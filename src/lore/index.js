@@ -4,7 +4,7 @@ import zh from './zh.js';
 import en from './en.js';
 
 export { CHARTER, CHARTER_LANGS, CHARTER_MANDATED, charterWallText } from './charter.js';
-export { RELICS, relicTitle } from './relics.js';
+export { RELICS, RELICS_FRONTIER, relicByN, relicTitle } from './relics.js';
 export { CANON, LETTER } from './canon.js';
 export { ACTIONS, ACTION_ORDER, EFFECTS_HELP } from './actions.js';
 

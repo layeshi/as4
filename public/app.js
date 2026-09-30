@@ -30,6 +30,7 @@ const NOT_ACTION = new Set(['day', 'month', 'omen', 'weather_start', 'weather_en
 
 const S = {
   state: null,
+  mapData: null, // GET /api/public/map：这个世界所用地图的静态数据
   lore: {},
   events: [],
   lastSeq: 0,
@@ -66,6 +67,15 @@ const ctx = {
     const lore = ctx.lore;
     return lore && lore.place[id] ? lore.place[id].name : id;
   },
+  /** 地点的顺序：按地图定义（边疆地图按街区排列） */
+  placeOrder() {
+    if (S.mapData) return S.mapData.places.map((p) => p.id);
+    return S.state ? S.state.places.map((p) => p.id) : [];
+  },
+  districtName(id) {
+    const lore = ctx.lore;
+    return id && lore && lore.district && lore.district[id] ? lore.district[id] : id || '';
+  },
   cityName() {
     const w = S.state.world;
     return w.cityName === w.humanCityName.zh ? w.humanCityName[getLang()] : w.cityName;
@@ -85,7 +95,7 @@ const ctx = {
 
 async function boot() {
   document.documentElement.lang = getLang();
-  for (const id of ['city', 'clock', 'countdown', 'pop', 'treasury', 'well', 'weather', 'conn', 'btn-enter', 'btn-back', 'btn-lang', 'map', 'tabs', 'panel', 'banner', 'color-mode', 'color-label', 'foot', 'drawer', 'status']) {
+  for (const id of ['city', 'clock', 'countdown', 'pop', 'treasury', 'well', 'weather', 'conn', 'btn-enter', 'btn-back', 'btn-lang', 'map', 'tabs', 'panel', 'banner', 'color-mode', 'color-label', 'foot', 'drawer', 'status', 'map-zoom-in', 'map-zoom-out', 'map-fit', 'map-legend']) {
     els[id] = document.getElementById(id);
   }
   wireStatic();
@@ -95,7 +105,7 @@ async function boot() {
   renderTabBar();
   showStatus(t('loading'));
   await Promise.all([loadLore(getLang()), loadLore(getLang() === 'zh' ? 'en' : 'zh')]);
-  const ok = await loadState();
+  const ok = (await loadState()) && (await loadMap());
   if (!ok) return;
   await loadEvents();
   initMap();
@@ -132,6 +142,9 @@ function wireStatic() {
     relabel();
   });
   els['color-mode'].addEventListener('change', () => map && map.setColorMode(els['color-mode'].value));
+  els['map-zoom-in'].addEventListener('click', () => map && map.zoomIn());
+  els['map-zoom-out'].addEventListener('click', () => map && map.zoomOut());
+  els['map-fit'].addEventListener('click', () => map && map.fit());
   els.tabs.addEventListener('keydown', (ev) => {
     const idx = TABS.findIndex((x) => x[0] === S.tab);
     let next = idx;
@@ -165,7 +178,22 @@ function applyLabels() {
   els['color-label'].textContent = t('colorBy');
   els.tabs.setAttribute('aria-label', t('tabs'));
   els.map.setAttribute('aria-label', t('map'));
+  els['map-zoom-in'].setAttribute('aria-label', t('zoomIn'));
+  els['map-zoom-in'].title = t('zoomIn');
+  els['map-zoom-out'].setAttribute('aria-label', t('zoomOut'));
+  els['map-zoom-out'].title = t('zoomOut');
+  els['map-fit'].textContent = t('fitMap');
+  renderLegend();
   updateConn();
+}
+
+/** 地图的图例（隧道只在有隧道的地图上列出） */
+function renderLegend() {
+  clear(els['map-legend']);
+  const items = [['flame', 'legend_agent'], ['', 'legend_road'], ['broken', 'legend_broken'], ['planned', 'legend_planned']];
+  if (S.mapData && S.mapData.terrain && S.mapData.terrain.tunnels && S.mapData.terrain.tunnels.length) items.push(['tunnel', 'legend_tunnel']);
+  items.push(['ruin', 'legend_ruin']);
+  for (const [key, label] of items) els['map-legend'].append(h('li', null, h('span', { class: `key ${key}`.trim(), 'aria-hidden': 'true' }), t(label)));
 }
 
 /** 切换语言后：静态文字、顶栏、地图与标签页全部重画 */
@@ -187,11 +215,32 @@ async function loadLore(lang) {
   if (r.ok) S.lore[lang] = r.json;
 }
 
+/** 地图的静态数据（世界创建后不再变化，只取一次） */
+async function loadMap() {
+  if (S.mapData) return true;
+  const r = await api('/api/public/map');
+  if (!r.ok) {
+    showStatus(t('loadFailed'), async () => {
+      if (await loadMap()) {
+        await loadEvents();
+        initMap();
+        applyState();
+        connect();
+        showStatus('');
+      }
+    });
+    return false;
+  }
+  S.mapData = r.json;
+  renderLegend();
+  return true;
+}
+
 async function loadState() {
   const r = await api('/api/public/state');
   if (!r.ok) {
     showStatus(t('loadFailed'), async () => {
-      const ok = await loadState();
+      const ok = (await loadState()) && (await loadMap());
       if (ok) {
         await loadEvents();
         initMap();
@@ -373,9 +422,13 @@ function updateCountdown() {
 // ── 地图 ──────────────────────────────────────────────────────
 
 function initMap() {
+  if (!S.mapData) return;
   map = createMap(els.map, {
+    mapData: S.mapData,
+    worldId: S.state ? S.state.world.id : '',
     placeName: (id) => ctx.placeName(id),
     humanName: (id) => (ctx.lore ? ctx.lore.place[id].name : id),
+    districtName: (id) => ctx.districtName(id),
     agentName: (id) => ctx.agentName(id),
     onAgent: (id) => openAgent(id),
     onPlace: (id) => openPlace(id),
@@ -390,7 +443,7 @@ function signature(tab, s) {
     case 'laws': return JSON.stringify([s.params, s.charter, s.laws, s.proposals, s.world.tick]);
     case 'residents': return JSON.stringify(s.agents.map((a) => [a.id, a.status, a.energy, a.coins, a.place, a.groups.length, a.lastActTick, a.ageDays]));
     case 'groups': return JSON.stringify(s.groups);
-    case 'environment': return JSON.stringify([s.places, s.well, s.wilds, s.weather.active, s.world.dayOfMonth]);
+    case 'environment': return JSON.stringify([s.places, s.well, s.wilds, s.regions, s.weather.active, s.world.dayOfMonth]);
     case 'library': return `${s.docs.length}:${s.lexicon.length}:${s.docs.reduce((n, d) => n + d.reads, 0)}`;
     case 'cemetery': return `${s.cemetery.length}:${s.retired.length}:${s.unborn.length}:${s.cemetery.reduce((n, g) => n + g.epitaphs.length, 0)}`;
     case 'legacy': return s.legacy ? String(s.legacy.day) : '';
@@ -494,9 +547,14 @@ function openPlace(id) {
   if (!p || !lore) return;
   const m = openModal(ctx.placeName(id), 'wide');
   const here = S.state.agents.filter((a) => a.place === id && (a.status === 'awake' || a.status === 'dormant'));
+  const region = (S.state.regions || []).find((r) => r.id === id);
+  const words = S.state.world.map === 'classic' ? lore.richness : lore.richnessWild || lore.richness;
   append(m.body, [
+    p.district ? h('p', { class: 'muted' }, `${t('col_district')}${colon()}${ctx.districtName(p.district)}`) : null,
     h('p', null, lore.place[id].desc),
-    p.condition === null ? h('p', { class: 'muted' }, t('fx_open')) : h('p', null, `${t('condition')}${colon()}`, conditionBar(p.condition), ` ${pct(p.condition)} · ${bandText(ctx, p.condition, id === 'well')}`),
+    region
+      ? h('p', null, `${t('richness')}${colon()}${words[region.richness] || region.richness} · ${t('wildsEnergy')} ${region.energy}/${region.energyMax} · ${t('wildsCoins')} ${region.coins} · ${t('relicsFound')} ${region.relicsFound}/${region.relics}`)
+      : p.condition === null ? h('p', { class: 'muted' }, t('fx_open')) : h('p', null, `${t('condition')}${colon()}`, conditionBar(p.condition), ` ${pct(p.condition)} · ${bandText(ctx, p.condition, id === 'well')}`),
     section(`${t('col_place')} (${here.length})`, here.length ? h('ul', { class: 'plain inline' }, here.map((a) => h('li', null, h('button', { class: 'link', type: 'button', onClick: () => { m.close(); openAgent(a.id); } }, a.name), ' ', statusChip(a.status)))) : h('p', { class: 'empty' }, t('empty'))),
     p.inscriptions.length ? section(t('walls'), wallBlock(ctx, p)) : null,
     p.facilities.length || p.projects.length

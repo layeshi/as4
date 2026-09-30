@@ -8,6 +8,7 @@ import { L, normLang } from '../lore/index.js';
 import {
   publicState, publicAgent, publicMemories, publicPlace, publicDoc, publicWeather, publicEvent,
 } from '../engine/visibility.js';
+import { publicMap } from '../map/index.js';
 import { clientIp, langOf, parseCookies, readJson, sendError, sendEngineError, sendJson, sha256hex } from './util.js';
 
 const intParam = (url, name, def, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) => {
@@ -146,9 +147,17 @@ export async function getLore(req, res, ctx, url) {
   sendJson(res, 200, {
     lang,
     cityName: d.cityName, redacted: d.redacted, unreadableInscription: d.unreadableInscription,
-    place: d.place, band: d.band, wellBand: d.wellBand, richness: d.richness, season: d.season,
+    place: d.place, district: d.district, band: d.band, wellBand: d.wellBand, richness: d.richness, richnessWild: d.richnessWild, season: d.season,
     facility: d.facility, weather: d.weather, omen: d.omen, physics: d.physics, law: d.law,
   });
+}
+
+/**
+ * GET /api/public/map：这个世界所用地图的静态数据（地点坐标、街区、街道图、地形）。
+ * 【新增，附录 C】观测站据此画地图；世界创建之后它不再变化。
+ */
+export async function getMap(req, res, ctx) {
+  sendJson(res, 200, publicMap(ctx.rt.w));
 }
 
 /** GET /api/public/legacy */
@@ -199,6 +208,7 @@ export const publicRoutes = [
   ['GET', '/api/public/metrics', getMetrics],
   ['GET', '/api/public/chronicle', getChronicle],
   ['GET', '/api/public/lore', getLore],
+  ['GET', '/api/public/map', getMap],
   ['GET', '/api/public/legacy', getLegacy],
   ['GET', '/api/public/weather', getWeather],
   ['POST', '/api/public/weather/vote', postWeatherVote],

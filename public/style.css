@@ -17,14 +17,6 @@
   --bad: #ef6b6b;
   --ai-bg: rgba(110, 168, 255, 0.09);
   --ai-line: rgba(110, 168, 255, 0.35);
-  --sky-top: #04060b;
-  --sky-bottom: #131a2c;
-  --curtain-a: #3e1120;
-  --curtain-b: #7c2b3c;
-  --star: #ffe9a8;
-  --street: #2b3550;
-  --bubble-bg: #f4f1e8;
-  --bubble-ink: #14171f;
   --c0: #6ea8ff;
   --c1: #58c98a;
   --c2: #f2b46d;
@@ -50,14 +42,6 @@
     --bad: #c23a3a;
     --ai-bg: rgba(36, 86, 196, 0.07);
     --ai-line: rgba(36, 86, 196, 0.35);
-    --sky-top: #b9c6e4;
-    --sky-bottom: #e7ebf5;
-    --curtain-a: #8c2b40;
-    --curtain-b: #c9566b;
-    --star: #b58900;
-    --street: #cfc6b3;
-    --bubble-bg: #ffffff;
-    --bubble-ink: #14171f;
     --shadow: 0 8px 30px rgba(20, 20, 40, 0.18);
   }
 }
@@ -142,7 +126,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .layout {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(360px, 1.1fr) minmax(360px, 1fr);
+  grid-template-columns: minmax(360px, 1.45fr) minmax(360px, 1fr);
   gap: 10px;
   padding: 10px;
   min-height: 0;
@@ -156,8 +140,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   flex-direction: column;
   min-height: 0;
 }
-.map { width: 100%; height: auto; max-height: calc(100vh - 150px); }
-.map-tools { padding: 4px 6px; font-size: 12px; color: var(--muted); }
+.map { flex: 1 1 0; width: 100%; min-height: 360px; display: block; border-radius: 5px; }
 .side-pane {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -193,7 +176,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   html, body { height: auto; }
   body { min-height: 100vh; }
   .layout { flex: none; grid-template-columns: 1fr; }
-  .map { max-height: none; }
+  .map { flex: none; height: auto; aspect-ratio: var(--map-aspect, 16 / 10); max-height: 78vh; min-height: 280px; }
   .side-pane { min-height: 60vh; }
   .panel { max-height: none; overflow: visible; min-height: 50vh; }
   .actions { margin-left: 0; }
@@ -444,47 +427,236 @@ figcaption { font-size: 12px; color: var(--muted); text-align: center; }
 .drawer-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); z-index: 1; }
 .drawer-body { padding: 8px 14px 24px; }
 
-/* ── 地图（SVG） ── */
-.map .sky-a { stop-color: var(--sky-top); }
-.map .sky-b { stop-color: var(--sky-bottom); }
-.map .curtain-a { stop-color: var(--curtain-a); }
-.map .curtain-b { stop-color: var(--curtain-b); }
-.map .sky-label { fill: var(--muted); font-size: 9px; opacity: 0.7; }
-.map .star path { fill: var(--star); }
-.map .star { cursor: pointer; }
-.map .street { stroke: var(--street); stroke-width: 6; stroke-linecap: round; opacity: 0.55; }
-.map .road { stroke: var(--accent); stroke-width: 4; stroke-linecap: round; opacity: 0.95; }
-.map .road.broken { stroke: var(--muted); stroke-dasharray: 6 6; opacity: 0.6; }
-.map .road.planned { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 6; opacity: 0.55; }
-.map .curtain-fold { fill: none; stroke: rgba(0, 0, 0, 0.28); stroke-width: 1; }
-.map .curtain-label { fill: rgba(255, 255, 255, 0.55); font-size: 11px; letter-spacing: 0.3em; }
-.map .place { cursor: pointer; }
-.map .place:focus-visible .place-shape { stroke-width: 3; }
-.map .place-name { fill: #f6f8fc; stroke: rgba(0, 0, 0, 0.45); stroke-width: 2.5px; paint-order: stroke; font-size: 13px; font-weight: 600; pointer-events: none; }
-.map .place-human { fill: var(--muted); font-size: 9px; pointer-events: none; }
-.map .place-crack { fill: none; stroke: var(--muted); stroke-width: 1.5; display: none; }
-.map .facility path, .map .facility circle, .map .facility ellipse { fill: none; stroke: var(--c2); stroke-width: 1.6; stroke-linejoin: round; }
-.map .facility.off path, .map .facility.off circle, .map .facility.off ellipse { stroke: var(--muted); opacity: 0.6; }
-.map .facility-x { stroke: var(--bad) !important; }
-.map .project-base { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 3; }
-.map .project-ring { fill: none; stroke: var(--c1); stroke-width: 2.5; }
-.map .omen { fill: var(--c2); animation: pulse 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-.map .agent { stroke: rgba(0, 0, 0, 0.55); stroke-width: 0.8; cursor: pointer; transition: transform 0.9s ease, r 0.6s ease; }
+/* ── 地图（SVG，赛博朋克 + 废土）：地图始终是一块深色的「屏幕」，不随浅色主题变亮 ── */
+.map {
+  --m-bg: #070a12;
+  --m-grid: rgba(0, 229, 255, 0.075);
+  --m-waste: #120c09;
+  --m-dune: rgba(214, 138, 72, 0.26);
+  --m-sea: #041119;
+  --m-scan: rgba(0, 229, 255, 0.1);
+  --m-coast: rgba(0, 229, 255, 0.45);
+  --m-curtain: #26050f;
+  --m-curtain-hot: #ff2a6d;
+  --m-river: #06222d;
+  --m-river-glow: rgba(0, 229, 255, 0.55);
+  --m-street: #151c2b;
+  --m-street-line: rgba(120, 220, 255, 0.26);
+  --m-track: rgba(214, 150, 90, 0.5);
+  --m-road: #27f3ff;
+  --m-planned: #ffd23f;
+  --m-wall: #262b37;
+  --m-wall-line: rgba(255, 148, 70, 0.55);
+  --m-body: rgba(8, 12, 22, 0.88);
+  --m-label: #e9f8ff;
+  --m-label-halo: #04060b;
+  --m-label-dim: #8190ad;
+  --m-sky: #03040a;
+  --m-star: #ffe9a8;
+  --m-bubble-bg: rgba(4, 10, 18, 0.94);
+  --m-cyan: #19e6ff;
+  --m-magenta: #ff3d8b;
+  --m-yellow: #ffd23f;
+  --m-green: #3dff9e;
+  --m-violet: #b98bff;
+  --m-orange: #ff9446;
+  --m-blue: #6b93ff;
+  --m-rust: #e0783a;
+  --m-sand: #e8c07a;
+  --m-ruin: #687085;
+  background: var(--m-bg);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+  outline: none;
+}
+.map.dragging { cursor: grabbing; }
+.map:focus-visible { box-shadow: 0 0 0 2px var(--accent) inset; }
+.map.dragging .glyph, .map.dragging .road, .map.dragging .star path { filter: none; }
+
+/* 地面、海与幕、河与水渠 */
+.map .ground-city { fill: var(--m-bg); }
+.map .grid-line { fill: none; stroke: var(--m-grid); stroke-width: 1; }
+.map .ground-waste { fill: var(--m-waste); }
+.map .dune { fill: none; stroke: var(--m-dune); stroke-width: 1.4; stroke-linecap: round; }
+.map .far-static { opacity: 0.55; }
+.map .static-line { stroke: rgba(232, 192, 122, 0.35); stroke-width: 1.2; }
+.map .far-label { fill: var(--m-sand); font-size: 22px; letter-spacing: 0.3em; opacity: 0.55; }
+.map .sea { fill: var(--m-sea); }
+.map .scan-line { stroke: var(--m-scan); stroke-width: 1; }
+.map .coast { fill: none; stroke: var(--m-coast); stroke-width: 1.6; }
+.map .curtain { fill: var(--m-curtain); }
+.map .curtain-fold { fill: none; stroke: rgba(255, 61, 139, 0.22); stroke-width: 1.2; }
+.map .curtain-fold.hot { stroke: var(--m-curtain-hot); stroke-width: 1.6; opacity: 0.7; }
+.map .glitch { fill: var(--m-curtain-hot); opacity: 0.35; }
+.map .river-bed, .map .canal-bed { fill: none; stroke: var(--m-river); stroke-width: 18; stroke-linecap: round; stroke-linejoin: round; }
+.map .canal-bed { stroke-width: 11; }
+.map .river-glow, .map .canal-glow { fill: none; stroke: var(--m-river-glow); stroke-width: 1.5; stroke-dasharray: 18 10; stroke-linecap: round; }
+
+/* 街区、城墙、街道、道路 */
+.map .district { fill-opacity: 0.045; stroke-opacity: 0.06; stroke-width: 150; stroke-linejoin: round; stroke-linecap: round; }
+.map .dist-harbor { fill: var(--m-cyan); stroke: var(--m-cyan); }
+.map .dist-oldtown { fill: var(--m-violet); stroke: var(--m-violet); }
+.map .dist-commons { fill: var(--m-magenta); stroke: var(--m-magenta); }
+.map .dist-waterworks { fill: var(--m-blue); stroke: var(--m-blue); }
+.map .dist-east { fill: var(--m-orange); stroke: var(--m-orange); }
+.map .district-label { stroke: none; fill-opacity: 0.6; letter-spacing: 0.28em; font-weight: 700; pointer-events: none; }
+.map .wall-body { fill: none; stroke: var(--m-wall); stroke-width: 12; stroke-linecap: square; }
+.map .wall-line { fill: none; stroke: var(--m-wall-line); stroke-width: 1.5; stroke-dasharray: 22 6; }
+.map .gate-tower { fill: var(--m-wall); stroke: var(--m-wall-line); stroke-width: 1.2; }
+.map .street-bed { fill: none; stroke: var(--m-street); stroke-width: 11; stroke-linecap: round; }
+.map .street-line { fill: none; stroke: var(--m-street-line); stroke-width: 1.2; stroke-dasharray: 10 12; }
+.map .street-bed.track { stroke: rgba(58, 38, 25, 0.9); stroke-width: 8; }
+.map .street-line.track { stroke: var(--m-track); stroke-dasharray: 4 8; }
+.map .street-bed.tunnel { stroke: none; }
+.map .street-line.tunnel { stroke: rgba(255, 210, 63, 0.5); stroke-dasharray: 2 9; stroke-width: 2.2; stroke-linecap: round; }
+.map .road { fill: none; stroke: var(--m-road); stroke-width: 4; stroke-linecap: round; filter: url(#m-glow); }
+.map .road.broken { stroke: var(--m-ruin); stroke-dasharray: 8 8; filter: none; opacity: 0.8; }
+.map .road.planned { stroke: var(--m-planned); stroke-width: 2.4; stroke-dasharray: 3 9; filter: none; opacity: 0.85; }
+
+/* 城外的废土装饰 */
+.map .deco-scrap { fill: rgba(224, 120, 58, 0.16); stroke: rgba(224, 120, 58, 0.55); stroke-width: 1.2; }
+.map .deco-panel { fill: rgba(107, 147, 255, 0.12); stroke: rgba(107, 147, 255, 0.6); stroke-width: 1; }
+.map .deco-salt { fill: rgba(232, 240, 244, 0.06); stroke: rgba(232, 240, 244, 0.35); stroke-width: 1; }
+.map .deco-lane { fill: none; stroke: rgba(232, 192, 122, 0.4); stroke-width: 1.6; }
+.map .deco-dash { fill: none; stroke: rgba(232, 192, 122, 0.45); stroke-width: 1.4; stroke-dasharray: 14 12; }
+.map .deco-bush { fill: none; stroke: rgba(170, 150, 110, 0.5); stroke-width: 1.3; stroke-linecap: round; }
+
+/* 地点：霓虹线稿。颜色来自色系（currentColor），外观随完好度变化；有人在时窗亮着 */
+.map .place { cursor: pointer; outline: none; }
+.map .hit { fill: transparent; }
+.map .hue-cyan { color: var(--m-cyan); }
+.map .hue-magenta { color: var(--m-magenta); }
+.map .hue-yellow { color: var(--m-yellow); }
+.map .hue-green { color: var(--m-green); }
+.map .hue-violet { color: var(--m-violet); }
+.map .hue-orange { color: var(--m-orange); }
+.map .hue-blue { color: var(--m-blue); }
+.map .hue-rust { color: var(--m-rust); }
+.map .hue-sand { color: var(--m-sand); }
+.map .glyph { filter: drop-shadow(0 0 3px currentColor); }
+.map .glyph .b { fill: var(--m-body); stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.map .glyph .n { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.map .glyph .d { fill: none; stroke: currentColor; stroke-width: 1.1; opacity: 0.45; }
+.map .glyph rect.d { fill: currentColor; fill-opacity: 0.18; stroke: none; }
+.map .glyph .w { fill: currentColor; opacity: 0.2; stroke: none; }
+.map .place.occupied .glyph .w { opacity: 0.95; }
+.map .glyph .core { fill: currentColor; stroke: none; opacity: 0.9; }
+.map .glyph .ring { stroke-dasharray: 4 5; }
+.map .glyph .beam { fill: none; stroke: currentColor; stroke-width: 6; opacity: 0.12; stroke-linecap: round; }
+.map .glyph .plaza { fill: currentColor; fill-opacity: 0.06; stroke: currentColor; stroke-width: 1.4; stroke-dasharray: 3 6; }
+.map .glyph .fence { fill: var(--m-body); stroke: currentColor; stroke-width: 1.4; stroke-dasharray: 3 3; }
+.map .glyph .tomb { fill: none; stroke: currentColor; stroke-width: 1; opacity: 0.35; }
+.map .glyph .tomb.filled { fill: currentColor; opacity: 0.85; }
+.map .glyph .fire { fill: var(--m-orange); stroke: none; transform-box: fill-box; transform-origin: 50% 100%; animation: fire 1.6s ease-in-out infinite alternate; }
+.map .glyph .panel { fill: currentColor; fill-opacity: 0.18; stroke: currentColor; stroke-width: 1.2; }
+.map .glyph .panel.broken { stroke-dasharray: 3 3; fill-opacity: 0.04; }
+.map .glyph .salt { fill: rgba(232, 240, 244, 0.12); stroke: currentColor; stroke-width: 1.2; }
+.map .glyph .lane { fill: none; stroke: currentColor; stroke-width: 2; }
+.map .glyph .dash { stroke-dasharray: 8 6; }
+.map .crack { fill: none; stroke: var(--m-ruin); stroke-width: 1.6; display: none; }
+.map .cond-worn .glyph { opacity: 0.88; }
+.map .cond-weathered .glyph { opacity: 0.72; }
+.map .cond-weathered .glyph .b, .map .cond-weathered .glyph .n { stroke-dasharray: 16 3; }
+.map .cond-dilapidated .glyph { opacity: 0.6; animation: flicker 4.2s steps(1, end) infinite; }
+.map .cond-dilapidated .glyph .b, .map .cond-dilapidated .glyph .n { stroke-dasharray: 7 4; }
+.map .cond-ruin { color: var(--m-ruin); }
+.map .cond-ruin .glyph { opacity: 0.5; filter: none; }
+.map .cond-ruin .glyph .b, .map .cond-ruin .glyph .n { stroke-dasharray: 3 5; }
+.map .cond-ruin .glyph .w, .map .cond-ruin .glyph .core { opacity: 0.08; }
+.map .cond-ruin .crack { display: block; }
+.map .place:hover .glyph, .map .place:focus-visible .glyph { filter: drop-shadow(0 0 7px currentColor) drop-shadow(0 0 1px #fff); }
+
+/* 设施、工程、征兆 */
+.map .facility { color: var(--m-yellow); }
+.map .facility path, .map .facility circle, .map .facility ellipse, .map .facility line { fill: var(--m-body); stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+.map .facility.off { color: var(--m-ruin); }
+.map .facility .facility-x { stroke: var(--m-magenta); fill: none; }
+.map .project-base { fill: var(--m-body); stroke: var(--m-ruin); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.map .project-ring { fill: none; stroke: var(--m-yellow); stroke-width: 2.6; }
+.map .omen { fill: var(--m-magenta); animation: blink 1.8s steps(2, jump-none) infinite; }
+
+/* 文字：字号与描边宽度由脚本按缩放写在图层上（在屏幕上大小不变） */
+.map .label { fill: var(--m-label); stroke: var(--m-label-halo); paint-order: stroke; font-weight: 600; letter-spacing: 0.04em; pointer-events: none; }
+.map .label.wild { fill: var(--m-sand); }
+.map .label-sub { fill: var(--m-label-dim); stroke: var(--m-label-halo); paint-order: stroke; font-size: 0.78em; pointer-events: none; }
+.map .badge { fill: var(--m-cyan); stroke: var(--m-label-halo); paint-order: stroke; font-size: 0.9em; font-weight: 700; pointer-events: none; display: none; }
+.map.lod-far .badge { display: inline; }
+.map.lod-far .layer-facilities, .map.lod-far .label-sub { display: none; }
+
+/* 居民：焰 */
+.map .agent { cursor: pointer; outline: none; }
+.map .agent .flame { stroke: rgba(0, 0, 0, 0.6); stroke-width: 0.7; }
+.map .agent .halo { opacity: 0.2; }
 .map .agent.dormant { opacity: 0.55; }
-.map .agent.exiled { stroke: var(--bad); stroke-width: 2; }
-.map .agent:hover, .map .agent:focus-visible { stroke: var(--text); stroke-width: 2; }
-.map .bubble rect { fill: var(--bubble-bg); stroke: rgba(0, 0, 0, 0.25); }
-.map .bubble text { fill: var(--bubble-ink); font-size: 11px; }
-.map .bubble.broadcast rect { fill: var(--c2); }
-.map .bubble { animation: bubble-life 4s ease-out forwards; pointer-events: none; }
-.map .ripple { fill: none; stroke: var(--c2); stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: ripple 2s ease-out forwards; pointer-events: none; }
+.map .agent.dormant .halo { display: none; }
+.map .agent.exiled .flame { stroke: var(--m-magenta); stroke-width: 2; }
+.map .agent:hover .flame, .map .agent:focus-visible .flame { stroke: #fff; stroke-width: 1.6; }
+
+/* 气泡与涟漪 */
+.map .bubble { pointer-events: none; animation: bubble-life 4s ease-out forwards; }
+.map .bubble rect { fill: var(--m-bubble-bg); stroke: var(--m-cyan); stroke-width: 1.2; }
+.map .bubble text { fill: #d9fbff; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, "PingFang SC", monospace; }
+.map .bubble.broadcast rect { stroke: var(--m-magenta); }
+.map .bubble.broadcast text { fill: #ffd6e7; }
+.map .ripple { fill: none; stroke: var(--m-magenta); stroke-width: 3; transform-box: fill-box; transform-origin: center; animation: ripple 2s ease-out forwards; pointer-events: none; }
+
+/* 天穹（HUD，逝者之星） */
+.map .sky { fill: var(--m-sky); stroke: rgba(0, 229, 255, 0.18); stroke-width: 1; }
+.map .sky-label { fill: var(--m-label-dim); font-size: 11px; letter-spacing: 0.15em; }
+.map .star { cursor: pointer; }
+.map .star path { fill: var(--m-star); filter: drop-shadow(0 0 3px var(--m-star)); }
+
+/* 天象 */
+.map .fx-fog, .map .fx-boats, .map .fx-eclipse, .map .fx-aurora, .map .fx-sun { display: none; }
+.map.wx-fog .fx-fog, .map.wx-migration .fx-boats, .map.wx-eclipse .fx-eclipse, .map.wx-eclipse .fx-sun, .map.wx-aurora .fx-aurora { display: inline; }
+.map .fog-wisp { fill: rgba(200, 215, 230, 0.1); animation: drift 14s ease-in-out infinite alternate; }
+.map .boat { fill: rgba(25, 230, 255, 0.3); stroke: var(--m-cyan); stroke-width: 1; }
+.map .fx-eclipse { fill: #000; opacity: 0.45; pointer-events: none; }
+.map .fx-sun .disc { fill: #000; }
+.map .fx-sun .corona { fill: none; stroke: #fff4c2; stroke-width: 2; filter: drop-shadow(0 0 5px #fff4c2); }
+.map .aurora-band { fill: none; stroke-width: 6; opacity: 0.35; stroke-linecap: round; animation: aurora 6s ease-in-out infinite alternate; }
+.map .aurora-band.a0 { stroke: var(--m-green); }
+.map .aurora-band.a1 { stroke: var(--m-violet); animation-delay: -2s; }
+.map .aurora-band.a2 { stroke: var(--m-cyan); animation-delay: -4s; }
+.map.wx-drought .glyph-well .core { opacity: 0.25; }
+.map.wx-bounty .glyph-well .core { animation: pulse-core 1.4s ease-in-out infinite; }
+.map.wx-amnesia .glyph-library .w { animation: flicker 2.2s steps(1, end) infinite; }
+.map.quaking .shake { animation: quake 0.12s linear 10; }
+
+/* 时辰：夜里更暗，有人的窗亮着；白天烟尘里的城稍亮一些 */
+.map.tod-night .ground-city { fill: #04060b; }
+.map.tod-dusk .ground-city { fill: #0a0b14; }
+.map.tod-day .ground-city { fill: #0b1221; }
+.map.tod-day .glyph { filter: drop-shadow(0 0 1.5px currentColor); }
+
 @keyframes bubble-life { 0% { opacity: 0; } 8% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes ripple { from { transform: scale(0.6); opacity: 0.9; } to { transform: scale(9); opacity: 0; } }
-@keyframes pulse { 0%, 100% { opacity: 0.35; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.25); } }
+@keyframes ripple { from { transform: scale(0.6); opacity: 0.9; } to { transform: scale(8); opacity: 0; } }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+@keyframes flicker { 0%, 100% { opacity: 0.6; } 7% { opacity: 0.15; } 9% { opacity: 0.6; } 53% { opacity: 0.25; } 55% { opacity: 0.6; } }
+@keyframes fire { from { transform: scaleY(0.85); opacity: 0.8; } to { transform: scaleY(1.12); opacity: 1; } }
+@keyframes drift { from { transform: translateX(-30px); } to { transform: translateX(60px); } }
+@keyframes aurora { from { transform: translateY(-3px); opacity: 0.2; } to { transform: translateY(3px); opacity: 0.45; } }
+@keyframes pulse-core { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+@keyframes quake { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-6px, 4px); } 50% { transform: translate(6px, -4px); } 75% { transform: translate(-4px, -6px); } }
+
+/* 地图下方的工具条：缩放、着色、图例 */
+.map-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 6px 4px 0; font-size: 12px; color: var(--muted); }
+.map-tools .zoom { display: inline-flex; gap: 4px; }
+.map-tools .zoom .btn { min-width: 30px; padding: 2px 8px; }
+.map-tools .spacer { flex: 1; }
+.map-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; }
+.map-legend li { display: inline-flex; align-items: center; gap: 5px; }
+.map-legend .key { display: inline-block; width: 16px; height: 4px; border-radius: 2px; background: #27f3ff; }
+.map-legend .key.broken { background: repeating-linear-gradient(90deg, #687085 0 4px, transparent 4px 7px); }
+.map-legend .key.planned { background: repeating-linear-gradient(90deg, #ffd23f 0 2px, transparent 2px 6px); }
+.map-legend .key.tunnel { background: repeating-linear-gradient(90deg, #ffd23f 0 2px, transparent 2px 7px); opacity: 0.6; }
+.map-legend .key.flame { width: 8px; height: 11px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: #19e6ff; }
+.map-legend .key.ruin { background: #687085; }
 
 @media (prefers-reduced-motion: reduce) {
-  .feed .ev, .map .omen, .map .bubble, .map .ripple { animation: none; }
-  .map .agent { transition: none; }
+  .feed .ev, .map .omen, .map .bubble, .map .ripple, .map .glyph, .map .fire, .map .fog-wisp, .map .aurora-band, .map.quaking .shake { animation: none; }
 }
 
 /* 入境向导与后台托管：沿用观测站的纸页、细线和暖色强调。 */

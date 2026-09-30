@@ -6,7 +6,8 @@
 // 效力执行结果 results[i] = { index, ok, note }：note 是与语言无关的短代码（如 "partial:12/20"、"target_gone"），
 // 由观测站在显示时翻译；部分执行也算 ok，并在 note 里说明。
 
-import { P, LAW_SPEC, PLACE_IDS, LIMITS } from '../params.js';
+import { P, LAW_SPEC, LIMITS } from '../params.js';
+import { hasPlace } from '../map/index.js';
 import { L, fmt, placeDisplayName } from '../lore/index.js';
 import { clockDay, agentList, isAlive, findAgent, nextId } from '../world.js';
 import { nameKey, normalizeText, cpLength, truncateCp } from '../text.js';
@@ -104,7 +105,7 @@ function validateEffect(w, e, i) {
     }
     case 'rename': {
       const isCity = e.target === 'city';
-      if (!isCity && !(typeof e.target === 'string' && PLACE_IDS.includes(e.target))) effErr(i, 'target 必须是 "city" 或地点 ID', 'target must be "city" or a place ID');
+      if (!isCity && !hasPlace(w, e.target)) effErr(i, 'target 必须是 "city" 或地点 ID', 'target must be "city" or a place ID');
       const name = normalizeText(e.name);
       if (name === null || name === '' || cpLength(name) > LIMITS.name) effErr(i, `name 必须是 1–${LIMITS.name} 个字符`, `name must be 1–${LIMITS.name} characters`);
       if (!screen(name).ok) fail('moderated');

@@ -8,7 +8,8 @@
 // 这只能发生在命令之内（沙盘脑在 tick 里感知）；传 after 或 ack: false 则不推进。
 // HTTP 层一律传 ack: false，用自己的内存游标（floor）做「自动确认」，见 docs/QUESTIONS.md Q9。
 
-import { P, PLACE_IDS, LAW_PARAM_NAMES, SEASON_TABLE, conditionBand, seasonBand, richnessBand } from '../params.js';
+import { P, LAW_PARAM_NAMES, SEASON_TABLE, conditionBand, seasonBand, richnessBand } from '../params.js';
+import { placeIdsOf, isWild, wildIdsOf, wildPool, wildSpec, districtOf, usesDistance } from '../map/index.js';
 import { L, fmt, normLang, placeDisplayName, cityDisplayName, ACTIONS, ACTION_ORDER } from '../lore/index.js';
 import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive } from '../world.js';
 import { truncateCp, cpLength } from '../text.js';
@@ -17,7 +18,7 @@ import { metabolismOf } from './lifecycle.js';
 import { actionCost } from './actions/util.js';
 import {
   costMultiplier, costMultiplierBp, isFunctioning, facilitiesAt, wallInscriptions, openProjectsAt,
-  hasRelay, isWeatherActive,
+  hasRelay, isWeatherActive, travelCosts, placeCost,
 } from './environment.js';
 import { describeEffect, isCitizen, inElectorate, openProposals } from './laws.js';
 import { omensAt } from './weather.js';
@@ -224,6 +225,9 @@ function hereView(w, a, l, lang) {
     facilities, projects, roads, omens,
     market: null, well: null, wilds: null, library: null, cemetery: null,
   };
+  // 有街区的地图（附录 C）：所在的街区
+  const district = districtOf(w, a.place);
+  if (district) here.district = { code: district, text: l.district[district] };
   if (a.place === 'market') {
     here.market = {
       offers: Object.values(w.offers)
@@ -238,9 +242,10 @@ function hereView(w, a, l, lang) {
       drawQuota: w.params.drawQuotaPerDay,
       condition: cond(l, w.places.well.condition, true),
     };
-  } else if (a.place === 'wilds') {
-    const band = richnessBand(w.wilds.energy);
-    here.wilds = { richness: band, text: l.richness[band] };
+  } else if (isWild(w, a.place)) {
+    // 经典地图的荒野：丰度按 wildsEnergyMax；边疆地图的各地带按自己的上限，描述词用 richnessWild
+    const band = richnessBand(wildPool(w, a.place).energy, wildSpec(w, a.place).energyMax);
+    here.wilds = { richness: band, text: (w.regions ? l.richnessWild : l.richness)[band] };
   } else if (a.place === 'library') {
     here.library = {
       docs: Object.values(w.docs).map((d) => ({
@@ -296,7 +301,7 @@ function cityView(w, a, l, lang, day) {
       yourVote: p.votes[a.id] ? { choice: p.votes[a.id].choice, reason: p.votes[a.id].reason } : null,
       eligible: inElectorate(w, a),
     })),
-    places: PLACE_IDS.map((id) => ({ id, name: placeDisplayName(w.places[id], lang) })),
+    places: placesView(w, a, lang),
     roads,
     citizens: living.map((o) => ({ id: o.id, name: o.name, status: o.status, citizen: isCitizen(w, o), exiled: o.exiled })),
     groups: Object.values(w.groups)
@@ -312,6 +317,21 @@ function cityView(w, a, l, lang, day) {
     })),
     recentDeaths: w.cemetery.slice(-P.recentDeathsInPerception).map((g) => ({ id: g.agentId, name: g.name, day: g.diedDay })),
   };
+}
+
+/**
+ * 全城的地点名单。经典地图只有 { id, name }；按路程计价的地图（附录 C）还给出街区、是否属于荒野，
+ * 以及从你此刻所在之处过去的实际代价 moveCost（含出发地的倍率；所在之处与到不了的地点为 null）。
+ */
+function placesView(w, a, lang) {
+  if (!usesDistance(w)) return placeIdsOf(w).map((id) => ({ id, name: placeDisplayName(w.places[id], lang) }));
+  const costs = travelCosts(w, a.place, { exiled: a.exiled });
+  return placeIdsOf(w).map((id) => {
+    const out = { id, name: placeDisplayName(w.places[id], lang), district: districtOf(w, id) };
+    if (isWild(w, id)) out.wild = true;
+    out.moveCost = id === a.place || costs[id] === undefined ? null : placeCost(w, a.place, costs[id]);
+    return out;
+  });
 }
 
 /** 进行中的提案只公开票数合计，不公开谁投了什么 */
@@ -361,11 +381,12 @@ function actionsView(w, a, l, lang) {
     if (entry.cost > 0 && costMultiplierBp(w, a.place) > 10000) {
       notes.push({ code: 'cost_multiplier', text: fmt(N.costMultiplier, { place: placeDisplayName(here, lang), mult: Math.round(costMultiplierBp(w, a.place) / 100) / 100 }) });
     }
-    // 可用性
-    if (def.place && a.place !== def.place) deny(reasonWrong(type));
+    // 可用性（探索：荒野的任一地带都可以）
+    if (def.place && !(def.place === 'wilds' ? isWild(w, a.place) : a.place === def.place)) deny(reasonWrong(type));
     switch (type) {
       case 'move':
-        if (a.exiled && a.place === 'wilds') deny({ code: 'exiled', text: R.exiled });
+        // 被放逐者只能在荒野各地带之间移动：没有别的地带可去时不可用
+        if (a.exiled && wildIdsOf(w).every((id) => id === a.place)) deny({ code: 'exiled', text: R.exiled });
         break;
       case 'broadcast':
         if (eclipse) {

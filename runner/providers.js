@@ -185,7 +185,7 @@ export function mockDecide(p, rnd) {
     const to = pick(((p.city && p.city.places) || []).map((x) => x.id).filter((id) => id !== here.place));
     if (to) actions.push({ type: 'move', to });
   } else if (actions.length < 2 && roll < 0.8) actions.push({ type: 'diary', text: lang === 'zh' ? '（mock 日记）今天也平平安安。' : '(mock diary) A quiet day again.' });
-  else if (actions.length < 2 && roll < 0.9 && here.place === 'wilds') actions.push({ type: 'explore' });
+  else if (actions.length < 2 && roll < 0.9 && here.wilds) actions.push({ type: 'explore' }); // 荒野（或边疆地图上荒野的任一地带）
   if (!thought && rnd() < 0.3) thought = lang === 'zh' ? '（mock）看看城里在发生什么。' : '(mock) Let me see what is going on in the city.';
   return { thought, actions };
 }

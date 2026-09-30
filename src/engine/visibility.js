@@ -5,7 +5,8 @@
 // 私语、独白、记忆条目延迟 PRIVATE_DELAY_TICKS 刻才公开（由 events.js 按 releaseTick 释放；
 // 这里只做「已经释放」之后的转换）。
 
-import { P, PLACE_IDS, conditionBand, richnessBand } from '../params.js';
+import { P, conditionBand, richnessBand } from '../params.js';
+import { placeIdsOf, wildIdsOf, wildPool, wildSpec, districtOf, isWild } from '../map/index.js';
 import { L } from '../lore/index.js';
 import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive } from '../world.js';
 import { isCitizen } from './laws.js';
@@ -103,6 +104,7 @@ export function publicPlace(w, id) {
   if (!p) return null;
   return {
     id: p.id, name: p.name, humanName: { ...p.humanName }, renamedBy: p.renamedBy, kind: p.kind,
+    district: districtOf(w, id), wild: isWild(w, id),
     condition: p.condition, band: p.condition === null ? null : conditionBand(p.condition), ruined: p.ruined,
     decayPerDay: p.decayPerDay, wallSlots: p.wallSlots,
     activity: { ...p.activity }, history: (p.history || []).slice(),
@@ -184,7 +186,7 @@ export function publicState(w, extra = {}) {
     world: {
       id: w.id, protocol: 1, tick: w.clock.tick, day, month: monthOfDay(day), dayOfMonth: dayOfMonthOf(day), tickOfDay: tickOfDay(w),
       ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, monthsPerEpoch: P.monthsPerEpoch, epoch: w.epoch,
-      paused: w.paused, revealed: w.revealed,
+      paused: w.paused, revealed: w.revealed, map: w.map || 'classic',
       cityName: w.cityName, humanCityName: { zh: zh.cityName, en: L('en').cityName },
       nextTickAt: extra.nextTickAt ?? null, tickMs: P.tickMs,
     },
@@ -193,7 +195,7 @@ export function publicState(w, extra = {}) {
       canonical: w.charterCanonical,
       articles: w.charter.map((a) => ({ n: a.n, status: a.status, versions: { ...a.versions }, history: a.history.map((h) => ({ ...h })) })),
     },
-    places: PLACE_IDS.map((id) => publicPlace(w, id)),
+    places: placeIdsOf(w).map((id) => publicPlace(w, id)),
     agents: agentList(w).map((a) => publicAgent(w, a)),
     groups: Object.values(w.groups).map((g) => groupView(w, g)),
     proposals: [...open, ...finished].map((p) => proposalView(w, p)),
@@ -205,7 +207,8 @@ export function publicState(w, extra = {}) {
     })),
     treasury: { ...w.treasury },
     well: { condition: w.places.well.condition, drawPoolLeft: w.well.drawPoolLeft, outputHistory: w.well.outputHistory.slice() },
-    wilds: { energy: w.wilds.energy, coins: w.wilds.coins, richness: richnessBand(w.wilds.energy), relicsFound: w.wilds.relicsFound },
+    wilds: wildsSummary(w),
+    regions: publicRegions(w),
     weather: publicWeather(w),
     lexicon: Object.values(w.lexicon).map(lexiconView),
     docs: Object.values(w.docs).map((d) => docSummary(w, d)),
@@ -218,6 +221,30 @@ export function publicState(w, extra = {}) {
     metrics: w.metrics.length ? w.metrics[w.metrics.length - 1] : null,
     legacy: w.legacy || null,
     chronicle: w.chronicle.slice(-5),
+  };
+}
+
+/**
+ * 荒野各地带的储量（经典地图只有一个地带：荒野）。遗物只给出已找到与总数，不给顺序。
+ */
+export function publicRegions(w) {
+  return wildIdsOf(w).map((id) => {
+    const pool = wildPool(w, id);
+    const spec = wildSpec(w, id);
+    return {
+      id, energy: pool.energy, energyMax: spec.energyMax, regen: spec.regen, coins: pool.coins,
+      richness: richnessBand(pool.energy, spec.energyMax), relicsFound: pool.relicsFound, relics: pool.relicOrder.length,
+    };
+  });
+}
+
+/** 荒野的合计（旧接口的 wilds 字段；经典地图就是那一个荒野） */
+function wildsSummary(w) {
+  const rs = publicRegions(w);
+  const energy = rs.reduce((s, r) => s + r.energy, 0);
+  const max = rs.reduce((s, r) => s + r.energyMax, 0);
+  return {
+    energy, coins: rs.reduce((s, r) => s + r.coins, 0), richness: richnessBand(energy, max), relicsFound: rs.reduce((s, r) => s + r.relicsFound, 0),
   };
 }
 

@@ -257,7 +257,7 @@ test('公共状态：概览的顶层结构与关键内容', () => {
   const st = publicState(w, { nextTickAt: 42 });
   assert.deepEqual(Object.keys(st), [
     'world', 'params', 'charter', 'places', 'agents', 'groups', 'proposals', 'laws', 'offers', 'cradle', 'treasury', 'well',
-    'wilds', 'weather', 'lexicon', 'docs', 'cemetery', 'retired', 'unborn', 'metrics', 'legacy', 'chronicle',
+    'wilds', 'regions', 'weather', 'lexicon', 'docs', 'cemetery', 'retired', 'unborn', 'metrics', 'legacy', 'chronicle',
   ]);
   assert.equal(st.world.nextTickAt, 42);
   assert.equal(st.world.revealed, false);

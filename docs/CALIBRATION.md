@@ -1,5 +1,7 @@
 # 沙盘标定报告（SPEC-M1 §16.3）
 
+> **2026-09-30 补充：** §0–§8 是经典地图（12 处地点）上的结果。新世界现在默认用边疆地图（SPEC 附录 C），它的结果在 [§9](#9-边疆地图2026-09-30)。标定脚本的缺省地图也随之改成了边疆地图；复现本文的旧结果请加 `--map classic`。
+
 > **状态：默认参数没有被改动。** 三个场景 × 种子 1–5 已经跑完（另有种子 6–10 作对照）；`default` 与 `laissez` 各有未达标的项。按 §16.3，数据与参数修改建议写在这里，**是否采纳由你决定**（问题登记为 [Q11](QUESTIONS.md)）。
 > 本文件的所有数字都可以用文末的命令复现；原始数据在 [docs/calibration/](calibration/)。
 
@@ -250,8 +252,10 @@ node src/sandbox/calibrate.js --params docs/calibration/params-M.json --seeds 1,
 ## 8. 复现
 
 ```bash
-# 基线（三个场景 × 种子 1–5；加 --seeds 1,…,10 看稳健性）
-npm run calibrate -- --label baseline --out docs/calibration/baseline.json
+# 基线（三个场景 × 种子 1–5；加 --seeds 1,…,10 看稳健性）。本文 §0–§8 用的是经典地图：
+npm run calibrate -- --map classic --label baseline --out docs/calibration/baseline.json
+# 边疆地图（§9；新世界的缺省）：
+npm run calibrate -- --map frontier --label frontier --out docs/calibration/frontier.json
 
 # 试算一组参数（不会修改任何默认值）：
 echo '{ "wellBaseOutput": 800 }' > /tmp/m.json
@@ -264,3 +268,31 @@ npm run sandbox -- --days 720 --agents 24 --seed 1 --params /tmp/m.json --out /t
 ```
 
 [docs/calibration/](calibration/) 里：`baseline.json`、`A.json`…`N.json` 是各方案的原始结果（每次运行的摘要与判定，10 个种子），`params-*.json` 是对应的参数覆盖。第 4 节的每日轨迹用 `onDay` 回调抓取账本流量，逻辑很小，见 `src/sandbox/run.js` 的 `runSandbox({ onDay, onEvent })`。
+
+## 9. 边疆地图（2026-09-30）
+
+同样的沙盘脑、同样的物理参数（**没有改任何默认值**），换成边疆地图（SPEC 附录 C：23 处地点，移动按路程计价，荒野 5 个地带）。沙盘脑在边疆地图上按感知里的 `moveCost` 估算移动的花费，闲逛只去代价 ≤ 2 的地方，探索在荒野各地带之间挑选（近的机会大）；经典地图上的决策不变。
+
+```
+npm run calibrate -- --map frontier --label frontier --out docs/calibration/frontier.json
+```
+
+种子 1–5 的中位数（括号里是经典地图的基线，§3.1）：
+
+| 场景 | 目标 | 要求 | 边疆地图 | 经典地图 |
+|---|---|---|---|---|
+| default | 第 720 日人口 | 8–120 | 4 ✗ | 6 ✗ |
+| default | 人均配给的中位数 | 6–20 | 17 ✓ | 15 ✓ |
+| default | 第 400 日前的死亡 | ≥ 1 | 31 ✓ | 29 ✓ |
+| default | 源井完好度的中位数 | ≥ 40% | 0 ✗ | 0 ✗ |
+| default | 建成的设施 | ≥ 3 | 17 ✓ | 12 ✓ |
+| default | 通过的法律 | ≥ 5 | 26 ✓ | 25 ✓ |
+| laissez | 源井降到下限的日子 | 60–120 | 48 ✗ | 55 ✗ |
+| laissez | 末日人口（显著下降但不灭绝） | 1–12 | 0 ✗ | 5 ✓ |
+| stress | 30 日内恢复的冲击比例 | ≥ 0.5 | 0.93 ✓ | 0.9 ✓ |
+
+- 源井在 `default` 里第一次 ≤ 20% 的日子是 159–223（经典 165–268）：崩溃的机制与 §4 相同——同龄群体越过「配给养不活」的线后涌向源井汲取，死井成为吸收态。边疆地图没有改变它，只是稍微提前。
+- **移动变贵了**：种子 2、前 300 日，经典地图上移动 23,769 次、平均代价 1.47（出发地失修时的倍率）、共 35,050 能量；边疆地图上移动 16,413 次、平均代价 2.58、共 42,422 能量——沙盘脑走路多花了约 20% 的能量。`laissez` 里没有人修缮，这部分开销足以让 3/5 个种子在第 720 日前灭绝。
+- 设施建得更多（17 对 12）；原因没有细查（沙盘脑在边疆地图上修路时挑代价 ≥ 2 的两地，可能有关）。
+- 这些数字仍然只说明规则型沙盘脑：它们会漫无目的地走动，比有目标的居民浪费得多。是否因此放宽物理，见 [QUESTIONS Q12](QUESTIONS.md)。
+

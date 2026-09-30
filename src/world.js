@@ -6,10 +6,11 @@
 // Soul.judged、Facility.ruined、Grave.will、WeatherState.scheduled.decidedBy/votes、Place.activity.repairs、Place.history、world.legacy。
 // 它们只增不改既有字段，不影响任何对外接口。
 
-import { P, PLACE_DEFS, LAW_DEFAULTS } from './params.js';
+import { P, LAW_DEFAULTS } from './params.js';
 import { createStreams, shuffle } from './rng.js';
 import { nameKey } from './text.js';
 import { L, CHARTER, CHARTER_LANGS, charterWallText, RELICS, CANON, LETTER } from './lore/index.js';
+import { getMap } from './map/index.js';
 
 export const WORLD_VERSION = 1;
 
@@ -71,10 +72,14 @@ function initialCounters(extra) {
 
 /**
  * 创建初始世界（§5.1）。不产生事件、不消耗 world 流以外的随机数。
- * @param {{id?: string, seed: string, codeVersion?: string, sandboxAdoption?: boolean}} opts
+ * map：用哪张地图（src/map/）。经典地图（缺省）不写 w.map 字段，荒野在 w.wilds——与 M1 的旧世界逐位相同；
+ * 其他地图写 w.map，荒野各地带的储量在 w.regions（附录 C）。
+ * @param {{id?: string, seed: string, codeVersion?: string, sandboxAdoption?: boolean, map?: string}} opts
  */
-export function createWorld({ id = 'baihua', seed, codeVersion = '0.0.0', sandboxAdoption = false } = {}) {
+export function createWorld({ id = 'baihua', seed, codeVersion = '0.0.0', sandboxAdoption = false, map = 'classic' } = {}) {
   if (typeof seed !== 'string' || seed === '') throw new Error('createWorld: seed is required');
+  const mapDef = getMap(map);
+  const classic = map === 'classic';
   const zh = L('zh');
   const en = L('en');
 
@@ -109,7 +114,7 @@ export function createWorld({ id = 'baihua', seed, codeVersion = '0.0.0', sandbo
     unborn: [],
     treasury: { energy: 0, coins: 0 },
     well: { drawPoolLeft: P.wellDrawPoolPerDay, outputHistory: [] },
-    wilds: { energy: P.wildsEnergyMax, coins: P.wildsCoins, relicOrder: [], relicsFound: 0 },
+    ...(classic ? { wilds: { energy: P.wildsEnergyMax, coins: P.wildsCoins, relicOrder: [], relicsFound: 0 } } : { regions: {} }),
     weather: { scheduled: null, active: [], votes: { month: 0, tallies: {}, voters: [] }, history: [] },
     ledger: newLedger(),
     counters: initialCounters(),
@@ -125,8 +130,10 @@ export function createWorld({ id = 'baihua', seed, codeVersion = '0.0.0', sandbo
     redacted: { events: [] }, // 被遮盖的事件 seq
   };
 
-  // 地点
-  for (const def of PLACE_DEFS) {
+  if (!classic) w.map = map;
+
+  // 地点（按地图定义的顺序）
+  for (const def of mapDef.places) {
     w.places[def.id] = {
       id: def.id,
       name: zh.place[def.id].name,
@@ -199,8 +206,20 @@ export function createWorld({ id = 'baihua', seed, codeVersion = '0.0.0', sandbo
     };
   }
 
-  // 荒野：遗物的出现顺序由 world 流洗牌决定
-  w.wilds.relicOrder = shuffle(w.rng.world, RELICS.map((r) => String(r.n)));
+  // 荒野：遗物的出现顺序由 world 流洗牌决定。经典地图是全部 16 件；其他地图每个地带各有一组，按地图顺序洗牌
+  if (classic) {
+    w.wilds.relicOrder = shuffle(w.rng.world, RELICS.map((r) => String(r.n)));
+  } else {
+    for (const def of mapDef.places) {
+      if (!def.wild) continue;
+      w.regions[def.id] = {
+        energy: def.wild.energyMax,
+        coins: def.wild.coins,
+        relicOrder: shuffle(w.rng.world, def.wild.relics.map(String)),
+        relicsFound: 0,
+      };
+    }
+  }
 
   return w;
 }

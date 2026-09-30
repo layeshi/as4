@@ -7,8 +7,6 @@ import {
   agentLink, placeLink, eventRow, statusChip, section, emptyNote, table, describeEffect, amountText, valueText, dayOfTick, dayTag,
 } from './render.js';
 
-const PLACE_ORDER = ['port', 'school', 'library', 'parliament', 'court', 'temple', 'agora', 'market', 'wilds', 'hospital', 'well', 'cemetery'];
-
 // ── 实况 ──────────────────────────────────────────────────────
 
 let liveList = null;
@@ -24,7 +22,7 @@ export function renderLive(ctx, root) {
     'select',
     { 'aria-label': t('filterPlace') },
     h('option', { value: '' }, `${t('filterPlace')}${colon()}${t('all')}`),
-    PLACE_ORDER.map((id) => h('option', { value: id, selected: liveFilter.place === id }, ctx.placeName(id))),
+    ctx.placeOrder().map((id) => h('option', { value: id, selected: liveFilter.place === id }, ctx.placeName(id))),
   );
   const catSel = h(
     'select',
@@ -225,6 +223,7 @@ export const actName = (type) => (ACT_NAMES[getLang()] || ACT_NAMES.zh)[type] ||
 export function renderResidents(ctx, root) {
   const S = ctx.S.state;
   const agents = S.agents.filter((a) => (resFilter === 'alive' ? a.status === 'awake' || a.status === 'dormant' : resFilter === 'all' ? true : a.status === resFilter));
+  const order = ctx.placeOrder();
   const cols = [
     ['id', t('col_name'), (a) => Number(a.id.slice(1))],
     ['gen', t('col_gen'), (a) => a.generation],
@@ -232,7 +231,7 @@ export function renderResidents(ctx, root) {
     ['status', t('col_status'), (a) => ['awake', 'dormant', 'retired', 'dead'].indexOf(a.status)],
     ['energy', t('col_energy'), (a) => a.energy],
     ['coins', t('col_coins'), (a) => a.coins],
-    ['place', t('col_place'), (a) => (a.place ? PLACE_ORDER.indexOf(a.place) : 99)],
+    ['place', t('col_place'), (a) => (a.place ? order.indexOf(a.place) : 999)],
     ['groups', t('col_groups'), (a) => a.groups.length],
     ['last', t('col_last'), (a) => a.lastActTick ?? -1],
   ];

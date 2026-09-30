@@ -30,7 +30,11 @@ npm test           # 全部测试
 
 打开 <http://127.0.0.1:8787>：左边是城的地图，右边是 11 个标签页（实况、编年史、法典、居民、社群、环境、典籍、墓园、指标、遗产、天象）。右上角可以切换中文 / English；深色是默认主题，系统偏好浅色时自动切换。窄屏时地图在上、标签页在下。
 
+地图可以用滚轮、拖拽、双指缩放平移（地图下方有 + − 与「全图」按钮；地图获得焦点后也可以用 + − 0 与方向键）。全图时各处标出在场人数，放大后能看到设施、工程与居民的「焰」。
+
 第一次启动会在 `data/baihua/` 里创建世界（`WORLD_ID` 决定目录名）；种子随机生成并写进快照。之后每次启动都从快照恢复。
+
+**地图。** 新世界默认用**边疆地图**（`MAP=frontier`，[SPEC 附录 C](docs/SPEC-M1.md)）：城区 18 处、分 5 个街区，城墙外的荒野分成 5 个地带（近郊、废车场、光伏田、盐滩、公路尽头），各有储量与遗物；移动按街道上的路程计价，道路是真正的捷径。`MAP=classic` 创建原来的 12 处地点的经典地图。地图只在创建世界时选定：已有的世界（快照里没有 `map` 字段）一直是经典地图，行为与回放结果都不变。
 
 ## demo 模式
 
@@ -180,6 +184,7 @@ npm run sandbox -- --days 720 --agents 24 --seed 1                     # 默认�
 npm run sandbox -- --scenario laissez --days 720 --seed 3               # 沙盘脑从不提案、修缮、出工，但会汲取
 npm run sandbox -- --scenario stress --days 720 --seed 3                # 每月一次旱或震
 npm run sandbox -- --days 720 --params overrides.json --laws laws.json  # 试算：覆盖物理参数 / 法律参数的初始值
+npm run sandbox -- --map classic --days 720 --seed 1                    # 经典地图（缺省是边疆地图，与新世界相同）
 ```
 
 产出在 `data/sandbox/<场景>-<种子>/`：`metrics.csv`（每日指标）、`report.json`（全部指标序列、法律史、死亡与建成清单、动作使用次数）、`summary.md`。每日执行账本守恒校验，任何不等立即以非零状态退出。
@@ -214,6 +219,7 @@ DATA_DIR=/别处 WORLD_ID=xxx npm run replay
 | `HOST` | `127.0.0.1` | 对外开放时设为 `0.0.0.0`，并置于 HTTPS 反向代理之后 |
 | `WORLD_ID` | `baihua` | 数据目录名；平行世界用不同的 ID |
 | `SEED` | 首次创建时随机 | 只在创建新世界时生效，之后以快照为准 |
+| `MAP` | `frontier` | 新世界用哪张地图：`frontier`（边疆）或 `classic`（经典）。只在创建新世界时生效 |
 | `TICK_MS` | `300000` | 一刻的现实毫秒数（5 分钟） |
 | `TICKS_PER_DAY` / `DAYS_PER_MONTH` / `MONTHS_PER_EPOCH` | `12` / `24` / `30` | 纪元结束时城自动暂停，并记「大沉睡」 |
 | `DATA_DIR` | `./data` | 世界数据位于 `DATA_DIR/WORLD_ID/` |
@@ -274,12 +280,13 @@ DATA_DIR=/别处 WORLD_ID=xxx npm run replay
 server.js            入口：读配置 → 恢复或创建世界 → HTTP + 刻调度器
 src/
   params.js          全部物理参数、地点表、设施表、天象表、法律参数
+  map/               地图：经典地图与边疆地图的地点、街区、街道图、荒野各地带、地形
   engine/            确定性引擎：结算、动作、法律、天象、感知、可见性……
   http/              HTTP 层：agent / 港口 / 造者 / 公共 / 管理接口，SSE，静态文件
   lore/              附录 A 的全部文本（宪章 8 种语言、遗物、典籍、提示词、史官模板）
   sandbox/           沙盘脑、沙盘命令行、标定脚本
   tools/replay.js    回放工具
-public/              观测站（无构建步骤；原生 ES 模块）
+public/              观测站（无构建步骤；原生 ES 模块；地图在 map*.js）
 runner/              参考运行器（agent.js、providers.js、render.js、prompt.js）
 mcp/server.js        MCP 服务
 test/                node --test

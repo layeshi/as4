@@ -54,7 +54,10 @@ function compose(w, d, lang) {
   for (const r of g.ruins) lines.push(fmt(l.ruin, { place: targetName(w, r.target, lang) }));
   for (const r of g.restored) lines.push(fmt(l.restored, { place: targetName(w, r.target, lang) }));
   for (const x of g.groups) lines.push(fmt(l.founded, { founder: w.agents[x.founder] ? w.agents[x.founder].name : x.founder, group: x.name }));
-  for (const r of g.relics) lines.push(fmt(l.relic, { finder: w.agents[r.finder] ? w.agents[r.finder].name : r.finder }));
+  for (const r of g.relics) {
+    const finder = w.agents[r.finder] ? w.agents[r.finder].name : r.finder;
+    lines.push(r.place ? fmt(l.relicAt, { finder, place: placeName(w, r.place, lang) }) : fmt(l.relic, { finder }));
+  }
   for (const x of g.deaths) {
     lines.push(x.lastWords ? fmt(l.death, { name: x.name, age: x.ageDays, lastWords: x.lastWords }) : fmt(l.deathNoWords, { name: x.name, age: x.ageDays }));
   }

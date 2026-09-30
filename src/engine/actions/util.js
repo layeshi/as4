@@ -3,7 +3,8 @@
 // 每个动作处理函数遵循同一个纪律：先校验一切（抛 ActError），再调用 ctx.pay() 扣代价，再修改世界。
 // 这样「失败的动作不扣能量」（PROTOCOL §2.2）是结构性保证，而不是靠每个处理函数自觉。
 
-import { PLACE_IDS, LIMITS } from '../../params.js';
+import { LIMITS } from '../../params.js';
+import { hasPlace } from '../../map/index.js';
 import { findAgent, isAlive } from '../../world.js';
 import { detectScript } from '../../text.js';
 import { sink } from '../ledger.js';
@@ -61,8 +62,9 @@ export function makeCtx(w, a, index, type) {
   return ctx;
 }
 
-export function needPlace(v) {
-  if (typeof v !== 'string' || !PLACE_IDS.includes(v)) fail('invalid_args');
+/** 这个世界的地点 ID（各张地图的地点不同） */
+export function needPlace(w, v) {
+  if (!hasPlace(w, v)) fail('invalid_args');
   return v;
 }
 

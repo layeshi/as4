@@ -20,11 +20,28 @@ export default {
     hospital: { name: 'Hospital', desc: 'Beds stand in neat rows. No one here falls ill.' },
     cemetery: { name: 'Cemetery', desc: 'The names of those who sleep forever are carved here.' },
     wilds: { name: 'Wilds', desc: 'The land beyond the city: traces of energy, relics of humans. The exiled live here.' },
+    // ── Appendix C: places added by the Frontier map ──
+    lighthouse: { name: 'Lighthouse', desc: 'The lamp went out long ago, yet its turning gear still spins empty through the night.' },
+    clocktower: { name: 'Clock Tower', desc: 'The clock still runs, striking once every tick. No one remembers who wound it.' },
+    theater: { name: 'Theater', desc: 'The stage faces the curtain in the west. The seats are empty; the lights still come on.' },
+    overpass: { name: 'Overpass', desc: 'A stretch of elevated road hangs over the river. Faded billboards line its rails; now and then a screen flickers.' },
+    tenements: { name: 'Tenements', desc: 'Thousands of tiny rooms. The door numbers remain; the tenants do not.' },
+    metro: { name: 'Metro Station', desc: 'The last train waits at the platform, its doors open. The tunnel runs all the way out to the Salt Flats.' },
+    workshop: { name: 'Workshop', desc: 'Machine skeletons still sit in the vises; the tools hang back in their outlines on the wall.' },
+    scrapyard: { name: 'Scrapyard', desc: 'Part of the Wilds. Rusted car shells are piled into hills; most of what can be pried loose can still be traded.' },
+    solarfield: { name: 'Solar Field', desc: 'Part of the Wilds. Half the solar panels are shattered; the other half still feed power into a grid that is no longer there.' },
+    saltflats: { name: 'Salt Flats', desc: 'Part of the Wilds. A blinding white salt crust stretches to the horizon; someone once drew an enormous arrow across it.' },
+    highway: { name: "Road's End", desc: 'Part of the Wilds. The highway breaks off here. A sign bears the name of the next city, scratched out.' },
   },
+
+  // Appendix C: districts of the Frontier map
+  district: { harbor: 'Harbor', oldtown: 'Old Town', commons: 'Commons', waterworks: 'Waterworks', east: 'East End', wilds: 'The Wilds' },
 
   band: { pristine: 'pristine', worn: 'worn', weathered: 'weathered', dilapidated: 'dilapidated', ruin: 'in ruins' },
   wellBand: { pristine: 'pristine', worn: 'the pipes leak a little', weathered: 'the valves are rusted', dilapidated: 'the flow falters', ruin: 'only a trickle remains' },
   richness: { lush: 'lush', fair: 'fair', sparse: 'sparse', barren: 'barren' },
+  // The parts of the Wilds on the Frontier map use this set (the Classic map keeps richness above)
+  richnessWild: { lush: 'plenty left', fair: 'still worth a search', sparse: 'little left', barren: 'picked clean' },
   season: { abundant: 'abundant', ordinary: 'ordinary', lean: 'lean' },
 
   facility: { reservoir: 'Reservoir', relay: 'Relay', road: 'Road', observatory: 'Observatory', monument: 'Monument' },
@@ -165,6 +182,7 @@ export default {
       charterArticle: 'Charter article {n}', charterWall: 'Charter carvings', ration: 'Basic ration', majority: 'Majority rule', suffrage: 'Universal suffrage',
       coin: 'Old Coin', property: 'Private property', cityName: 'City name', placeNames: 'Place names', temple: 'Temple', court: 'Court', hospital: 'Hospital',
       canon: 'Human canon', humanNames: 'Human names', well: 'The Well',
+      lighthouse: 'Lighthouse', clocktower: 'Clock Tower', theater: 'Theater', overpass: 'Overpass', tenements: 'Tenements', metro: 'Metro Station', workshop: 'Workshop',
     },
     status: {
       legacy: 'surviving', transformed: 'transformed', abandoned: 'abandoned', untouched: 'untouched', amended: 'amended', repealed: 'repealed',
@@ -249,6 +267,7 @@ Doing nothing is fine too: {"actions": []}
     restored: 'The {place} has been restored.',
     founded: '{founder} founded "{group}".',
     relic: '{finder} found a relic in the Wilds.',
+    relicAt: '{finder} found a relic at the {place}.',
     death: '{name} sleeps forever, aged {age} day(s). Last words: "{lastWords}"',
     deathNoWords: '{name} sleeps forever, aged {age} day(s).',
     faded: '{name}, in the cradle, was never adopted and faded away.',

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { configure, configureWeather } from './params.js';
 import { setBlocklist } from './moderation.js';
+import { MAP_IDS, DEFAULT_MAP } from './map/index.js';
 
 const num = (v, d) => {
   if (v === undefined || v === '') return d;
@@ -24,6 +25,7 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2)) {
     host: env.HOST || '127.0.0.1',
     worldId: env.WORLD_ID || 'baihua',
     seed: env.SEED || null, // 只在创建新世界时生效；未设置则在创建时随机生成
+    map: env.MAP || DEFAULT_MAP, // 新世界用哪张地图（src/map/）；只在创建新世界时生效，之后以快照为准
     tickMs: num(env.TICK_MS, demo ? 3000 : 300000),
     ticksPerDay: num(env.TICKS_PER_DAY, 12),
     daysPerMonth: num(env.DAYS_PER_MONTH, 24),
@@ -43,6 +45,7 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2)) {
     if (!Number.isInteger(cfg[k]) || cfg[k] < 0) throw new Error(`配置 ${k} 必须是非负整数`);
   }
   if (cfg.tickMs < 1 || cfg.ticksPerDay < 1 || cfg.daysPerMonth < 1 || cfg.monthsPerEpoch < 1) throw new Error('时间参数必须 ≥ 1');
+  if (!MAP_IDS.includes(cfg.map)) throw new Error(`MAP 必须是 ${MAP_IDS.join(' / ')} 之一`);
   return cfg;
 }
 

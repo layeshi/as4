@@ -5,6 +5,8 @@
 // P 是一个可变对象：服务器启动时按环境变量调用 configure()，沙盘推演按 --params 调用它。
 // 引擎的确定性以「同一份 P」为前提（见 SPEC §11.4）。
 
+import CLASSIC_MAP from './map/classic.js';
+
 /** §6.1 时间、§6.2 能量与生命、§6.4 环境 */
 export const P = {
   // §6.1 时间
@@ -110,30 +112,21 @@ export function conditionBand(bp) {
   return 'ruin';
 }
 
-/** 荒野丰度档位（按能量储量 / 上限） */
-export function richnessBand(energy) {
-  const pct = (energy * 100) / P.wildsEnergyMax;
+/** 荒野丰度档位（按能量储量 / 上限；上限缺省为经典荒野的 wildsEnergyMax） */
+export function richnessBand(energy, max = P.wildsEnergyMax) {
+  const pct = (energy * 100) / max;
   if (pct >= 70) return 'lush';
   if (pct >= 40) return 'fair';
   if (pct >= 15) return 'sparse';
   return 'barren';
 }
 
-/** §6.4 地点表。kind：well | cost | endow | none | open */
-export const PLACE_DEFS = Object.freeze([
-  { id: 'port', kind: 'endow', decay: 60, walls: 6 },
-  { id: 'agora', kind: 'open', decay: 0, walls: 6 },
-  { id: 'parliament', kind: 'cost', decay: 50, walls: 12 },
-  { id: 'market', kind: 'cost', decay: 60, walls: 6 },
-  { id: 'well', kind: 'well', decay: 100, walls: 6 },
-  { id: 'library', kind: 'cost', decay: 50, walls: 6 },
-  { id: 'school', kind: 'endow', decay: 50, walls: 6 },
-  { id: 'temple', kind: 'none', decay: 30, walls: 6 },
-  { id: 'court', kind: 'none', decay: 40, walls: 6 },
-  { id: 'hospital', kind: 'none', decay: 40, walls: 6 },
-  { id: 'cemetery', kind: 'cost', decay: 30, walls: 6 },
-  { id: 'wilds', kind: 'open', decay: 0, walls: 6 },
-]);
+/**
+ * §6.4 地点表（经典地图）。kind：well | cost | endow | none | open。
+ * 地点表连同坐标、街道在 src/map/ 里按地图定义；一个世界用哪张地图记在 w.map。
+ * 引擎按世界取地点请用 src/map/index.js（placeIdsOf 等），这里只保留经典地图的表。
+ */
+export const PLACE_DEFS = Object.freeze(CLASSIC_MAP.places.map(({ id, kind, decay, walls }) => Object.freeze({ id, kind, decay, walls })));
 export const PLACE_IDS = Object.freeze(PLACE_DEFS.map((p) => p.id));
 
 /** §6.4 设施表。needBp：「正常运转」所需的最低完好度（纪念碑只要 > 0） */

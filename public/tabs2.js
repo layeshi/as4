@@ -9,7 +9,6 @@ import {
 } from './render.js';
 
 const WELL_BASE = 600; // 默认参数下的源井基础日产（仅用于「今日预计产出」的估算）
-const WILDS_MAX = 800;
 
 const ownerText = (ctx, o) => {
   if (!o || o.kind === 'city') return t('owner_city');
@@ -25,8 +24,9 @@ export function renderEnvironment(ctx, root) {
 
   root.append(wellPanel(ctx));
 
-  // 地点表
+  // 地点表（有街区的地图多一列街区）
   const fx = (p) => {
+    if (p.wild) return t('fx_wild');
     if (p.kind === 'open') return t('fx_open');
     if (p.id === 'port') return t('fx_port');
     if (p.id === 'school') return t('fx_school');
@@ -42,13 +42,15 @@ export function renderEnvironment(ctx, root) {
     const arrow = d > 0 ? '▲' : d < 0 ? '▼' : '＝';
     return h('span', { class: `trend ${d > 0 ? 'up' : d < 0 ? 'down' : ''}`.trim() }, spark(hst), ` ${arrow} ${(Math.abs(d) / 100).toFixed(1)}`);
   };
+  const districts = S.places.some((p) => p.district);
   root.append(
     section(
       t('places'),
       table(
-        [t('col_name'), t('condition'), t('band'), t('trend7'), t('decay'), t('effect')],
+        [t('col_name'), ...(districts ? [t('col_district')] : []), t('condition'), t('band'), t('trend7'), t('decay'), t('effect')],
         S.places.map((p) => [
           h('span', null, placeLink(ctx, p.id), p.renamedBy ? h('small', { class: 'muted' }, ` (${lore.place[p.id].name})`) : null),
+          ...(districts ? [ctx.districtName(p.district)] : []),
           p.condition === null ? '—' : h('span', { class: 'cond' }, conditionBar(p.condition), ` ${pct(p.condition)}`),
           p.condition === null ? '—' : bandText(ctx, p.condition, p.id === 'well'),
           trend(p),
@@ -113,18 +115,23 @@ export function renderEnvironment(ctx, root) {
     ),
   );
 
-  // 荒野
-  const w = S.wilds;
+  // 荒野：经典地图只有一个荒野；边疆地图的荒野分成几个地带，各有储量与遗物
+  const words = S.world.map === 'classic' ? lore.richness : lore.richnessWild || lore.richness;
+  const regions = S.regions || [];
   root.append(
     section(
-      t('wilds'),
-      h(
-        'dl',
-        { class: 'kv' },
-        h('dt', null, t('richness')), h('dd', null, lore.richness[w.richness] || w.richness),
-        h('dt', null, t('wildsEnergy')), h('dd', null, h('span', { class: 'cond' }, progressBar(w.energy, WILDS_MAX), ` ${w.energy}/${WILDS_MAX}`)),
-        h('dt', null, t('wildsCoins')), h('dd', null, String(w.coins)),
-        h('dt', null, t('relicsFound')), h('dd', null, `${w.relicsFound}/16`),
+      regions.length > 1 ? t('regions') : t('wilds'),
+      table(
+        [t('col_region'), t('richness'), t('wildsEnergy'), t('regen'), t('wildsCoins'), t('relicsFound')],
+        regions.map((r) => [
+          placeLink(ctx, r.id),
+          words[r.richness] || r.richness,
+          h('span', { class: 'cond' }, progressBar(r.energy, r.energyMax), ` ${r.energy}/${r.energyMax}`),
+          t('perDay', { n: r.regen }),
+          String(r.coins),
+          `${r.relicsFound}/${r.relics}`,
+        ]),
+        'regions',
       ),
     ),
   );

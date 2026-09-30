@@ -8,6 +8,7 @@ import { conditionBand } from './params.js';
 import { L, fmt, cityDisplayName } from './lore/index.js';
 import { agentList, isAlive } from './world.js';
 import { electorateOf } from './engine/laws.js';
+import { mapOf, wildIdsOf, wildPool } from './map/index.js';
 
 const round = (x, k = 3) => {
   const m = 10 ** k;
@@ -93,7 +94,7 @@ export function dailyMetrics(w, d) {
     drawn: g.drawn,
     projectsBuilt: Object.values(w.projects).filter((j) => j.status === 'built').length,
     projectsAbandoned: Object.values(w.projects).filter((j) => j.status === 'abandoned').length,
-    wildsEnergy: w.wilds.energy,
+    wildsEnergy: wildIdsOf(w).reduce((s, id) => s + wildPool(w, id).energy, 0), // 荒野各地带合计
     proposals: g.proposals,
     passed: g.passed,
     rejected: g.rejected,
@@ -193,8 +194,8 @@ export function computeLegacy(w, d) {
     : entry(w, 'cityName', 'cityName', {}, 'named', 'cityNamed', { name: w.cityName }));
   const renamed = Object.values(w.places).filter((p) => p.renamedBy).length;
   items.push(entry(w, 'placeNames', 'placeNames', {}, renamed === 0 ? 'legacy' : 'transformed', 'placeNames', { n: renamed }, renamed));
-  // 神殿、法院、医院：被重新诠释 > 被维护 > 被使用 > 空置
-  for (const id of ['temple', 'court', 'hospital']) {
+  // 神殿、法院、医院（边疆地图另有灯塔、钟楼……）：被重新诠释 > 被维护 > 被使用 > 空置
+  for (const id of mapOf(w).legacy) {
     const p = w.places[id];
     const used = p.activity.lastActiveDay !== null && d - p.activity.lastActiveDay < 10;
     if (p.renamedBy) items.push(entry(w, id, id, {}, 'reinterpreted', 'placeReinterpreted', { name: p.name }));

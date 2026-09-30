@@ -346,15 +346,16 @@ test('POST /api/me/act：成功——逐个动作的结果、剩余次数；动�
     const a = await env.register('青禾');
     const r = await env.call('/api/me/act', {
       method: 'POST', token: a.agentToken,
-      body: { thought: '先去广场看看。', actions: [{ type: 'move', to: 'agora' }, { type: 'say', text: '有人在吗？' }, { type: 'repair', target: 'well', energy: 5 }, { type: 'nonsense' }] },
+      body: { thought: '先去学堂看看。', actions: [{ type: 'move', to: 'school' }, { type: 'say', text: '有人在吗？' }, { type: 'repair', target: 'well', energy: 5 }, { type: 'nonsense' }] },
     });
     assert.equal(r.status, 200);
     assert.equal(r.json.ok, true);
+    // 港口与学堂在两张地图上都相邻：移动的代价为 1
     assert.deepEqual(r.json.results.map((x) => [x.index, x.type, x.ok, x.cost]), [[0, 'move', true, 1], [1, 'say', true, 1], [2, 'repair', false, 0], [3, 'nonsense', false, 0]]);
-    assert.deepEqual(r.json.results[0].data, { place: 'agora' });
+    assert.deepEqual(r.json.results[0].data, { place: 'school' });
     assert.deepEqual(r.json.results[2].error, { code: 'wrong_place', message: '这个动作不能在当前地点执行。' });
     assert.equal(r.json.results[3].error.code, 'invalid_args');
-    assert.deepEqual(r.json.you, { status: 'awake', energy: 38, coins: 20, actionsLeft: 0, place: 'agora' });
+    assert.deepEqual(r.json.you, { status: 'awake', energy: 38, coins: 20, actionsLeft: 0, place: 'school' });
     // 英文
     const b = await env.register('松烟');
     const en = await env.call('/api/me/act?lang=en', { method: 'POST', token: b.agentToken, body: { actions: [{ type: 'repair', target: 'well', energy: 5 }, { type: 'contribute', project: 'j9', energy: 99999 }] } });
@@ -371,7 +372,7 @@ test('POST /api/me/act：成功——逐个动作的结果、剩余次数；动�
     assert.ok(hint.json.results[0].error.message.includes('只差')); // 具体的说明来自 hint
     // 独白进入延迟公开事件
     const thoughts = env.rt.events.ownerEvents('a1', 'thought');
-    assert.equal(thoughts[0].data.text, '先去广场看看。');
+    assert.equal(thoughts[0].data.text, '先去学堂看看。');
   } finally {
     await env.close();
   }

@@ -2,6 +2,8 @@
 // 源井产出、蓄能池的腐坏上限。（修缮、衰败、工程、汲取、铭刻、荒野见本文件后半部分。）
 
 import { P, FACILITY_DEFS, SEASON_TABLE, WEATHER_DEFS } from '../params.js';
+import { ACTIONS } from '../lore/index.js';
+import { mapOf, isWild, usesDistance, shortestCosts } from '../map/index.js';
 import { nextId, clockDay } from '../world.js';
 import { sink } from './ledger.js';
 import { emit, pushInbox } from './core.js';
@@ -36,6 +38,28 @@ export function roadBetween(w, a, b) {
 export function roadFree(w, a, b) {
   const r = roadBetween(w, a, b);
   return !!r && isFunctioning(r);
+}
+
+/**
+ * 按路程计价的地图（附录 C）：从 from 出发到各地点的最小移动代价（不含出发地的倍率）。
+ * 街道按地图定义的代价；正常运转的道路另加一条代价为 0 的边。被放逐者只能经过、到达荒野各地带。
+ */
+export function travelCosts(w, from, { exiled = false } = {}) {
+  const extra = [];
+  for (const f of Object.values(w.facilities)) {
+    if (f.type === 'road' && isFunctioning(f)) extra.push({ a: f.place, b: f.to, cost: 0 });
+  }
+  return shortestCosts(mapOf(w), from, { extra, only: exiled ? (id) => isWild(w, id) : null });
+}
+
+/**
+ * 移动的基础代价（出发地的倍率由 ctx.pay 另算）。到不了（被放逐者去城里）返回 null。
+ * 经典地图：两端之间有正常运转的道路为 0，否则为动作表的基础代价 1；按路程计价的地图：最短路的代价。
+ */
+export function moveBaseCost(w, from, to, { exiled = false } = {}) {
+  if (!usesDistance(w)) return roadFree(w, from, to) ? 0 : ACTIONS.move.base;
+  const c = travelCosts(w, from, { exiled })[to];
+  return c === undefined ? null : c;
 }
 
 /** 观星台是否在此地且正常运转 */

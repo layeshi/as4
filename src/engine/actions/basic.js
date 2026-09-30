@@ -7,17 +7,21 @@ import {
   fail, emit, pushInbox, ref, creditEnergy,
   needText, optText, needInt, optAmount, needObject, needId, toPermille, mulPermille,
 } from '../core.js';
-import { hasRelay, isWeatherActive, roadFree } from '../environment.js';
+import { hasRelay, isWeatherActive, moveBaseCost } from '../environment.js';
+import { isWild } from '../../map/index.js';
 import { needPlace, needAgent, recordUtterance } from './util.js';
 
 function move(ctx, args) {
   const { w, a } = ctx;
-  const to = needPlace(args.to);
+  const to = needPlace(w, args.to);
   if (to === a.place) fail('already');
-  if (a.exiled && to !== 'wilds') fail('exiled');
+  if (a.exiled && !isWild(w, to)) fail('exiled');
   const from = a.place;
-  // 正常运转的道路两端之间为 0；否则按基础代价（在出发地的倍率下）
-  ctx.pay(roadFree(w, from, to) ? 0 : ACTIONS.move.base);
+  // 经典地图：正常运转的道路两端之间为 0，否则为基础代价；按路程计价的地图：街道图上的最短路。
+  // 都在出发地的倍率下计价（ctx.pay）
+  const base = moveBaseCost(w, from, to, { exiled: a.exiled });
+  if (base === null) fail('exiled');
+  ctx.pay(base);
   a.place = to;
   w.places[to].activity.visits++;
   emit(w, 'move', { agent: a.id, place: to, data: { from, to } });

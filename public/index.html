@@ -31,9 +31,16 @@
   <section class="map-pane">
     <svg id="map" class="map"></svg>
     <div class="map-tools">
+      <span class="zoom">
+        <button id="map-zoom-in" class="btn small" type="button">+</button>
+        <button id="map-zoom-out" class="btn small" type="button">−</button>
+        <button id="map-fit" class="btn small" type="button">全图</button>
+      </span>
       <label><span id="color-label">着色</span>
         <select id="color-mode"><option value="group">按社群</option><option value="script">按文字系统</option></select>
       </label>
+      <span class="spacer"></span>
+      <ul id="map-legend" class="map-legend"></ul>
     </div>
   </section>
   <section class="side-pane">

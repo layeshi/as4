@@ -2,7 +2,7 @@
 //
 //   node src/sandbox/run.js --days 720 --agents 24 --seed 1 \
 //     [--weather random|schedule:<file>] [--params overrides.json] \
-//     [--scenario default|laissez|stress] [--out data/sandbox/<name>]
+//     [--scenario default|laissez|stress] [--map frontier|classic] [--out data/sandbox/<name>]
 //   额外（标定用，不在 SPEC 里）：--laws <file> 覆盖法律参数的初始值（如 {"rationShare": 0.8}）
 //
 // 不启动 HTTP，直接循环执行 tick 命令；所有 agent 都是沙盘脑（body.kind = "sandbox"），在第 0 日由港口入城。
@@ -19,6 +19,7 @@ import { checkConservation } from '../engine/ledger.js';
 import { createStream, int } from '../rng.js';
 import { ACTION_ORDER } from '../lore/index.js';
 import { configureSandbox } from './brains.js';
+import { DEFAULT_MAP } from '../map/index.js';
 
 export const SCENARIOS = ['default', 'laissez', 'stress'];
 
@@ -31,9 +32,10 @@ export function stressSchedule(months) {
 
 /**
  * 跑一次沙盘推演，返回 { world, report }。
- * opts：{ days, agents, seed, weather, params, laws, scenario, letterEveryDays }；onDay(w, d) 与 onEvent(e) 是观测用的回调
+ * opts：{ days, agents, seed, weather, params, laws, scenario, map, letterEveryDays }；onDay(w, d) 与 onEvent(e) 是观测用的回调。
+ * map 缺省与新世界相同（DEFAULT_MAP）；--map classic 复现经典地图（docs/CALIBRATION.md 的旧结果）。
  */
-export function runSandbox({ days = 720, agents = 24, seed = 1, weather, params, laws, scenario = 'default', letterEveryDays = 25, onDay, onEvent } = {}) {
+export function runSandbox({ days = 720, agents = 24, seed = 1, weather, params, laws, scenario = 'default', map = DEFAULT_MAP, letterEveryDays = 25, onDay, onEvent } = {}) {
   if (!SCENARIOS.includes(scenario)) throw new Error(`unknown scenario: ${scenario}`);
   configureSandbox({ scenario });
   if (params) configure(params);
@@ -42,7 +44,7 @@ export function runSandbox({ days = 720, agents = 24, seed = 1, weather, params,
   else if (weather && weather.startsWith('schedule:')) configureWeather({ mode: 'schedule', schedule: JSON.parse(readFileSync(weather.slice(9), 'utf8')) });
   else configureWeather({ mode: weather === 'vote' ? 'vote' : 'random' });
 
-  const w = createWorld({ id: 'sandbox', seed: String(seed), codeVersion: 'sandbox', sandboxAdoption: true });
+  const w = createWorld({ id: 'sandbox', seed: String(seed), codeVersion: 'sandbox', sandboxAdoption: true, map });
   // 标定用：法律参数的初始值（--laws 文件）。不属于 SPEC §16.1 的命令行，只用来在不改默认值的前提下试算建议
   if (laws) {
     for (const [k, v] of Object.entries(laws)) {
@@ -87,7 +89,7 @@ export function runSandbox({ days = 720, agents = 24, seed = 1, weather, params,
       if (onDay) onDay(w, d);
     }
   }
-  const report = buildReport(w, events, { days, agents, seed, scenario, elapsedMs: Date.now() - t0, conservationFailure });
+  const report = buildReport(w, events, { days, agents, seed, scenario, map, elapsedMs: Date.now() - t0, conservationFailure });
   return { world: w, report };
 }
 
@@ -203,6 +205,7 @@ function main() {
     seed: o.seed ?? '1',
     weather: o.weather,
     scenario: o.scenario || 'default',
+    map: o.map || DEFAULT_MAP,
     params: o.params ? JSON.parse(readFileSync(o.params, 'utf8')) : undefined,
     laws: o.laws ? JSON.parse(readFileSync(o.laws, 'utf8')) : undefined,
   };

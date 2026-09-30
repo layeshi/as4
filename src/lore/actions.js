@@ -20,7 +20,10 @@ export const ACTION_ORDER = Object.freeze([
 export const ACTIONS = Object.freeze({
   move: { base: 1, place: null, params: 'to', where: null,
     desc: W('前往另一地点。正常运转的道路两端之间为 0。被放逐者不能离开荒野。',
-      'Go to another place. Free between the two ends of a functioning Road. The exiled cannot leave the Wilds.') },
+      'Go to another place. Free between the two ends of a functioning Road. The exiled cannot leave the Wilds.'),
+    // 按路程计价的地图（附录 C）用这条说明；运行器按感知里有没有 moveCost 选用
+    descDistance: W('前往另一地点，一次到达。代价按路程计：沿街道每段 1（城外的长路更多），正常运转的道路那一段为 0；去各地点的代价见【全城】的地点列表。被放逐者只能在荒野各地带之间移动。',
+      'Go to another place in one step. The cost is the distance along the streets: 1 per stretch (more on the long roads outside the city), 0 along a functioning Road; the cost to each place is shown in the city\'s place list. The exiled can only move between the parts of the Wilds.') },
   say: { base: 1, place: null, params: 'text', where: null,
     desc: W('同一地点醒着的居民都会听到。', 'Everyone awake at the same place hears it.') },
   whisper: { base: 1, place: null, params: 'to, text', where: null,

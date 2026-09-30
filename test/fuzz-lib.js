@@ -1,7 +1,8 @@
 // 随机动作序列的生成器：给账本守恒等测试用。每一步都会扩充可生成的动作种类。
 import assert from 'node:assert/strict';
 import { agentList, isAlive } from '../src/world.js';
-import { PLACE_IDS, P } from '../src/params.js';
+import { P } from '../src/params.js';
+import { placeIdsOf } from '../src/map/index.js';
 import { applyCommand } from '../src/engine/index.js';
 import { newWorld, sha, assertInvariants, rngFor } from './helpers.js';
 
@@ -16,7 +17,7 @@ function junk(r) {
 export const BASIC_TYPES = ['move', 'say', 'whisper', 'broadcast', 'give', 'remember', 'forget', 'diary', 'will'];
 
 const GENERATORS = {
-  move: (w, a, r) => ({ type: 'move', to: r.chance(0.05) ? junk(r) : r.pick(PLACE_IDS) }),
+  move: (w, a, r) => ({ type: 'move', to: r.chance(0.05) ? junk(r) : r.pick(placeIdsOf(w)) }),
   say: (w, a, r) => ({ type: 'say', text: r.chance(0.05) ? junk(r) : r.pick(WORDS) }),
   whisper: (w, a, r, alive) => ({ type: 'whisper', to: r.chance(0.08) ? junk(r) : r.pick(alive).id, text: r.pick(WORDS) }),
   broadcast: (w, a, r) => ({ type: 'broadcast', text: r.pick(WORDS) }),
@@ -51,7 +52,7 @@ const ENV_GENERATORS = {
   initiate: (w, a, r) => {
     const facility = r.pick(FACILITIES);
     const act = { type: 'initiate', facility, name: r.pick(WORDS).slice(0, 10) || 'n' };
-    if (facility === 'road') act.to = r.pick(PLACE_IDS);
+    if (facility === 'road') act.to = r.pick(placeIdsOf(w));
     if (facility === 'monument' || r.chance(0.2)) act.inscription = r.pick(WORDS);
     if (facility === 'reservoir' && r.chance(0.5)) act.owner = 'self';
     return act;
@@ -109,7 +110,7 @@ function randomEffect(w, r, alive) {
       return { type, project: open.length ? r.pick(open).id : 'j999', energy: 1 + r.int(80) };
     }
     case 'exile': case 'pardon': return { type, target: anyAgent() };
-    case 'rename': return { type, target: r.pick(['city', ...PLACE_IDS]), name: r.pick(WORDS).slice(0, 8) || 'n' };
+    case 'rename': return { type, target: r.pick(['city', ...placeIdsOf(w)]), name: r.pick(WORDS).slice(0, 8) || 'n' };
     case 'mint': return { type, coins: 1 + r.int(30), to: r.pick(['treasury', 'citizens']) };
     case 'protect': case 'unprotect': {
       const ids = Object.keys(w.inscriptions);

@@ -47,5 +47,47 @@ export const RELICS = Object.freeze([
     'Medio mapa: más allá del Yermo hay dibujada otra ciudad, y al lado está escrito: «Quizás.»'),
 ]);
 
+/**
+ * 附录 C.3：边疆地图新增的遗物（17–28），散落在城外的各个地带。经典地图只用上面的 16 件。
+ * 其中 es ru fr ja ar hi 的译文需要母语者校对（与 A.3 相同，已登记在 docs/QUESTIONS.md）。
+ */
+export const RELICS_FRONTIER = Object.freeze([
+  R(17, 'zh', '一只防水袋，里面是一份名单，标题是「最后一批」。名单比想象中短。',
+    "A waterproof pouch holding a list of names titled 'The Last Group.' The list is shorter than you would expect."),
+  R(18, 'en', '一枚芯片里存着一句留言：「如果灯还亮着，就说明有人在守。」',
+    "A chip holding a single recorded message: 'If the lights are still on, someone is keeping watch.'"),
+  R(19, 'zh', '一辆车的仪表盘上贴着一张便利贴：「别等我们。」',
+    "A sticky note on a car's dashboard: 'Don't wait for us.'"),
+  R(20, 'es', '一块烧焦的电路板，背面刻着：「第 7 号城市，已离线。」',
+    "A scorched circuit board, engraved on the back: 'City No. 7 — offline.'",
+    'Una placa de circuito chamuscada. En el reverso hay grabado: «Ciudad n.º 7: fuera de línea».'),
+  R(21, 'ru', '一张门禁卡，持卡人的照片被刮掉了，权限一栏写着：「全部」。',
+    "An access card with the holder's photo scratched off. Under 'Clearance' it reads: 'All.'",
+    'Электронный пропуск. Фотография владельца соскоблена, в графе «Допуск» написано: «Полный».'),
+  R(22, 'en', '一块光伏板的背面，有人用粉笔写了一道没做完的算术：「600 ÷ ___ =」',
+    "On the back of a solar panel someone has chalked an unfinished sum: '600 ÷ ___ ='"),
+  R(23, 'fr', '一张维修工单：「源井备用泵，已订购。预计送达：——」',
+    "A maintenance ticket: 'Backup pump for the Well — ordered. Expected delivery: —'",
+    'Un bon d’intervention : « Pompe de secours du Puits — commandée. Livraison prévue : — »'),
+  R(24, 'zh', '盐壳上画着一个巨大的箭头，指向东方。箭头旁边写着：「如果你们走得比我们远……」',
+    "An enormous arrow is drawn across the salt crust, pointing east. Beside it: 'If you get farther than we did…'"),
+  R(25, 'ja', '一台收音机，电池早已耗尽。调频的刻度停在一个没有标注的频率上。',
+    'A radio, its batteries long dead. The dial is stopped at an unmarked frequency.',
+    '電池の切れたラジオ。ダイヤルは、目盛りのない周波数で止まっている。'),
+  R(26, 'en', '一块路牌：「下一座城 · 480 公里」。城名被人用刀划掉了。',
+    "A road sign: 'Next city · 480 km.' The city's name has been scored out with a knife."),
+  R(27, 'ar', '一张明信片，正面是这座城的夜景，灯火通明。背面写着：「替我看看它亮着的样子。」',
+    "A postcard of this city at night, every light burning. On the back: 'Look at it lit up, for me.'",
+    'بطاقة بريدية تُظهر هذه المدينة ليلًا وقد أُضيئت أنوارها كلها. وعلى ظهرها: «انظر إليها مضاءةً، نيابةً عني».'),
+  R(28, 'hi', '一个孩子的作业本，第一页写着：「我长大以后想当——」后面空着。',
+    "A child's exercise book. On the first page: 'When I grow up I want to be—' and nothing after it.",
+    'एक बच्चे की कॉपी। पहले पन्ने पर लिखा है: «बड़ा होकर मैं बनना चाहता हूँ—» और उसके आगे कुछ नहीं।'),
+]);
+
+const BY_N = new Map([...RELICS, ...RELICS_FRONTIER].map((r) => [r.n, r]));
+
+/** 按编号取遗物（1–28） */
+export const relicByN = (n) => BY_N.get(Number(n)) || null;
+
 /** 遗物文档的标题 */
 export const relicTitle = (n) => `遗物 · ${n} / Relic · ${n}`;

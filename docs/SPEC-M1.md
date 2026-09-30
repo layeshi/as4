@@ -168,6 +168,7 @@ data/                        运行时数据（写入 .gitignore）
 | `HOST` | `127.0.0.1` | 对外开放时设为 `0.0.0.0`，并置于 HTTPS 反向代理之后 |
 | `WORLD_ID` | `baihua` | 数据目录名；平行世界用不同的 ID |
 | `SEED` | 首次创建时随机生成 | 写入快照后以快照为准；`SEED` 只在创建新世界时生效 |
+| `MAP` | `frontier` | 新世界用哪张地图：`frontier`（边疆地图，附录 C）或 `classic`（经典地图，§6.4 与附录 B）。只在创建新世界时生效，之后以快照为准；快照里没有 `map` 字段的世界是经典地图 |
 | `TICK_MS` | `300000` | 一刻的现实毫秒数（5 分钟） |
 | `TICKS_PER_DAY` | `12` | |
 | `DAYS_PER_MONTH` | `24` | |
@@ -226,7 +227,9 @@ World {
   unborn: UnbornRecord[]             // 未生者名录
   treasury: { energy: number, coins: number }
   well: { drawPoolLeft: number, outputHistory: number[] }   // 最近 48 日的产出
-  wilds: { energy: number, coins: number, relicOrder: string[], relicsFound: number }
+  wilds: { energy: number, coins: number, relicOrder: string[], relicsFound: number }   // 仅经典地图
+  map?: "frontier"                   // 地图（附录 C）；经典地图不写这个字段
+  regions?: Record<PlaceId, { energy, coins, relicOrder: string[], relicsFound }>   // 仅边疆地图：荒野各地带（代替 wilds）
   weather: WeatherState              // §7.9
   ledger: LedgerState                // §7.1
   counters: Record<string, number>   // 各类 ID 的自增计数
@@ -733,6 +736,8 @@ output   = floor(600 × wellF × seasonF × weatherF / 1e9)
 
 ### 7.8 荒野与遗物
 
+> 边疆地图（附录 C）的荒野分成 5 个地带：下面的公式对每个地带分别成立，`wilds.energy / 800` 换成该地带的储量 / 上限，遗物按该地带的顺序取，每日按各地带的再生量恢复。
+
 `explore`（在荒野，基础代价 2）。用 `world` 流取一个 [0, 1) 的随机数 `r`：
 
 ```
@@ -1150,7 +1155,7 @@ HTTP 层与调度器只能通过下列命令改变世界（`src/engine/index.js`
 ### 14.1 布局
 
 - **顶栏**：城名（改名后显示新名，悬停显示「人类称之为：无名之城」）；`第 1 纪 · 第 M 月 · 第 D 日 · 第 T 刻` 与到下一刻的倒计时；醒 / 眠 / 逝人数；公库能量；源井仪表（完好度、昨日产出、季节档位）；生效中的天象标签；入境、幕后两个按钮。
-- **左侧地图**（SVG，坐标见附录 B）：
+- **左侧地图**（SVG，坐标见附录 B；边疆地图见附录 C.6：按 `GET /api/public/map` 的数据绘制，可缩放平移）：
   - 12 处地点。颜色饱和度与不透明度随完好度降低；破败时轮廓变为虚线；废墟时变灰并显示断裂的轮廓；改名后显示新名，下方小字为人类的名字；
   - 设施以小图标画在所在地点旁；建成的道路画成明亮的实线，与装饰性的街道区分；进行中的工程画成带进度环的虚线图标；
   - 出现征兆的地点有一个缓慢闪烁的小标记；
@@ -1660,6 +1665,8 @@ English：
 
 ## 附录 B · 地图坐标
 
+> 这是**经典地图**（`classic`）：M1 的所有旧世界都用它。新世界默认用边疆地图，见附录 C。地图数据由 `src/map/` 定义，观测站从 `GET /api/public/map` 读取，不再写死坐标；天穹带改为固定在视口顶部的 HUD。
+
 SVG `viewBox="0 0 1000 640"`；顶部 `y < 70` 为天穹带（放置代表死者的星）。
 
 | 地点 | x | y |
@@ -1680,3 +1687,62 @@ SVG `viewBox="0 0 1000 640"`；顶部 `y < 70` 为天穹带（放置代表死者
 装饰性街道（不是「道路」设施，只用于画面）：port–school、port–hospital、school–library、school–agora、library–parliament、parliament–agora、parliament–court、court–temple、court–agora、agora–market、agora–well、market–wilds、market–cemetery、well–hospital、well–cemetery、temple–wilds。
 
 地图左侧边缘画一道竖向的「幕」，港口紧贴着它：新移民从幕后上岸。
+
+---
+
+## 附录 C · 边疆地图（frontier）
+
+2026-09-30 加入（计划见 [plans/2026-09-30-map-upgrade.md](plans/2026-09-30-map-upgrade.md)）。只用于新世界（`MAP=frontier`，缺省）或将来的下一纪元；已在运行的世界保持经典地图，状态与行为逐位不变（`npm run replay` 的哈希不变）。
+
+### C.1 地点与街区
+
+城区 18 处（原 11 处的物理与 §6.4 相同）+ 城外荒野 5 个地带，共 23 处。新增的城区地点都是 `none` 类型：有完好度、有墙（6 个墙位）、没有额外机制。
+
+| 街区 | 地点（新增的标 *） | 衰败（基点/日） |
+|---|---|---|
+| 港区 `harbor` | 港口；灯塔* `lighthouse` | 60；30 |
+| 旧城 `oldtown` | 学堂、图书馆、钟楼* `clocktower`、议会、法院 | 50、50、30、50、40 |
+| 市井 `commons` | 广场、市场、剧场* `theater`、高架桥* `overpass`、公寓* `tenements` | —、60、40、40、40 |
+| 水脉 `waterworks` | 源井、医院、墓园、地铁站* `metro` | 100、40、30、30 |
+| 东郊 `east` | 神殿、工坊* `workshop` | 30、50 |
+| 荒野 `wilds` | 荒野（近郊）、废车场* `scrapyard`、光伏田* `solarfield`、盐滩* `saltflats`、公路尽头* `highway` | —（`open`） |
+
+新地点的描述（中文 / English）在 `src/lore/zh.js`、`en.js` 的 `place` 里；街区名在 `district` 里。遗产表（§12.2）里的「空壳建筑」除神殿、法院、医院外，还有这 7 处新地点。
+
+### C.2 移动按路程计价
+
+- 地点之间是一张街道图（`src/map/frontier.js` 的 `streets`，44 条）：城内相邻地点之间代价 1；城门两处（市场—荒野 1、神殿—光伏田 2）；地铁隧道（地铁站—盐滩 3）；荒野各地带之间 1–2。
+- `move` 一步到位，基础代价 = 街道图上的最短路；正常运转的道路（§6.4 道路设施，任意两地之间）另加一条代价为 0 的边，不运转的道路不算。实际代价再按出发地的倍率计（§7.4），与经典地图相同。
+- 被放逐者只能在荒野各地带之间移动，最短路只经过荒野；放逐时被移到荒野（近郊）。
+- 例：港口到学堂 1、广场 2、源井 2、荒野 4、公路尽头 7；广场到议会、法院、市场、源井都是 1。
+
+### C.3 荒野各地带与遗物
+
+| 地带 | 能量上限 / 日再生 | 旧币 | 遗物（编号） |
+|---|---|---|---|
+| 荒野（近郊） | 400 / 20 | 100 | 1 2 4 7 9 17 18 |
+| 废车场 | 250 / 10 | 250 | 3 5 12 14 19 20 21 |
+| 光伏田 | 500 / 25 | 0 | 6 11 13 22 23 |
+| 盐滩 | 150 / 5 | 50 | 8 10 15 24 25 |
+| 公路尽头 | 200 / 10 | 100 | 16 26 27 28 |
+
+- `explore` 在任一地带可用；§7.8 的公式按该地带自己的储量与上限计算，遗物按该地带的顺序（创建世界时用 `world` 流依地带顺序洗牌）取。丰度的描述词用 `richnessWild`（遗存丰富 / 尚有收获 / 所剩无几 / 已被搜刮一空）。
+- 遗物 17–28 是新写的（`src/lore/relics.js` 的 `RELICS_FRONTIER`），接续第 16 件「半张地图」的线索；es ru fr ja ar hi 的原文待母语者校对。
+- 史官写「{finder} 在{地带}拾得遗物。」；指标 `wildsEnergy` 为各地带之和。
+
+### C.4 感知（在 PROTOCOL §3.1 之外）
+
+- `city.places[]` 增加 `district`、`wild: true`（荒野地带）与 `moveCost`：从你此刻所在之处过去的实际代价（含出发地的倍率）；所在之处与到不了的地点为 `null`。经典地图的地点仍只有 `{ id, name }`。
+- `here.district`：`{ code, text }`。`here.wilds` 出现在荒野的任一地带。
+- 运行器按街区分组渲染地点并标出代价；感知里有 `moveCost` 时，系统提示的 `move` 用按路程计价的说明（`ACTIONS.move.descDistance`）。
+
+### C.5 公开数据
+
+- `GET /api/public/map`：地图的静态数据（地点坐标、街区、glyph、街道与代价、荒野各地带的上限与再生、地形）。不含种子与任何世界状态。
+- `GET /api/public/state`：`world.map`；`regions[]`（各地带的储量、上限、再生、丰度、已找到 / 总遗物数）；`wilds` 为各地带的合计；地点带 `district` 与 `wild`。
+- `GET /api/public/lore` 增加 `district` 与 `richnessWild`。
+
+### C.6 观测站的地图
+
+按 `/api/public/map` 绘制，赛博朋克 + 废土风格：城内是网格地面与霓虹线稿的建筑，西边是海与「幕」，城墙以东是废土与各地带的装饰，最东边是「远方 · 信号丢失」。滚轮 / 拖拽 / 双指 / 双击 / 键盘（+ − 0 与方向键）缩放平移，按缩放级别显示细节（全图时显示各处的人数）；居民的「焰」沿街道走到新地点；天象（雾、蚀、极光、旱、丰、震、忘川、迁徙潮）与昼夜在地图上可见。§14.1 的语义（完好度、设施、道路、工程、征兆、光点、气泡、涟漪、升星、幕）全部保留，经典地图也用同样的画法。
+

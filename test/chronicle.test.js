@@ -6,6 +6,7 @@ import { applyCommand } from '../src/engine/index.js';
 import { writeChronicle, pickQuote } from '../src/chronicle.js';
 import { newWorld, reg, one, tick, settle, tickDays, grant, eventsOf } from './helpers.js';
 import { boot } from './http-helpers.js';
+import { getMap } from '../src/map/index.js';
 
 const world = (names = ['青禾', '松烟', '白露']) => {
   const w = newWorld('chron');
@@ -213,7 +214,8 @@ test('GET /api/public/chronicle | metrics | legacy：一日之后有数据；lan
     assert.equal((await env.call('/api/public/metrics')).json.metrics.length, 2);
     const legacy = await env.call('/api/public/legacy');
     assert.equal(legacy.json.legacy.day, 1);
-    assert.equal(legacy.json.legacy.items.length, 23);
+    // 20 项 + 地图里「人类的空壳建筑」各一项（HTTP 测试用新世界的默认地图：边疆地图有 10 处，经典地图 3 处）
+    assert.equal(legacy.json.legacy.items.length, 20 + getMap(env.rt.w.map || 'classic').legacy.length);
     const state = await env.call('/api/public/state');
     assert.equal(state.json.metrics.day, 1);
     assert.equal(state.json.legacy.day, 1);

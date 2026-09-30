@@ -15,6 +15,7 @@ import { stepWeather, scheduleMonth } from './weather.js';
 import { dailyMetrics, computeLegacy } from '../metrics.js';
 import { writeChronicle } from '../chronicle.js';
 import { runSandboxBrains, sandboxAdoptions } from '../sandbox/brains.js';
+import { wildIdsOf, wildPool, wildSpec } from '../map/index.js';
 
 /** 每刻（tick 命令，§8.1） */
 export function tickWorld(w) {
@@ -98,9 +99,13 @@ function recordPlaceHistory(w) {
   }
 }
 
-/** 第 12 步：荒野恢复、汲取池重置、每人当日汲取量清零 */
+/** 第 12 步：荒野（各地带）恢复、汲取池重置、每人当日汲取量清零 */
 function restoreDaily(w) {
-  w.wilds.energy = Math.min(P.wildsEnergyMax, w.wilds.energy + P.wildsRegenPerDay);
+  for (const id of wildIdsOf(w)) {
+    const pool = wildPool(w, id);
+    const spec = wildSpec(w, id);
+    pool.energy = Math.min(spec.energyMax, pool.energy + spec.regen);
+  }
   w.well.drawPoolLeft = P.wellDrawPoolPerDay;
   for (const a of agentList(w)) a.drawnToday = 0;
 }

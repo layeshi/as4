@@ -6,6 +6,8 @@
 // - 每一刻以 50% 的概率行动，每次 1–2 个动作；
 // - 九种性情；能量低于 12 时都会求生；有一定概率修缮、出工、汲取；
 // - 语言：约三分之一说英文，六分之一说西班牙文，其余说中文。
+// - 按路程计价的地图（附录 C，感知里的地点带 moveCost）：按实际代价估算移动的花费，闲逛与修路挑近处 / 远处，
+//   探索在荒野的各地带之间挑选。经典地图上的决策与随机数的消耗顺序保持原样（旧世界的回放依赖它）。
 //
 // 本文件属于引擎确定性约束的范围：禁止 Math.random / Date.now / new Date / 超越函数。
 
@@ -215,7 +217,8 @@ function decide(w, a, p, r, count) {
   const you = p.you; // 感知是新建的对象，这里可以放心地本地扣减
   const costs = {};
   for (const x of p.actions) costs[x.type] = x.cost;
-  const ctx = { w, a, p, r, you, here: p.here, city: p.city, lang: langOf(a), t: a.body.temperament, laissez: SANDBOX.scenario === 'laissez', costs };
+  const dist = p.city.places.some((x) => x.moveCost !== undefined);
+  const ctx = { w, a, p, r, you, here: p.here, city: p.city, lang: langOf(a), t: a.body.temperament, laissez: SANDBOX.scenario === 'laissez', costs, dist };
   const out = [];
   // 收件箱只递送一次：管事收到入会申请就当场答复（不然多半就错过了）
   const request = p.inbox.find((i) => i.kind === 'group' && i.event === 'request');
@@ -240,6 +243,13 @@ function spend(ctx, act) {
   let energy = ctx.costs[act.type] || 0;
   let coins = 0;
   switch (act.type) {
+    case 'move': {
+      // 按路程计价：感知给出了去每个地点的实际代价；到不了的地点当作付不起
+      if (!ctx.dist) break;
+      const to = ctx.city.places.find((x) => x.id === act.to);
+      energy = to && to.moveCost !== null ? to.moveCost : Number.MAX_SAFE_INTEGER;
+      break;
+    }
     case 'give':
       energy += act.energy || 0;
       coins += act.coins || 0;
@@ -342,9 +352,9 @@ function survive(ctx) {
     if (here.place !== 'well') return [MOVE('well')];
     const act = drawAction(ctx, { desperate: you.energy < 5 });
     if (act) return [act];
-    return you.energy >= 4 ? at(ctx, 'wilds', { type: 'explore' }) : [];
+    return you.energy >= 4 ? exploreAt(ctx) : [];
   }
-  if (choice === 'explore') return at(ctx, 'wilds', { type: 'explore' });
+  if (choice === 'explore') return exploreAt(ctx);
   // 求助：私语给醒着的人
   const target = r.pick(others(ctx).filter((c) => c.status === 'awake'));
   if (!target) return [];
@@ -407,8 +417,32 @@ function intentActions(ctx, intent) {
     case 'care': return care(ctx);
     case 'faith': return faith(ctx);
     case 'mourn': return mourn(ctx);
-    default: return [MOVE(ctx.r.pick(ctx.city.places.map((x) => x.id).filter((id) => id !== ctx.here.place)))];
+    default: return wander(ctx);
   }
+}
+
+/** 闲逛：经典地图上任选一处；按路程计价的地图上多半只去近处（代价 ≤ 2） */
+function wander(ctx) {
+  const { r, here, city } = ctx;
+  if (!ctx.dist) return [MOVE(r.pick(city.places.map((x) => x.id).filter((id) => id !== here.place)))];
+  const reachable = city.places.filter((x) => x.moveCost !== null);
+  const near = reachable.filter((x) => x.moveCost <= 2);
+  const to = r.pick(near.length ? near : reachable);
+  return to ? [MOVE(to.id)] : [];
+}
+
+/**
+ * 去荒野探索。经典地图：去荒野（在那里就直接探索）。
+ * 按路程计价的地图：所在的地带还没被搜刮一空就在这里探索；否则挑另一个地带，近的机会大（按 1 / 代价 加权）。
+ */
+function exploreAt(ctx) {
+  if (!ctx.dist) return at(ctx, 'wilds', { type: 'explore' });
+  const { r, here, city } = ctx;
+  if (here.wilds && here.wilds.richness !== 'barren') return [{ type: 'explore' }];
+  const wild = city.places.filter((x) => x.wild && x.id !== here.place && x.moveCost !== null);
+  if (!wild.length) return here.wilds ? [{ type: 'explore' }] : [];
+  const pick = wild[r.weighted(wild.map((x) => 1 / Math.max(1, x.moveCost)))];
+  return [MOVE(pick.id), { type: 'explore' }];
 }
 
 function social(ctx) {
@@ -458,7 +492,9 @@ function build(ctx) {
   const name = fill(ctx.lang === 'en' ? 'Work {n}' : ctx.lang === 'es' ? 'Obra {n}' : '工程{n}', { n: 1 + r.int(99) });
   const act = { type: 'initiate', facility: type, name };
   if (type === 'road') {
-    const to = r.pick(ctx.city.places.map((x) => x.id).filter((id) => id !== here.place));
+    // 按路程计价的地图上，道路是远处之间的捷径：挑代价 ≥ 2 的地点
+    const far = ctx.dist ? ctx.city.places.filter((x) => x.moveCost !== null && x.moveCost >= 2).map((x) => x.id) : [];
+    const to = far.length ? r.pick(far) : r.pick(ctx.city.places.map((x) => x.id).filter((id) => id !== here.place));
     act.to = to;
     if (ctx.city.roads.some((x) => (x.a === here.place && x.b === to) || (x.a === to && x.b === here.place))) return [];
   }
@@ -635,7 +671,7 @@ function know(ctx) {
 function explore(ctx) {
   const { you } = ctx;
   if (you.energy < 6) return [];
-  return at(ctx, 'wilds', { type: 'explore' });
+  return exploreAt(ctx);
 }
 
 // ── 社群 ───────────────────────────────────────────────────────

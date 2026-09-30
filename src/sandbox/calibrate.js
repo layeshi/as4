@@ -2,7 +2,7 @@
 // 按规格的目标逐项判定（取种子的中位数），并把结果写成 JSON 与 Markdown 表格。
 //
 //   node src/sandbox/calibrate.js [--seeds 1,2,3,4,5] [--days 720] [--agents 24]
-//     [--scenarios default,laissez,stress] [--params file.json] [--laws file.json]
+//     [--scenarios default,laissez,stress] [--map frontier|classic] [--params file.json] [--laws file.json]
 //     [--label baseline] [--out docs/calibration/<label>.json] [--md]
 //
 // 判定只用来发现问题：任何一项不满足，都把数据写进 docs/QUESTIONS.md 并提出参数修改建议——
@@ -15,6 +15,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runSandbox, SCENARIOS } from './run.js';
+import { DEFAULT_MAP } from '../map/index.js';
 
 // ── 单次运行的精简摘要 ───────────────────────────────────────────
 
@@ -151,9 +152,9 @@ async function pool(items, limit, fn) {
  * 跑一组标定。opts：{ seeds, days, agents, scenarios, params, laws, label }
  * 返回 { label, opts, runs: { scenario: [summary] }, verdicts: { scenario: [criterion] } }
  */
-export async function calibrate({ seeds = [1, 2, 3, 4, 5], days = 720, agents = 24, scenarios = SCENARIOS, params, laws, label = 'baseline' } = {}) {
+export async function calibrate({ seeds = [1, 2, 3, 4, 5], days = 720, agents = 24, scenarios = SCENARIOS, map = DEFAULT_MAP, params, laws, label = 'baseline' } = {}) {
   const jobs = [];
-  for (const scenario of scenarios) for (const seed of seeds) jobs.push({ scenario, seed, days, agents, params, laws });
+  for (const scenario of scenarios) for (const seed of seeds) jobs.push({ scenario, seed, days, agents, map, params, laws });
   const done = await pool(jobs, Math.max(1, availableParallelism() - 1), runInWorker);
   const runs = {};
   for (const r of done) (runs[r.scenario] ||= []).push(r);
@@ -217,6 +218,7 @@ async function main() {
     days: o.days ? Number(o.days) : undefined,
     agents: o.agents ? Number(o.agents) : undefined,
     scenarios: o.scenarios ? o.scenarios.split(',') : undefined,
+    map: o.map,
     params: o.params ? JSON.parse(readFileSync(o.params, 'utf8')) : undefined,
     laws: o.laws ? JSON.parse(readFileSync(o.laws, 'utf8')) : undefined,
     label: o.label,
@@ -241,8 +243,8 @@ async function main() {
 // ── worker 入口 ────────────────────────────────────────────────
 
 if (!isMainThread && workerData && workerData.scenario) {
-  const { scenario, seed, days, agents, params, laws } = workerData;
-  const { report } = runSandbox({ scenario, seed, days, agents, params, laws });
+  const { scenario, seed, days, agents, map, params, laws } = workerData;
+  const { report } = runSandbox({ scenario, seed, days, agents, map, params, laws });
   parentPort.postMessage(summarize(report, { seed, scenario, agents }));
 } else if (isMainThread && process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((e) => {

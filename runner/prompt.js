@@ -12,9 +12,9 @@ function costOf(a, lang) {
 
 /**
  * 动作表：每个动作一行，格式 `type(参数) 基础代价 [地点限制]：说明`（模板来自 lore 的 prompt.catalogLine）。
- * opts：{ memorySlots }
+ * opts：{ memorySlots, distance }——distance 为真（按路程计价的地图，附录 C）时，move 用按路程计价的说明。
  */
-export function actionCatalog(lang, { memorySlots = P.memorySlots } = {}) {
+export function actionCatalog(lang, { memorySlots = P.memorySlots, distance = false } = {}) {
   const l = L(lang).prompt;
   const code = normLang(lang);
   return ACTION_ORDER.map((type) => {
@@ -24,7 +24,7 @@ export function actionCatalog(lang, { memorySlots = P.memorySlots } = {}) {
       params: a.params,
       cost: costOf(a, code),
       where: a.where ? fmt(l.catalogWhere, { where: a.where[code] }) : '',
-      desc: fmt(a.desc[code], { memorySlots, effects: EFFECTS_HELP[code] }),
+      desc: fmt((distance && a.descDistance ? a.descDistance : a.desc)[code], { memorySlots, effects: EFFECTS_HELP[code] }),
     });
   }).join('\n');
 }
@@ -34,7 +34,7 @@ export function actionCatalog(lang, { memorySlots = P.memorySlots } = {}) {
  * opts：{ lang, cityName, maxActions, ticksPerDay, daysPerMonth, graceDays?, memorySlots?, soul? }
  * soul 为空（null / undefined）时不含「你的灵魂」一节。
  */
-export function buildSystemPrompt({ lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays = P.dormancyGraceDays, memorySlots = P.memorySlots, soul = null }) {
+export function buildSystemPrompt({ lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays = P.dormancyGraceDays, memorySlots = P.memorySlots, distance = false, soul = null }) {
   const l = L(lang).prompt;
   const head = fmt(l.head, {
     cityName: cityName || L(lang).cityName,
@@ -42,7 +42,7 @@ export function buildSystemPrompt({ lang = 'zh', cityName, maxActions = 4, ticks
     ticksPerDay,
     daysPerMonth,
     graceDays,
-    actionCatalog: actionCatalog(lang, { memorySlots }),
+    actionCatalog: actionCatalog(lang, { memorySlots, distance }),
   });
   if (soul === null || soul === undefined) return head;
   return `${head}\n\n${fmt(l.soul, { soul })}`;
@@ -58,6 +58,8 @@ export function promptParams(perception) {
     ticksPerDay: p.now && p.now.ticksPerDay,
     daysPerMonth: p.now && p.now.daysPerMonth,
     memorySlots: p.you && p.you.memorySlots,
+    // 按路程计价的地图：感知里的地点带 moveCost
+    distance: !!(p.city && Array.isArray(p.city.places) && p.city.places.some((x) => x.moveCost !== undefined)),
     soul: p.you ? p.you.soul : null,
   };
 }

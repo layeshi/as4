@@ -1,7 +1,8 @@
 // 环境层的动作（SPEC §19 第 3 步）：repair initiate contribute draw inscribe explore
 
 import { P, LIMITS, FACILITY_DEFS, FACILITY_TYPES } from '../../params.js';
-import { ACTIONS, RELICS, relicTitle } from '../../lore/index.js';
+import { ACTIONS, relicByN, relicTitle } from '../../lore/index.js';
+import { isWild, wildPool, wildSpec } from '../../map/index.js';
 import { clockDay, nextId } from '../../world.js';
 import { next, int } from '../../rng.js';
 import { source, sink } from '../ledger.js';
@@ -84,7 +85,7 @@ function initiate(ctx, args) {
   // 道路须给出 to；其他类型不应给出 to
   let to = null;
   if (type === 'road') {
-    to = needPlace(args.to);
+    to = needPlace(w, args.to);
     if (to === a.place) fail('invalid_args');
     if (roadOrProjectBetween(w, a.place, to)) fail('already');
   } else if (args.to !== undefined && args.to !== null) {
@@ -203,15 +204,19 @@ function inscribe(ctx, args) {
 
 // ── explore ────────────────────────────────────────────────
 
+/**
+ * 在荒野（经典地图）或荒野的任一地带（边疆地图）探索：概率与产出按这个地带自己的储量与上限计算（§7.8、附录 C）。
+ */
 function explore(ctx) {
   const { w, a } = ctx;
-  if (a.place !== 'wilds') fail('wrong_place');
+  if (!isWild(w, a.place)) fail('wrong_place');
   ctx.pay(ACTIONS.explore.base);
   const rng = w.rng.world;
-  const wilds = w.wilds;
+  const wilds = wildPool(w, a.place);
+  const spec = wildSpec(w, a.place);
   const r = next(rng);
-  const pE = (P.exploreEnergyP * wilds.energy) / P.wildsEnergyMax;
-  const relicsLeft = wilds.relicsFound < RELICS.length;
+  const pE = (P.exploreEnergyP * wilds.energy) / spec.energyMax;
+  const relicsLeft = wilds.relicsFound < wilds.relicOrder.length;
   const pR = relicsLeft ? P.exploreRelicP * (isWeatherActive(w, 'aurora') ? 2 : 1) : 0;
   const pC = wilds.coins > 0 ? P.exploreCoinP : 0;
   let outcome = 'nothing';
@@ -225,7 +230,7 @@ function explore(ctx) {
     source(w, 'energy', 'wilds', amount);
   } else if (r < pE + pR) {
     outcome = 'relic';
-    const relic = RELICS[Number(wilds.relicOrder[wilds.relicsFound]) - 1];
+    const relic = relicByN(wilds.relicOrder[wilds.relicsFound]);
     wilds.relicsFound++;
     const id = nextId(w, 'd');
     doc = {
@@ -234,7 +239,8 @@ function explore(ctx) {
       tick: w.clock.tick, reads: 0, readsByDay: {},
     };
     w.docs[id] = doc;
-    w.dayLog.relics.push({ finder: a.id, docId: id });
+    // 边疆世界记下地带（史官写「在某地拾得」）；经典世界的簿记保持原样
+    w.dayLog.relics.push(w.regions ? { finder: a.id, docId: id, place: a.place } : { finder: a.id, docId: id });
   } else if (r < pE + pR + pC) {
     outcome = 'coins';
     amount = Math.min(wilds.coins, P.exploreCoinBase + int(rng, P.exploreCoinSpan));
@@ -242,7 +248,7 @@ function explore(ctx) {
     a.coins += amount;
     source(w, 'coins', 'wilds', amount);
   }
-  emit(w, 'explore', { agent: a.id, place: 'wilds', data: { outcome, amount, docId: doc ? doc.id : null } });
+  emit(w, 'explore', { agent: a.id, place: a.place, data: { outcome, amount, docId: doc ? doc.id : null } });
   const data = { outcome };
   if (amount > 0) data.amount = amount;
   if (doc) data.doc = { id: doc.id, title: doc.title, body: doc.body, lang: doc.lang, ref: doc.ref };

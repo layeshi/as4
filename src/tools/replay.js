@@ -24,7 +24,8 @@ export function replayDir(dir, { toN, currentVersion } = {}) {
     warnings.push(`世界创建时的代码版本是 ${snap.codeVersion}，当前是 ${currentVersion}：回放可能不一致`);
   }
   const limit = toN === undefined ? snap.commandN : toN;
-  const w = createWorld({ id: snap.id, seed: snap.seed, codeVersion: snap.codeVersion, sandboxAdoption: snap.sandboxAdoption });
+  // 快照里没有 map 字段的是经典地图（M1 以来的旧世界）
+  const w = createWorld({ id: snap.id, seed: snap.seed, codeVersion: snap.codeVersion, sandboxAdoption: snap.sandboxAdoption, map: snap.map || 'classic' });
   const cmds = readCommands(commandsPath(dir), { toN: limit });
   for (const cmd of cmds) applyCommand(w, cmd);
   const hash = stateHash(w);

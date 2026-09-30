@@ -48,7 +48,7 @@ export class Runtime {
     } else {
       if (existsSync(cmdFile)) throw new Error(`${cmdFile} 存在但没有快照：数据目录不完整，请检查或用 --reset 重建`);
       const seed = cfg.seed || randomSeed();
-      w = createWorld({ id: cfg.worldId, seed, codeVersion: version, sandboxAdoption: cfg.sandboxAgents > 0 });
+      w = createWorld({ id: cfg.worldId, seed, codeVersion: version, sandboxAdoption: cfg.sandboxAgents > 0, map: cfg.map || 'classic' });
       writeSnapshot(dir, w);
       created = true;
     }

@@ -3,6 +3,7 @@
 // 「第 N 日」一律按 日序号 + 1 显示（感知里的 day 从 0 起）。
 
 import { LAW_DEFAULTS } from '../src/params.js';
+import { L } from '../src/lore/index.js';
 
 const D = {
   zh: {
@@ -31,7 +32,7 @@ const D = {
     treasuryLine: (e, c) => `公库 ${e} 能量${c ? ` · ${c} 旧币` : ''}`, ration: (n) => `昨日人均配给 ${n}`, pop: (a, d, x) => `醒 ${a} / 眠 ${d} / 逝 ${x}`, retiredN: (n) => `归隐 ${n}`, cradleN: (n) => `摇篮 ${n}`,
     lawParams: '法律参数', charter: '宪章', canonical: (l) => `正本语言：${l}`, laws: '在效法律', proposals: '进行中的提案', tally: (y, n, a) => `赞 ${y} 反 ${n} 弃 ${a}`,
     ticksLeft: (n) => `还剩 ${n} 刻`, yourVote: (c) => `你已投「${c}」`, notVoted: '你尚未投票', notEligible: '你不在选民范围内', governance: '修宪级', by: '提案人',
-    residents: '居民', places: '地点', groupsAll: '社群', lexicon: '词典', cradle: '摇篮', recentDeaths: '近期逝者', open: '开放', closed: '封闭', members: '成员',
+    residents: '居民', places: '地点', placesCost: '地点与移动代价', hereMark: '此处', unreachable: '—', groupsAll: '社群', lexicon: '词典', cradle: '摇篮', recentDeaths: '近期逝者', open: '开放', closed: '封闭', members: '成员',
     daysWord: '日', unknownEffect: '（效力）',
     // 收件
     kinds: {
@@ -92,7 +93,7 @@ const D = {
     treasuryLine: (e, c) => `Treasury ${e} energy${c ? ` · ${c} coins` : ''}`, ration: (n) => `ration per head yesterday ${n}`, pop: (a, d, x) => `awake ${a} / dormant ${d} / dead ${x}`, retiredN: (n) => `retired ${n}`, cradleN: (n) => `cradle ${n}`,
     lawParams: 'Law parameters', charter: 'The Charter', canonical: (l) => `canonical language: ${l}`, laws: 'Laws in force', proposals: 'Open proposals', tally: (y, n, a) => `yes ${y} no ${n} abstain ${a}`,
     ticksLeft: (n) => `${n} tick(s) left`, yourVote: (c) => `you voted “${c}”`, notVoted: 'you have not voted', notEligible: 'you are outside the electorate', governance: 'constitutional', by: 'proposed by',
-    residents: 'Residents', places: 'Places', groupsAll: 'Groups', lexicon: 'Lexicon', cradle: 'Cradle', recentDeaths: 'Recent deaths', open: 'open', closed: 'closed', members: 'members',
+    residents: 'Residents', places: 'Places', placesCost: 'Places and move costs', hereMark: 'here', unreachable: '—', groupsAll: 'Groups', lexicon: 'Lexicon', cradle: 'Cradle', recentDeaths: 'Recent deaths', open: 'open', closed: 'closed', members: 'members',
     daysWord: 'd', unknownEffect: '(effect)',
     kinds: {
       say: (i) => `[said] ${i.from.name} (${i.place}): ${i.text}`,
@@ -218,6 +219,7 @@ export function renderPerception(p, { lastResults, lang } = {}) {
   if (h) {
     const place = [h.name];
     if (h.humanName && h.humanName !== h.name) place.push(d.humanName(h.humanName));
+    if (h.district) place.push(h.district.text);
     if (h.condition) place.push(`${h.condition.text}（${Math.round(h.condition.bp / 100)}%）`);
     if (h.costMultiplier && h.costMultiplier !== 1) place.push(d.mult(h.costMultiplier));
     lines.push(`${d.here}${h.name} [${h.place}]${place.length > 1 ? ` · ${place.slice(1).join(' · ')}` : ''}`);
@@ -284,7 +286,7 @@ export function renderPerception(p, { lastResults, lang } = {}) {
     if (c.citizens && c.citizens.length) {
       lines.push(`  ${d.residents}：${c.citizens.map((x) => `${x.name}(${x.id}${x.status === 'dormant' ? `,${d.dormantMark}` : ''}${x.exiled ? `,${d === D.zh ? '被放逐' : 'exiled'}` : ''})`).join('、')}`);
     }
-    if (c.places && c.places.length) lines.push(`  ${d.places}：${c.places.map((x) => `${x.name}(${x.id})`).join('、')}`);
+    if (c.places && c.places.length) lines.push(placesLine(d, c.places, code, p.here ? p.here.place : null));
     if (c.roads && c.roads.length) lines.push(`  ${d.roads}：${c.roads.map((r) => `${r.a}—${r.b}${r.functioning ? '' : `（${d.notFunctioning}）`}`).join('、')}`);
     if (c.lexicon && c.lexicon.length) lines.push(`  ${d.lexicon}：${c.lexicon.map((x) => `${x.word}=${x.meaning}`).join('；')}`);
     for (const s of c.cradle || []) lines.push(`  ${d.cradle}：[${s.id}] ${s.name}（${s.parents.map((x) => x.name).join(' + ')}，${d.day(s.expiresDay + 1)}前）：${s.soul}`);
@@ -303,6 +305,24 @@ export function renderPerception(p, { lastResults, lang } = {}) {
 
   if (lastResults) lines.push(`${d.last}${lastResults}`);
   return lines.join('\n');
+}
+
+/**
+ * 全城的地点名单。按路程计价的地图（地点带 moveCost）按街区分组，并在每处后面标出从这里过去的代价：
+ *   地点与移动代价：港区：港口(port) 此处、灯塔(lighthouse) 1；旧城：学堂(school) 1、……
+ */
+function placesLine(d, places, code, hereId) {
+  if (!places.some((x) => x.moveCost !== undefined)) return `  ${d.places}：${places.map((x) => `${x.name}(${x.id})`).join('、')}`;
+  const districts = L(code).district || {};
+  const groups = [];
+  for (const x of places) {
+    const key = x.district || '';
+    let g = groups.find((y) => y.key === key);
+    if (!g) groups.push((g = { key, items: [] }));
+    const cost = x.id === hereId ? d.hereMark : x.moveCost === null || x.moveCost === undefined ? d.unreachable : x.moveCost;
+    g.items.push(`${x.name}(${x.id}) ${cost}`);
+  }
+  return `  ${d.placesCost}：${groups.map((g) => `${g.key ? `${districts[g.key] || g.key}：` : ''}${g.items.join('、')}`).join('；')}`;
 }
 
 /** 动作结果 → 一行简短文字：say ✓（−1）；move ✗ wrong_place：…… */

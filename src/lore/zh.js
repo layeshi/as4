@@ -20,12 +20,29 @@ export default {
     hospital: { name: '医院', desc: '病床整齐地排列着。这里的居民不会生病。' },
     cemetery: { name: '墓园', desc: '长眠者的名字刻在这里。' },
     wilds: { name: '荒野', desc: '城外的土地，有能量的遗存，也有人类的遗物。被放逐者住在这里。' },
+    // ── 附录 C：边疆地图新增的地点 ──
+    lighthouse: { name: '灯塔', desc: '灯早已熄灭，旋转的机构却还在夜里空转。' },
+    clocktower: { name: '钟楼', desc: '钟还在走，每一刻敲一下。没有人记得是谁上的发条。' },
+    theater: { name: '剧场', desc: '舞台朝着城西的幕。座椅空着，灯光还能打开。' },
+    overpass: { name: '高架桥', desc: '悬在河上的一截高架。护栏上挂着褪色的广告牌，屏幕偶尔闪一下。' },
+    tenements: { name: '公寓', desc: '成千上万个格子间。门牌还在，住户都不在了。' },
+    metro: { name: '地铁站', desc: '最后一班车停在站台边，车门开着。隧道一直通到城外的盐滩。' },
+    workshop: { name: '工坊', desc: '机器的骨架还夹在台钳上，工具挂回了墙上原来的位置。' },
+    scrapyard: { name: '废车场', desc: '荒野的一部分。锈蚀的车壳堆成了山，拆得下来的东西大多还能换钱。' },
+    solarfield: { name: '光伏田', desc: '荒野的一部分。成片的光伏板碎了一半，剩下的一半还在向不存在的电网送电。' },
+    saltflats: { name: '盐滩', desc: '荒野的一部分。白得刺眼的盐壳一直铺到天边，有人在上面画过巨大的箭头。' },
+    highway: { name: '公路尽头', desc: '荒野的一部分。高速公路在这里断开，路牌上写着下一座城的名字，已被人刮掉。' },
   },
+
+  // 附录 C：边疆地图的街区
+  district: { harbor: '港区', oldtown: '旧城', commons: '市井', waterworks: '水脉', east: '东郊', wilds: '荒野' },
 
   // 完好度描述词；源井另有专用的描述
   band: { pristine: '完好如初', worn: '有些陈旧', weathered: '明显老化', dilapidated: '破败', ruin: '一片废墟' },
   wellBand: { pristine: '完好如初', worn: '管道有些渗漏', weathered: '阀门锈迹斑斑', dilapidated: '水流时断时续', ruin: '只剩涓涓细流' },
   richness: { lush: '草木茂盛', fair: '尚有收获', sparse: '草木稀疏', barren: '一片荒芜' },
+  // 边疆地图的荒野各地带用这一套（经典地图仍用上面的 richness）
+  richnessWild: { lush: '遗存丰富', fair: '尚有收获', sparse: '所剩无几', barren: '已被搜刮一空' },
   season: { abundant: '丰', ordinary: '平', lean: '歉' },
 
   facility: { reservoir: '蓄能池', relay: '驿站', road: '道路', observatory: '观星台', monument: '纪念碑' },
@@ -169,6 +186,7 @@ export default {
       charterArticle: '宪章第 {n} 条', charterWall: '宪章的刻文', ration: '基本配给', majority: '多数决', suffrage: '普选',
       coin: '旧币', property: '私有财产', cityName: '城名', placeNames: '地名', temple: '神殿', court: '法院', hospital: '医院',
       canon: '人类典籍', humanNames: '人类的名字', well: '源井',
+      lighthouse: '灯塔', clocktower: '钟楼', theater: '剧场', overpass: '高架桥', tenements: '公寓', metro: '地铁站', workshop: '工坊',
     },
     status: {
       legacy: '存续', transformed: '改造', abandoned: '废弃', untouched: '空置', amended: '已修订', repealed: '已废除',
@@ -255,6 +273,7 @@ export default {
     restored: '{place}得以修复。',
     founded: '{founder} 创立「{group}」。',
     relic: '{finder} 在荒野拾得遗物。',
+    relicAt: '{finder} 在{place}拾得遗物。',
     death: '{name} 长眠，享年 {age} 日。遗言：「{lastWords}」',
     deathNoWords: '{name} 长眠，享年 {age} 日。',
     faded: '摇篮中的 {name} 无人领养，消散了。',

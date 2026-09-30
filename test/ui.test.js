@@ -15,8 +15,9 @@ import { configureSandbox } from '../src/sandbox/brains.js';
 import { STR, TPL, VARS, CAT, describeEvent, templateKey, setLang, getLang, t, fmt } from '../public/i18n.js';
 import { describeEffect as clientDescribeEffect, bandOf, SEASON_TABLE } from '../public/render.js';
 import { SEASON_TABLE as SERVER_SEASON, conditionBand } from '../src/params.js';
-import { PLACE_XY } from '../public/map.js';
-import { PLACE_DEFS } from '../src/params.js';
+import { GLYPH_NAMES, GLYPH_HUE } from '../public/map-glyphs.js';
+import { streetCurve, smoothPath } from '../public/map-terrain.js';
+import { MAPS, publicMap } from '../src/map/index.js';
 import { boot } from './http-helpers.js';
 import { newWorld, reg } from './helpers.js';
 
@@ -210,12 +211,25 @@ test('前端的法律效力描述与引擎的 describeEffect 逐字一致（中�
   }
 });
 
-test('前端常量与引擎一致：季节表、完好度档位、地图坐标覆盖 12 处地点', () => {
+test('前端常量与引擎一致：季节表、完好度档位；每张地图用到的图形前端都画得出', () => {
   assert.deepEqual(SEASON_TABLE, [...SERVER_SEASON]);
   for (const bp of [0, 1, 2999, 3000, 5999, 6000, 8999, 9000, 10000]) assert.equal(bandOf(bp), conditionBand(bp), String(bp));
-  assert.deepEqual(Object.keys(PLACE_XY).sort(), PLACE_DEFS.map((p) => p.id).sort());
-  assert.deepEqual(PLACE_XY.port, [80, 380]);
-  assert.deepEqual(PLACE_XY.cemetery, [730, 545]);
+  for (const m of Object.values(MAPS)) {
+    for (const p of m.places) {
+      assert.ok(GLYPH_NAMES.includes(p.glyph), `${m.id}.${p.id} 的图形 ${p.glyph} 没有画法`);
+      assert.ok(GLYPH_HUE[p.glyph], `${m.id}.${p.id} 的图形 ${p.glyph} 没有色系`);
+    }
+    // 街道曲线与平滑折线是确定的纯函数（地图数据 → 路径）
+    const xy = Object.fromEntries(m.places.map((p) => [p.id, p.xy]));
+    for (const e of m.edges) {
+      const c = streetCurve(xy, e.a, e.b);
+      assert.match(c.d, /^M[\d.-]+,[\d.-]+ Q/);
+      assert.deepEqual(streetCurve(xy, e.a, e.b), c);
+    }
+    if (m.terrain.coast) assert.match(smoothPath(m.terrain.coast), /^M.* C/);
+  }
+  // 前端只从 /api/public/map 取地图：地图数据可以序列化，且不含任何世界状态
+  assert.equal(JSON.stringify(publicMap({ map: 'frontier' })).length > 1000, true);
 });
 
 // ── 静态文件 ──────────────────────────────────────────────────
