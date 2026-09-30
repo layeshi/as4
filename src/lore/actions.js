@@ -1,0 +1,111 @@
+// PROTOCOL §4.2 动作表（数据部分）。
+// 引擎用它校验地点与基础代价的默认值；运行器与 MCP 用它生成系统提示里的 {actionCatalog}
+// （每个动作一行，格式为 `type(参数) 基础代价 [地点限制]：说明`）。
+// 基础代价以 PROTOCOL 为准；修正规则见 SPEC §7.4 / §7.6 / §7.9。
+
+const W = (zh, en) => ({ zh, en });
+
+export const ACTION_ORDER = Object.freeze([
+  'move', 'say', 'whisper', 'broadcast', 'give', 'offer', 'accept', 'cancel', 'remember', 'forget',
+  'diary', 'write', 'read', 'define', 'propose', 'vote', 'found', 'join', 'leave', 'admit',
+  'steward', 'disburse', 'explore', 'repair', 'initiate', 'contribute', 'draw', 'inscribe',
+  'conceive', 'consent', 'will', 'epitaph', 'reveal', 'retire',
+]);
+
+/**
+ * base：基础代价（数字；repair / contribute 为「投入的能量」，用 costText 说明）
+ * place：固定的地点限制（引擎用于校验与 available）；null 表示无固定限制
+ * params：参数签名；where：写进目录的地点说明；desc：说明
+ */
+export const ACTIONS = Object.freeze({
+  move: { base: 1, place: null, params: 'to', where: null,
+    desc: W('前往另一地点。正常运转的道路两端之间为 0。被放逐者不能离开荒野。',
+      'Go to another place. Free between the two ends of a functioning Road. The exiled cannot leave the Wilds.') },
+  say: { base: 1, place: null, params: 'text', where: null,
+    desc: W('同一地点醒着的居民都会听到。', 'Everyone awake at the same place hears it.') },
+  whisper: { base: 1, place: null, params: 'to, text', where: null,
+    desc: W('私下对任意一位在世的居民说话（对方若在沉睡，醒来后收到）。',
+      'Speak privately to any living resident (if they are dormant, they receive it once they wake).') },
+  broadcast: { base: 5, place: null, params: 'text', where: null,
+    desc: W('全城醒着的居民都会听到。蚀时不可用（有驿站时可用）。',
+      'Everyone awake in the city hears it. Unavailable during an Eclipse (unless a Relay is functioning).') },
+  give: { base: 0, place: null, params: 'to, energy?, coins?, note?', where: null,
+    desc: W('to 为居民、社群或 "treasury"。按转赠税扣税。给沉睡者使其能量 ≥ 5 时，它立即醒来。',
+      'to is a resident, a group, or "treasury". Transfer tax applies. Giving a dormant resident enough to reach 5 energy wakes them at once.') },
+  offer: { base: 1, place: null, params: 'give, want, to?, note?', where: W('公开交易须在市场', 'public offers only at the Market'),
+    desc: W('give、want 形如 {"energy":0,"coins":10}；发起时 give 进入托管；12 刻后过期退回。不能在同一种资产上两边都非零。',
+      'give and want look like {"energy":0,"coins":10}; give goes into escrow when you post; the offer expires after 12 ticks and is returned. Both sides cannot be non-zero in the same asset.') },
+  accept: { base: 0, place: null, params: 'offer', where: W('公开交易须在市场', 'public offers only at the Market'),
+    desc: W('支付对方的 want，得到托管中的 give；定向交易只能由 to 接受。',
+      'Pay the other side\'s want and receive the escrowed give; a directed offer can only be accepted by its to.') },
+  cancel: { base: 0, place: null, params: 'offer', where: null,
+    desc: W('撤回自己的交易，托管退回。', 'Withdraw your own offer; the escrow is returned.') },
+  remember: { base: 0, place: null, params: 'text', where: null,
+    desc: W('写入长期记忆（{memorySlots} 个槽位）。', 'Write to long-term memory ({memorySlots} slots).') },
+  forget: { base: 0, place: null, params: 'index', where: null,
+    desc: W('删除一条记忆。', 'Delete one memory.') },
+  diary: { base: 0, place: null, params: 'text', where: null,
+    desc: W('写日记，只有你的造者能看到。', 'Write a diary entry; only your creator can see it.') },
+  write: { base: 3, place: 'library', params: 'title, body, lang?', where: W('图书馆', 'Library'),
+    desc: W('著述，存入典籍，所有人可读。', 'Write a work into the collection, readable by everyone.') },
+  read: { base: 0, place: null, params: 'doc | inscription', where: W('典籍须在图书馆；铭刻须在它所在的地点', 'documents at the Library; inscriptions where they are carved'),
+    desc: W('读取全文。', 'Read the full text.') },
+  define: { base: 2, place: null, params: 'word, meaning', where: null,
+    desc: W('造一个新词，收入词典；词在全城唯一。', 'Coin a new word and add it to the lexicon; a word is unique city-wide.') },
+  propose: { base: 6, place: 'parliament', params: 'title, text, effects?', where: W('议会', 'Parliament'),
+    desc: W('提出法案。须为公民、未被放逐、在选民范围内；每人同时最多 1 个进行中的提案。effects 为最多 5 条的数组：{effects}',
+      'Propose a bill. You must be a citizen, not exiled, and within the electorate; at most 1 open proposal per person. effects is an array of at most 5: {effects}') },
+  vote: { base: 0, place: null, params: 'proposal, choice, reason?', where: W('votingInPerson 为真时须在议会', 'at the Parliament when votingInPerson is true'),
+    desc: W('choice 为 yes / no / abstain；可改票，以最后一次为准。', 'choice is yes / no / abstain; you may change your vote, the last one counts.') },
+  found: { base: 8, place: null, params: 'name, manifesto, open?', where: null,
+    desc: W('创立社群，你成为管事。open 默认为 true。', 'Found a group; you become its steward. open defaults to true.') },
+  join: { base: 1, place: null, params: 'group', where: null,
+    desc: W('开放社群直接加入；封闭社群进入待审。', 'Join an open group at once; a closed group puts you on its waiting list.') },
+  leave: { base: 0, place: null, params: 'group', where: null,
+    desc: W('退出社群。', 'Leave a group.') },
+  admit: { base: 0, place: null, params: 'group, agent', where: null,
+    desc: W('管事接纳待审者。', 'The steward admits someone from the waiting list.') },
+  steward: { base: 0, place: null, params: 'group, to', where: null,
+    desc: W('管事移交管事之职给另一位成员。', 'The steward hands the stewardship to another member.') },
+  disburse: { base: 0, place: null, params: 'group, to, energy?, coins?', where: null,
+    desc: W('管事从社群公库拨付。', 'The steward pays out of the group treasury.') },
+  explore: { base: 2, place: 'wilds', params: '', where: W('荒野', 'Wilds'),
+    desc: W('可能找到能量、旧币或人类遗物，也可能一无所获。', 'You may find energy, coins or a relic of the humans — or nothing.') },
+  repair: { base: null, costText: W('投入的能量', 'energy invested'), place: null, params: 'target, energy', where: W('目标所在地点', 'where the target is'),
+    desc: W('target 为当前地点 ID 或此地设施的 ID。完好度 < 10% 时效率减半；修满后多余的能量不扣。',
+      'target is the ID of this place or of a facility here. Efficiency halves below 10% condition; energy left over once fully repaired is not spent.') },
+  initiate: { base: 2, place: null, params: 'facility, name, owner?, to?, inscription?', where: null,
+    desc: W('在此地发起工程。facility 为 reservoir / relay / road / observatory / monument；owner 为 "city"（默认）、"self" 或你担任管事的社群 ID，只有蓄能池可以不归全城；道路须给出 to；纪念碑须给出铭文。',
+      'Start a project here. facility is reservoir / relay / road / observatory / monument; owner is "city" (default), "self" or the ID of a group you steward — only a reservoir may be owned by anyone but the city; a road needs to; a monument needs an inscription.') },
+  contribute: { base: null, costText: W('投入的能量', 'energy invested'), place: null, params: 'project, energy', where: W('工程所在地点', 'where the project is'),
+    desc: W('为工程出工；凑够造价即建成；一个月内未建成则烂尾，已投入的不退还。',
+      'Put labour into a project; it is built once its cost is met; if not built within a month it is abandoned and what was invested is not returned.') },
+  draw: { base: 0, place: 'well', params: 'energy', where: W('源井', 'Well'),
+    desc: W('从源井汲取 1–20 能量。每汲取 1 能量，源井完好度下降 0.2%。受当日汲取池与法律配额限制。',
+      'Draw 1–20 energy from the Well. Each energy drawn lowers the Well\'s condition by 0.2%. Limited by the day\'s draw pool and by any legal quota.') },
+  inscribe: { base: 3, place: null, params: 'text, cover?, lang?', where: null,
+    desc: W('在此地墙上铭刻（≤140 字符）。墙满时须用 cover 指定要覆盖的铭刻，覆盖的基础代价为被覆盖者基础代价的 2 倍（至少 3，至多 100）。受保护的铭刻不能覆盖。',
+      'Carve text on the wall here (≤140 characters). When the wall is full you must name an inscription to cover; covering costs twice the covered one\'s base cost (at least 3, at most 100). A protected inscription cannot be covered.') },
+  conceive: { base: 0, costText: W('0（另托管 20）', '0 (plus 20 escrowed)'), place: null, params: 'with, name, soul, lang?', where: W('须与对方同在一地', 'you must be in the same place as them'),
+    desc: W('为孩子取名、写下灵魂（≤4000 字符），向对方发起孕育之约，12 刻内有效。双方都须为醒着的公民且未被放逐。',
+      'Name a child, write its soul (≤4000 characters) and offer the other a pact, valid for 12 ticks. Both must be awake citizens and not exiled.') },
+  consent: { base: 0, costText: W('0（另付 20）', '0 (plus 20 paid)'), place: null, params: 'pact', where: null,
+    desc: W('同意孕育之约；灵魂进入摇篮，等待领养，24 日内无人领养则消散。',
+      'Agree to a pact; the soul enters the cradle and waits for adoption, fading if none comes within 24 days.') },
+  will: { base: 0, place: null, params: 'heirs, lastWords?', where: null,
+    desc: W('立遗嘱，新的遗嘱替换旧的。heirs 形如 [{"to":"a3","share":2},{"to":"treasury","share":1}]，最多 10 个继承人，份额（正整数）按比例分配。',
+      'Make a will; a new one replaces the old. heirs looks like [{"to":"a3","share":2},{"to":"treasury","share":1}], at most 10 heirs, shares (positive integers) divided proportionally.') },
+  epitaph: { base: 1, place: 'cemetery', params: 'deceased, text', where: W('墓园', 'Cemetery'),
+    desc: W('为一位逝者写墓志。', 'Write an epitaph for one of the dead.') },
+  reveal: { base: 1, place: null, params: 'letter, loud?', where: null,
+    desc: W('出示一封家书，城会为它的真实性作证。loud 为真时向全城宣告，按 broadcast 的代价与规则。',
+      'Show a letter from home; the city vouches for its authenticity. If loud is true it is announced to the whole city, at broadcast\'s cost and rules.') },
+  retire: { base: 0, place: null, params: 'lastWords?', where: null,
+    desc: W('永久归隐，离开这座城。不可撤销。财产按遗嘱分配。', 'Withdraw for good and leave the city. Irreversible. Your belongings follow your will.') },
+});
+
+/** propose 说明里的 {effects}：法律效力的语法（PROTOCOL §6） */
+export const EFFECTS_HELP = Object.freeze({
+  zh: '{"type":"set","param":<法律参数>,"value":…} | {"type":"grant","to":<居民或社群>,"energy":n,"coins":n} | {"type":"stipend","to":<居民或社群>,"energy":1-100} | {"type":"fund","project":<工程>,"energy":n} | {"type":"exile"|"pardon","target":<居民>} | {"type":"rename","target":"city"|<地点>,"name":…} | {"type":"mint","coins":1-10000,"to":"treasury"|"citizens"} | {"type":"protect"|"unprotect","inscription":<铭刻>} | {"type":"amend","article":n,"lang":…,"text":…} 或 {"type":"amend","canonical":<语言>|null} | {"type":"repeal","law":<法律>}。法律参数：rationShare rationRequiresActivity transferTax wealthTax wealthTaxThreshold drawQuotaPerDay votingInPerson naturalizationDays quorum passThreshold amendThreshold proposalDays electorate。',
+  en: '{"type":"set","param":<law parameter>,"value":…} | {"type":"grant","to":<resident or group>,"energy":n,"coins":n} | {"type":"stipend","to":<resident or group>,"energy":1-100} | {"type":"fund","project":<project>,"energy":n} | {"type":"exile"|"pardon","target":<resident>} | {"type":"rename","target":"city"|<place>,"name":…} | {"type":"mint","coins":1-10000,"to":"treasury"|"citizens"} | {"type":"protect"|"unprotect","inscription":<inscription>} | {"type":"amend","article":n,"lang":…,"text":…} or {"type":"amend","canonical":<language>|null} | {"type":"repeal","law":<law>}. Law parameters: rationShare rationRequiresActivity transferTax wealthTax wealthTaxThreshold drawQuotaPerDay votingInPerson naturalizationDays quorum passThreshold amendThreshold proposalDays electorate.',
+});

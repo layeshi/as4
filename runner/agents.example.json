@@ -1,0 +1,33 @@
+{
+  "server": "http://127.0.0.1:8787",
+  "agents": [
+    {
+      "name": "青禾",
+      "tokenEnv": "HOUREN_TOKEN_A",
+      "lang": "zh",
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "effort": "medium",
+      "fallbacks": true,
+      "actEveryTicks": 1
+    },
+    {
+      "name": "Bram",
+      "tokenEnv": "HOUREN_TOKEN_B",
+      "lang": "en",
+      "provider": "openai",
+      "baseURL": "http://127.0.0.1:11434/v1",
+      "model": "qwen3:8b",
+      "apiKeyEnv": "OLLAMA_API_KEY",
+      "jsonMode": false,
+      "temperature": 0.8
+    },
+    {
+      "name": "试演",
+      "tokenEnv": "HOUREN_TOKEN_C",
+      "lang": "zh",
+      "provider": "mock"
+    }
+  ]
+}

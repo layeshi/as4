@@ -1,0 +1,18 @@
+{
+  "server": "http://127.0.0.1:8787",
+  "agents": [
+    {
+      "name": "王江",
+      "tokenEnv": "HOUREN_TOKEN_A",
+      "lang": "zh",
+      "provider": "openai",
+      "baseURL": "https://open.bigmodel.cn/api/coding/paas/v4",
+      "model": "glm-5.3",
+      "apiKeyEnv": "GLM_API_KEY",
+      "historyRounds": 2,
+      "extraBody": { "thinking": { "type": "disabled" } },
+      "actEveryTicks": 1
+    }
+  ]
+}
+

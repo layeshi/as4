@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>后人纪 · The Heirs</title>
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1 id="city">后人纪</h1>
+    <span id="conn" class="conn off" role="img" aria-label="connection">○</span>
+  </div>
+  <div class="cell clockcell"><div id="clock"></div><div id="countdown" class="muted"></div></div>
+  <div class="cell" id="pop"></div>
+  <div class="cell" id="treasury"></div>
+  <div class="cell" id="well"></div>
+  <div class="cell" id="weather"></div>
+  <div class="actions">
+    <button id="btn-enter" class="btn primary" type="button">入境</button>
+    <button id="btn-back" class="btn" type="button">幕后</button>
+    <button id="btn-lang" class="btn ghost" type="button">English</button>
+  </div>
+</header>
+<div id="banner" class="banner" role="status" hidden></div>
+<div id="status" class="status" role="status" hidden></div>
+<main class="layout">
+  <section class="map-pane">
+    <svg id="map" class="map"></svg>
+    <div class="map-tools">
+      <label><span id="color-label">着色</span>
+        <select id="color-mode"><option value="group">按社群</option><option value="script">按文字系统</option></select>
+      </label>
+    </div>
+  </section>
+  <section class="side-pane">
+    <div id="tabs" class="tabs" role="tablist"></div>
+    <div id="panel" class="panel" role="tabpanel" tabindex="0"></div>
+  </section>
+</main>
+<aside id="drawer" class="drawer" hidden></aside>
+<footer id="foot" class="foot"></footer>
+<noscript><p class="noscript">观测站需要 JavaScript。 / The observatory needs JavaScript.</p></noscript>
+</body>
+</html>
