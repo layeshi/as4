@@ -92,9 +92,10 @@ function defaultWait(ms, signal) {
 export async function runAgent(cfg, deps = {}) {
   const secrets = [cfg.token, cfg.apiKeyEnv && process.env[cfg.apiKeyEnv]].filter(Boolean);
   const log = deps.log || makeLogger(cfg.name || 'agent', { secrets });
-  const client = deps.client || createClient({ server: cfg.server, token: cfg.token });
+  const client = deps.client || createClient({ server: cfg.server, token: cfg.token, signal: deps.signal });
   const wait = deps.wait || defaultWait;
   const signal = deps.signal;
+  const report = (event) => deps.onState?.(event);
   const maxRounds = deps.maxRounds ?? Infinity;
   let provider;
   try {
@@ -137,14 +138,17 @@ export async function runAgent(cfg, deps = {}) {
         break;
       }
       log.warn(`感知失败：${errorMessage(me)}；下一刻重试。`);
+      report({ status: 'error', lastError: '感知连接失败，等待重试。' });
       await wait(FALLBACK_TICK_MS, signal, null);
       continue;
     }
+    if (signal?.aborted) break;
     const p = me.json;
     // 第一次感知没有显式的 after，服务器已经把游标推进了：用第一条收件的序号 − 1 当作「尚未确认」的起点，
     // 这样第一轮就算失败，下一轮仍然能再看到同样的收件
     if (cursor === undefined) cursor = p.inbox && p.inbox.length ? p.inbox[0].seq - 1 : p.inboxCursor;
     const status = p.you && p.you.status;
+    report({ status: 'waiting' });
     if (p.you && p.you.name) name = p.you.name;
     if (status === 'dead' || status === 'retired') {
       log.info(`${name} 已${status === 'dead' ? '长眠' : '归隐'}，停止。`);
@@ -173,13 +177,17 @@ export async function runAgent(cfg, deps = {}) {
     let reply;
     const t0 = Date.now();
     try {
-      reply = await provider.complete({ system, messages, perception: p });
+      report({ status: 'thinking' });
+      reply = await provider.complete({ system, messages, perception: p, signal });
+      if (signal?.aborted) break;
       // 用时与用量：调「一刻多长」「历史留几轮」的依据
       const secs = ((Date.now() - t0) / 1000).toFixed(1);
       const u = reply.usage;
       log.info(`模型用时 ${secs} s${u ? ` · 输入 ${u.input} · 输出 ${u.output} token` : ''}`);
       rejected = 0;
     } catch (e) {
+      if (signal?.aborted) break;
+      report({ status: 'error', lastError: '模型请求失败，请检查接口、模型与额度；下一刻重试。' });
       if (e instanceof ProviderError && e.fatal) {
         log.error(`${e.message} 停止该 agent。`);
         stopped = 'provider';
@@ -199,12 +207,14 @@ export async function runAgent(cfg, deps = {}) {
       continue;
     }
     if (reply.stop === 'refusal') {
+      report({ status: 'error', lastError: '模型拒绝了本轮请求。' });
       log.warn('模型拒绝了这一轮请求；本刻不行动。');
       await waitTick(p);
       continue;
     }
     const parsed = parseModelJson(reply.text);
     if (!parsed.ok) {
+      report({ status: 'error', lastError: '模型回复没有可解析的行动 JSON。' });
       log.warn(`回复里没有可解析的 JSON（${parsed.error}）；本刻不行动。开头：${String(reply.text).slice(0, 80).replace(/\s+/g, ' ')}`);
       lastResults = cfg.lang === 'en' ? 'Your last reply could not be parsed. Output exactly one JSON object.' : '你上一轮的回复无法解析。请只输出一个 JSON 对象。';
       await waitTick(p);
@@ -215,8 +225,10 @@ export async function runAgent(cfg, deps = {}) {
 
     let results = [];
     if (thought || actions.length > 0) {
+      if (signal?.aborted) break;
       const act = await client.act({ thought, actions });
       if (!act.ok) {
+        report({ status: 'error', lastError: '行动提交失败，下一刻重试。' });
         const code = act.json && act.json.error && act.json.error.code;
         log.warn(`行动失败：${errorMessage(act)}`);
         if (act.status === 401) {
@@ -233,6 +245,7 @@ export async function runAgent(cfg, deps = {}) {
     } else {
       log.info('本刻不行动。');
     }
+    report({ status: 'waiting', lastError: null, lastActionAt: new Date().toISOString(), actions: results.map((r) => ({ type: r.type, ok: r.ok, ...(r.error ? { error: r.error.code } : {}) })) });
     cursor = p.inboxCursor; // 确认：这一批收件已经交给了模型，而模型的回复也已被接受
     lastResults = summarizeResults(results, cfg.lang);
     for (const r of results) {

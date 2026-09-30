@@ -7,7 +7,7 @@ const DEFAULT_TIMEOUT_MS = 30000;
  * createClient({ server, token, fetch?, timeoutMs? })
  * 每个调用返回 { ok, status, json, error? }：网络错误时 status = 0、error 为一句话（不含令牌）。
  */
-export function createClient({ server, token, fetch: fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS }) {
+export function createClient({ server, token, fetch: fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS, signal }) {
   const base = String(server).replace(/\/+$/, '');
 
   async function call(path, { method = 'GET', body } = {}) {
@@ -18,7 +18,7 @@ export function createClient({ server, token, fetch: fetchImpl = globalThis.fetc
         method,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
       });
       let json = null;
       try {

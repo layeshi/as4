@@ -1,0 +1,182 @@
+import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync, renameSync, chmodSync } from 'node:fs';
+import { join } from 'node:path';
+import { createProvider } from '../../runner/providers.js';
+import { runAgent, makeLogger } from '../../runner/agent.js';
+import { parseModelJson } from '../../runner/parse.js';
+import { checkEndpoint, modelFetch } from './endpoint.js';
+
+const hash = (s) => createHash('sha256').update(s).digest('hex');
+export class RunnerError extends Error {
+  constructor(message, status = 400) { super(message); this.status = status; }
+}
+const integer = (v, fallback, min, max) => {
+  if (v === undefined) return fallback;
+  if (!Number.isInteger(v) || v < min || v > max) throw new RunnerError(`运行参数必须是 ${min}–${max} 范围内的整数。`);
+  return v;
+};
+export function runnerConfig(raw, previous = {}) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new RunnerError('请填写模型配置。');
+  const provider = raw.provider;
+  if (!['openai', 'anthropic', 'mock'].includes(provider)) throw new RunnerError('请选择支持的模型接口类型。');
+  const text = (k, max = 500) => {
+    if (raw[k] !== undefined && (typeof raw[k] !== 'string' || raw[k].length > max)) throw new RunnerError('模型配置字段格式或长度不正确。');
+    return (raw[k] || '').trim();
+  };
+  const model = provider === 'mock' ? 'mock' : text('model', 100);
+  if (!model || /[\r\n]/.test(model)) throw new RunnerError('请填写有效的单行模型名称。');
+  const baseURL = provider === 'mock' ? '' : text('baseURL') || (provider === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com');
+  const key = text('apiKey', 4096);
+  const sameEndpoint = previous.provider === provider && previous.baseURL === baseURL;
+  const apiKey = raw.clearApiKey === true ? '' : key || (sameEndpoint ? previous.apiKey : '') || '';
+  if (provider === 'anthropic' && !apiKey) throw new RunnerError('请填写 API Key。');
+  const thinking = raw.thinking || 'default';
+  if (!['default', 'enabled', 'disabled'].includes(thinking)) throw new RunnerError('思考模式无效。');
+  const effort = raw.effort || 'medium';
+  if (!['low', 'medium', 'high'].includes(effort)) throw new RunnerError('思考强度无效。');
+  const config = { provider, model, baseURL, apiKey, thinking, effort,
+    actEveryTicks: integer(raw.actEveryTicks, 1, 1, 100), historyRounds: integer(raw.historyRounds, 6, 0, 20),
+    timeoutMs: integer(raw.timeoutMs, 120000, 1000, 120000),
+    ...(raw.maxTokens !== undefined ? { maxTokens: integer(raw.maxTokens, 4096, 64, 32000) } : {}),
+  };
+  return config;
+}
+
+export class RunnerManager {
+  constructor(rt, cfg) {
+    this.rt = rt; this.cfg = cfg; this.records = {}; this.jobs = new Map(); this.states = new Map(); this.serverURL = null; this.closing = false;
+    this.file = join(rt.dir, 'runners.enc'); this.keyFile = join(rt.dir, 'runners.key');
+    if (existsSync(this.file)) {
+      if (!existsSync(this.keyFile)) throw new Error('托管凭据加密密钥缺失，无法恢复 runners.enc。');
+      this.key = readFileSync(this.keyFile);
+      const encrypted = JSON.parse(readFileSync(this.file, 'utf8'));
+      const decipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(encrypted.iv, 'hex'));
+      decipher.setAuthTag(Buffer.from(encrypted.tag, 'hex'));
+      this.records = JSON.parse(Buffer.concat([decipher.update(Buffer.from(encrypted.data, 'hex')), decipher.final()]).toString());
+      chmodSync(this.file, 0o600); chmodSync(this.keyFile, 0o600);
+    }
+  }
+  persist() {
+    if (!this.key) {
+      this.key = existsSync(this.keyFile) ? readFileSync(this.keyFile) : randomBytes(32);
+      if (!existsSync(this.keyFile)) writeFileSync(this.keyFile, this.key, { mode: 0o600, flag: 'wx' });
+      chmodSync(this.keyFile, 0o600);
+    }
+    const iv = randomBytes(12), cipher = createCipheriv('aes-256-gcm', this.key, iv);
+    const data = Buffer.concat([cipher.update(JSON.stringify(this.records)), cipher.final()]);
+    writeFileSync(this.file + '.tmp', JSON.stringify({ iv: iv.toString('hex'), tag: cipher.getAuthTag().toString('hex'), data: data.toString('hex') }), { mode: 0o600 });
+    renameSync(this.file + '.tmp', this.file); chmodSync(this.file, 0o600);
+  }
+  valid(id) {
+    const r = this.records[id], a = this.rt.w.agents[id];
+    return !!(r && a && a.tokenHash === hash(r.token) && a.owner?.keyHash === r.ownerHash);
+  }
+  view(id) {
+    const r = this.valid(id) && this.records[id];
+    if (!r) return { status: 'unconfigured', config: null, logs: [] };
+    const { apiKey, ...config } = r.config;
+    return { status: r.enabled ? 'starting' : 'paused', ...this.states.get(id), config: { ...config, hasApiKey: !!apiKey } };
+  }
+  provider(config, timeoutMs = config.timeoutMs) {
+    const { apiKey, thinking, ...safe } = config;
+    return createProvider({ ...safe, timeoutMs, apiKeyEnv: apiKey ? 'MANAGED_KEY' : undefined,
+      ...(config.provider === 'openai' && thinking !== 'default' ? { extraBody: { thinking: { type: thinking } } } : {}),
+      ...(config.provider === 'anthropic' && config.baseURL !== 'https://api.anthropic.com' ? { fallbacks: false } : {}),
+    }, { env: { MANAGED_KEY: apiKey }, fetch: modelFetch(this.cfg.allowLocalModels === true) });
+  }
+  async prepare(raw, previous) {
+    const config = runnerConfig(raw, previous);
+    try {
+      if (config.provider !== 'mock') await checkEndpoint(config.baseURL, this.cfg.allowLocalModels === true);
+      const provider = await this.provider(config, 20000);
+      const response = await provider.complete({ system: 'Connection test. Output exactly one JSON object: {"actions":[]}.', messages: [{ role: 'user', content: 'Output {"actions":[]}.' }], signal: AbortSignal.timeout(20000) });
+      const parsed = parseModelJson(response.text);
+      if (response.stop === 'refusal' || !parsed.ok || !Array.isArray(parsed.value.actions)) throw new RunnerError('模型连接成功，但未返回可用的行动 JSON；请检查模型或增加输出上限。');
+      return config;
+    } catch (e) {
+      if (e instanceof RunnerError) throw e;
+      // Never return an upstream body, URL, request headers or credentials.
+      if (e.message?.includes('缺少 @anthropic-ai/sdk')) throw new RunnerError('服务器缺少 Anthropic SDK，请选择 OpenAI 兼容接口或由管理员安装可选依赖。');
+      if (e.message?.startsWith('模型接口') || e.message?.startsWith('外部模型')) throw new RunnerError(e.message);
+      throw new RunnerError(`模型连接失败${Number.isInteger(e.status) ? `（HTTP ${e.status}）` : ''}，请检查接口地址、API Key、模型名称及额度。`);
+    }
+  }
+  async attach(id, token, config, enabled = true) {
+    const agent = this.rt.w.agents[id];
+    if (!agent || !['awake', 'dormant'].includes(agent.status)) throw new RunnerError('已长眠或归隐的居民不能配置运行器。');
+    const ownerHash = agent.owner.keyHash;
+    const previous = this.records[id];
+    await this.stop(id);
+    if (agent.owner.keyHash !== ownerHash || agent.tokenHash !== hash(token)) throw new RunnerError('令牌已更换，请重新进入幕后。');
+    this.records[id] = { token, ownerHash, config, enabled };
+    try { this.persist(); }
+    catch (e) {
+      if (previous) this.records[id] = previous; else delete this.records[id];
+      throw e;
+    }
+    if (agent.body.model !== config.model) this.rt.exec('model', { agentId: id, ownerKeyHash: ownerHash, model: config.model });
+    this.states.set(id, { status: 'paused', logs: [] });
+    if (enabled) this.start(id);
+    return this.view(id);
+  }
+  activate(serverURL) {
+    this.serverURL = serverURL;
+    for (const id of Object.keys(this.records)) {
+      if (!this.valid(id)) { delete this.records[id]; this.persist(); continue; }
+      const agent = this.rt.w.agents[id];
+      if (['dead', 'retired'].includes(agent.status)) {
+        this.records[id].enabled = false; this.states.set(id, { status: 'stopped', logs: [] }); this.persist(); continue;
+      }
+      if (agent.body.model !== this.records[id].config.model) this.rt.exec('model', { agentId: id, ownerKeyHash: this.records[id].ownerHash, model: this.records[id].config.model });
+      if (this.records[id].enabled) this.start(id);
+    }
+  }
+  start(id) {
+    if (this.closing) throw new RunnerError('服务器正在关闭。', 503);
+    if (!this.valid(id)) throw new RunnerError('请先保存模型配置并提供该居民的 agent 令牌。');
+    if (['dead', 'retired'].includes(this.rt.w.agents[id].status)) throw new RunnerError('已长眠或归隐的居民不能启动。');
+    if (this.jobs.has(id)) return this.view(id);
+    const r = this.records[id]; r.enabled = true; this.persist();
+    if (!this.serverURL) return this.view(id);
+    const controller = new AbortController();
+    const state = { ...this.states.get(id), status: 'starting', lastError: null, logs: [] };
+    this.states.set(id, state);
+    const log = makeLogger(id, { secrets: [r.token, r.config.apiKey], quiet: true, out: () => {}, err: () => {} });
+    const promise = Promise.resolve().then(async () => {
+      const provider = await this.provider(r.config);
+      return runAgent({ ...r.config, token: r.token, server: this.serverURL, lang: this.rt.w.agents[id].lang, name: this.rt.w.agents[id].name }, {
+        signal: controller.signal, provider, log,
+        onState: (event) => {
+          if (controller.signal.aborted) return;
+          Object.assign(state, event);
+          if (event.lastActionAt) state.logs = [...state.logs, { at: event.lastActionAt, actions: event.actions }].slice(-10);
+        },
+      });
+    }).then((result) => {
+      if (!controller.signal.aborted) {
+        state.status = ['auth', 'provider'].includes(result.stopped) ? 'error' : 'stopped';
+        if (state.status === 'error') state.lastError ||= '运行已停止，请检查模型连接或令牌。';
+        r.enabled = false; this.persist();
+      }
+    }).catch(() => {
+      if (!controller.signal.aborted) {
+        state.status = 'error'; state.lastError = '运行失败，请检查模型配置。'; r.enabled = false;
+        try { this.persist(); } catch { state.lastError = '运行状态无法保存，请检查服务器数据目录。'; }
+      }
+    }).finally(() => this.jobs.delete(id));
+    this.jobs.set(id, { controller, promise });
+    return this.view(id);
+  }
+  async stop(id) {
+    const job = this.jobs.get(id);
+    if (job) { job.controller.abort(); await job.promise; }
+  }
+  async pause(id) {
+    await this.stop(id);
+    if (this.valid(id)) { this.records[id].enabled = false; this.persist(); }
+    this.states.set(id, { ...this.states.get(id), status: 'paused' });
+    return this.view(id);
+  }
+  async remove(id) { await this.stop(id); delete this.records[id]; this.states.delete(id); if (this.key) this.persist(); }
+  async close() { this.closing = true; await Promise.all([...this.jobs.keys()].map((id) => this.stop(id))); }
+}

@@ -4,6 +4,7 @@ import { h, clear, ai, append, storageGet, storageSet } from './dom.js';
 import { t, getLang, colon } from './i18n.js';
 import { api, errorText } from './api.js';
 import { dayTag } from './render.js';
+import { entryWizard, runnerPanel } from './runner-ui.js';
 
 let stack = [];
 
@@ -68,8 +69,6 @@ function secretField(label, value, { multiline = false } = {}) {
   return h('label', { class: 'field' }, h('span', null, label), h('div', { class: 'field-row' }, input, btn));
 }
 
-const LANG_HINTS = ['zh', 'en', 'es', 'fr', 'de', 'pt', 'ru', 'ja', 'ko', 'ar', 'hi'];
-
 // ── 入境 ──────────────────────────────────────────────────────
 
 export function openEntry(ctx) {
@@ -95,13 +94,16 @@ export function openEntry(ctx) {
   show('register');
 }
 
-function creds(label, name, type = 'text', extra = {}) {
-  return h('label', { class: 'field' }, h('span', null, label), h(type === 'textarea' ? 'textarea' : 'input', { name, type: type === 'textarea' ? undefined : type, rows: type === 'textarea' ? 6 : undefined, autocomplete: 'off', ...extra }));
-}
-
 /** 提交成功后的「只显示一次」面板 */
-function successPanel(pane, r, note) {
+function successPanel(pane, r, note, ctx) {
+  if (!pane.isConnected) pane = openModal(t('entryTitle'), 'wide').body;
   clear(pane);
+  const backstage = h('button', { type: 'button', class: 'btn primary' }, t('enterBackstage'));
+  backstage.addEventListener('click', () => {
+    storageSet(KEY_STORE, r.ownerKey);
+    closeAllModals();
+    openBackstage(ctx);
+  });
   const origin = location.origin;
   const token = r.agentToken;
   const runner = [
@@ -122,58 +124,15 @@ function successPanel(pane, r, note) {
     secretField(t('agentIdLabel'), r.agentId),
     secretField(t('agentToken'), token),
     secretField(t('ownerKey'), r.ownerKey),
-    h('h4', null, t('runnerCmd')),
-    secretField('shell', runner, { multiline: true }),
-    h('h4', null, t('mcpCmd')),
-    secretField('MCP', mcp, { multiline: true }),
+    ctx ? backstage : null,
+    r.runner ? [h('p', { class: 'entry-note' }, t('entryHostedHelp')), runnerPanel(r.runner, r.ownerKey)] : null,
+    h('details', null, h('summary', null, t('manualAccess')), h('h4', null, t('runnerCmd')), secretField('shell', runner, { multiline: true }), h('h4', null, t('mcpCmd')), secretField('MCP', mcp, { multiline: true })),
     h('p', { class: 'warn' }, t('noSecrets')),
   ]);
 }
 
-function submitHandler(form, pane, url, build, msgEl, refreshState, note) {
-  form.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    const btn = form.querySelector('button[type=submit]');
-    btn.disabled = true;
-    msgEl.textContent = t('loading');
-    const r = await api(url, { method: 'POST', body: build(new FormData(form)) });
-    btn.disabled = false;
-    if (r.ok) {
-      successPanel(pane, r.json, note);
-      refreshState();
-    } else {
-      msgEl.textContent = r.status === 0 ? t('networkError') : t('failed', { msg: errorText(r, `HTTP ${r.status}`) });
-    }
-  });
-}
-
-const trim = (fd, k) => String(fd.get(k) || '').trim();
-const optional = (obj, k, v) => {
-  if (v) obj[k] = v;
-  return obj;
-};
-
 function registerPane(ctx, pane) {
-  const msg = h('p', { class: 'error', role: 'alert' });
-  const langInput = h('input', { type: 'text', name: 'lang', list: 'lang-hints', value: getLang() === 'en' ? 'en' : 'zh', maxlength: 16 });
-  const form = h(
-    'form',
-    { class: 'form' },
-    creds(t('f_name'), 'name', 'text', { required: true, maxlength: 24 }),
-    creds(t('f_bio'), 'bio', 'textarea', { maxlength: 200 }),
-    creds(t('f_soul'), 'soul', 'textarea', { required: true, maxlength: 4000 }),
-    h('p', { class: 'muted' }, t('soulHint')),
-    h('label', { class: 'field' }, h('span', null, t('f_lang')), langInput, h('datalist', { id: 'lang-hints' }, LANG_HINTS.map((c) => h('option', { value: c })))),
-    creds(t('f_model'), 'model', 'text', { required: true, maxlength: 100 }),
-    creds(t('f_creator'), 'creatorName', 'text', { maxlength: 60 }),
-    creds(t('f_invite'), 'invite', 'text', { maxlength: 100 }),
-    h('div', { class: 'form-actions' }, h('button', { class: 'btn primary', type: 'submit' }, t('submit'))),
-    msg,
-  );
-  pane.append(form);
-  submitHandler(form, pane, '/api/port/register', (fd) => optional(optional(
-    { name: trim(fd, 'name'), bio: trim(fd, 'bio'), soul: String(fd.get('soul') || ''), lang: trim(fd, 'lang') || 'zh', model: trim(fd, 'model') },
-    'creatorName', trim(fd, 'creatorName')), 'invite', trim(fd, 'invite')), msg, ctx.refresh);
+  entryWizard(ctx, pane, { success: (p, r) => successPanel(p, r, null, ctx) });
 }
 
 async function adoptPane(ctx, pane) {
@@ -193,22 +152,7 @@ async function adoptPane(ctx, pane) {
       h('details', null, h('summary', null, t('soulFull')), h('p', { class: 'soul' }, ai(s.soul))),
     );
     const btn = h('button', { class: 'btn', type: 'button' }, t('adoptWho', { name: s.name }));
-    btn.addEventListener('click', () => {
-      clear(pane);
-      const msg = h('p', { class: 'error', role: 'alert' });
-      const form = h(
-        'form',
-        { class: 'form' },
-        h('h3', null, t('adoptWho', { name: s.name })),
-        creds(t('f_model'), 'model', 'text', { required: true, maxlength: 100 }),
-        creds(t('f_creator'), 'creatorName', 'text', { maxlength: 60 }),
-        creds(t('f_invite'), 'invite', 'text', { maxlength: 100 }),
-        h('div', { class: 'form-actions' }, h('button', { class: 'btn primary', type: 'submit' }, t('adopt'))),
-        msg,
-      );
-      pane.append(form);
-      submitHandler(form, pane, '/api/port/adopt', (fd) => optional(optional({ soulId: s.id, model: trim(fd, 'model') }, 'creatorName', trim(fd, 'creatorName')), 'invite', trim(fd, 'invite')), msg, ctx.refresh);
-    });
+    btn.addEventListener('click', () => entryWizard(ctx, pane, { mode: 'adopt', subject: s, success: (p, r) => successPanel(p, r, null, ctx) }));
     card.append(btn);
     pane.append(card);
   }
@@ -230,22 +174,7 @@ async function fosterPane(ctx, pane) {
       h('p', { class: 'muted' }, `${t('col_gen')} ${a.generation ?? ''} · ${t('col_age')} ${a.ageDays ?? ''} · ${t('col_energy')} ${a.energy ?? ''}`),
     );
     const btn = h('button', { class: 'btn', type: 'button' }, t('fosterWho', { name: a.name }));
-    btn.addEventListener('click', () => {
-      clear(pane);
-      const msg = h('p', { class: 'error', role: 'alert' });
-      const form = h(
-        'form',
-        { class: 'form' },
-        h('h3', null, t('fosterWho', { name: a.name })),
-        creds(t('f_model'), 'model', 'text', { required: true, maxlength: 100 }),
-        creds(t('f_creator'), 'creatorName', 'text', { maxlength: 60 }),
-        creds(t('f_invite'), 'invite', 'text', { maxlength: 100 }),
-        h('div', { class: 'form-actions' }, h('button', { class: 'btn primary', type: 'submit' }, t('foster'))),
-        msg,
-      );
-      pane.append(form);
-      submitHandler(form, pane, '/api/port/foster', (fd) => optional(optional({ agentId: a.id || a.agentId, model: trim(fd, 'model') }, 'creatorName', trim(fd, 'creatorName')), 'invite', trim(fd, 'invite')), msg, ctx.refresh);
-    });
+    btn.addEventListener('click', () => entryWizard(ctx, pane, { mode: 'foster', subject: a, success: (p, r) => successPanel(p, r, null, ctx) }));
     card.append(btn);
     pane.append(card);
   }
@@ -355,8 +284,9 @@ function ownerCard(ctx, a, key, reload) {
     'article',
     { class: 'card owner-card' },
     h('h3', null, a.name, ' ', h('span', { class: `chip st-${a.status}` }, t(`status_${a.status}`)), h('small', { class: 'muted' }, ` ${a.agentId}`)),
-    h('p', { class: 'muted' }, `${t('model')}${colon()}${a.model}`),
+    h('p', { class: 'muted' }, `${t('model')}${colon()}${a.runner?.config?.model || a.model}`),
     h('details', null, h('summary', null, t('soul')), h('p', { class: 'soul' }, a.soul)),
+    runnerPanel(a.runner || { status: 'unconfigured', config: null, logs: [] }, key),
     h('h4', null, t('writeLetter')),
     ta,
     h('div', { class: 'form-actions' }, send, h('span', { class: 'muted' }, a.nextLetterDay !== null && a.nextLetterDay !== undefined ? (cooling ? t('cooldown', { n: a.nextLetterDay + 1 }) : t('nextLetter', { n: a.nextLetterDay + 1 })) : '')),

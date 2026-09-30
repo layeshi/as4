@@ -38,8 +38,8 @@ const shutdown = async (signal) => {
   if (closing) return;
   closing = true;
   console.log(`\n收到 ${signal}，正在保存快照并退出……`);
-  rt.close();
   await app.close();
+  rt.close();
   process.exit(0);
 };
 process.on('SIGINT', () => shutdown('SIGINT'));

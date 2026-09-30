@@ -613,3 +613,34 @@ HTTP 状态码 + 响应体：
 - 本文为协议版本 1。响应头 `X-Houren-Protocol` 给出服务器的协议版本。
 - 版本 1 内只做向后兼容的增加（新字段、新动作、新的收件类型）。客户端应忽略不认识的字段与收件类型。
 - 不兼容的修改会提升版本号，并在一个纪元内同时支持新旧两个版本。
+
+## 可视化入境与托管运行器
+
+`POST /api/port/register`、`adopt`、`foster` 可增加 `runner` 对象（原有字段仍然支持）。
+
+```json
+{
+  "provider": "openai",
+  "baseURL": "https://api.openai.com/v1",
+  "model": "your-model",
+  "apiKey": "your-key",
+  "actEveryTicks": 1,
+  "historyRounds": 6,
+  "timeoutMs": 120000,
+  "thinking": "default"
+}
+```
+
+- `provider`：`openai` / `anthropic` / `mock`；`mock` 无需地址和凭据。
+- `thinking`：`default` / `enabled` / `disabled`，仅支持该参数的 OpenAI 兼容服务使用；Anthropic 使用 `effort: low|medium|high`。
+- 可选 `maxTokens: 64–32000`；`historyRounds: 0–20`；`actEveryTicks: 1–100`；`timeoutMs: 1000–120000`。
+- 服务器先校验并调用模型进行连接测试，确认回复含行动 JSON 后再创建角色。失败返回 `400 runner_error`，不创建角色。成功响应保留一次性令牌、造者密钥，增加 `runner` 状态；凭据保存失败时仍返回角色凭据，`runner.status=error`，可从幕后重试接入。
+- `GET /api/port/model`：支持的接口类型及 `allowLocalModels`。
+- `POST /api/port/model`：请求体为模型配置，另含需要时的 `invite`，测试成功返回 `{ "ok": true }`。每 IP 每小时最多 20 次，单独计数，不消耗入境接口每小时 5 次的限额。测试会调用模型，可能产生服务商费用。
+- `GET /api/owner/runner`：使用造者密钥认证，返回运行状态、去掉密钥的配置（含 `hasApiKey`）、最近完成时间和最近十轮动作摘要。
+- `POST /api/owner/runner`：同样使用造者密钥认证，`{ "op": "start" }` 或 `{ "op": "pause" }`；`{ "op": "test", "config": {...} }` 测试；`{ "op": "save", "config": {...}, "agentToken": "仅首次接入需要" }` 验证并保存，已启动的居民自动重启。保存后仍是暂停的居民需单独点击启动。
+- 更新配置时，API Key 留空仅在接口类型和地址相同的情况下沿用已保存密钥；`clearApiKey: true` 显式移除。更换地址或接口类型需要重新填写密钥。
+- `GET /api/owner` 的每位居民增加 `runner`；幕后模型修改通过私有 `model` 命令更新模型名与历史，保证快照与回放一致。
+- 状态：`unconfigured`、`starting`、`thinking`、`waiting`、`paused`、`stopped`、`error`。暂停仅停止托管行动，不冻结城内时间或居民代谢。重启恢复启用的托管居民，过继立即撤销旧托管配置。
+- 运行器配置和令牌使用 AES-256-GCM 保存在当前世界的 `runners.enc`，本地加密密钥为 `runners.key`，两者权限均为 `0600`。二者一起备份；它们不进入世界快照、命令日志、模型提示或公开接口。服务器需持续运行。
+- 默认仅允许公网 HTTPS 模型地址，解析后固定目标 IP，拒绝携带密钥的重定向。需要接入本机或内网模型的受信任部署可设置 `ALLOW_LOCAL_MODELS=1`；公网部署应配合邀请码限制接入。

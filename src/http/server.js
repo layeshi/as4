@@ -2,6 +2,8 @@
 // 只用 Node 内置模块。所有 JSON 响应带 X-Houren-Protocol: 1；请求体上限 64 KB。
 
 import http from 'node:http';
+import { RunnerManager } from '../runner/manager.js';
+import { runnerRoutes } from './runner.js';
 import { readFile, stat } from 'node:fs/promises';
 import { dirname, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,7 +33,7 @@ const MIME = {
 /** index.html 的内容安全策略：界面脚本只能通过 CSSOM / classList / SVG 属性设置样式（SPEC §13） */
 export const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'";
 
-const ROUTES = [...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes];
+const ROUTES = [...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...runnerRoutes];
 
 function match(method, pathname) {
   for (const [m, pattern, handler] of ROUTES) {
@@ -99,9 +101,11 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console } 
   const ctx = {
     rt,
     cfg,
+    runners: new RunnerManager(rt, cfg),
     tokens: new TokenIndex(rt.w),
     limits: {
       agent: new PerTickLimiter(20), // 每个令牌每刻 20 个请求
+      model: new SlidingLimiter(20, 60 * 60 * 1000), // 连接测试与入境次数分开计数
       port: new SlidingLimiter(5, 60 * 60 * 1000), // 注册、领养、过继：每个 IP 每小时 5 次
     },
     sse: { clients: new Set(), perIp: new Map(), total: 0 },
@@ -142,6 +146,11 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console } 
       else res.end();
     }
   });
+  server.on('listening', () => {
+    const address = server.address();
+    const host = address.address === '::' ? '[::1]' : address.address === '0.0.0.0' ? '127.0.0.1' : address.address.includes(':') ? `[${address.address}]` : address.address;
+    ctx.runners.activate(`http://${host}:${address.port}`);
+  });
   // 慢速连接与保活：SSE 长连接由自己的心跳维持
   server.keepAliveTimeout = 65000;
   server.headersTimeout = 20000;
@@ -156,7 +165,8 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console } 
   return {
     server,
     ctx,
-    close() {
+    async close() {
+      await ctx.runners.close();
       clearInterval(heartbeat);
       for (const res of ctx.sse.clients) res.end();
       ctx.sse.clients.clear();

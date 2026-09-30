@@ -35,6 +35,7 @@ export async function getOwner(req, res, ctx, url) {
       nextLetterDay: a.lastLetterDay === null ? null : a.lastLetterDay + P.letterCooldownDays,
       today: clockDay(rt.w),
       fosterable: a.fosterable,
+      runner: ctx.runners.view(id),
     }],
   });
 }

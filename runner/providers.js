@@ -48,17 +48,19 @@ async function createAnthropicProvider(cfg, deps) {
     ...(apiKey ? { apiKey } : {}),
     ...(cfg.baseURL ? { baseURL: cfg.baseURL } : {}),
     ...(cfg.timeoutMs ? { timeout: cfg.timeoutMs } : {}),
+    ...(deps.fetch ? { fetch: deps.fetch } : {}),
+    ...(deps.fetch ? { maxRetries: 0 } : {}),
   });
 
   const isA = (e, name) => typeof Anthropic[name] === 'function' && e instanceof Anthropic[name];
 
   return {
     name: 'anthropic',
-    async complete({ system, messages }) {
+    async complete({ system, messages, signal }) {
       // 默认模型 claude-opus-5-5。不要发送 thinking、temperature、top_p、top_k（该模型会返回 400），不要预填 assistant 消息。
       const req = {
         model: cfg.model ?? 'claude-opus-5-5',
-        max_tokens: 16000,
+        max_tokens: cfg.maxTokens ?? 16000,
         // 一刻恰好 5 分钟，等于默认缓存有效期：系统提示用 1 小时缓存
         system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral', ttl: '1h' } }],
         messages,
@@ -68,7 +70,7 @@ async function createAnthropicProvider(cfg, deps) {
       };
       let resp;
       try {
-        resp = await client.beta.messages.create(req);
+        resp = await client.beta.messages.create(req, signal ? { signal } : undefined);
       } catch (e) {
         if (isA(e, 'AuthenticationError') || isA(e, 'PermissionDeniedError')) throw new ProviderError(`认证失败：${safeMessage(e)}`, { fatal: true, status: e.status });
         if (isA(e, 'NotFoundError')) throw new ProviderError(`模型或接口不存在：${safeMessage(e)}`, { fatal: true, status: e.status });
@@ -101,7 +103,7 @@ function createOpenAIProvider(cfg, deps) {
   }
   return {
     name: 'openai',
-    async complete({ system, messages }) {
+    async complete({ system, messages, signal }) {
       const body = { ...(cfg.extraBody || {}), model: cfg.model, messages: [{ role: 'system', content: system }, ...messages] };
       if (cfg.temperature !== undefined) body.temperature = cfg.temperature;
       if (cfg.maxTokens !== undefined) body.max_tokens = cfg.maxTokens;
@@ -110,7 +112,7 @@ function createOpenAIProvider(cfg, deps) {
       if (key) headers.Authorization = `Bearer ${key}`;
       let res;
       try {
-        res = await fetchImpl(url, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(cfg.timeoutMs ?? 120000) });
+        res = await fetchImpl(url, { method: 'POST', headers, body: JSON.stringify(body), signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(cfg.timeoutMs ?? 120000)]) : AbortSignal.timeout(cfg.timeoutMs ?? 120000) });
       } catch (e) {
         throw new ProviderError(`网络错误：${e && e.name === 'TimeoutError' ? 'timeout' : safeMessage(e)}`, { retryable: true });
       }

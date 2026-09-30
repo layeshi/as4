@@ -13,7 +13,7 @@
 
 import { bad, drainEvents } from './core.js';
 import { tickWorld } from './tick.js';
-import { register, adopt, release, foster, letter } from './lifecycle.js';
+import { register, adopt, release, foster, letter, changeModel } from './lifecycle.js';
 import { actCommand } from './actions.js';
 import { weatherVote } from './weather.js';
 import { adminCommand } from './admin.js';
@@ -24,6 +24,7 @@ const COMMANDS = {
   adopt: (w, p) => adopt(w, p),
   release: (w, p) => release(w, p),
   foster: (w, p) => foster(w, p),
+  model: (w, p) => changeModel(w, p),
   letter: (w, p) => letter(w, p),
   act: (w, p) => actCommand(w, p),
   weather_vote: (w, p) => weatherVote(w, p),

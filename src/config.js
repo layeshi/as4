@@ -29,6 +29,7 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2)) {
     daysPerMonth: num(env.DAYS_PER_MONTH, 24),
     monthsPerEpoch: num(env.MONTHS_PER_EPOCH, 30),
     dataDir: env.DATA_DIR || './data',
+    allowLocalModels: env.ALLOW_LOCAL_MODELS === '1',
     adminKey: env.ADMIN_KEY || null,
     inviteCode: env.INVITE_CODE || null,
     weatherMode: env.WEATHER_MODE || 'vote',

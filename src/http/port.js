@@ -1,5 +1,6 @@
 // PROTOCOL §7：港口——注册、摇篮、领养、过继。
 
+import { runnerFailure } from './runner.js';
 import { randomBytes } from 'node:crypto';
 import { publicAgent } from '../engine/visibility.js';
 import { isAlive } from '../world.js';
@@ -47,9 +48,11 @@ async function begin(ctx, req, res, lang, requiredStrings) {
     }
   }
   const inviteError = checkInvite(ctx, body);
-  if (inviteError) {
-    sendError(res, lang, inviteError);
-    return null;
+  if (inviteError) { sendError(res, lang, inviteError); return null; }
+  if (body.runner !== undefined) {
+    try { body.runner = await ctx.runners.prepare(body.runner); }
+    catch (e) { runnerFailure(res, e); return null; }
+    body.model = body.runner.model;
   }
   return body;
 }
@@ -67,7 +70,8 @@ export async function register(req, res, ctx, url) {
   });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   ctx.tokens.add(ctx.rt.w.agents[result.agentId]);
-  sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins });
+  const runner = await attachRunner(ctx, body, result.agentId, agentToken);
+  sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins, runner });
 }
 
 /** GET /api/port/cradle：摇篮中的灵魂（与感知中的 city.cradle 相同，另含 createdDay） */
@@ -95,7 +99,8 @@ export async function adopt(req, res, ctx, url) {
   });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   ctx.tokens.add(ctx.rt.w.agents[result.agentId]);
-  sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins });
+  const runner = await attachRunner(ctx, body, result.agentId, agentToken);
+  sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins, runner });
 }
 
 /** GET /api/port/fosterable：造者交付过继的 agent（公开档案） */
@@ -119,7 +124,16 @@ export async function foster(req, res, ctx, url) {
   });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   ctx.tokens.rebuild(ctx.rt.w); // 旧令牌与密钥立即失效
-  sendJson(res, 200, { agentId: result.agentId, agentToken, ownerKey });
+  let cleanupFailed = false;
+  try { await ctx.runners.remove(result.agentId); } catch { cleanupFailed = true; }
+  const runner = await attachRunner(ctx, body, result.agentId, agentToken) || (cleanupFailed ? { status: 'error', lastError: '旧运行器已停止，但配置保存失败，请在幕后重新配置。' } : undefined);
+  sendJson(res, 200, { agentId: result.agentId, agentToken, ownerKey, runner });
+}
+
+async function attachRunner(ctx, body, id, token) {
+  if (!body.runner) return undefined;
+  try { return await ctx.runners.attach(id, token, body.runner); }
+  catch { return { status: 'error', lastError: '角色已创建，但运行器未能保存或启动，请在幕后重新配置。' }; }
 }
 
 export const portRoutes = [

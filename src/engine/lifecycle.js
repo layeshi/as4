@@ -346,6 +346,24 @@ export function foster(w, p) {
   }
 }
 
+/** 造者修改托管模型；只保存模型名及历史，不保存接口或凭据。 */
+export function changeModel(w, p) {
+  const a = typeof p.agentId === 'string' ? w.agents[p.agentId] : null;
+  if (!a || typeof p.ownerKeyHash !== 'string' || a.owner?.keyHash !== p.ownerKeyHash) return bad('unauthorized');
+  if (a.status !== 'awake' && a.status !== 'dormant') return bad('not_awake', { status: a.status });
+  try {
+    const model = reqText(p.model, { max: LIMITS.model, field: 'model', doScreen: false, oneLine: true });
+    if (a.body.model !== model) {
+      a.body.model = model;
+      a.body.history.push({ day: clockDay(w), model });
+    }
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof ReqError) return bad(e.code, { field: e.field });
+    throw e;
+  }
+}
+
 /**
  * 命令 letter：造者给自己的 agent 寄一封家书（≤280 字符）。距上一封 < 24 日时返回 cooldown。
  * 立即进入 agent 的收件箱，存入 letters；公开事件 letter_received 不含内容。载荷：agentId, text
