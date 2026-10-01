@@ -12,6 +12,9 @@ import {
 } from './tabs2.js';
 import { renderProfile } from './profile.js';
 import { openEntry, openBackstage, openModal } from './modals.js';
+import { TABS2, signature2 } from './e2-tabs.js';
+import { createMap2 } from './e2-map.js';
+import { renderProfile2, openPlace2 } from './e2-profile.js';
 import { pct, bandText, conditionBar, statusChip, section, table, clockConfig, SEASON_TABLE } from './render.js';
 
 const TABS = [
@@ -20,11 +23,15 @@ const TABS = [
   ['legacy', renderLegacy], ['weather', renderWeather],
 ];
 
+/** 第二纪的城用 TABS2（e2-tabs.js），第一纪的城用 TABS；读到状态之后才知道是哪一纪 */
+let tabsNow = TABS;
+const isE2 = () => !!(S.state && S.state.world.physics === 2);
+
 /** 展示 agent 所写文字的页面：标注「AI 生成内容」 */
-const AI_TABS = new Set(['live', 'laws', 'groups', 'library', 'cemetery']);
+const AI_TABS = new Set(['live', 'laws', 'groups', 'library', 'cemetery', 'cradle']);
 
 /** 这些事件很频繁，且不改变需要整体重拉的数据 */
-const QUIET = new Set(['say', 'move', 'whisper', 'broadcast', 'thought', 'remember', 'forget', 'read', 'omen']);
+const QUIET = new Set(['say', 'move', 'whisper', 'broadcast', 'thought', 'remember', 'forget', 'read', 'omen', 'rule_op', 'rule_error']);
 /** 带 agent 字段、能代表「最近行动」的事件 */
 const NOT_ACTION = new Set(['day', 'month', 'omen', 'weather_start', 'weather_end', 'admin', 'redacted', 'great_sleep', 'letter_received']);
 
@@ -63,13 +70,17 @@ const ctx = {
   groupName: (id) => (groupIndex.get(id) ? groupIndex.get(id).name : String(id)),
   placeName(id) {
     const p = placeIndex.get(id);
+    if (p && p.displayName) return p.displayName[getLang()] || p.displayName.zh; // 第二纪：后人开辟的、遗址的名字随语言
     if (p && p.renamedBy) return p.name;
     const lore = ctx.lore;
     return lore && lore.place[id] ? lore.place[id].name : id;
   },
   /** 地点的顺序：按地图定义（边疆地图按街区排列） */
   placeOrder() {
-    if (S.mapData) return S.mapData.places.map((p) => p.id);
+    if (S.mapData) {
+      const base = S.mapData.places.map((p) => p.id);
+      return isE2() ? [...base, ...S.state.places.map((p) => p.id).filter((id) => !base.includes(id))] : base; // 第二纪：后人开辟的地点排在人类的之后
+    }
     return S.state ? S.state.places.map((p) => p.id) : [];
   },
   districtName(id) {
@@ -107,6 +118,7 @@ async function boot() {
   await Promise.all([loadLore(getLang()), loadLore(getLang() === 'zh' ? 'en' : 'zh')]);
   const ok = (await loadState()) && (await loadMap());
   if (!ok) return;
+  chooseTabs();
   await loadEvents();
   initMap();
   applyState();
@@ -116,6 +128,16 @@ async function boot() {
     if (S.dirty) refreshNow();
   }, 20000);
   showStatus('');
+}
+
+/** 读到状态之后，按这座城的纪选择标签页（第二纪多了「摇篮与躯壳」等），并重画标签栏 */
+function chooseTabs() {
+  tabsNow = isE2() ? TABS2 : TABS;
+  const first = location.hash.slice(1);
+  if (tabsNow.some((x) => x[0] === first)) S.tab = first;
+  else if (!tabsNow.some((x) => x[0] === S.tab)) S.tab = 'live';
+  renderTabBar();
+  renderLegend();
 }
 
 function showStatus(text, retry) {
@@ -146,20 +168,20 @@ function wireStatic() {
   els['map-zoom-out'].addEventListener('click', () => map && map.zoomOut());
   els['map-fit'].addEventListener('click', () => map && map.fit());
   els.tabs.addEventListener('keydown', (ev) => {
-    const idx = TABS.findIndex((x) => x[0] === S.tab);
+    const idx = tabsNow.findIndex((x) => x[0] === S.tab);
     let next = idx;
-    if (ev.key === 'ArrowRight') next = (idx + 1) % TABS.length;
-    else if (ev.key === 'ArrowLeft') next = (idx + TABS.length - 1) % TABS.length;
+    if (ev.key === 'ArrowRight') next = (idx + 1) % tabsNow.length;
+    else if (ev.key === 'ArrowLeft') next = (idx + tabsNow.length - 1) % tabsNow.length;
     else if (ev.key === 'Home') next = 0;
-    else if (ev.key === 'End') next = TABS.length - 1;
+    else if (ev.key === 'End') next = tabsNow.length - 1;
     else return;
     ev.preventDefault();
-    selectTab(TABS[next][0]);
+    selectTab(tabsNow[next][0]);
     els.tabs.children[next].focus();
   });
   window.addEventListener('hashchange', () => {
     const id = location.hash.slice(1);
-    if (id !== S.tab && TABS.some((x) => x[0] === id)) selectTab(id, false);
+    if (id !== S.tab && tabsNow.some((x) => x[0] === id)) selectTab(id, false);
   });
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && drawerId) closeDrawer();
@@ -193,6 +215,7 @@ function renderLegend() {
   const items = [['flame', 'legend_agent'], ['', 'legend_road'], ['broken', 'legend_broken'], ['planned', 'legend_planned']];
   if (S.mapData && S.mapData.terrain && S.mapData.terrain.tunnels && S.mapData.terrain.tunnels.length) items.push(['tunnel', 'legend_tunnel']);
   items.push(['ruin', 'legend_ruin']);
+  if (isE2()) items.push(['site', 'legend_site'], ['lot', 'legend_lot'], ['razed', 'legend_razed'], ['owner', 'legend_owner'], ['salvage', 'legend_salvage'], ['gate', 'legend_gate']);
   for (const [key, label] of items) els['map-legend'].append(h('li', null, h('span', { class: `key ${key}`.trim(), 'aria-hidden': 'true' }), t(label)));
 }
 
@@ -340,6 +363,10 @@ function onTick(data) {
       }
     }
     S.state.treasury = data.treasury;
+    if (data.shells && S.state.shells) {
+      S.state.shells.free = data.shells.free;
+      S.state.shells.used = data.shells.total - data.shells.free;
+    }
     const well = placeIndex.get('well');
     if (well) well.condition = data.well.condition;
     S.state.world.tick = data.tick;
@@ -378,7 +405,7 @@ function renderTopbar() {
   els.clock.textContent = t('clock', { epoch: w.epoch, month: Math.floor(day / w.daysPerMonth) + 1, day: (day % w.daysPerMonth) + 1, tick: (tick % w.ticksPerDay) + 1 });
   const c = pop();
   els.pop.textContent = t('population', c);
-  els.treasury.textContent = `${t('treasury')} ${s.treasury.energy}`;
+  els.treasury.textContent = `${t('treasury')} ${s.treasury.energy}${s.shells ? ` · ${t('shellsTop', { free: s.shells.free, total: s.shells.total })}` : ''}`;
   const well = placeIndex.get('well');
   const hist = s.well.outputHistory;
   const cond = well ? well.condition : 0;
@@ -423,11 +450,16 @@ function updateCountdown() {
 
 function initMap() {
   if (!S.mapData) return;
-  map = createMap(els.map, {
+  const e2 = isE2();
+  map = (e2 ? createMap2 : createMap)(els.map, {
     mapData: S.mapData,
     worldId: S.state ? S.state.world.id : '',
     placeName: (id) => ctx.placeName(id),
-    humanName: (id) => (ctx.lore ? ctx.lore.place[id].name : id),
+    humanName: (id) => {
+      const p = placeIndex.get(id);
+      if (e2) return p && p.humanName ? p.humanName[getLang()] || p.humanName.zh : id; // 第二纪：只有人类的建筑有人类的名字
+      return ctx.lore ? ctx.lore.place[id].name : id;
+    },
     districtName: (id) => ctx.districtName(id),
     agentName: (id) => ctx.agentName(id),
     onAgent: (id) => openAgent(id),
@@ -439,6 +471,7 @@ function initMap() {
 // ── 应用状态 ──────────────────────────────────────────────────
 
 function signature(tab, s) {
+  if (s.world.physics === 2) return signature2(tab, s);
   switch (tab) {
     case 'laws': return JSON.stringify([s.params, s.charter, s.laws, s.proposals, s.world.tick]);
     case 'residents': return JSON.stringify(s.agents.map((a) => [a.id, a.status, a.energy, a.coins, a.place, a.groups.length, a.lastActTick, a.ageDays]));
@@ -470,7 +503,7 @@ function applyState({ force = false } = {}) {
 
 function renderTabBar() {
   clear(els.tabs);
-  TABS.forEach(([id]) => {
+  tabsNow.forEach(([id]) => {
     const b = h('button', { class: 'tab', role: 'tab', id: `tab-${id}`, type: 'button', 'aria-selected': String(id === S.tab), 'aria-controls': 'panel', tabindex: id === S.tab ? 0 : -1 }, t(`tab_${id}`));
     b.addEventListener('click', () => selectTab(id));
     els.tabs.append(b);
@@ -501,7 +534,7 @@ function renderTab({ keepScroll = false } = {}) {
   const box = h('div', { class: 'tabbox' });
   els.panel.append(box);
   if (AI_TABS.has(S.tab)) box.append(h('p', { class: 'ai-note' }, t('aiNote')));
-  const fn = TABS.find((x) => x[0] === S.tab)[1];
+  const fn = tabsNow.find((x) => x[0] === S.tab)[1];
   try {
     const r = fn(ctx, box);
     if (r && typeof r.catch === 'function') r.catch((err) => box.append(h('p', { class: 'error' }, `${t('loadFailed')}: ${err && err.message}`)));
@@ -535,13 +568,14 @@ async function openAgent(id) {
     return;
   }
   try {
-    body.append(renderProfile(ctx, r.json));
+    body.append((isE2() ? renderProfile2 : renderProfile)(ctx, r.json));
   } catch (err) {
     body.append(h('p', { class: 'error' }, `${t('loadFailed')}: ${err && err.message}`));
   }
 }
 
 function openPlace(id) {
+  if (isE2()) return openPlace2(ctx, id);
   const p = placeIndex.get(id);
   const lore = ctx.lore;
   if (!p || !lore) return;

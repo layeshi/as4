@@ -281,7 +281,7 @@ export function renderCemetery(ctx, root) {
     section(
       `${t('unbornList')} (${S.unborn.length})`,
       S.unborn.length
-        ? h('ul', { class: 'plain' }, S.unborn.map((u) => h('li', null, ai(u.name), u.parents ? [' · ', u.parents.map((p) => [agentLink(ctx, p), ' '])] : null)))
+        ? h('ul', { class: 'plain' }, S.unborn.map((u) => h('li', null, ai(u.name), u.parents || u.authors ? [' · ', (u.parents || u.authors).map((p) => [agentLink(ctx, p), ' '])] : null)))
         : emptyNote(t('noUnborn')),
     ),
   );
@@ -330,6 +330,7 @@ const LEGACY_TONE = {
   legacy: 'alive', read: 'alive', used: 'alive', maintained: 'alive', circulating: 'alive',
   transformed: 'changed', amended: 'changed', reinterpreted: 'changed', named: 'changed', unnamed: 'alive',
   abandoned: 'gone', forgotten: 'gone', repealed: 'gone', untouched: 'gone',
+  remodeled: 'changed', salvaged: 'changed', razed: 'gone', // 第二纪：人类的建筑被改装、拆取、拆成遗址
 };
 
 export function renderLegacy(ctx, root) {

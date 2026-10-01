@@ -2,7 +2,6 @@
 
 import { runnerFailure } from './runner.js';
 import { randomBytes } from 'node:crypto';
-import { publicAgent } from '../engine/visibility.js';
 import { isAlive } from '../world.js';
 import { clientIp, langOf, readJson, sendError, sendEngineError, sendJson, sha256hex, timingEqual } from './util.js';
 
@@ -74,16 +73,9 @@ export async function register(req, res, ctx, url) {
   sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins, runner });
 }
 
-/** GET /api/port/cradle：摇篮中的灵魂（与感知中的 city.cradle 相同，另含 createdDay） */
+/** GET /api/port/cradle：摇篮中的灵魂（第一纪与感知中的 city.cradle 相同、另含 createdDay；第二纪另含作者、出资与出资者） */
 export async function cradle(req, res, ctx) {
-  const w = ctx.rt.w;
-  sendJson(res, 200, {
-    cradle: Object.values(w.souls).map((s) => ({
-      id: s.id, name: s.name,
-      parents: s.parents.map((id) => ({ id, name: w.agents[id].name })),
-      soul: s.soul, lang: s.lang, generation: s.generation, createdDay: s.createdDay, expiresDay: s.expiresDay,
-    })),
-  });
+  sendJson(res, 200, { cradle: ctx.rt.engine.publicCradle(ctx.rt.w) });
 }
 
 /** POST /api/port/adopt */
@@ -107,7 +99,7 @@ export async function adopt(req, res, ctx, url) {
 export async function fosterable(req, res, ctx) {
   const w = ctx.rt.w;
   sendJson(res, 200, {
-    agents: Object.values(w.agents).filter((a) => a.fosterable && isAlive(a)).map((a) => publicAgent(w, a)),
+    agents: Object.values(w.agents).filter((a) => a.fosterable && isAlive(a)).map((a) => ctx.rt.engine.publicAgent(w, a)),
   });
 }
 

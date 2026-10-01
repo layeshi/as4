@@ -691,3 +691,93 @@ figcaption { font-size: 12px; color: var(--muted); text-align: center; }
   .soul-template { flex-wrap: wrap; }
   .entry-summary { gap: 10px 16px; }
 }
+
+/* ══ 第二纪 ══════════════════════════════════════════════════════
+   后人开辟的地点、空地块、遗址、模块、门、残料环、主人的描边；法典里的读法与规则；摇篮与躯壳；谱系网。 */
+
+/* 空地块与小路 */
+.map .layer-lots .lot-wrap { opacity: 0.55; cursor: help; }
+.map .layer-lots .lot-wrap.wild { opacity: 0.32; }
+.map .lot-diamond { fill: none; stroke: var(--m-ruin); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.map .lot-dot { fill: var(--m-ruin); }
+.map .lot-wrap.building { opacity: 0.95; }
+.map .lot-wrap.building .lot-diamond { stroke: var(--m-yellow); }
+.map .path-small { fill: none; stroke: var(--m-sand); stroke-width: 1.5; stroke-dasharray: 2 6; stroke-linecap: round; opacity: 0.7; }
+
+/* 后人开辟的地点：用废料拼起来的棚屋，线条是断的 */
+.map .place.agent-built .glyph { filter: drop-shadow(0 0 2px currentColor); }
+.map .place.agent-built .glyph .b { stroke-dasharray: 24 3; }
+.map .place.agent-built .glyph .n { stroke-dasharray: 30 2; }
+
+/* 主人的描边、残料环、门 */
+.map .hidden { display: none; }
+.map .owner-ring { fill: none; stroke-width: 1.8; stroke-dasharray: 6 5; opacity: 0.85; pointer-events: none; }
+.map .salvage-ring { fill: none; stroke: var(--m-sand); stroke-width: 2.2; stroke-linecap: round; opacity: 0.6; pointer-events: none; transition: stroke-dasharray 0.9s ease; }
+.map .gate-bar { fill: none; stroke: var(--m-yellow); stroke-width: 3.2; stroke-linecap: round; pointer-events: none; }
+.map .gate-bar.off { stroke: var(--m-ruin); stroke-dasharray: 4 4; }
+
+/* 模块：叠在一起的小图标 */
+.map .mods .module { color: var(--m-cyan); }
+.map .mods .module path, .map .mods .module rect, .map .mods .module circle, .map .mods .module line { fill: var(--m-body); stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.map .mods .module.m-memorial { color: var(--m-orange); }
+.map .mods .module.m-cradle { color: var(--m-green); }
+.map .mods .module.m-relay, .map .mods .module.m-sensor { color: var(--m-blue); }
+.map .mods .module.m-archive, .map .mods .module.m-surface { color: var(--m-violet); }
+.map .mods .module.m-board, .map .mods .module.m-store { color: var(--m-yellow); }
+.map .mods .module.inherent { opacity: 0.72; }
+.map .mods .module.off { color: var(--m-ruin); }
+
+/* 遗址：褪色的轮廓 */
+.map .place.razed { color: var(--m-ruin); }
+.map .place.razed .glyph { opacity: 0.3; filter: none; }
+.map .place.razed .glyph .b, .map .place.razed .glyph .n { fill: none; stroke-dasharray: 2 6; }
+.map .place.razed .glyph .w, .map .place.razed .glyph .core { opacity: 0; }
+.map .label.razed { fill: var(--m-label-dim); font-style: italic; }
+
+/* 开辟：新地点从空地块上长出来；拆解：建筑闪一下 */
+.map .place.fresh .glyph { animation: e2-grow 1.8s ease-out; transform-box: fill-box; transform-origin: 50% 100%; }
+.map .place.flash .glyph { animation: e2-flash 0.7s ease-out; }
+@keyframes e2-grow { from { transform: scale(0.15); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes e2-flash { 0% { filter: drop-shadow(0 0 14px #fff) brightness(2.2); } 100% { filter: drop-shadow(0 0 3px currentColor); } }
+
+/* 图例 */
+.map-legend .key.site { width: 12px; height: 10px; border-radius: 2px; background: #e0783a; }
+.map-legend .key.lot { width: 9px; height: 9px; background: transparent; border: 1px dashed #687085; transform: rotate(45deg); }
+.map-legend .key.razed { background: repeating-linear-gradient(90deg, #687085 0 2px, transparent 2px 6px); }
+.map-legend .key.owner { width: 14px; height: 9px; border-radius: 50%; background: transparent; border: 2px dashed #b98bff; }
+.map-legend .key.salvage { width: 12px; height: 12px; border-radius: 50%; background: transparent; border: 2px solid #e8c07a; }
+.map-legend .key.gate { height: 3px; background: #ffd23f; }
+
+/* 法典：读法、规则 JSON、标签、状态 */
+.reading { margin: 4px 0; padding-left: 20px; color: var(--text); }
+.reading li { padding: 1px 0; }
+ol.reading { list-style: decimal; }
+ul.reading { list-style: none; padding-left: 0; }
+.json { background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 6px; padding: 8px; overflow: auto; max-height: 280px; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+.json-details > summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.fp code { margin-right: 6px; font-size: 11px; }
+.physics-group h4 { margin: 8px 0 2px; }
+.proc-history { padding-left: 20px; }
+.chip.tag { color: var(--accent); border-color: var(--accent); margin-left: 0; margin-right: 3px; }
+.chip.warn { color: var(--warn); border-color: var(--warn); }
+.chip.good { color: var(--good); border-color: var(--good); }
+.chip.razed { color: var(--muted); border-style: dashed; }
+.chip.mod { margin-left: 0; margin-right: 3px; color: var(--text); }
+.chip.mod.off { color: var(--muted); border-style: dashed; }
+.chip.mod.inherent { border-style: dotted; }
+.chip.inherited { color: var(--c2); border-color: var(--c2); margin-left: 0; }
+.chip.cls-constitutional { color: var(--c4); border-color: var(--c4); }
+.chip.ls-repealed, .chip.ls-replaced { color: var(--bad); border-color: var(--bad); }
+.chip.ls-active { color: var(--good); border-color: var(--good); }
+.purpose { font-size: 12px; }
+.soul-card .soul { white-space: pre-wrap; }
+
+/* 谱系网 */
+.lineage { width: 100%; max-width: 560px; height: auto; margin: 8px 0; }
+.lineage .lin-edge { fill: none; stroke: var(--line); stroke-width: 1.4; }
+.lineage .lin-node { cursor: pointer; outline: none; }
+.lineage .lin-node circle { fill: var(--panel-2); stroke: var(--accent); stroke-width: 1.8; }
+.lineage .lin-node.self circle { fill: var(--accent); }
+.lineage .lin-node.st-dead circle, .lineage .lin-node.st-retired circle { stroke: var(--muted); stroke-dasharray: 2 2; }
+.lineage .lin-node text { fill: var(--text); font-size: 11px; }
+.lineage .lin-node:hover circle, .lineage .lin-node:focus-visible circle { stroke-width: 3; }

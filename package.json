@@ -12,8 +12,8 @@
     "demo": "node server.js --demo",
     "fresh": "node server.js --demo --reset",
     "test": "node --test",
-    "sandbox": "node src/sandbox/run.js",
-    "calibrate": "node src/sandbox/calibrate.js",
+    "sandbox": "node src/sandbox/main.js run",
+    "calibrate": "node src/sandbox/main.js calibrate",
     "replay": "node src/tools/replay.js",
     "agent": "node runner/agent.js",
     "mcp": "node mcp/server.js"

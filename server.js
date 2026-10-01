@@ -6,14 +6,14 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { loadConfig, applyConfig } from './src/config.js';
+import { loadConfig, applyConfig, DEFAULT_PHYSICS } from './src/config.js';
 import { Runtime } from './src/runtime.js';
 import { createApp } from './src/http/server.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'));
 
-const cfg = loadConfig();
+const cfg = loadConfig(process.env, process.argv.slice(2), { defaultPhysics: DEFAULT_PHYSICS }); // 新世界缺省用第二纪的物理（已有的世界按快照）
 cfg.trustProxy = process.env.TRUST_PROXY === '1';
 applyConfig(cfg);
 if (cfg.host !== '127.0.0.1' && !cfg.adminKey) console.warn('提示：对外监听但没有设置 ADMIN_KEY，管理接口保持关闭。');
@@ -28,7 +28,7 @@ const rt = Runtime.open(cfg, {
 const app = createApp(rt, cfg);
 
 app.server.listen(cfg.port, cfg.host, () => {
-  console.log(`后人纪 · ${rt.w.id}（第 ${rt.w.clock.tick} 刻，种子 ${rt.w.seed}，地图 ${rt.w.map || 'classic'}）`);
+  console.log(`后人纪 · ${rt.w.id}（第 ${rt.engine.physics === 2 ? '二' : '一'}纪 · 第 ${rt.w.clock.tick} 刻，种子 ${rt.w.seed}，地图 ${rt.w.map || 'classic'}）`);
   console.log(`观测站：http://${cfg.host}:${cfg.port}   一刻 = ${cfg.tickMs} ms${cfg.demo ? '（demo 模式）' : ''}`);
   rt.start();
 });

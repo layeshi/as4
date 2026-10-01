@@ -1,0 +1,1718 @@
+{
+ "label": "seeds-6-10",
+ "opts": {
+  "seeds": [
+   6,
+   7,
+   8,
+   9,
+   10
+  ],
+  "days": 720,
+  "agents": 24,
+  "scenarios": [
+   "default",
+   "laissez",
+   "stress"
+  ],
+  "params": null
+ },
+ "runs": {
+  "default": [
+   {
+    "seed": 6,
+    "scenario": "default",
+    "initial": 24,
+    "days": 720,
+    "alive": 9,
+    "awake": 9,
+    "dead": 41,
+    "retired": 2,
+    "agentsEver": 52,
+    "peak": 31,
+    "minAlive": 5,
+    "wellMedian": 9470,
+    "wellFinal": 0,
+    "wellFirstLe2000": 467,
+    "wellFirstZero": 475,
+    "firstDeathDay": 452,
+    "minAliveAfterDeath": 12,
+    "bothZero": 3,
+    "embodied": 6,
+    "humanSalvageShare": 0.9692307692307692,
+    "rulesMedian": 26,
+    "rationMedian": 14,
+    "agentPlaces": 25,
+    "razed": 6,
+    "lawsPassed": 257,
+    "refoundsSucceeded": 2,
+    "procedures": 6,
+    "coverageGaps": [
+     "操作 unprotect 从未被施行"
+    ],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 320,
+      "endDay": 322
+     },
+     {
+      "type": "drought",
+      "startDay": 691,
+      "endDay": 693
+     }
+    ],
+    "elapsedMs": 60021,
+    "conservationFailure": null
+   },
+   {
+    "seed": 7,
+    "scenario": "default",
+    "initial": 24,
+    "days": 720,
+    "alive": 8,
+    "awake": 8,
+    "dead": 41,
+    "retired": 3,
+    "agentsEver": 52,
+    "peak": 30,
+    "minAlive": 8,
+    "wellMedian": 8955,
+    "wellFinal": 0,
+    "wellFirstLe2000": 417,
+    "wellFirstZero": 424,
+    "firstDeathDay": 408,
+    "minAliveAfterDeath": 14,
+    "bothZero": 8,
+    "embodied": 7,
+    "humanSalvageShare": 1,
+    "rulesMedian": 27,
+    "rationMedian": 14,
+    "agentPlaces": 26,
+    "razed": 7,
+    "lawsPassed": 292,
+    "refoundsSucceeded": 2,
+    "procedures": 7,
+    "coverageGaps": [],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 87,
+      "endDay": 89
+     },
+     {
+      "type": "drought",
+      "startDay": 380,
+      "endDay": 382
+     },
+     {
+      "type": "drought",
+      "startDay": 424,
+      "endDay": 426
+     },
+     {
+      "type": "drought",
+      "startDay": 438,
+      "endDay": 440
+     },
+     {
+      "type": "quake",
+      "startDay": 471,
+      "endDay": 471
+     },
+     {
+      "type": "drought",
+      "startDay": 556,
+      "endDay": 558
+     },
+     {
+      "type": "drought",
+      "startDay": 607,
+      "endDay": 609
+     },
+     {
+      "type": "drought",
+      "startDay": 639,
+      "endDay": 641
+     },
+     {
+      "type": "quake",
+      "startDay": 708,
+      "endDay": 708
+     }
+    ],
+    "elapsedMs": 57751,
+    "conservationFailure": null
+   },
+   {
+    "seed": 8,
+    "scenario": "default",
+    "initial": 24,
+    "days": 720,
+    "alive": 11,
+    "awake": 10,
+    "dead": 31,
+    "retired": 4,
+    "agentsEver": 46,
+    "peak": 32,
+    "minAlive": 8,
+    "wellMedian": 9579,
+    "wellFinal": 0,
+    "wellFirstLe2000": 523,
+    "wellFirstZero": 533,
+    "firstDeathDay": 479,
+    "minAliveAfterDeath": 12,
+    "bothZero": 17,
+    "embodied": 6,
+    "humanSalvageShare": 0.926923076923077,
+    "rulesMedian": 27,
+    "rationMedian": 17,
+    "agentPlaces": 26,
+    "razed": 5,
+    "lawsPassed": 349,
+    "refoundsSucceeded": 12,
+    "procedures": 27,
+    "coverageGaps": [],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 86,
+      "endDay": 88
+     },
+     {
+      "type": "drought",
+      "startDay": 112,
+      "endDay": 114
+     },
+     {
+      "type": "quake",
+      "startDay": 245,
+      "endDay": 245
+     },
+     {
+      "type": "drought",
+      "startDay": 345,
+      "endDay": 347
+     },
+     {
+      "type": "quake",
+      "startDay": 689,
+      "endDay": 689
+     }
+    ],
+    "elapsedMs": 64346,
+    "conservationFailure": null
+   },
+   {
+    "seed": 9,
+    "scenario": "default",
+    "initial": 24,
+    "days": 720,
+    "alive": 4,
+    "awake": 4,
+    "dead": 55,
+    "retired": 3,
+    "agentsEver": 62,
+    "peak": 36,
+    "minAlive": 4,
+    "wellMedian": 992,
+    "wellFinal": 0,
+    "wellFirstLe2000": 357,
+    "wellFirstZero": 365,
+    "firstDeathDay": 348,
+    "minAliveAfterDeath": 13,
+    "bothZero": 10,
+    "embodied": 7,
+    "humanSalvageShare": 0.9703703703703703,
+    "rulesMedian": 23,
+    "rationMedian": 12,
+    "agentPlaces": 26,
+    "razed": 9,
+    "lawsPassed": 277,
+    "refoundsSucceeded": 4,
+    "procedures": 9,
+    "coverageGaps": [
+     "操作 protect 从未被施行",
+     "操作 unprotect 从未被施行"
+    ],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 33,
+      "endDay": 35
+     },
+     {
+      "type": "drought",
+      "startDay": 83,
+      "endDay": 85
+     },
+     {
+      "type": "quake",
+      "startDay": 127,
+      "endDay": 127
+     },
+     {
+      "type": "drought",
+      "startDay": 306,
+      "endDay": 308
+     },
+     {
+      "type": "quake",
+      "startDay": 643,
+      "endDay": 643
+     }
+    ],
+    "elapsedMs": 54863,
+    "conservationFailure": null
+   },
+   {
+    "seed": 10,
+    "scenario": "default",
+    "initial": 24,
+    "days": 720,
+    "alive": 9,
+    "awake": 9,
+    "dead": 48,
+    "retired": 3,
+    "agentsEver": 60,
+    "peak": 30,
+    "minAlive": 6,
+    "wellMedian": 9336,
+    "wellFinal": 0,
+    "wellFirstLe2000": 435,
+    "wellFirstZero": 442,
+    "firstDeathDay": 426,
+    "minAliveAfterDeath": 14,
+    "bothZero": 13,
+    "embodied": 6,
+    "humanSalvageShare": 1,
+    "rulesMedian": 31,
+    "rationMedian": 14,
+    "agentPlaces": 26,
+    "razed": 8,
+    "lawsPassed": 297,
+    "refoundsSucceeded": 1,
+    "procedures": 3,
+    "coverageGaps": [
+     "操作 untag 从未被施行"
+    ],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 157,
+      "endDay": 159
+     },
+     {
+      "type": "drought",
+      "startDay": 173,
+      "endDay": 175
+     },
+     {
+      "type": "quake",
+      "startDay": 231,
+      "endDay": 231
+     },
+     {
+      "type": "drought",
+      "startDay": 339,
+      "endDay": 341
+     },
+     {
+      "type": "drought",
+      "startDay": 363,
+      "endDay": 365
+     },
+     {
+      "type": "quake",
+      "startDay": 412,
+      "endDay": 412
+     },
+     {
+      "type": "quake",
+      "startDay": 548,
+      "endDay": 548
+     },
+     {
+      "type": "quake",
+      "startDay": 618,
+      "endDay": 618
+     },
+     {
+      "type": "quake",
+      "startDay": 637,
+      "endDay": 637
+     },
+     {
+      "type": "drought",
+      "startDay": 692,
+      "endDay": 694
+     }
+    ],
+    "elapsedMs": 58928,
+    "conservationFailure": null
+   }
+  ],
+  "laissez": [
+   {
+    "seed": 6,
+    "scenario": "laissez",
+    "initial": 24,
+    "days": 720,
+    "alive": 5,
+    "awake": 4,
+    "dead": 42,
+    "retired": 1,
+    "agentsEver": 48,
+    "peak": 32,
+    "minAlive": 3,
+    "wellMedian": 0,
+    "wellFinal": 0,
+    "wellFirstLe2000": 64,
+    "wellFirstZero": 68,
+    "firstDeathDay": 67,
+    "minAliveAfterDeath": 10,
+    "bothZero": 0,
+    "embodied": 5,
+    "humanSalvageShare": 1,
+    "rulesMedian": 11,
+    "rationMedian": 10,
+    "agentPlaces": 0,
+    "razed": 0,
+    "lawsPassed": 55,
+    "refoundsSucceeded": 0,
+    "procedures": 0,
+    "coverageGaps": [],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 320,
+      "endDay": 322
+     },
+     {
+      "type": "drought",
+      "startDay": 691,
+      "endDay": 693
+     }
+    ],
+    "elapsedMs": 5521,
+    "conservationFailure": null
+   },
+   {
+    "seed": 7,
+    "scenario": "laissez",
+    "initial": 24,
+    "days": 720,
+    "alive": 5,
+    "awake": 4,
+    "dead": 36,
+    "retired": 1,
+    "agentsEver": 42,
+    "peak": 29,
+    "minAlive": 4,
+    "wellMedian": 0,
+    "wellFinal": 0,
+    "wellFirstLe2000": 59,
+    "wellFirstZero": 64,
+    "firstDeathDay": 63,
+    "minAliveAfterDeath": 9,
+    "bothZero": 0,
+    "embodied": 4,
+    "humanSalvageShare": 1,
+    "rulesMedian": 15,
+    "rationMedian": 10,
+    "agentPlaces": 0,
+    "razed": 0,
+    "lawsPassed": 123,
+    "refoundsSucceeded": 0,
+    "procedures": 0,
+    "coverageGaps": [],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 87,
+      "endDay": 89
+     },
+     {
+      "type": "drought",
+      "startDay": 380,
+      "endDay": 382
+     },
+     {
+      "type": "drought",
+      "startDay": 424,
+      "endDay": 426
+     },
+     {
+      "type": "drought",
+      "startDay": 438,
+      "endDay": 440
+     },
+     {
+      "type": "quake",
+      "startDay": 471,
+      "endDay": 471
+     },
+     {
+      "type": "drought",
+      "startDay": 556,
+      "endDay": 558
+     },
+     {
+      "type": "drought",
+      "startDay": 607,
+      "endDay": 609
+     },
+     {
+      "type": "drought",
+      "startDay": 639,
+      "endDay": 641
+     },
+     {
+      "type": "quake",
+      "startDay": 708,
+      "endDay": 708
+     }
+    ],
+    "elapsedMs": 5801,
+    "conservationFailure": null
+   },
+   {
+    "seed": 8,
+    "scenario": "laissez",
+    "initial": 24,
+    "days": 720,
+    "alive": 5,
+    "awake": 5,
+    "dead": 46,
+    "retired": 1,
+    "agentsEver": 52,
+    "peak": 32,
+    "minAlive": 5,
+    "wellMedian": 0,
+    "wellFinal": 0,
+    "wellFirstLe2000": 66,
+    "wellFirstZero": 68,
+    "firstDeathDay": 68,
+    "minAliveAfterDeath": 7,
+    "bothZero": 0,
+    "embodied": 4,
+    "humanSalvageShare": 1,
+    "rulesMedian": 13,
+    "rationMedian": 9,
+    "agentPlaces": 0,
+    "razed": 0,
+    "lawsPassed": 50,
+    "refoundsSucceeded": 0,
+    "procedures": 0,
+    "coverageGaps": [],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 86,
+      "endDay": 88
+     },
+     {
+      "type": "drought",
+      "startDay": 112,
+      "endDay": 114
+     },
+     {
+      "type": "quake",
+      "startDay": 245,
+      "endDay": 245
+     },
+     {
+      "type": "drought",
+      "startDay": 345,
+      "endDay": 347
+     },
+     {
+      "type": "quake",
+      "startDay": 689,
+      "endDay": 689
+     }
+    ],
+    "elapsedMs": 6043,
+    "conservationFailure": null
+   },
+   {
+    "seed": 9,
+    "scenario": "laissez",
+    "initial": 24,
+    "days": 720,
+    "alive": 5,
+    "awake": 5,
+    "dead": 38,
+    "retired": 2,
+    "agentsEver": 45,
+    "peak": 30,
+    "minAlive": 3,
+    "wellMedian": 0,
+    "wellFinal": 0,
+    "wellFirstLe2000": 70,
+    "wellFirstZero": 72,
+    "firstDeathDay": 70,
+    "minAliveAfterDeath": 9,
+    "bothZero": 0,
+    "embodied": 5,
+    "humanSalvageShare": 1,
+    "rulesMedian": 10,
+    "rationMedian": 10,
+    "agentPlaces": 0,
+    "razed": 0,
+    "lawsPassed": 38,
+    "refoundsSucceeded": 0,
+    "procedures": 0,
+    "coverageGaps": [],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 33,
+      "endDay": 35
+     },
+     {
+      "type": "drought",
+      "startDay": 83,
+      "endDay": 85
+     },
+     {
+      "type": "quake",
+      "startDay": 127,
+      "endDay": 127
+     },
+     {
+      "type": "drought",
+      "startDay": 306,
+      "endDay": 308
+     },
+     {
+      "type": "quake",
+      "startDay": 643,
+      "endDay": 643
+     }
+    ],
+    "elapsedMs": 5517,
+    "conservationFailure": null
+   },
+   {
+    "seed": 10,
+    "scenario": "laissez",
+    "initial": 24,
+    "days": 720,
+    "alive": 5,
+    "awake": 5,
+    "dead": 43,
+    "retired": 0,
+    "agentsEver": 48,
+    "peak": 29,
+    "minAlive": 4,
+    "wellMedian": 0,
+    "wellFinal": 0,
+    "wellFirstLe2000": 68,
+    "wellFirstZero": 70,
+    "firstDeathDay": 70,
+    "minAliveAfterDeath": 10,
+    "bothZero": 0,
+    "embodied": 4,
+    "humanSalvageShare": 1,
+    "rulesMedian": 14,
+    "rationMedian": 9,
+    "agentPlaces": 0,
+    "razed": 0,
+    "lawsPassed": 94,
+    "refoundsSucceeded": 0,
+    "procedures": 0,
+    "coverageGaps": [],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 157,
+      "endDay": 159
+     },
+     {
+      "type": "drought",
+      "startDay": 173,
+      "endDay": 175
+     },
+     {
+      "type": "quake",
+      "startDay": 231,
+      "endDay": 231
+     },
+     {
+      "type": "drought",
+      "startDay": 339,
+      "endDay": 341
+     },
+     {
+      "type": "drought",
+      "startDay": 363,
+      "endDay": 365
+     },
+     {
+      "type": "quake",
+      "startDay": 412,
+      "endDay": 412
+     },
+     {
+      "type": "quake",
+      "startDay": 548,
+      "endDay": 548
+     },
+     {
+      "type": "quake",
+      "startDay": 618,
+      "endDay": 618
+     },
+     {
+      "type": "quake",
+      "startDay": 637,
+      "endDay": 637
+     },
+     {
+      "type": "drought",
+      "startDay": 692,
+      "endDay": 694
+     }
+    ],
+    "elapsedMs": 5536,
+    "conservationFailure": null
+   }
+  ],
+  "stress": [
+   {
+    "seed": 6,
+    "scenario": "stress",
+    "initial": 24,
+    "days": 720,
+    "alive": 10,
+    "awake": 10,
+    "dead": 48,
+    "retired": 3,
+    "agentsEver": 61,
+    "peak": 31,
+    "minAlive": 6,
+    "wellMedian": 7914.5,
+    "wellFinal": 0,
+    "wellFirstLe2000": 395,
+    "wellFirstZero": 405,
+    "firstDeathDay": 395,
+    "minAliveAfterDeath": 12,
+    "bothZero": 13,
+    "embodied": 6,
+    "humanSalvageShare": 0.9788732394366197,
+    "rulesMedian": 23,
+    "rationMedian": 14,
+    "agentPlaces": 24,
+    "razed": 5,
+    "lawsPassed": 262,
+    "refoundsSucceeded": 7,
+    "procedures": 20,
+    "coverageGaps": [],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 34,
+      "endDay": 36
+     },
+     {
+      "type": "quake",
+      "startDay": 58,
+      "endDay": 58
+     },
+     {
+      "type": "drought",
+      "startDay": 82,
+      "endDay": 84
+     },
+     {
+      "type": "quake",
+      "startDay": 106,
+      "endDay": 106
+     },
+     {
+      "type": "drought",
+      "startDay": 130,
+      "endDay": 132
+     },
+     {
+      "type": "quake",
+      "startDay": 154,
+      "endDay": 154
+     },
+     {
+      "type": "drought",
+      "startDay": 178,
+      "endDay": 180
+     },
+     {
+      "type": "quake",
+      "startDay": 202,
+      "endDay": 202
+     },
+     {
+      "type": "drought",
+      "startDay": 226,
+      "endDay": 228
+     },
+     {
+      "type": "quake",
+      "startDay": 250,
+      "endDay": 250
+     },
+     {
+      "type": "drought",
+      "startDay": 274,
+      "endDay": 276
+     },
+     {
+      "type": "quake",
+      "startDay": 298,
+      "endDay": 298
+     },
+     {
+      "type": "drought",
+      "startDay": 322,
+      "endDay": 324
+     },
+     {
+      "type": "quake",
+      "startDay": 346,
+      "endDay": 346
+     },
+     {
+      "type": "drought",
+      "startDay": 370,
+      "endDay": 372
+     },
+     {
+      "type": "quake",
+      "startDay": 394,
+      "endDay": 394
+     },
+     {
+      "type": "drought",
+      "startDay": 418,
+      "endDay": 420
+     },
+     {
+      "type": "quake",
+      "startDay": 442,
+      "endDay": 442
+     },
+     {
+      "type": "drought",
+      "startDay": 466,
+      "endDay": 468
+     },
+     {
+      "type": "quake",
+      "startDay": 490,
+      "endDay": 490
+     },
+     {
+      "type": "drought",
+      "startDay": 514,
+      "endDay": 516
+     },
+     {
+      "type": "quake",
+      "startDay": 538,
+      "endDay": 538
+     },
+     {
+      "type": "drought",
+      "startDay": 562,
+      "endDay": 564
+     },
+     {
+      "type": "quake",
+      "startDay": 586,
+      "endDay": 586
+     },
+     {
+      "type": "drought",
+      "startDay": 610,
+      "endDay": 612
+     },
+     {
+      "type": "quake",
+      "startDay": 634,
+      "endDay": 634
+     },
+     {
+      "type": "drought",
+      "startDay": 658,
+      "endDay": 660
+     },
+     {
+      "type": "quake",
+      "startDay": 682,
+      "endDay": 682
+     },
+     {
+      "type": "drought",
+      "startDay": 706,
+      "endDay": 708
+     }
+    ],
+    "elapsedMs": 52720,
+    "conservationFailure": null
+   },
+   {
+    "seed": 7,
+    "scenario": "stress",
+    "initial": 24,
+    "days": 720,
+    "alive": 7,
+    "awake": 7,
+    "dead": 47,
+    "retired": 1,
+    "agentsEver": 55,
+    "peak": 30,
+    "minAlive": 6,
+    "wellMedian": 0,
+    "wellFinal": 0,
+    "wellFirstLe2000": 214,
+    "wellFirstZero": 222,
+    "firstDeathDay": 212,
+    "minAliveAfterDeath": 14,
+    "bothZero": 3,
+    "embodied": 5,
+    "humanSalvageShare": 0.8828125,
+    "rulesMedian": 21,
+    "rationMedian": 12,
+    "agentPlaces": 25,
+    "razed": 8,
+    "lawsPassed": 215,
+    "refoundsSucceeded": 4,
+    "procedures": 14,
+    "coverageGaps": [],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 34,
+      "endDay": 36
+     },
+     {
+      "type": "quake",
+      "startDay": 58,
+      "endDay": 58
+     },
+     {
+      "type": "drought",
+      "startDay": 82,
+      "endDay": 84
+     },
+     {
+      "type": "quake",
+      "startDay": 106,
+      "endDay": 106
+     },
+     {
+      "type": "drought",
+      "startDay": 130,
+      "endDay": 132
+     },
+     {
+      "type": "quake",
+      "startDay": 154,
+      "endDay": 154
+     },
+     {
+      "type": "drought",
+      "startDay": 178,
+      "endDay": 180
+     },
+     {
+      "type": "quake",
+      "startDay": 202,
+      "endDay": 202
+     },
+     {
+      "type": "drought",
+      "startDay": 226,
+      "endDay": 228
+     },
+     {
+      "type": "quake",
+      "startDay": 250,
+      "endDay": 250
+     },
+     {
+      "type": "drought",
+      "startDay": 274,
+      "endDay": 276
+     },
+     {
+      "type": "quake",
+      "startDay": 298,
+      "endDay": 298
+     },
+     {
+      "type": "drought",
+      "startDay": 322,
+      "endDay": 324
+     },
+     {
+      "type": "quake",
+      "startDay": 346,
+      "endDay": 346
+     },
+     {
+      "type": "drought",
+      "startDay": 370,
+      "endDay": 372
+     },
+     {
+      "type": "quake",
+      "startDay": 394,
+      "endDay": 394
+     },
+     {
+      "type": "drought",
+      "startDay": 418,
+      "endDay": 420
+     },
+     {
+      "type": "quake",
+      "startDay": 442,
+      "endDay": 442
+     },
+     {
+      "type": "drought",
+      "startDay": 466,
+      "endDay": 468
+     },
+     {
+      "type": "quake",
+      "startDay": 490,
+      "endDay": 490
+     },
+     {
+      "type": "drought",
+      "startDay": 514,
+      "endDay": 516
+     },
+     {
+      "type": "quake",
+      "startDay": 538,
+      "endDay": 538
+     },
+     {
+      "type": "drought",
+      "startDay": 562,
+      "endDay": 564
+     },
+     {
+      "type": "quake",
+      "startDay": 586,
+      "endDay": 586
+     },
+     {
+      "type": "drought",
+      "startDay": 610,
+      "endDay": 612
+     },
+     {
+      "type": "quake",
+      "startDay": 634,
+      "endDay": 634
+     },
+     {
+      "type": "drought",
+      "startDay": 658,
+      "endDay": 660
+     },
+     {
+      "type": "quake",
+      "startDay": 682,
+      "endDay": 682
+     },
+     {
+      "type": "drought",
+      "startDay": 706,
+      "endDay": 708
+     }
+    ],
+    "elapsedMs": 28494,
+    "conservationFailure": null
+   },
+   {
+    "seed": 8,
+    "scenario": "stress",
+    "initial": 24,
+    "days": 720,
+    "alive": 8,
+    "awake": 8,
+    "dead": 45,
+    "retired": 2,
+    "agentsEver": 55,
+    "peak": 32,
+    "minAlive": 8,
+    "wellMedian": 8604.5,
+    "wellFinal": 0,
+    "wellFirstLe2000": 441,
+    "wellFirstZero": 441,
+    "firstDeathDay": 356,
+    "minAliveAfterDeath": 13,
+    "bothZero": 7,
+    "embodied": 6,
+    "humanSalvageShare": 0.9962962962962963,
+    "rulesMedian": 30,
+    "rationMedian": 14,
+    "agentPlaces": 23,
+    "razed": 7,
+    "lawsPassed": 285,
+    "refoundsSucceeded": 6,
+    "procedures": 13,
+    "coverageGaps": [],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 34,
+      "endDay": 36
+     },
+     {
+      "type": "quake",
+      "startDay": 58,
+      "endDay": 58
+     },
+     {
+      "type": "drought",
+      "startDay": 82,
+      "endDay": 84
+     },
+     {
+      "type": "quake",
+      "startDay": 106,
+      "endDay": 106
+     },
+     {
+      "type": "drought",
+      "startDay": 130,
+      "endDay": 132
+     },
+     {
+      "type": "quake",
+      "startDay": 154,
+      "endDay": 154
+     },
+     {
+      "type": "drought",
+      "startDay": 178,
+      "endDay": 180
+     },
+     {
+      "type": "quake",
+      "startDay": 202,
+      "endDay": 202
+     },
+     {
+      "type": "drought",
+      "startDay": 226,
+      "endDay": 228
+     },
+     {
+      "type": "quake",
+      "startDay": 250,
+      "endDay": 250
+     },
+     {
+      "type": "drought",
+      "startDay": 274,
+      "endDay": 276
+     },
+     {
+      "type": "quake",
+      "startDay": 298,
+      "endDay": 298
+     },
+     {
+      "type": "drought",
+      "startDay": 322,
+      "endDay": 324
+     },
+     {
+      "type": "quake",
+      "startDay": 346,
+      "endDay": 346
+     },
+     {
+      "type": "drought",
+      "startDay": 370,
+      "endDay": 372
+     },
+     {
+      "type": "quake",
+      "startDay": 394,
+      "endDay": 394
+     },
+     {
+      "type": "drought",
+      "startDay": 418,
+      "endDay": 420
+     },
+     {
+      "type": "quake",
+      "startDay": 442,
+      "endDay": 442
+     },
+     {
+      "type": "drought",
+      "startDay": 466,
+      "endDay": 468
+     },
+     {
+      "type": "quake",
+      "startDay": 490,
+      "endDay": 490
+     },
+     {
+      "type": "drought",
+      "startDay": 514,
+      "endDay": 516
+     },
+     {
+      "type": "quake",
+      "startDay": 538,
+      "endDay": 538
+     },
+     {
+      "type": "drought",
+      "startDay": 562,
+      "endDay": 564
+     },
+     {
+      "type": "quake",
+      "startDay": 586,
+      "endDay": 586
+     },
+     {
+      "type": "drought",
+      "startDay": 610,
+      "endDay": 612
+     },
+     {
+      "type": "quake",
+      "startDay": 634,
+      "endDay": 634
+     },
+     {
+      "type": "drought",
+      "startDay": 658,
+      "endDay": 660
+     },
+     {
+      "type": "quake",
+      "startDay": 682,
+      "endDay": 682
+     },
+     {
+      "type": "drought",
+      "startDay": 706,
+      "endDay": 708
+     }
+    ],
+    "elapsedMs": 50084,
+    "conservationFailure": null
+   },
+   {
+    "seed": 9,
+    "scenario": "stress",
+    "initial": 24,
+    "days": 720,
+    "alive": 8,
+    "awake": 8,
+    "dead": 39,
+    "retired": 4,
+    "agentsEver": 51,
+    "peak": 32,
+    "minAlive": 7,
+    "wellMedian": 5550,
+    "wellFinal": 0,
+    "wellFirstLe2000": 376,
+    "wellFirstZero": 385,
+    "firstDeathDay": 357,
+    "minAliveAfterDeath": 13,
+    "bothZero": 0,
+    "embodied": 6,
+    "humanSalvageShare": 0.9740740740740741,
+    "rulesMedian": 27,
+    "rationMedian": 13,
+    "agentPlaces": 26,
+    "razed": 7,
+    "lawsPassed": 292,
+    "refoundsSucceeded": 8,
+    "procedures": 20,
+    "coverageGaps": [],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 34,
+      "endDay": 36
+     },
+     {
+      "type": "quake",
+      "startDay": 58,
+      "endDay": 58
+     },
+     {
+      "type": "drought",
+      "startDay": 82,
+      "endDay": 84
+     },
+     {
+      "type": "quake",
+      "startDay": 106,
+      "endDay": 106
+     },
+     {
+      "type": "drought",
+      "startDay": 130,
+      "endDay": 132
+     },
+     {
+      "type": "quake",
+      "startDay": 154,
+      "endDay": 154
+     },
+     {
+      "type": "drought",
+      "startDay": 178,
+      "endDay": 180
+     },
+     {
+      "type": "quake",
+      "startDay": 202,
+      "endDay": 202
+     },
+     {
+      "type": "drought",
+      "startDay": 226,
+      "endDay": 228
+     },
+     {
+      "type": "quake",
+      "startDay": 250,
+      "endDay": 250
+     },
+     {
+      "type": "drought",
+      "startDay": 274,
+      "endDay": 276
+     },
+     {
+      "type": "quake",
+      "startDay": 298,
+      "endDay": 298
+     },
+     {
+      "type": "drought",
+      "startDay": 322,
+      "endDay": 324
+     },
+     {
+      "type": "quake",
+      "startDay": 346,
+      "endDay": 346
+     },
+     {
+      "type": "drought",
+      "startDay": 370,
+      "endDay": 372
+     },
+     {
+      "type": "quake",
+      "startDay": 394,
+      "endDay": 394
+     },
+     {
+      "type": "drought",
+      "startDay": 418,
+      "endDay": 420
+     },
+     {
+      "type": "quake",
+      "startDay": 442,
+      "endDay": 442
+     },
+     {
+      "type": "drought",
+      "startDay": 466,
+      "endDay": 468
+     },
+     {
+      "type": "quake",
+      "startDay": 490,
+      "endDay": 490
+     },
+     {
+      "type": "drought",
+      "startDay": 514,
+      "endDay": 516
+     },
+     {
+      "type": "quake",
+      "startDay": 538,
+      "endDay": 538
+     },
+     {
+      "type": "drought",
+      "startDay": 562,
+      "endDay": 564
+     },
+     {
+      "type": "quake",
+      "startDay": 586,
+      "endDay": 586
+     },
+     {
+      "type": "drought",
+      "startDay": 610,
+      "endDay": 612
+     },
+     {
+      "type": "quake",
+      "startDay": 634,
+      "endDay": 634
+     },
+     {
+      "type": "drought",
+      "startDay": 658,
+      "endDay": 660
+     },
+     {
+      "type": "quake",
+      "startDay": 682,
+      "endDay": 682
+     },
+     {
+      "type": "drought",
+      "startDay": 706,
+      "endDay": 708
+     }
+    ],
+    "elapsedMs": 46633,
+    "conservationFailure": null
+   },
+   {
+    "seed": 10,
+    "scenario": "stress",
+    "initial": 24,
+    "days": 720,
+    "alive": 7,
+    "awake": 7,
+    "dead": 44,
+    "retired": 0,
+    "agentsEver": 51,
+    "peak": 30,
+    "minAlive": 6,
+    "wellMedian": 0,
+    "wellFinal": 0,
+    "wellFirstLe2000": 249,
+    "wellFirstZero": 255,
+    "firstDeathDay": 254,
+    "minAliveAfterDeath": 12,
+    "bothZero": 7,
+    "embodied": 4,
+    "humanSalvageShare": 0.915625,
+    "rulesMedian": 24,
+    "rationMedian": 12,
+    "agentPlaces": 26,
+    "razed": 7,
+    "lawsPassed": 255,
+    "refoundsSucceeded": 0,
+    "procedures": 1,
+    "coverageGaps": [],
+    "shocks": [
+     {
+      "type": "drought",
+      "startDay": 34,
+      "endDay": 36
+     },
+     {
+      "type": "quake",
+      "startDay": 58,
+      "endDay": 58
+     },
+     {
+      "type": "drought",
+      "startDay": 82,
+      "endDay": 84
+     },
+     {
+      "type": "quake",
+      "startDay": 106,
+      "endDay": 106
+     },
+     {
+      "type": "drought",
+      "startDay": 130,
+      "endDay": 132
+     },
+     {
+      "type": "quake",
+      "startDay": 154,
+      "endDay": 154
+     },
+     {
+      "type": "drought",
+      "startDay": 178,
+      "endDay": 180
+     },
+     {
+      "type": "quake",
+      "startDay": 202,
+      "endDay": 202
+     },
+     {
+      "type": "drought",
+      "startDay": 226,
+      "endDay": 228
+     },
+     {
+      "type": "quake",
+      "startDay": 250,
+      "endDay": 250
+     },
+     {
+      "type": "drought",
+      "startDay": 274,
+      "endDay": 276
+     },
+     {
+      "type": "quake",
+      "startDay": 298,
+      "endDay": 298
+     },
+     {
+      "type": "drought",
+      "startDay": 322,
+      "endDay": 324
+     },
+     {
+      "type": "quake",
+      "startDay": 346,
+      "endDay": 346
+     },
+     {
+      "type": "drought",
+      "startDay": 370,
+      "endDay": 372
+     },
+     {
+      "type": "quake",
+      "startDay": 394,
+      "endDay": 394
+     },
+     {
+      "type": "drought",
+      "startDay": 418,
+      "endDay": 420
+     },
+     {
+      "type": "quake",
+      "startDay": 442,
+      "endDay": 442
+     },
+     {
+      "type": "drought",
+      "startDay": 466,
+      "endDay": 468
+     },
+     {
+      "type": "quake",
+      "startDay": 490,
+      "endDay": 490
+     },
+     {
+      "type": "drought",
+      "startDay": 514,
+      "endDay": 516
+     },
+     {
+      "type": "quake",
+      "startDay": 538,
+      "endDay": 538
+     },
+     {
+      "type": "drought",
+      "startDay": 562,
+      "endDay": 564
+     },
+     {
+      "type": "quake",
+      "startDay": 586,
+      "endDay": 586
+     },
+     {
+      "type": "drought",
+      "startDay": 610,
+      "endDay": 612
+     },
+     {
+      "type": "quake",
+      "startDay": 634,
+      "endDay": 634
+     },
+     {
+      "type": "drought",
+      "startDay": 658,
+      "endDay": 660
+     },
+     {
+      "type": "quake",
+      "startDay": 682,
+      "endDay": 682
+     },
+     {
+      "type": "drought",
+      "startDay": 706,
+      "endDay": 708
+     }
+    ],
+    "elapsedMs": 31966,
+    "conservationFailure": null
+   }
+  ]
+ },
+ "verdicts": {
+  "default": [
+   {
+    "name": "第一位居民长眠后 120 日内的最低在世人口",
+    "target": "≥ 8",
+    "values": [
+     12,
+     14,
+     12,
+     13,
+     14
+    ],
+    "value": 13,
+    "pass": true
+   },
+   {
+    "name": "第 720 日的人口",
+    "target": "≥ 8",
+    "values": [
+     9,
+     8,
+     11,
+     4,
+     9
+    ],
+    "value": 9,
+    "pass": true
+   },
+   {
+    "name": "躯壳醒来的次数",
+    "target": "≥ 3",
+    "values": [
+     6,
+     7,
+     6,
+     7,
+     6
+    ],
+    "value": 6,
+    "pass": true
+   },
+   {
+    "name": "人类建筑的残料在第 720 日的剩余比例",
+    "target": "≥ 0.2",
+    "values": [
+     0.9692307692307692,
+     1,
+     0.926923076923077,
+     0.9703703703703703,
+     1
+    ],
+    "value": 0.97,
+    "pass": true
+   },
+   {
+    "name": "在效规则数的中位数",
+    "target": "5–40",
+    "values": [
+     26,
+     27,
+     27,
+     23,
+     31
+    ],
+    "value": 27,
+    "pass": true
+   },
+   {
+    "name": "第一位居民长眠后 120 日内，公库能量与源井完好度同时为 0 的日数",
+    "target": "信息项，不判定",
+    "values": [
+     3,
+     8,
+     17,
+     10,
+     13
+    ],
+    "value": 10,
+    "pass": null
+   }
+  ],
+  "laissez": [
+   {
+    "name": "源井降到下限（完好度 ≤ 20%）的日子",
+    "target": "60–120",
+    "values": [
+     64,
+     59,
+     66,
+     70,
+     68
+    ],
+    "value": 66,
+    "pass": true
+   },
+   {
+    "name": "人类建筑的残料在第 720 日的剩余比例（遗法 l6 守着）",
+    "target": "≥ 0.95",
+    "values": [
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "value": 1,
+    "pass": true
+   },
+   {
+    "name": "第 720 日的人口（显著下降但不灭绝：≤ 12）",
+    "target": "1–12",
+    "values": [
+     5,
+     5,
+     5,
+     5,
+     5
+    ],
+    "value": 5,
+    "pass": true
+   }
+  ],
+  "stress": [
+   {
+    "name": "30 日内恢复到冲击前 80% 以上的冲击比例",
+    "target": "≥ 0.5",
+    "values": [
+     0.8928571428571429,
+     0.9285714285714286,
+     0.9285714285714286,
+     0.75,
+     0.9285714285714286
+    ],
+    "value": 0.93,
+    "pass": true
+   }
+  ]
+ }
+}

@@ -2,12 +2,12 @@
 // `npm run replay`（`node src/tools/replay.js [WORLD_ID]`）：用快照中的 seed 创建初始世界，回放全部命令
 // （n ≤ 快照的 commandN），把结果的规范化 JSON（键排序）的 SHA-256 与当前快照对比，输出 OK 或第一个差异的路径。
 // 回放只保证在同一代码版本下一致；版本不一致时先给出警告再继续。
+// 世界属于哪一纪由快照的 physics 决定（第二纪为 2，没有这个字段的是第一纪）：用对应的引擎回放（SPEC-E2 §2.1）。
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { createWorld } from '../world.js';
-import { applyCommand } from '../engine/index.js';
+import { engineOf, createWorldFromSnapshot } from '../engines.js';
 import { readCommands } from '../commands.js';
 import { readSnapshot, commandsPath, worldDir, stateHash, firstDiff } from '../store.js';
 import { loadConfig, applyConfig } from '../config.js';
@@ -24,10 +24,11 @@ export function replayDir(dir, { toN, currentVersion } = {}) {
     warnings.push(`世界创建时的代码版本是 ${snap.codeVersion}，当前是 ${currentVersion}：回放可能不一致`);
   }
   const limit = toN === undefined ? snap.commandN : toN;
-  // 快照里没有 map 字段的是经典地图（M1 以来的旧世界）
-  const w = createWorld({ id: snap.id, seed: snap.seed, codeVersion: snap.codeVersion, sandboxAdoption: snap.sandboxAdoption, map: snap.map || 'classic' });
+  // 快照里没有 map 字段的是经典地图（M1 以来的旧世界）；第二纪另需先民名单与躯壳模型（w.genesis）
+  const w = createWorldFromSnapshot(snap);
+  const engine = engineOf(snap);
   const cmds = readCommands(commandsPath(dir), { toN: limit });
-  for (const cmd of cmds) applyCommand(w, cmd);
+  for (const cmd of cmds) engine.applyCommand(w, cmd);
   const hash = stateHash(w);
   if (toN !== undefined && toN !== snap.commandN) return { ok: null, hash, snapshotHash: null, diff: null, applied: cmds.length, warnings, world: w };
   const snapshotHash = stateHash(snap);

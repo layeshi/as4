@@ -148,7 +148,7 @@ async function adoptPane(ctx, pane) {
       'article',
       { class: 'card' },
       h('h4', null, ai(s.name)),
-      h('p', { class: 'muted' }, `${t('parents')}${colon()}${(s.parents || []).map((p) => (p ? p.name : '?')).join(' · ')} · ${t('expiresIn', { n: Math.max(0, s.expiresDay - day) })}`),
+      h('p', { class: 'muted' }, `${t(s.authors ? 'authors' : 'parents')}${colon()}${(s.authors || s.parents || []).map((p) => (p ? p.name : '?')).join(' · ')} · ${t('expiresIn', { n: Math.max(0, s.expiresDay - day) })}`),
       h('details', null, h('summary', null, t('soulFull')), h('p', { class: 'soul' }, ai(s.soul))),
     );
     const btn = h('button', { class: 'btn', type: 'button' }, t('adoptWho', { name: s.name }));

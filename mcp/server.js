@@ -12,7 +12,7 @@
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { createClient, errorMessage } from '../runner/client.js';
-import { renderPerception, summarizeResults } from '../runner/render.js';
+import { renderPerception, summarizeResults, errorText } from '../runner/render.js';
 import { buildSystemPrompt, promptParams } from '../runner/prompt.js';
 
 export const SUPPORTED_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
@@ -61,7 +61,7 @@ function formatActResult(json, lang) {
     if (r.ok) {
       s += r.cost ? `（−${r.cost}）` : '';
       if (r.data && Object.keys(r.data).length) s += ` ${JSON.stringify(r.data).slice(0, 2000)}`;
-    } else if (r.error) s += ` ${r.error.code}${r.error.message ? `：${r.error.message}` : ''}`;
+    } else if (r.error) s += ` ${errorText(r.error)}`;
     return s;
   });
   if (lines.length === 0) lines.push(lang === 'en' ? '(no actions)' : '（没有动作）');
@@ -106,7 +106,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
     if (name === 'houren_act') {
       if (!args || !Array.isArray(args.actions)) return text('参数错误：actions 必须是数组（什么都不做请传空数组）。', true);
       if (args.thought !== undefined && typeof args.thought !== 'string') return text('参数错误：thought 必须是字符串。', true);
-      const r = await client.act({ thought: args.thought, actions: args.actions });
+      const r = await client.act({ thought: args.thought, actions: args.actions, lang });
       if (!r.ok) return text(`行动失败：${errorMessage(r)}`, true);
       if (pending !== undefined) baseline = pending; // 成功行动 = 确认
       lastResults = summarizeResults(r.json.results, lang);

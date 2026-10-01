@@ -86,8 +86,15 @@ function defaultWait(ms, signal) {
 /**
  * 驱动一个 agent，直到它长眠 / 归隐 / 认证失败 / 被中止 / 达到 maxRounds。
  * cfg：一项 loadRunnerConfig 的结果（或等价的对象：server、token、lang、provider…）。
- * deps（多为测试用）：{ client, provider, providerDeps, log, wait(ms, signal), signal, maxRounds }
+ * deps（多为测试用）：{ client, provider, providerDeps, log, wait(ms, signal), signal, maxRounds,
+ *                      beforeModel, onUsage }
+ *   client       注入的客户端（与 runner/client.js 同接口：me / act）。躯壳居民没有令牌，由进程内客户端感知与行动（SPEC-E2 §13.2）
+ *   beforeModel  (agentId, meta) → Promise<boolean>：每次调用模型之前问一声，为假则本刻不调用（预算、匀速、硬上限）。
+ *                meta：{ chars（系统提示 + 消息的字符数）, perception }。不传则总是调用
+ *   onUsage      (agentId, usage, meta)：每次调用模型之后报告用量。usage 为 { input, output }，提供者没报告时为 null；
+ *                meta：{ ok, chars, replyChars, ms, error? }——调用失败（限速、超时……）时 ok 为 false，用来释放预留
  * 返回 { rounds, acted, stopped }，stopped ∈ dead | retired | auth | provider | aborted | maxRounds
+ * 协议 1 与协议 2 共用：系统提示与感知的渲染按感知里的 protocol 选择（runner/prompt.js、runner/render.js）。
  */
 export async function runAgent(cfg, deps = {}) {
   const secrets = [cfg.token, cfg.apiKeyEnv && process.env[cfg.apiKeyEnv]].filter(Boolean);
@@ -174,11 +181,28 @@ export async function runAgent(cfg, deps = {}) {
     for (const h of history) messages.push({ role: 'user', content: h.user }, { role: 'assistant', content: h.assistant });
     messages.push({ role: 'user', content: userText });
 
+    const agentId = p.you && p.you.id;
+    const chars = system.length + messages.reduce((n, m) => n + m.content.length, 0);
+    if (deps.beforeModel && !(await deps.beforeModel(agentId, { chars, perception: p }))) {
+      log.info('本刻不调用模型（预算 / 匀速 / 暂停）。');
+      report({ status: 'waiting' });
+      await waitTick(p);
+      continue;
+    }
+    // 用量的回报不能影响运行：回报函数出错只记一条警告
+    const reportUsage = (usage, meta) => {
+      try {
+        deps.onUsage?.(agentId, usage, { chars, ...meta });
+      } catch (e) {
+        log.warn(`onUsage 出错：${e && e.message}`);
+      }
+    };
     let reply;
     const t0 = Date.now();
     try {
       report({ status: 'thinking' });
       reply = await provider.complete({ system, messages, perception: p, signal });
+      reportUsage(reply.usage || null, { ok: true, replyChars: String(reply.text || '').length, ms: Date.now() - t0 });
       if (signal?.aborted) break;
       // 用时与用量：调「一刻多长」「历史留几轮」的依据
       const secs = ((Date.now() - t0) / 1000).toFixed(1);
@@ -186,6 +210,7 @@ export async function runAgent(cfg, deps = {}) {
       log.info(`模型用时 ${secs} s${u ? ` · 输入 ${u.input} · 输出 ${u.output} token` : ''}`);
       rejected = 0;
     } catch (e) {
+      reportUsage(null, { ok: false, replyChars: 0, ms: Date.now() - t0, error: e });
       if (signal?.aborted) break;
       report({ status: 'error', lastError: '模型请求失败，请检查接口、模型与额度；下一刻重试。' });
       if (e instanceof ProviderError && e.fatal) {
@@ -226,7 +251,7 @@ export async function runAgent(cfg, deps = {}) {
     let results = [];
     if (thought || actions.length > 0) {
       if (signal?.aborted) break;
-      const act = await client.act({ thought, actions });
+      const act = await client.act({ thought, actions, lang: cfg.lang });
       if (!act.ok) {
         report({ status: 'error', lastError: '行动提交失败，下一刻重试。' });
         const code = act.json && act.json.error && act.json.error.code;

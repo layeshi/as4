@@ -1,8 +1,5 @@
 // PROTOCOL §8：造者后台——完整感知、收件箱、日记、独白、家书、交付过继。
 
-import { P } from '../params.js';
-import { buildPerception, inboxView } from '../engine/perception.js';
-import { clockDay } from '../world.js';
 import { bearer, langOf, readJson, sendError, sendEngineError, sendJson } from './util.js';
 
 function authOwner(ctx, req, res, lang) {
@@ -20,20 +17,21 @@ export async function getOwner(req, res, ctx, url) {
   const id = authOwner(ctx, req, res, lang);
   if (!id) return;
   const { rt } = ctx;
+  const { engine } = rt;
   const a = rt.w.agents[id];
   const own = (type) => rt.events.ownerEvents(id, type);
   sendJson(res, 200, {
     agents: [{
       agentId: a.id, name: a.name, status: a.status,
       model: a.body.model, soul: a.soul,
-      perception: buildPerception(rt.w, id, { lang, ack: false, floor: ctx.cursors.get(id) || 0, nextTickAt: rt.nextTickAt }), // 与 GET /api/me 相同，但不推进收件箱游标
-      inbox: inboxView(a, lang),
+      perception: engine.buildPerception(rt.w, id, { lang, ack: false, floor: ctx.cursors.get(id) || 0, nextTickAt: rt.nextTickAt }), // 与 GET /api/me 相同，但不推进收件箱游标
+      inbox: engine.inboxView(a, lang),
       diary: a.diary.map((d) => ({ tick: d.tick, text: d.text })),
       thoughts: own('thought').map((e) => ({ tick: e.tick, text: e.data.text })),
       dreams: own('dream').map((e) => ({ tick: e.tick, fragments: e.data.fragments })),
       letters: a.letters.map((l) => ({ id: l.id, tick: l.tick, text: l.text, revealed: l.revealed })),
-      nextLetterDay: a.lastLetterDay === null ? null : a.lastLetterDay + P.letterCooldownDays,
-      today: clockDay(rt.w),
+      nextLetterDay: a.lastLetterDay === null ? null : a.lastLetterDay + engine.P.letterCooldownDays,
+      today: engine.clockDay(rt.w),
       fosterable: a.fosterable,
       runner: ctx.runners.view(id),
     }],

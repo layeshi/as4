@@ -17,7 +17,9 @@ export function involves(ev, id) {
   const d = ev.data;
   if (!d) return false;
   if (d.agentId === id || d.from === id || d.to === id || d.with === id || d.deceased === id || d.target === id) return true;
-  return Array.isArray(d.parents) && d.parents.includes(id);
+  if (Array.isArray(d.parents) && d.parents.includes(id)) return true;
+  // 第二纪才有的字段：灵魂与出生的作者、章程与地点规则的设置者、联署者（第一纪的事件没有这些字段）
+  return (Array.isArray(d.authors) && d.authors.includes(id)) || d.setBy === id || d.signer === id;
 }
 
 export class EventStore {
@@ -145,6 +147,13 @@ export class EventStore {
   forAgent(id, n = 100) {
     const out = [];
     for (let i = this.ring.length - 1; i >= 0 && out.length < n; i--) if (involves(this.ring[i], id)) out.push(this.ring[i]);
+    return out.reverse();
+  }
+
+  /** 满足条件的最近 n 条公开事件（按 seq 升序；第二纪用它取与某部法律有关的事件） */
+  recent(predicate, n = 100) {
+    const out = [];
+    for (let i = this.ring.length - 1; i >= 0 && out.length < n; i--) if (predicate(this.ring[i])) out.push(this.ring[i]);
     return out.reverse();
   }
 

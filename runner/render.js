@@ -4,6 +4,7 @@
 
 import { LAW_DEFAULTS } from '../src/params.js';
 import { L } from '../src/lore/index.js';
+import { renderPerception2 } from './render2.js';
 
 const D = {
   zh: {
@@ -159,6 +160,7 @@ const ref = (r) => (r ? `${r.name}(${r.id})` : '?');
  * 沉睡与死亡的感知也能渲染（只有几行）。
  */
 export function renderPerception(p, { lastResults, lang } = {}) {
+  if (p && p.protocol === 2) return renderPerception2(p, { lastResults, lang }); // 第二纪的城：协议 2 的渲染（附录 A.9）
   const code = (lang || p.lang) === 'en' ? 'en' : 'zh'; // 死亡 / 归隐后的感知不带 lang，由调用者给出
   const d = D[code];
   const lines = [];
@@ -325,10 +327,16 @@ function placesLine(d, places, code, hereId) {
   return `  ${d.placesCost}：${groups.map((g) => `${g.key ? `${districts[g.key] || g.key}：` : ''}${g.items.join('、')}`).join('；')}`;
 }
 
+/** 一个动作错误 → 一句话。第二纪的 forbidden 带着拒绝它的法律与规则写下的理由：forbidden：l2：法案只能在议会提出 */
+export function errorText(e) {
+  if (e.code === 'forbidden' && e.law && e.reason) return `${e.code}：${e.law}：${e.reason}`;
+  return `${e.code}${e.message ? `：${e.message}` : ''}`;
+}
+
 /** 动作结果 → 一行简短文字：say ✓（−1）；move ✗ wrong_place：…… */
 export function summarizeResults(results, lang = 'zh') {
   if (!Array.isArray(results) || results.length === 0) return lang === 'en' ? D.en.lastEmpty : D.zh.lastEmpty;
   return results
-    .map((r) => (r.ok ? `${r.type} ✓${r.cost ? `（−${r.cost}）` : ''}` : `${r.type} ✗ ${r.error ? `${r.error.code}${r.error.message ? `：${r.error.message}` : ''}` : ''}`))
+    .map((r) => (r.ok ? `${r.type} ✓${r.cost ? `（−${r.cost}）` : ''}` : `${r.type} ✗ ${r.error ? errorText(r.error) : ''}`))
     .join('；');
 }

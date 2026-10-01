@@ -41,10 +41,11 @@ export function createClient({ server, token, fetch: fetchImpl = globalThis.fetc
       if (after !== undefined && after !== null) q.set('after', String(after));
       return call(`/api/me?${q}`);
     },
-    act({ thought, actions }) {
+    /** lang 为 en 时动作错误的说明用英文（缺省 zh，请求路径不变）；第二纪里它还进入命令（draft 的说明、read { law } 的读法） */
+    act({ thought, actions, lang }) {
       const body = { actions };
       if (thought) body.thought = thought;
-      return call('/api/me/act', { method: 'POST', body });
+      return call(`/api/me/act${lang === 'en' ? '?lang=en' : ''}`, { method: 'POST', body });
     },
   };
 }

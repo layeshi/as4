@@ -83,7 +83,10 @@ async function createAnthropicProvider(cfg, deps) {
       if (resp.stop_reason === 'refusal') return { text: '', stop: 'refusal', details: resp.stop_details };
       const text = (resp.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
       const out = { text, stop: resp.stop_reason };
-      if (resp.usage && Number.isFinite(resp.usage.input_tokens)) out.usage = { input: resp.usage.input_tokens, output: resp.usage.output_tokens };
+      // 用量：输入含缓存写入与缓存命中（缓存命中也照常计入，SPEC-E2 §13.3）；响应里没有缓存字段时与原来相同
+      if (resp.usage && Number.isFinite(resp.usage.input_tokens)) {
+        out.usage = { input: resp.usage.input_tokens + (resp.usage.cache_creation_input_tokens || 0) + (resp.usage.cache_read_input_tokens || 0), output: resp.usage.output_tokens };
+      }
       return out;
     },
   };
@@ -154,6 +157,34 @@ const MOCK_LINES = {
   en: ['Hello, I am a demonstration resident.', 'How is the Well today?', 'May the lamp stay lit.', 'Is anyone at the Parliament?'],
 };
 
+/**
+ * 协议 2：偶尔提出的模板法律（SPEC-E2 附录 A.2 的三个例子）。规则是校验过的合法写法；标题带一个随机编号，避免同名。
+ * 第一个限制汲取，第二个每日给带标签的人发能量，第三个修缮后补贴。
+ */
+export function mockProposal(lang, rnd) {
+  const en = lang === 'en';
+  const keeper = en ? 'keeper' : '守井人';
+  const examples = [
+    {
+      title: en ? 'Draw limit' : '汲取限额',
+      text: en ? 'At most 5 energy a day may be drawn from the Well per person.' : '每人每日至多从源井汲取 5 能量。',
+      rules: [{ when: 'before:draw', if: 'actor.drawnToday + args.energy > 5', do: [{ op: 'deny', reason: en ? 'at most 5 a day per person' : '每人每日限汲 5' }] }],
+    },
+    {
+      title: en ? 'Keepers\' allowance' : '守井人津贴',
+      text: en ? 'Each day the Treasury pays every keeper 3 energy.' : '每日公库给每位守井人 3 能量。',
+      rules: [{ when: 'daily', do: [{ op: 'each', in: `tagged('${keeper}')`, do: [{ op: 'transfer', from: 'treasury', to: 'it', energy: '3' }] }] }],
+    },
+    {
+      title: en ? 'Repair subsidy' : '修缮补贴',
+      text: en ? 'Whoever repairs a place is refunded half of what they spent, up to 10.' : '修缮者可从公库领回所花能量的一半，至多 10。',
+      rules: [{ when: 'after:repair', if: 'result.spent >= 2', do: [{ op: 'transfer', from: 'treasury', to: 'actor', energy: 'min(10, result.spent / 2)' }] }],
+    },
+  ];
+  const e = examples[Math.floor(rnd() * examples.length)];
+  return { type: 'propose', title: `${e.title} ${1 + Math.floor(rnd() * 999)}`, text: e.text, rules: e.rules };
+}
+
 /** 按感知生成一次合法的行动（不联网）。返回 { thought, actions } */
 export function mockDecide(p, rnd) {
   const lang = p.lang === 'en' ? 'en' : 'zh';
@@ -178,6 +209,18 @@ export function mockDecide(p, rnd) {
 
   // 修缮所在地点
   if (actions.length < 2 && here.condition && here.condition.bp < 9000 && you.energy > 30) actions.push({ type: 'repair', target: here.place, energy: 5 });
+
+  // 协议 2：偶尔去议会，在那里提出一部合法的模板法律（便于演示与测试）
+  if (p.protocol === 2 && actions.length < 2) {
+    const prop = (p.actions || []).find((a) => a.type === 'propose');
+    const r2 = rnd();
+    if (prop && prop.available && r2 < 0.05) {
+      actions.push(mockProposal(lang, rnd));
+      thought = lang === 'zh' ? '（mock）试着提一部法律。' : '(mock) Let me try proposing a law.';
+    } else if (prop && !prop.available && prop.reason && prop.reason.code === 'forbidden' && here.place !== 'parliament' && r2 < 0.06) {
+      actions.push({ type: 'move', to: 'parliament' });
+    }
+  }
 
   const roll = rnd();
   if (actions.length < 2 && roll < 0.4) actions.push({ type: 'say', text: pick(MOCK_LINES[lang]) });

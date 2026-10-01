@@ -2,6 +2,7 @@
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { errorMessage } from '../lore/index.js';
+import { errorMessage as errorMessage2 } from '../e2/lore/index.js';
 
 export const sha256hex = (s) => createHash('sha256').update(s).digest('hex');
 
@@ -31,27 +32,44 @@ const STATUS = {
 };
 export const httpStatusFor = (code) => STATUS[code] || 400;
 
-/** 发送 JSON 响应。所有 JSON 响应都带 X-Houren-Protocol: 1 */
+/**
+ * 发送 JSON 响应。所有 JSON 响应都带 X-Houren-Protocol：值是这座城所用的协议版本（第一纪 1、第二纪 2），
+ * 由 createApp 在每个 /api/ 请求开始时按引擎设置到 res 上；没有设置时为 1。
+ */
 export function sendJson(res, status, body, headers = {}) {
   const text = JSON.stringify(body);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(text),
-    'X-Houren-Protocol': '1',
+    'X-Houren-Protocol': res.getHeader('X-Houren-Protocol') ?? '1',
     'Cache-Control': 'no-store',
     ...headers,
   });
   res.end(text);
 }
 
-/** { error: { code, message, ...extra } }；message 按 lang 本地化 */
-export function errorBody(lang, code, extra = {}) {
+/**
+ * { error: { code, message, ...extra } }；message 按 lang 本地化。
+ * protocol 2 用第二纪的错误文本（有 forbidden、no_module 等新错误码），并把 rule_invalid 的 issues（引擎里中英文各一份）
+ * 写成请求语言的 { path, code, message, hint? }。
+ */
+export function errorBody(lang, code, extra = {}, protocol = 1) {
   const { hint, ...rest } = extra;
+  if (protocol === 2) {
+    if (Array.isArray(rest.issues)) {
+      const en = lang === 'en';
+      rest.issues = rest.issues.map((i) => ({ path: i.path, code: i.code, message: en ? i.en : i.zh, ...(i.hint ? { hint: en ? i.hint.en : i.hint.zh } : {}) }));
+    }
+    return { error: { code, message: hint?.[lang] ?? errorMessage2(lang, code, rest.status), ...rest } };
+  }
   return { error: { code, message: hint?.[lang] ?? errorMessage(lang, code, rest.status), ...rest } };
 }
 
+/** 响应所属的协议版本：createApp 在每个 /api/ 请求开始时把 X-Houren-Protocol 设到 res 上 */
+const protocolOf = (res) => (Number(res.getHeader('X-Houren-Protocol')) === 2 ? 2 : 1);
+
 export function sendError(res, lang, code, extra = {}, headers = {}) {
-  sendJson(res, httpStatusFor(code), errorBody(lang, code, extra), headers);
+  sendJson(res, httpStatusFor(code), errorBody(lang, code, extra, protocolOf(res)), headers);
 }
 
 /** 把引擎返回的 { ok: false, error: { code, ...extra } } 发成 HTTP 错误 */

@@ -4,23 +4,20 @@
 // 然后把引擎产出的事件交给 EventStore（落盘、进入缓冲、SSE 推送）。
 // 每日结算发生的那条 tick 命令执行完之后写快照（所以快照的状态与 commandN 严格对应）。
 
-import { createWorld } from './world.js';
-import { applyCommand } from './engine/index.js';
-import { drainEvents } from './engine/core.js';
+import { engineOf, engineForPhysics } from './engines.js';
 import { CommandLog, readCommands, repairCommandLog } from './commands.js';
 import { EventStore } from './events.js';
-import { P } from './params.js';
 import { randomSeed } from './config.js';
-import { agentList, isAlive } from './world.js';
 import {
   worldDir, snapshotPath, commandsPath, eventsPath, readSnapshot, writeSnapshot, removeWorld,
 } from './store.js';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 export class Runtime {
-  constructor({ cfg, w, log, events, dir, version, logger = console }) {
+  constructor({ cfg, w, log, events, dir, version, logger = console, engine = engineOf(w) }) {
     this.cfg = cfg;
     this.w = w;
+    this.engine = engine; // 世界所属的引擎门面（SPEC-E2 §2.1）：physics 为 2 的世界用 v2，其余用 v1
     this.log = log;
     this.events = events;
     this.dir = dir;
@@ -33,7 +30,8 @@ export class Runtime {
 
   /**
    * 打开一个世界：有快照就恢复（读快照，再回放日志里 n > commandN 的命令，追上崩溃前的状态），
-   * 否则用种子创建新世界。
+   * 否则用种子创建新世界。已有的世界按快照的 physics 选择引擎；新世界按 cfg.physics（缺省为第一纪，
+   * 服务器入口 server.js 把缺省定为第二纪，见 docs/QUESTIONS.md Q13）。
    */
   static open(cfg, { version = '0.0.0', logger = console, onCreate = null } = {}) {
     const dir = worldDir(cfg.dataDir, cfg.worldId);
@@ -42,23 +40,28 @@ export class Runtime {
     const events = new EventStore(eventsPath(dir));
     let w = readSnapshot(dir);
     let created = false;
+    let engine;
     if (w) {
+      engine = engineOf(w);
       if (w.codeVersion !== version) logger.warn?.(`世界创建时的代码版本是 ${w.codeVersion}，当前是 ${version}：回放可能不一致`);
       repairCommandLog(cmdFile);
     } else {
       if (existsSync(cmdFile)) throw new Error(`${cmdFile} 存在但没有快照：数据目录不完整，请检查或用 --reset 重建`);
       const seed = cfg.seed || randomSeed();
-      w = createWorld({ id: cfg.worldId, seed, codeVersion: version, sandboxAdoption: cfg.sandboxAgents > 0, map: cfg.map || 'classic' });
+      // TODO(spec): Q13 —— cfg.physics 未指定时按第一纪创建（原有的调用方不受影响）；服务器入口把缺省定为第二纪
+      engine = engineForPhysics(cfg.physics === 2 ? 2 : 1);
+      const base = { id: cfg.worldId, seed, codeVersion: version, sandboxAdoption: cfg.sandboxAgents > 0, map: cfg.map || (engine.physics === 2 ? 'frontier' : 'classic') };
+      w = engine.createWorld(engine.physics === 2 ? { ...base, ...genesisInputs(cfg) } : base);
       writeSnapshot(dir, w);
       created = true;
     }
     // 事件：快照之后产生的事件由回放重新产生，所以先截掉
     events.load({ keepSeq: w.counters.event, tick: w.clock.tick });
-    const rt = new Runtime({ cfg, w, log: new CommandLog(cmdFile), events, dir, version, logger });
+    const rt = new Runtime({ cfg, w, engine, log: new CommandLog(cmdFile), events, dir, version, logger });
     if (rt.log.n < w.commandN) throw new Error(`命令日志（${rt.log.n} 条）比快照（commandN = ${w.commandN}）还短：数据已损坏`);
     const tail = readCommands(cmdFile, { fromN: w.commandN });
     for (const cmd of tail) {
-      const { events: evs } = applyCommand(w, cmd);
+      const { events: evs } = engine.applyCommand(w, cmd);
       events.append(evs, { silent: true, tick: w.clock.tick });
       if (cmd.type === 'tick') events.release(w.clock.tick, { silent: true });
     }
@@ -75,10 +78,10 @@ export class Runtime {
     const cmd = this.log.append(type, payload, this.w.clock.tick);
     let out;
     try {
-      out = applyCommand(this.w, cmd);
+      out = this.engine.applyCommand(this.w, cmd);
     } catch (e) {
       this.logger.error?.(`命令 #${cmd.n}（${type}）执行出错：`, e);
-      out = { result: { ok: false, error: { code: 'internal' } }, events: drainEvents(this.w) };
+      out = { result: { ok: false, error: { code: 'internal' } }, events: this.engine.drainEvents(this.w) };
     }
     this.events.append(out.events, { tick: this.w.clock.tick });
     if (type === 'tick' && out.result.ok) {
@@ -93,18 +96,9 @@ export class Runtime {
     writeSnapshot(this.dir, this.w);
   }
 
-  /** SSE tick 事件的精简状态（PROTOCOL §9） */
+  /** SSE tick 事件的精简状态（PROTOCOL §9）；内容由引擎门面生成，nextTickAt 是运行时的 */
   tickSummary() {
-    const w = this.w;
-    const hist = w.well.outputHistory;
-    return {
-      tick: w.clock.tick,
-      day: Math.floor(w.clock.tick / P.ticksPerDay),
-      nextTickAt: this.nextTickAt,
-      agents: agentList(w).filter(isAlive).map((a) => ({ id: a.id, place: a.place, energy: a.energy, status: a.status })),
-      treasury: { energy: w.treasury.energy, coins: w.treasury.coins },
-      well: { condition: w.places.well.condition, outputYesterday: hist.length ? hist[hist.length - 1] : null },
-    };
+    return this.engine.tickSummary(this.w, { nextTickAt: this.nextTickAt });
   }
 
   /** 推进一刻（调度器与 admin/tick 用） */
@@ -136,4 +130,18 @@ export class Runtime {
     this.timer = null;
     this.snapshot();
   }
+}
+
+/**
+ * 创建第二纪新世界所需的、来自配置文件的输入（SPEC-E2 §3）：先民文件 FOUNDERS_FILE、躯壳配置 SHELLS_FILE 里的模型名，
+ * 以及沙盘世界里躯壳与先民由沙盘脑驱动的标志。文件只在创建世界时读取，内容进入世界状态的 genesis（回放需要）。
+ */
+function genesisInputs(cfg) {
+  const out = { sandboxShells: cfg.sandboxAgents > 0 };
+  if (cfg.foundersFile) out.founders = JSON.parse(readFileSync(cfg.foundersFile, 'utf8'));
+  if (cfg.shellsFile) {
+    const shells = JSON.parse(readFileSync(cfg.shellsFile, 'utf8'));
+    out.shellModels = (shells.lines || []).map((l) => l.model);
+  }
+  return out;
 }

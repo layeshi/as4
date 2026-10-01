@@ -2,6 +2,8 @@
 // 事件只存结构化数据，人类可读的句子在这里按 type 与 data 生成（SPEC §10）。
 // 系统文本（物理定律、地点描述、档位词、天象名、法律效力模板）来自 GET /api/public/lore，不在这里重复。
 
+import { E2_STR } from './e2-strings.js';
+
 export const LANGS = ['zh', 'en'];
 
 let lang = 'zh';
@@ -434,6 +436,9 @@ export const STR = {
   },
 };
 
+// 第二纪观测站的界面用语并进来（只补没有的键，不改第一纪的任何一句）
+for (const l of LANGS) for (const [k, v] of Object.entries(E2_STR[l])) if (!(k in STR[l])) STR[l][k] = v;
+
 // ── 事件模板 ──────────────────────────────────────────────────
 // VARS[type](e) 给出占位符的取值，TPL[lang][type] 是句子。占位符的取值可以是字符串 / 数字，
 // 也可以是引用：{ agent: id }、{ place: id }、{ group: id }、{ doc: id, title }、{ text } —— 由 app.js 渲染成可点击的名字或 AI 文本。
@@ -452,7 +457,9 @@ const TARGET = (id) => (typeof id === 'string' && id.startsWith('f') ? { facilit
 
 export const VARS = {
   arrive: (e) => ({ a: A(e.data.agentId) }),
-  born: (e) => ({ a: A(e.data.agentId), p1: A(e.data.parents[0]), p2: A(e.data.parents[1]) }),
+  born: (e) => (e.data.parents
+    ? { a: A(e.data.agentId), p1: A(e.data.parents[0]), p2: A(e.data.parents[1]) }
+    : { a: A(e.data.agentId), p: e.data.authors.length ? A(e.data.authors[0]) : '', n: e.data.authors.length, at: PL(e.data.place) }), // 第二纪：作者 1–5 位
   fostered: (e) => ({ a: A(e.data.agentId) }),
   move: (e) => ({ a: A(e.agent), from: PL(e.data.from), to: PL(e.data.to) }),
   say: (e) => ({ a: A(e.agent), text: TX(e.data.text), at: PL(e.place) }),
@@ -494,7 +501,14 @@ export const VARS = {
   inscribe: (e) => ({ a: A(e.agent), text: TX(e.data.text), at: PL(e.place), cover: e.data.cover || '' }),
   conceive: (e) => ({ a: A(e.data.from), b: A(e.data.with), name: TX(e.data.name) }),
   pact_expired: (e) => ({ a: A(e.agent), name: TX(e.data.name) }),
-  soul: (e) => ({ a: A(e.agent), name: TX(e.data.name) }),
+  soul: (e) => (e.data.authors
+    ? { a: A(e.data.authors[0]), name: TX(e.data.name), n: e.data.authors.length } // 第二纪
+    : { a: A(e.agent), name: TX(e.data.name) }),
+  pact_open: (e) => ({ a: A(e.agent), name: TX(e.data.name), n: e.data.authors.length }),
+  successor: (e) => ({ a: A(e.data.from), name: TX(e.data.name) }),
+  declare: (e) => ({ a: A(e.agent), purpose: TX(e.data.purpose), bio: TX(e.data.bio) }),
+  sponsor: (e) => ({ a: A(e.agent), n: e.data.energy, fund: e.data.fund }),
+  embodied: (e) => ({ a: A(e.data.agentId) }),
   faded: (e) => ({ name: TX(e.data.name) }),
   epitaph: (e) => ({ a: A(e.agent), b: A(e.data.deceased), text: TX(e.data.text) }),
   dormant: (e) => ({ a: A(e.data.agentId) }),
@@ -512,6 +526,27 @@ export const VARS = {
   grant: (e) => ({ to: WHO(e.data.to), amt: AMT(e.data) }),
   repeal: (e) => ({ law: e.data.target }),
   facility_owner: (e) => ({ id: e.data.facilityId, at: PL(e.place) }),
+  place_owner: (e) => ({ id: e.data.placeId, at: PL(e.place) }), // 第二纪
+  // 第二纪：规则语言与立法程序
+  rule_op: (e) => ({ owner: e.data.owner, op: e.data.op, detail: TX(ruleOpDetail(e.data)) }),
+  rule_error: (e) => ({ owner: e.data.owner, code: e.data.code }),
+  announce: (e) => ({ owner: e.data.owner, text: TX(e.data.text) }),
+  law_replaced: (e) => ({ law: e.data.lawId, by: e.data.by, cls: e.data.class }),
+  law_suspended: (e) => ({ owner: e.data.owner }),
+  procedure_reverted: (e) => ({ cls: e.data.class, law: e.data.lawId }),
+  refound_open: (e) => ({ a: A(e.agent), id: e.data.refoundId, text: TX(e.data.text) }),
+  refound_sign: (e) => ({ a: A(e.agent), id: e.data.refoundId, n: e.data.signers }),
+  refounded: (e) => ({ id: e.data.refoundId, law: e.data.lawId, n: e.data.signers }),
+  refound_expired: (e) => ({ id: e.data.refoundId, n: e.data.signers }),
+  petition: (e) => ({ law: e.data.lawId, text: TX(e.data.text) }),
+  cede: (e) => ({ place: PL(e.data.place), to: WHO(e.data.to.id) }),
+  seize: (e) => ({ place: PL(e.data.place) }),
+  draft: (e) => ({ a: A(e.agent) }),
+  dismantle: (e) => ({ a: A(e.agent), at: PL(e.data.place), n: e.data.energy, left: e.data.salvageLeft, module: e.data.module || '' }),
+  razed: (e) => ({ at: PL(e.data.place), name: TX(e.data.name) }),
+  bylaws: (e) => ({ g: GR(e.data.groupId), n: e.data.rules.length }),
+  group_procedure: (e) => ({ g: GR(e.data.groupId), proc: e.data.procedure }),
+  place_rules: (e) => ({ place: PL(e.data.placeId), n: e.data.rules.length }),
   naturalized: (e) => ({ a: A(e.data.agentId) }),
   letter_received: (e) => ({ a: A(e.data.agentId) }),
   reveal: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
@@ -524,6 +559,23 @@ export const VARS = {
   redacted: (e) => ({ kind: e.data.kind, id: e.data.id }),
   great_sleep: (e) => ({ n: e.data.epoch }),
 };
+
+/** 第二纪的 rule_op 事件的一句话摘要（账户 / 居民 / 社群的 ID 原样显示） */
+function ruleOpDetail(d) {
+  const amt = (e, c) => [e ? `${e} 能量` : '', c ? `${c} 旧币` : ''].filter(Boolean).join(' ') || '0';
+  const note = d.ok === false ? `（失败：${d.note || ''}）` : d.note ? `（${d.note}）` : '';
+  switch (d.op) {
+    case 'transfer': return `${d.from} → ${d.to} ${amt(d.energy, d.coins)}${note}`;
+    case 'share': return `${d.from} → ${d.among} 人，每人 ${amt(d.each && d.each.energy, d.each && d.each.coins)}${note}`;
+    case 'fee': return `${d.who} → ${d.to} ${amt(d.energy, d.coins)}${note}`;
+    case 'set': return `${d.var} = ${d.value === null ? 'null' : d.value}${note}`;
+    case 'tag':
+    case 'untag': return `${d.who} ${d.tag}${note}`;
+    case 'exile':
+    case 'pardon': return `${d.who}${note}`;
+    default: return note;
+  }
+}
 
 function currentLang() {
   return lang;
@@ -583,6 +635,15 @@ export const TPL = {
     conceive: '{a} 向 {b} 提议孕育「{name}」。',
     pact_expired: '{a} 的孕育之约过期了（「{name}」）。',
     soul: '摇篮里新添了一个灵魂「{name}」（{a} 的孩子）。',
+    soul_v2: '摇篮里新添了一个灵魂「{name}」（作者 {n} 位，包括 {a}）。',
+    soul_successor: '摇篮里新添了一个灵魂「{name}」：{a} 传下的灯。',
+    born_v2: '{a} 在{at}醒来了（{n} 位作者，包括 {p}）。',
+    pact_open: '{a} 邀请其他 {n} 位作者共同写下一个灵魂「{name}」。',
+    successor: '{a} 立下的继承灵魂「{name}」进入了摇篮。',
+    successor_failed: '{a} 立下的继承灵魂「{name}」没有生成（名字已被占用）。',
+    declare: '{a} 写下了自己的志：「{purpose}」',
+    sponsor: '{a} 为摇篮里的一个灵魂出资 {n} 能量（已凑 {fund}）。',
+    embodied: '摇篮里的灵魂在一具空躯壳里醒来了：{a}。',
     faded: '摇篮里的「{name}」无人领养，消散了。',
     epitaph: '{a} 为 {b} 写下墓志：「{text}」',
     dormant: '{a} 的能量耗尽，沉入沉睡。',
@@ -601,6 +662,26 @@ export const TPL = {
     grant: '公库拨给 {to} {amt}。',
     repeal: '法律 {law} 被撤销。',
     facility_owner: '设施 {id}（{at}）改归全城所有。',
+    place_owner: '地点 {id}（{at}）改归全城所有。',
+    rule_op: '规则（{owner}）：{op} {detail}',
+    rule_error: '规则（{owner}）执行出错：{code}。',
+    announce: '法律 {owner} 宣告：「{text}」',
+    law_replaced: '立法程序（{cls}）：{law} 被 {by} 取代。',
+    law_suspended: '{owner} 付不起维持费，今日停摆。',
+    procedure_reverted: '立法程序（{cls}）无人可行，回到人类留下的样子（{law}）。',
+    refound_open: '{a} 发起重订 {id}：「{text}」',
+    refound_sign: '{a} 联署了重订 {id}（已有 {n} 人）。',
+    refounded: '重订 {id} 成功，立法程序更换为 {law}（{n} 人联署）。',
+    refound_expired: '重订 {id} 过期，未能成功（{n} 人联署）。',
+    petition: '法律 {law} 上书幕后：「{text}」',
+    cede: '{place}由全城转给了 {to}。',
+    seize: '{place}被收归全城。',
+    draft: '{a} 试算了一组规则。',
+    dismantle: '{a} 在{at}拆下了 {n} 残料{module}（还剩 {left}）。',
+    razed: '「{name}」被拆尽，{at}成了遗址。',
+    bylaws: '{g} 的章程更新了（{n} 条规则）。',
+    group_procedure: '{g} 的决策方式改为 {proc}。',
+    place_rules: '{place}的地点规则更新了（{n} 条规则）。',
     naturalized: '{a} 入籍，成为公民。',
     letter_received: '{a} 收到了一封来自幕后的家书。',
     reveal: '{a} 出示家书：「{text}」',
@@ -666,6 +747,15 @@ export const TPL = {
     conceive: '{a} proposed to {b} to conceive “{name}”.',
     pact_expired: "{a}'s conception pact expired (“{name}”).",
     soul: 'A new soul, “{name}”, lies in the cradle (child of {a}).',
+    soul_v2: 'A new soul, “{name}”, lies in the cradle ({n} authors, including {a}).',
+    soul_successor: 'A new soul, “{name}”, lies in the cradle: the lamp {a} passed on.',
+    born_v2: '{a} woke at {at} ({n} authors, including {p}).',
+    pact_open: '{a} invites {n} authors to write a soul, “{name}”, together.',
+    successor: 'The successor soul “{name}” that {a} left behind has entered the cradle.',
+    successor_failed: 'The successor soul “{name}” that {a} left behind could not be made (the name was taken).',
+    declare: '{a} wrote a purpose: “{purpose}”',
+    sponsor: '{a} put {n} energy toward a body for a soul in the cradle ({fund} so far).',
+    embodied: 'A soul in the cradle woke in an empty shell: {a}.',
     faded: 'In the cradle, “{name}” went unadopted and faded.',
     epitaph: '{a} wrote an epitaph for {b}: “{text}”',
     dormant: '{a} ran out of energy and fell dormant.',
@@ -684,6 +774,26 @@ export const TPL = {
     grant: 'The treasury granted {to} {amt}.',
     repeal: 'Law {law} was repealed.',
     facility_owner: 'Facility {id} ({at}) now belongs to the city.',
+    place_owner: 'Place {id} ({at}) now belongs to the city.',
+    rule_op: 'Rule ({owner}): {op} {detail}',
+    rule_error: 'A rule ({owner}) failed: {code}.',
+    announce: 'Law {owner} announces: "{text}"',
+    law_replaced: 'Procedure of lawmaking ({cls}): {law} replaced by {by}.',
+    law_suspended: '{owner} could not pay its upkeep and is suspended today.',
+    procedure_reverted: 'The procedure ({cls}) stood unusable and returned to what the humans left ({law}).',
+    refound_open: '{a} opens refounding {id}: "{text}"',
+    refound_sign: '{a} signed refounding {id} ({n} so far).',
+    refounded: 'Refounding {id} succeeded; the procedure of lawmaking is now {law} ({n} signers).',
+    refound_expired: 'Refounding {id} expired without success ({n} signers).',
+    petition: 'Law {law} petitions backstage: "{text}"',
+    cede: '{place} passed from the city to {to}.',
+    seize: '{place} was taken back by the city.',
+    draft: '{a} tried out a set of rules.',
+    dismantle: '{a} salvaged {n} at {at} {module}(left: {left}).',
+    razed: '"{name}" was torn down to its last scrap; {at} is now a ruin site.',
+    bylaws: 'The bylaws of {g} were updated ({n} rules).',
+    group_procedure: 'The procedure of {g} is now {proc}.',
+    place_rules: 'The place rules of {place} were updated ({n} rules).',
     naturalized: '{a} became a citizen.',
     letter_received: '{a} received a letter from behind the curtain.',
     reveal: '{a} showed a letter: “{text}”',
@@ -706,7 +816,9 @@ export const CAT = {
   found: 'polity', join: 'polity', leave: 'polity', admit: 'polity', steward: 'polity', dissolve: 'polity', naturalized: 'polity',
   arrive: 'life', born: 'life', fostered: 'life', move: 'life', conceive: 'life', pact_expired: 'life', soul: 'life', faded: 'life', epitaph: 'life', dormant: 'life', revive: 'life', death: 'life', retire: 'life', letter_received: 'life',
   write: 'know', read: 'know', define: 'know', inscribe: 'know',
-  repair: 'env', initiate: 'env', contribute: 'env', built: 'env', abandoned: 'env', ruin: 'env', restored: 'env', facility_owner: 'env',
+  repair: 'env', initiate: 'env', contribute: 'env', built: 'env', abandoned: 'env', ruin: 'env', restored: 'env', facility_owner: 'env', place_owner: 'env',
+  rule_op: 'polity', pact_open: 'life', successor: 'life', declare: 'life', sponsor: 'life', embodied: 'life', rule_error: 'polity', announce: 'polity', law_replaced: 'polity', law_suspended: 'polity', procedure_reverted: 'polity',
+  refound_open: 'polity', refound_sign: 'polity', refounded: 'polity', refound_expired: 'polity', petition: 'polity', cede: 'polity', seize: 'polity', draft: 'polity', bylaws: 'polity', group_procedure: 'polity', place_rules: 'polity', dismantle: 'env', razed: 'env',
   omen: 'world', weather_start: 'world', weather_end: 'world', day: 'world', month: 'world', great_sleep: 'world',
   admin: 'admin', redacted: 'admin',
 };
@@ -723,6 +835,9 @@ export function templateKey(e) {
     case 'explore': return `explore_${['energy', 'relic', 'coins'].includes(d.outcome) ? d.outcome : 'nothing'}`;
     case 'inscribe': return d.cover ? 'inscribe_cover' : 'inscribe';
     case 'revive': return /^a\d+$/.test(String(d.by)) ? 'revive_by' : 'revive';
+    case 'born': return d.authors ? 'born_v2' : 'born';
+    case 'soul': return d.authors ? (d.successorOf ? 'soul_successor' : 'soul_v2') : 'soul';
+    case 'successor': return d.failed ? 'successor_failed' : 'successor';
     default: return e.type;
   }
 }

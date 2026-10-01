@@ -1,0 +1,60 @@
+// SPEC-E2 §2：第二纪引擎的命令入口。HTTP 层、运行时与调度器只能通过这些命令改变世界。
+//
+//   tick          调度器
+//   register      港口
+//   adopt         港口（领养摇篮里的灵魂）
+//   release/foster/model  后台 / 港口
+//   act           居民接口
+//   letter        后台
+//   weather_vote  公共接口
+//   admin         管理接口
+//
+// 令牌与密钥由 HTTP 层用 crypto 生成，只把哈希放进命令载荷，所以回放时状态完全一致。
+
+import { bad, drainEvents } from './core.js';
+import { tickWorld } from './tick.js';
+import { register, adopt, release, foster, changeModel, letter } from './lifecycle.js';
+import { actCommand } from './actions.js';
+import { weatherVote } from './weather.js';
+import { adminCommand } from './admin.js';
+import './rules.js'; // 安装规则的钩子（hooks.js）与每日规则（tick.js 的 STEPS）
+import './upkeep.js'; // 维持费（STEPS.upkeep）
+import './legislation.js'; // 遗法（创世时）、计票、自动回退、重订（STEPS.*）
+import './bylaws.js'; // 社群章程、地点规则、社群的程序与社群提案
+import './shells.js'; // 躯壳：出资排队、醒来、消散、先民入城（STEPS.shells / STEPS.founders）
+import './records.js'; // 每日指标、人类遗产存活表、史官（STEPS.metrics）
+import '../sandbox/brains.js'; // 沙盘脑 v2：每刻行动（STEPS.sandbox）、沙盘领养（STEPS.sandboxAdopt）与 admin seed_sandbox
+
+const COMMANDS = {
+  tick: (w) => (w.paused ? bad('paused') : tickWorld(w)),
+  register: (w, p) => register(w, p),
+  adopt: (w, p) => adopt(w, p),
+  release: (w, p) => release(w, p),
+  foster: (w, p) => foster(w, p),
+  model: (w, p) => changeModel(w, p),
+  letter: (w, p) => letter(w, p),
+  act: (w, p) => actCommand(w, p),
+  weather_vote: (w, p) => weatherVote(w, p),
+  admin: (w, p) => adminCommand(w, p),
+};
+
+export const COMMAND_TYPES = () => Object.keys(COMMANDS);
+
+/** 其他步骤加入的命令 */
+export function registerCommand(type, fn) {
+  COMMANDS[type] = fn;
+}
+
+/**
+ * 执行一条命令。cmd 形如 { n?, tick?, type, payload }。
+ * 返回 { result, events }：events 是本命令产出的全部事件（含 internal），由调用者交给 events.js。
+ */
+export function applyCommand(w, cmd) {
+  const handler = COMMANDS[cmd.type];
+  w.commandN = cmd.n !== undefined ? cmd.n : w.commandN + 1;
+  if (!handler) return { result: bad('invalid_request', { field: 'type' }), events: drainEvents(w) };
+  const result = handler(w, cmd.payload || {});
+  return { result, events: drainEvents(w) };
+}
+
+export { tickWorld } from './tick.js';

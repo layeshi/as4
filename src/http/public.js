@@ -4,11 +4,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { WEATHER_CODES } from '../params.js';
-import { L, normLang } from '../lore/index.js';
-import {
-  publicState, publicAgent, publicMemories, publicPlace, publicDoc, publicWeather, publicEvent,
-} from '../engine/visibility.js';
-import { publicMap } from '../map/index.js';
+import { normLang } from '../lore/index.js';
 import { clientIp, langOf, parseCookies, readJson, sendError, sendEngineError, sendJson, sha256hex } from './util.js';
 
 const intParam = (url, name, def, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) => {
@@ -24,10 +20,10 @@ export async function getState(req, res, ctx) {
   const { rt } = ctx;
   const key = `${rt.w.commandN}:${rt.nextTickAt}`;
   if (!ctx.cache.state || ctx.cache.state.key !== key) {
-    ctx.cache.state = { key, text: JSON.stringify(publicState(rt.w, { nextTickAt: rt.nextTickAt })) };
+    ctx.cache.state = { key, text: JSON.stringify(rt.engine.publicState(rt.w, { nextTickAt: rt.nextTickAt })) };
   }
   const text = ctx.cache.state.text;
-  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(text), 'X-Houren-Protocol': '1', 'Cache-Control': 'no-store' });
+  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(text), 'X-Houren-Protocol': String(rt.engine.protocol), 'Cache-Control': 'no-store' });
   res.end(text);
 }
 
@@ -39,6 +35,7 @@ export async function getEvents(req, res, ctx, url) {
   if (Number.isNaN(since)) return sendError(res, lang, 'invalid_request', { field: 'since' });
   if (Number.isNaN(limit)) return sendError(res, lang, 'invalid_request', { field: 'limit' });
   const w = ctx.rt.w;
+  const { publicEvent } = ctx.rt.engine;
   const events = ctx.rt.events.since(since, limit).map((e) => publicEvent(w, e, { released: e.released === true })).filter(Boolean);
   // TODO(spec): Q10 —— 延迟公开的事件释放时 seq 已落在游标之后，按 seq 轮询会漏掉它们（SSE 不受影响）
   sendJson(res, 200, { events, last: events.length ? events[events.length - 1].seq : since });
@@ -56,11 +53,12 @@ export async function stream(req, res, ctx) {
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
-    'X-Houren-Protocol': '1',
+    'X-Houren-Protocol': String(ctx.rt.engine.protocol),
   });
   res.write(': connected\n\n');
   sse.clients.add(res);
   const w = ctx.rt.w;
+  const { publicEvent } = ctx.rt.engine;
   const off = ctx.rt.events.subscribe((name, data) => {
     if (name === 'e') {
       const pe = publicEvent(w, data, { released: data.released === true });
@@ -85,6 +83,7 @@ export async function stream(req, res, ctx) {
 export async function getAgent(req, res, ctx, url, params) {
   const lang = langOf(url.searchParams);
   const { rt } = ctx;
+  const { publicEvent, publicAgent, publicMemories } = rt.engine;
   const a = rt.w.agents[params[0]];
   if (!a) return sendError(res, lang, 'not_found');
   const thoughts = rt.events
@@ -103,14 +102,29 @@ export async function getAgent(req, res, ctx, url, params) {
 
 /** GET /api/public/places/:id */
 export async function getPlace(req, res, ctx, url, params) {
-  const p = publicPlace(ctx.rt.w, params[0]);
+  const p = ctx.rt.engine.publicPlace(ctx.rt.w, params[0]);
   if (!p) return sendError(res, langOf(url.searchParams), 'not_found');
   sendJson(res, 200, p);
 }
 
+/**
+ * GET /api/public/laws/:id（协议 2）：一部城法 `l…`、社群章程 `group:<g>` 或地点规则 `place:<id>` 的全部，
+ * 另有与它有关的最近 100 条事件。第一纪的城没有这个接口（publicLaw 恒为 null → 404）。
+ */
+export async function getLaw(req, res, ctx, url, params) {
+  const { rt } = ctx;
+  const law = rt.engine.publicLaw(rt.w, params[0]);
+  if (!law) return sendError(res, langOf(url.searchParams), 'not_found');
+  const events = rt.events
+    .recent((e) => rt.engine.eventMatchesLaw(e, params[0]), 100)
+    .map((e) => rt.engine.publicEvent(rt.w, e, { released: e.released === true }))
+    .filter(Boolean);
+  sendJson(res, 200, { law, events });
+}
+
 /** GET /api/public/docs/:id */
 export async function getDoc(req, res, ctx, url, params) {
-  const d = publicDoc(ctx.rt.w, params[0]);
+  const d = ctx.rt.engine.publicDoc(ctx.rt.w, params[0]);
   if (!d) return sendError(res, langOf(url.searchParams), 'not_found');
   sendJson(res, 200, d);
 }
@@ -143,13 +157,7 @@ export async function getChronicle(req, res, ctx, url) {
  */
 export async function getLore(req, res, ctx, url) {
   const lang = normLang(langOf(url.searchParams));
-  const d = L(lang);
-  sendJson(res, 200, {
-    lang,
-    cityName: d.cityName, redacted: d.redacted, unreadableInscription: d.unreadableInscription,
-    place: d.place, district: d.district, band: d.band, wellBand: d.wellBand, richness: d.richness, richnessWild: d.richnessWild, season: d.season,
-    facility: d.facility, weather: d.weather, omen: d.omen, physics: d.physics, law: d.law,
-  });
+  sendJson(res, 200, ctx.rt.engine.publicLore(lang));
 }
 
 /**
@@ -157,7 +165,7 @@ export async function getLore(req, res, ctx, url) {
  * 【新增，附录 C】观测站据此画地图；世界创建之后它不再变化。
  */
 export async function getMap(req, res, ctx) {
-  sendJson(res, 200, publicMap(ctx.rt.w));
+  sendJson(res, 200, ctx.rt.engine.publicMap(ctx.rt.w));
 }
 
 /** GET /api/public/legacy */
@@ -167,7 +175,7 @@ export async function getLegacy(req, res, ctx) {
 
 /** GET /api/public/weather：生效中、历史、本月投票计数、当前征兆（看不到排期） */
 export async function getWeather(req, res, ctx) {
-  sendJson(res, 200, publicWeather(ctx.rt.w));
+  sendJson(res, 200, ctx.rt.engine.publicWeather(ctx.rt.w));
 }
 
 /**
@@ -204,6 +212,7 @@ export const publicRoutes = [
   ['GET', '/api/public/stream', stream],
   ['GET', /^\/api\/public\/agents\/([^/]+)$/, getAgent],
   ['GET', /^\/api\/public\/places\/([^/]+)$/, getPlace],
+  ['GET', /^\/api\/public\/laws\/([^/]+)$/, getLaw],
   ['GET', /^\/api\/public\/docs\/([^/]+)$/, getDoc],
   ['GET', '/api/public/metrics', getMetrics],
   ['GET', '/api/public/chronicle', getChronicle],

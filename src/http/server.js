@@ -1,8 +1,9 @@
 // SPEC-M1 §13：HTTP 服务。路由、静态文件、限速、CORS、CSP。
-// 只用 Node 内置模块。所有 JSON 响应带 X-Houren-Protocol: 1；请求体上限 64 KB。
+// 只用 Node 内置模块。所有 JSON 响应带 X-Houren-Protocol（第一纪的城为 1，第二纪的城为 2）；请求体上限 64 KB。
 
 import http from 'node:http';
 import { RunnerManager } from '../runner/manager.js';
+import { ShellManager } from '../shells/manager.js';
 import { runnerRoutes } from './runner.js';
 import { readFile, stat } from 'node:fs/promises';
 import { dirname, extname, join, normalize, sep } from 'node:path';
@@ -102,6 +103,8 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console } 
     rt,
     cfg,
     runners: new RunnerManager(rt, cfg),
+    // 躯壳的运行时（SPEC-E2 §13）：第二纪的城且配置了 SHELLS_FILE 时才有；配置有问题会在这里抛出，服务器启动失败并说明原因
+    shells: rt.engine.physics === 2 && cfg.shellsFile ? new ShellManager(rt, cfg, { logger }) : null,
     tokens: new TokenIndex(rt.w),
     limits: {
       agent: new PerTickLimiter(20), // 每个令牌每刻 20 个请求
@@ -130,6 +133,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console } 
         return;
       }
       if (pathname.startsWith('/api/')) {
+        res.setHeader('X-Houren-Protocol', String(rt.engine.protocol)); // 协议版本随世界的物理（SPEC-E2 §2.1）
         const m = match(req.method, pathname);
         if (!m) return sendError(res, 'zh', 'not_found');
         await m.handler(req, res, ctx, url, m.params);
@@ -150,6 +154,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console } 
     const address = server.address();
     const host = address.address === '::' ? '[::1]' : address.address === '0.0.0.0' ? '127.0.0.1' : address.address.includes(':') ? `[${address.address}]` : address.address;
     ctx.runners.activate(`http://${host}:${address.port}`);
+    if (ctx.shells) ctx.shells.activate();
   });
   // 慢速连接与保活：SSE 长连接由自己的心跳维持
   server.keepAliveTimeout = 65000;
@@ -166,6 +171,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console } 
     server,
     ctx,
     async close() {
+      if (ctx.shells) await ctx.shells.close();
       await ctx.runners.close();
       clearInterval(heartbeat);
       for (const res of ctx.sse.clients) res.end();

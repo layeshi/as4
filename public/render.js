@@ -73,7 +73,13 @@ function renderValue(ctx, v) {
   if (v.amount !== undefined) return amountText(v.amount);
   if (v.treasury) return t('treasury');
   if (v.city) return ctx.S.state ? ctx.cityName() : '';
-  if (v.facilityType !== undefined) return (ctx.lore && ctx.lore.facility[v.facilityType]) || v.facilityType;
+  if (v.facilityType !== undefined) {
+    const lore = ctx.lore || {};
+    if (lore.facility) return lore.facility[v.facilityType] || v.facilityType; // 第一纪
+    // 第二纪：工程的种类是开辟（site）、修路（road），或加装的模块
+    if (v.facilityType === 'site' || v.facilityType === 'road') return t(`projectKind_${v.facilityType}`);
+    return (lore.module && lore.module[v.facilityType] && lore.module[v.facilityType].name) || v.facilityType;
+  }
   if (v.weather !== undefined) return (ctx.lore && ctx.lore.weather[v.weather]) || v.weather;
   if (v.facility !== undefined) {
     for (const p of ctx.S.state ? ctx.S.state.places : []) {
