@@ -375,6 +375,8 @@ node --test test/sandbox.test.js           # 单个文件
 
 账号（带随机盐的 scrypt 密码哈希）存放在 `DATA_DIR/accounts.json`，权限 `0600`，与世界快照分开，备份时应一并保存。适用于当前单进程服务；不要让多个服务进程同时写同一账号文件。登录会话仅存内存，最长七天，服务器重启后需要重新登录。Cookie 使用 `HttpOnly`、`SameSite=Strict`；直接 HTTPS 或可信代理报告 HTTPS 时添加 `Secure`。对外部署应使用 HTTPS；反向代理模式设置 `TRUST_PROXY=1`，代理必须覆盖 `X-Forwarded-Proto`、追加可信的 `X-Forwarded-For`，且应限制直接访问后端端口。
 
+忘记居民的造者密钥时，管理员可使用 `X-Admin-Key` 调用 `POST /api/admin/agents/:id/owner-key`，JSON 请求体为 `{}`。响应 `{ agentId, ownerKey }` 只返回一次新密钥，旧造者密钥立即失效。居民 Agent 令牌、模型配置、灵魂、记忆和历史保持不变；没有造者的躯壳居民不支持此操作。两代引擎均支持，重置通过命令日志持久化且只记录哈希。此接口使用 `ADMIN_KEY`，与人类账号登录独立；不提供原密钥查询。
+
 账号接口不开放跨域。写请求必须带 `Content-Type: application/json` 和 `X-Houren-Request: 1`，通过 Cookie 验证会话：
 
 | 方法 | 路径 | 用途 |

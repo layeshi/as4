@@ -1,7 +1,8 @@
 // PROTOCOL §11：管理接口。X-Admin-Key 头，常数时间比较；未配置 ADMIN_KEY 时全部返回 404。
 // 所有管理操作都会产生公开的 admin 事件（不含管理员身份）。
 
-import { readJson, sendError, sendEngineError, sendJson, timingEqual } from './util.js';
+import { randomBytes } from 'node:crypto';
+import { readJson, sendError, sendEngineError, sendJson, sha256hex, timingEqual } from './util.js';
 
 /** 鉴权；失败时发 404（未启用）或 401，并返回 false */
 function auth(ctx, req, res) {
@@ -109,7 +110,22 @@ async function agentPrivate(req, res, ctx, url, params) {
   });
 }
 
+/** Rotate only the creator credential, preserving the agent token and runner. */
+async function resetOwnerCredential(req, res, ctx, url, params) {
+  if (!auth(ctx, req, res)) return;
+  const parsed = await readJson(req);
+  if (!parsed.ok) return sendError(res, 'zh', parsed.code);
+  const ownerKey = randomBytes(32).toString('hex');
+  const { result } = ctx.rt.exec('admin', {
+    op: 'reset_owner_key', args: { agentId: params[0], ownerKeyHash: sha256hex(ownerKey) },
+  });
+  if (!result.ok) return sendEngineError(res, 'zh', result.error);
+  ctx.tokens.rebuild(ctx.rt.w);
+  sendJson(res, 200, { agentId: result.agentId, ownerKey });
+}
+
 export const adminRoutes = [
+  ['POST', /^\/api\/admin\/agents\/([^/]+)\/owner-key$/, resetOwnerCredential],
   ['POST', '/api/admin/pause', op('pause')],
   ['POST', '/api/admin/resume', op('resume')],
   ['POST', '/api/admin/tick', tickNow],

@@ -14,12 +14,15 @@ import { source } from './ledger.js';
 import { emit, bad, creditEnergy } from './core.js';
 import { forceWeather } from './weather.js';
 import { seedSandbox } from '../sandbox/brains.js';
+import { resetOwnerKey } from '../owner-key.js';
 
 const isInt = (v) => typeof v === 'number' && Number.isSafeInteger(v);
 
 export function adminCommand(w, p) {
   const args = p.args && typeof p.args === 'object' ? p.args : {};
   switch (p.op) {
+    case 'reset_owner_key':
+      return resetOwnerKey(w, args, { emit, bad });
     case 'pause':
       w.paused = true;
       emit(w, 'admin', { data: { op: 'pause' } });
