@@ -207,7 +207,7 @@ export async function runAgent(cfg, deps = {}) {
       // 用时与用量：调「一刻多长」「历史留几轮」的依据
       const secs = ((Date.now() - t0) / 1000).toFixed(1);
       const u = reply.usage;
-      log.info(`模型用时 ${secs} s${u ? ` · 输入 ${u.input} · 输出 ${u.output} token` : ''}`);
+      log.info(`模型用时 ${secs} s${u ? ` · 输入 ${u.input} · 输出 ${u.output} token${Number.isFinite(u.reasoning) ? ` · 思考 ${u.reasoning}` : ''}` : ''} · stop=${String(reply.stop || 'unknown').replace(/[^a-z_]/gi, '').slice(0, 24)}`);
       rejected = 0;
     } catch (e) {
       reportUsage(null, { ok: false, replyChars: 0, ms: Date.now() - t0, error: e });
@@ -241,7 +241,9 @@ export async function runAgent(cfg, deps = {}) {
     if (!parsed.ok) {
       report({ status: 'error', lastError: '模型回复没有可解析的行动 JSON。' });
       log.warn(`回复里没有可解析的 JSON（${parsed.error}）；本刻不行动。开头：${String(reply.text).slice(0, 80).replace(/\s+/g, ' ')}`);
-      lastResults = cfg.lang === 'en' ? 'Your last reply could not be parsed. Output exactly one JSON object.' : '你上一轮的回复无法解析。请只输出一个 JSON 对象。';
+      lastResults = reply.stop === 'length'
+        ? (cfg.lang === 'en' ? 'Your last reply reached the output token limit before a valid action JSON was available. No action was submitted.' : '上一轮达到输出 token 上限，未得到完整行动 JSON，未提交行动。')
+        : (cfg.lang === 'en' ? 'Your last reply could not be parsed. Output exactly one JSON object.' : '你上一轮的回复无法解析。请只输出一个 JSON 对象。');
       await waitTick(p);
       continue;
     }

@@ -20,7 +20,12 @@ export async function getState(req, res, ctx) {
   const { rt } = ctx;
   const key = `${rt.w.commandN}:${rt.nextTickAt}`;
   if (!ctx.cache.state || ctx.cache.state.key !== key) {
-    ctx.cache.state = { key, text: JSON.stringify(rt.engine.publicState(rt.w, { nextTickAt: rt.nextTickAt })) };
+    const state = rt.engine.publicState(rt.w, { nextTickAt: rt.nextTickAt });
+    if (rt.engine.physics === 2 && rt.events.fiscal) {
+      if (state.metrics) state.metrics = rt.events.fiscal.metrics(rt.w, state.metrics);
+      state.ruleDiagnostics = rt.events.fiscal.diagnostics(rt.w);
+    }
+    ctx.cache.state = { key, text: JSON.stringify(state) };
   }
   const text = ctx.cache.state.text;
   res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(text), 'X-Houren-Protocol': String(rt.engine.protocol), 'Cache-Control': 'no-store' });
@@ -135,7 +140,9 @@ export async function getMetrics(req, res, ctx, url) {
   const from = intParam(url, 'from', 0, { min: 0 });
   const to = intParam(url, 'to', Number.MAX_SAFE_INTEGER, { min: 0 });
   if (Number.isNaN(from) || Number.isNaN(to)) return sendError(res, lang, 'invalid_request', { field: Number.isNaN(from) ? 'from' : 'to' });
-  sendJson(res, 200, { metrics: ctx.rt.w.metrics.filter((m) => m.day >= from && m.day <= to) });
+  const { rt } = ctx;
+  const metrics = rt.w.metrics.filter((m) => m.day >= from && m.day <= to);
+  sendJson(res, 200, { metrics: rt.engine.physics === 2 && rt.events.fiscal ? metrics.map(m => rt.events.fiscal.metrics(rt.w, m)) : metrics });
 }
 
 /** GET /api/public/chronicle?lang=&from=&to= */

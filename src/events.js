@@ -7,6 +7,7 @@
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { FiscalView } from './fiscal-view.js';
 
 const RING_SIZE = 2000;
 const OWNER_KEEP = 300;
@@ -31,6 +32,7 @@ export class EventStore {
     this.owner = new Map(); // agentId → 最近的 owner / delayed 事件
     this.subscribers = new Set(); // (name, data) => void
     this.lastSeq = 0;
+    this.fiscal = new FiscalView();
     if (file) mkdirSync(dirname(file), { recursive: true });
   }
 
@@ -40,6 +42,7 @@ export class EventStore {
    * tick：当前刻，用来决定哪些 delayed 事件已经释放。
    */
   load({ keepSeq = Infinity, tick = 0 } = {}) {
+    this.fiscal = new FiscalView();
     this.ring = [];
     this.pending = [];
     this.owner = new Map();
@@ -64,6 +67,7 @@ export class EventStore {
 
   /** 把一条事件放进内存索引（不落盘、不推送） */
   index(ev, tick) {
+    this.fiscal.index(ev);
     if (ev.vis === 'public') this.pushRing(ev);
     else if (ev.vis === 'delayed') {
       this.addOwner(ev);

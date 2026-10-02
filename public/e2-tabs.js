@@ -197,6 +197,11 @@ export function renderLaws2(ctx, root) {
   const S = ctx.S.state;
   const lore = ctx.lore;
   const lang = getLang();
+  if (S.ruleDiagnostics?.length) root.append(section(
+    lang === 'en' ? 'Recent runtime errors in active laws' : '有效法律的最近运行错误',
+    h('p', { class: 'muted' }, lang === 'en' ? 'Historical diagnostics; an active law may still fail to execute.' : '以下为历史诊断；法律仍有效不代表其规则执行成功。'),
+    ...S.ruleDiagnostics.map(e => h('p', { class: 'error' }, `${e.owner} · rules[${e.rule}] · tick ${e.tick} · ${e.code}: ${e.detail}`)),
+  ));
 
   // 物理：自然律与守护律（附录 A.3）
   const physics = lore.physics;
@@ -628,6 +633,16 @@ export async function renderMetrics2(ctx, root) {
   const two = (a, b) => h('div', { class: 'charts two' }, a, b);
   const rate = (v) => `${Math.round(v * 100)}%`;
   const c = (series, o = {}) => lineChart({ series, height: 190, xLabel: 'D', ...o });
+  root.append(h('p', { class: 'muted' }, getLang() === 'en'
+    ? 'Scheduled law payments include actual daily/monthly transfers and shares from the city treasury to residents, averaged over living residents. Repair subsidies are shown separately. Historical balances are unchanged.'
+    : '日结法律拨款按公库每日／每月规则实际转账、均分金额统计，人均值按在世居民计算；修缮等其他法律拨款另列。历史余额不变。'));
+  root.append(two(
+    fig(getLang() === 'en' ? 'Scheduled payments per living resident' : '日结法律拨款／在世居民', c([{ name: getLang() === 'en' ? 'Actual payments' : '实际拨款', points: pts('rationPerCapita'), color: 2 }])),
+    fig(getLang() === 'en' ? 'Treasury payments by law' : '公库法律拨款', c([
+      { name: getLang() === 'en' ? 'Scheduled' : '日结拨款', points: pts('dailyDistributionEnergy'), color: 2 },
+      { name: getLang() === 'en' ? 'Other' : '其他拨款', points: pts('otherLawPaymentsEnergy'), color: 3 },
+    ])),
+  ));
   root.append(
     two(
       fig(t('m_population'), c([{ name: t('s_awake'), points: pts('awake'), color: 0 }, { name: t('s_dormant'), points: pts('dormant'), color: 3 }])),

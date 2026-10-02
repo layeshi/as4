@@ -133,6 +133,8 @@ function createOpenAIProvider(cfg, deps) {
       const out = { text: (choice && choice.message && choice.message.content) || '', stop: (choice && choice.finish_reason) || 'stop' };
       const u = json && json.usage;
       if (u && Number.isFinite(u.prompt_tokens)) out.usage = { input: u.prompt_tokens, output: u.completion_tokens };
+      const reasoning = u?.completion_tokens_details?.reasoning_tokens;
+      if (out.usage && Number.isFinite(reasoning)) out.usage.reasoning = reasoning;
       return out;
     },
   };

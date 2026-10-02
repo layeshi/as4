@@ -112,7 +112,7 @@ test('declare / draft / propose / vote：立志；试算；提出（遗法 l2 �
     // draft：成功返回读法与预览；失败的校验仍是 200，errors 按 lang 本地化
     const dr = await env.one(a, { type: 'draft', rules: [{ when: 'daily', do: [{ op: 'set', var: 'y', value: 'city.treasury' }] }] });
     ok(dr);
-    assert.deepEqual(Object.keys(dr.data), ['ok', 'errors', 'reading', 'preview']);
+    assert.deepEqual(Object.keys(dr.data), ['ok', 'errors', 'reading', 'preview', 'staticOk', 'previewOk']);
     assert.equal(dr.data.ok, true);
     assert.ok(dr.data.reading.rules[0].includes('每日结算时'));
     const bad = await env.one(a, { type: 'draft', rules: [{ when: 'daily', do: [{ op: 'set', var: 'y', value: '1 + "a"' }] }] }, { lang: 'en' });

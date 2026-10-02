@@ -57,12 +57,7 @@ const text = (t, isError = false) => ({ content: [{ type: 'text', text: t }], ..
 /** 一次调用结果 → 给模型看的文字 */
 function formatActResult(json, lang) {
   const lines = (json.results || []).map((r) => {
-    let s = `${r.index + 1}. ${r.type} ${r.ok ? '✓' : '✗'}`;
-    if (r.ok) {
-      s += r.cost ? `（−${r.cost}）` : '';
-      if (r.data && Object.keys(r.data).length) s += ` ${JSON.stringify(r.data).slice(0, 2000)}`;
-    } else if (r.error) s += ` ${errorText(r.error)}`;
-    return s;
+    return `${r.index + 1}. ${summarizeResults([r], lang)}`;
   });
   if (lines.length === 0) lines.push(lang === 'en' ? '(no actions)' : '（没有动作）');
   const y = json.you;

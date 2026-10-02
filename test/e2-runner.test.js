@@ -490,7 +490,8 @@ test('MCP：houren_rules 按服务器的协议版本返回对应的系统提示�
     assert.ok(/1\. propose ✗ forbidden：l2：/.test(act), act);
     assert.ok(act.includes('3. say ✓（−1）'));
     const p2 = textOf(await mcp2.handle(call(5, 'houren_perceive', {})));
-    assert.ok(p2.trimEnd().split('\n').at(-1).startsWith('【上一轮的结果】propose ✗ forbidden：l2：'), p2.trimEnd().split('\n').at(-1));
+    assert.ok(p2.includes('【上一轮的结果】propose ✗ forbidden：l2：'), p2);
+    assert.ok(p2.includes('rules[0].do[0].op'), '详细校验问题必须反馈给模型');
     void publicLore;
   } finally {
     await v2.close();

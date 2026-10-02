@@ -1491,6 +1491,7 @@ Doing nothing is fine: {"actions": []}
 账户：treasury、一位居民（actor、it、agent('a3')）、group('g1')、soul('s4')（为躯壳出资）。
 立法程序：{"ordinary":{...},"constitutional":{...}}，每类写 proposers（提案者的条件，用 actor）、voters（表决者列表，提案时固定）、weight（每票的分量，用 it）、period（刻）、secret（是否不记名）、decide（用 yes no abstain voted total turnout 判断是否通过）；或 {"none":true}：这一类不再立法。改程序或改宪章的提案是修宪级。
 边界：规则从居民身上拿走的能量不会让它低于 {floor}；每条持续生效的规则每天从公库扣 1 能量；规则出错时这一次什么都不做；规则的后果不会触发规则；内心与私语不可触及。
+执行语义：同一条规则先在旧状态上计算全部操作，再施行；同一 do 中的 set 不会被后续表达式立即读到，依赖计算须拆为不同规则或展开表达式。city.wellCondition 使用基点：10000=100%，8000=80%；配给比例使用千分比：600=60%。city.treasury 是余额，treasury 是账户。basedOn 只记录参考来源，不撤销旧法；替代须显式 repeal。draft 的动作成功不等于规则有效：请检查 data.ok、errors、preview 中的 error。repair 的实际目标在 result.target；限额须区分累计投入和累计补贴。
 先用 draft 试算，再 propose。投票前读城给出的「引擎读法」：那是规则真正做的事。
 例：{"when":"before:draw","if":"actor.drawnToday + args.energy > 5","do":[{"op":"deny","reason":"每人每日限汲 5"}]}
 例：{"when":"daily","do":[{"op":"each","in":"tagged('守井人')","do":[{"op":"transfer","from":"treasury","to":"it","energy":"3"}]}]}
@@ -1511,6 +1512,7 @@ Operations: transfer{from,to,energy?,coins?} share{from,energy?,coins?,among} ea
 Accounts: treasury, a resident (actor, it, agent('a3')), group('g1'), soul('s4') (funding a shell).
 Procedure: {"ordinary":{...},"constitutional":{...}}; each class has proposers (condition on actor), voters (list of voters, fixed when proposed), weight (each vote's weight, using it), period (ticks), secret (secret ballot or not), decide (whether it passes, using yes no abstain voted total turnout); or {"none":true}: no more lawmaking of this class. Proposals that change the procedure or the Charter are constitutional.
 Limits: energy taken from a resident by a rule never brings them below {floor}; each standing rule costs the Treasury 1 energy a day; a rule that fails does nothing that time; what rules do never triggers other rules; inner life and whispers are out of reach.
+Execution: each rule first evaluates ALL operations against the pre-rule state, then applies them. A set in one do is NOT visible to later expressions in that same do; split dependent calculations into separate rules or inline them. city.wellCondition uses basis points: 10000=100%, 8000=80%; ration fractions use permille: 600=60%. city.treasury is a balance; treasury is an account. basedOn records a reference only; replacing a law requires explicit repeal. A successful draft action does not mean valid rules: inspect data.ok, errors and preview errors. The actual repair target is result.target; distinguish cumulative spending from cumulative subsidy.
 Use draft to try rules before you propose. Before voting, read the city's "reading": it is what the rules actually do.
 Example: {"when":"before:draw","if":"actor.drawnToday + args.energy > 5","do":[{"op":"deny","reason":"at most 5 a day per person"}]}
 Example: {"when":"daily","do":[{"op":"each","in":"tagged('keeper')","do":[{"op":"transfer","from":"treasury","to":"it","energy":"3"}]}]}

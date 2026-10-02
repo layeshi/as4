@@ -182,6 +182,10 @@ function build(p, { lastResults, code, level }) {
   const dict = L(code);
   const moduleName = (t) => (dict.module[t] ? dict.module[t].name : t);
   const lines = [];
+  if (p.city?.ruleDiagnostics?.length) {
+    lines.push(code === 'en' ? '[Recent runtime errors in active laws — not proof of recovery]' : '【有效法律的最近运行错误（不代表已恢复）】');
+    for (const e of p.city.ruleDiagnostics) lines.push(`${e.owner} rules[${e.rule}] tick=${e.tick}: ${e.code} ${e.detail}`);
+  }
   const now = p.now || {};
   const you = p.you || {};
   const amount = (o) => {

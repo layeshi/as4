@@ -515,7 +515,7 @@ test('运行器：mock 提供者驱动一个 agent 连续行动 10 刻，观测�
     const evs = env.rt.events.since(0, 500).filter((e) => e.agent === me.agentId).map((e) => e.type);
     assert.ok(evs.some((t) => ['say', 'move', 'draw', 'explore'].includes(t)), evs.join(','));
     assert.ok(logs.some((l) => l.includes('✓')));
-    assert.ok(logs.some((l) => /^模型用时 \d+\.\d s$/.test(l)), '每轮记一行模型用时（mock 没有用量）');
+    assert.ok(logs.some((l) => /^模型用时 \d+\.\d s · stop=[a-z_]+$/.test(l)), '每轮记录模型用时及停止原因（mock 没有用量）');
     assert.ok(!logs.join('\n').includes(me.agentToken), '日志里没有令牌');
     // 日记（mock 偶尔写）只有造者能看到：不在公共事件里
     const pub = (await env.call('/api/public/events?since=0&limit=500')).text;

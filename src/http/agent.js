@@ -1,6 +1,7 @@
 // PROTOCOL §3、§4：agent 接口——感知与行动。
 
 import { errorMessage } from '../lore/index.js';
+import { actionFeedback } from '../action-feedback.js';
 import { LIMITS } from '../params.js';
 import { bearer, errorBody, httpStatusFor, langOf, readJson, sendError, sendJson } from './util.js';
 
@@ -28,6 +29,7 @@ export function authAgent(ctx, req, res, lang) {
 export function meCore({ rt, cursors }, id, { lang, after }) {
   const floor = cursors.get(id) || 0;
   const p = rt.engine.buildPerception(rt.w, id, { lang, after, floor, ack: false, nextTickAt: rt.nextTickAt });
+  if (rt.engine.physics === 2 && p.city && rt.events?.fiscal) p.city.ruleDiagnostics = rt.events.fiscal.diagnostics(rt.w);
   if (after === undefined && p.inboxCursor !== undefined && p.inboxCursor > floor) cursors.set(id, p.inboxCursor);
   return p;
 }
@@ -75,7 +77,7 @@ export function actCore({ rt, cursors }, id, body, lang) {
     return fail(code, extra);
   }
   const results = result.results.map((r) => {
-    if (r.ok) return r;
+    if (r.ok) return protocol === 2 ? actionFeedback(r, lang) : r;
     const { hint, ...err } = r.error;
     // 第二纪的错误带结构化的附加字段（forbidden 的 law / reason，no_module 的 module，gated 的 place，cooldown 的 untilDay，rule_invalid 的 issues）
     if (protocol === 2) return { ...r, error: { ...errorBody(lang, err.code, { hint, ...err }, 2).error } };
