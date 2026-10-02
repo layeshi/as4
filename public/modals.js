@@ -96,6 +96,7 @@ export function openEntry(ctx) {
 
 /** 提交成功后的「只显示一次」面板 */
 function successPanel(pane, r, note, ctx) {
+  rememberOwner(r.ownerKey, { agentId: r.agentId });
   if (!pane.isConnected) pane = openModal(t('entryTitle'), 'wide').body;
   clear(pane);
   const backstage = h('button', { type: 'button', class: 'btn primary' }, t('enterBackstage'));
@@ -183,14 +184,67 @@ async function fosterPane(ctx, pane) {
 // ── 幕后 ──────────────────────────────────────────────────────
 
 const KEY_STORE = 'houren.ownerKey';
+const KEYS_STORE = 'houren.ownerKeys';
+
+// Keep the legacy current key so existing browsers migrate without losing access.
+function savedOwners() {
+  let entries = [];
+  try {
+    const stored = JSON.parse(storageGet(KEYS_STORE) || '[]');
+    if (Array.isArray(stored)) entries = stored.filter(x => x && typeof x.key === 'string' && x.key);
+  } catch { /* Recover the legacy key if the list is malformed. */ }
+  const legacy = storageGet(KEY_STORE);
+  if (legacy && !entries.some(x => x.key === legacy)) entries.push({ key: legacy });
+  return entries;
+}
+
+function rememberOwner(key, agent = {}) {
+  const entries = savedOwners();
+  const entry = entries.find(x => x.key === key || (agent.agentId && x.agentId === agent.agentId));
+  if (entry) Object.assign(entry, { key }, agent);
+  else entries.push({ key, ...agent });
+  storageSet(KEYS_STORE, JSON.stringify(entries));
+  storageSet(KEY_STORE, key);
+}
+
+function forgetOwner(key) {
+  const entries = savedOwners().filter(x => x.key !== key);
+  storageSet(KEYS_STORE, JSON.stringify(entries));
+  if (storageGet(KEY_STORE) === key) storageSet(KEY_STORE, null);
+  return entries;
+}
 
 export function openBackstage(ctx) {
   const m = openModal(t('backTitle'), 'wide');
   const warn = h('p', { class: 'warn persistent', role: 'note' }, t('backWarn'));
   const area = h('div', { class: 'back-area' });
-  m.body.append(warn, area);
+  const navigation = h('div', { class: 'toolbar' });
+  m.body.append(warn, navigation, h('p', { class: 'muted' }, t('ownerKeysHelp')), area);
+  let generation = 0;
+  const showNavigation = (key) => {
+    clear(navigation);
+    const entries = savedOwners();
+    if (entries.length) {
+      const picker = h('select', { name: 'ownerAgent', 'aria-label': t('selectOwnerAgent') },
+        h('option', { value: '', disabled: true }, t('selectOwnerAgent')),
+        entries.map((entry, index) => h('option', { value: String(index) },
+          entry.name ? `${entry.name} · ${entry.agentId}` : entry.agentId || t('savedOwner', { n: index + 1 }))));
+      picker.value = String(entries.findIndex(entry => entry.key === key));
+      if (!key) picker.value = '';
+      picker.addEventListener('change', () => {
+        const entry = entries[Number(picker.value)];
+        if (entry) load(entry.key);
+      });
+      navigation.append(h('label', { class: 'field' }, h('span', null, t('selectOwnerAgent')), picker));
+    }
+    const add = h('button', { class: 'btn small', type: 'button' }, t('addOwnerKey'));
+    add.addEventListener('click', () => showKeyForm(''));
+    navigation.append(add);
+  };
 
   const showKeyForm = (message) => {
+    generation++;
+    showNavigation(null);
     clear(area);
     const msg = h('p', { class: 'error', role: 'alert' }, message || '');
     const input = h('input', { type: 'password', name: 'ownerKey', autocomplete: 'off', class: 'mono', 'aria-label': t('ownerKeyLabel') });
@@ -213,22 +267,28 @@ export function openBackstage(ctx) {
   };
 
   const load = async (key) => {
+    const version = ++generation;
+    showNavigation(key);
     clear(area);
     area.append(h('p', { class: 'muted' }, t('loading')));
     const r = await api('/api/owner', { key });
+    if (version !== generation || !area.isConnected) return;
     if (r.status === 401 || r.status === 403) {
-      storageSet(KEY_STORE, null);
+      forgetOwner(key);
       return showKeyForm(t('invalidKey'));
     }
     if (!r.ok) return showKeyForm(r.status === 0 ? t('networkError') : errorText(r, t('loadFailed')));
-    storageSet(KEY_STORE, key);
-    renderOwner(ctx, area, r.json.agents || [], key, () => load(key), () => {
-      storageSet(KEY_STORE, null);
-      showKeyForm('');
+    const agent = r.json.agents?.[0];
+    rememberOwner(key, agent ? { agentId: agent.agentId, name: agent.name } : {});
+    showNavigation(key);
+    renderOwner(ctx, area, r.json.agents || [], key, () => { if (version === generation && area.isConnected) load(key); }, () => {
+      const remaining = forgetOwner(key);
+      if (remaining.length) load(remaining[0].key);
+      else showKeyForm('');
     });
   };
 
-  const saved = storageGet(KEY_STORE);
+  const saved = storageGet(KEY_STORE) || savedOwners()[0]?.key;
   if (saved) load(saved);
   else showKeyForm('');
 }

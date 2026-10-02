@@ -121,6 +121,7 @@ async function resetOwnerCredential(req, res, ctx, url, params) {
   });
   if (!result.ok) return sendEngineError(res, 'zh', result.error);
   ctx.tokens.rebuild(ctx.rt.w);
+  ctx.runners.syncOwnerKey(result.agentId);
   sendJson(res, 200, { agentId: result.agentId, ownerKey });
 }
 

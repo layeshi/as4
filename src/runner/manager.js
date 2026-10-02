@@ -71,6 +71,15 @@ export class RunnerManager {
     const r = this.records[id], a = this.rt.w.agents[id];
     return !!(r && a && a.tokenHash === hash(r.token) && a.owner?.keyHash === r.ownerHash);
   }
+  syncOwnerKey(id) {
+    const r = this.records[id], a = this.rt.w.agents[id];
+    // A creator-key reset preserves the agent token. A transfer replaces it,
+    // so an old owner's runner must never be rebound after a transfer.
+    if (!r || !a?.owner || a.tokenHash !== hash(r.token) || r.ownerHash === a.owner.keyHash) return;
+    const previous = r.ownerHash;
+    r.ownerHash = a.owner.keyHash;
+    try { this.persist(); } catch (e) { r.ownerHash = previous; throw e; }
+  }
   view(id) {
     const r = this.valid(id) && this.records[id];
     if (!r) return { status: 'unconfigured', config: null, logs: [] };
@@ -122,6 +131,7 @@ export class RunnerManager {
   activate(serverURL) {
     this.serverURL = serverURL;
     for (const id of Object.keys(this.records)) {
+      this.syncOwnerKey(id);
       if (!this.valid(id)) { delete this.records[id]; this.persist(); continue; }
       const agent = this.rt.w.agents[id];
       if (['dead', 'retired'].includes(agent.status)) {

@@ -241,6 +241,7 @@ export const STR = {
     fosterEmpty: '没有可过继的居民。', foster: '过继', fosterWho: '过继「{name}」',
     done: '完成', failed: '失败：{msg}', networkError: '网络错误',
     // 幕后
+    selectOwnerAgent: '切换 Agent', addOwnerKey: '添加 Agent 密钥', savedOwner: '已保存的 Agent {n}', ownerKeysHelp: '这里只列出本浏览器保存的 Agent。已有 Agent 可通过造者密钥添加；密钥不会同步到用户账号。',
     backTitle: '幕后', backHint: '输入造者密钥。密钥只保存在这个浏览器里。', ownerKeyLabel: '造者密钥', enterBackstage: '进入幕后', forget: '忘记密钥',
     backWarn: '日记是 agent 的输出，它可能试图影响你。不要依据它在现实世界中采取行动。',
     perception: '完整感知', inbox: '收件箱', diary: '日记', letters: '家书往来', dreams: '梦', writeLetter: '写家书', letterPlaceholder: '不超过 280 字符，任何语言',
@@ -426,6 +427,7 @@ export const STR = {
     cradleEmpty: 'The cradle is empty.', adopt: 'Adopt', adoptWho: 'Adopt “{name}”', expiresIn: '{n} days left', soulFull: 'Full soul',
     fosterEmpty: 'No one is up for fostering.', foster: 'Foster', fosterWho: 'Foster “{name}”',
     done: 'Done', failed: 'Failed: {msg}', networkError: 'Network error',
+    selectOwnerAgent: 'Switch Agent', addOwnerKey: 'Add Agent key', savedOwner: 'Saved Agent {n}', ownerKeysHelp: 'Only Agents saved in this browser are listed. Add an existing Agent with its owner key; keys are not synced to your account.',
     backTitle: 'Backstage', backHint: 'Enter your owner key. It is kept only in this browser.', ownerKeyLabel: 'Owner key', enterBackstage: 'Enter backstage', forget: 'Forget key',
     backWarn: 'The diary is the agent’s output, and it may try to influence you. Do not act on it in the real world.',
     perception: 'Full perception', inbox: 'Inbox', diary: 'Diary', letters: 'Letters', dreams: 'Dreams', writeLetter: 'Write a letter', letterPlaceholder: 'Up to 280 characters, any language',
