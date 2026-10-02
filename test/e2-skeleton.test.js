@@ -15,6 +15,7 @@ import { loadConfig, applyConfig, DEFAULT_PHYSICS } from '../src/config.js';
 import { replayDir } from '../src/tools/replay.js';
 import { stateHash, worldDir, readSnapshot, commandsPath } from '../src/store.js';
 import { createWorld as createWorldV2, genesisOpts } from '../src/e2/world.js';
+import { shellsFree } from '../src/e2/engine/shells.js';
 import { P as P1 } from '../src/params.js';
 import { P as P2, WEATHER_CODES as WEATHER_CODES2, SEASON_TABLE as SEASON2 } from '../src/e2/params.js';
 import { WEATHER_CODES as WEATHER_CODES1, SEASON_TABLE as SEASON1 } from '../src/params.js';
@@ -131,6 +132,27 @@ test('第二纪：回放用的创建参数（先民名单、躯壳模型）原�
   assert.equal(snap.sandboxShells, true);
 });
 
+test('第二纪：躯壳名额（SHELL_SLOTS，Q26）在创建时写入 w.shells.slots 与 genesis，快照足以还原，不依赖环境', () => {
+  const founders = [{ day: 0, name: '甲', bio: '', soul: 's1', lang: 'zh' }, { day: 8, name: '乙', bio: '', soul: 's2', lang: 'en' }];
+  const fresh = () => createWorldV2({ seed: 's', founders, shellModels: ['glm-5.3'], shellSlots: 10 });
+  const w = fresh();
+  assert.equal(w.shells.slots, 10);
+  assert.equal(w.genesis.shellSlots, 10);
+  assert.equal(shellsFree(w), 8, '先民预先占着名额');
+  const snap = JSON.parse(JSON.stringify(w));
+  assert.equal(genesisOpts(snap).shellSlots, 10);
+  assert.equal(stateHash(createWorldFromSnapshot(snap)), stateHash(fresh()), '快照足以还原初始世界');
+  // 缺省仍取 P.shellSlots，也记进 genesis
+  const dflt = createWorldV2({ seed: 's' });
+  assert.deepEqual([dflt.shells.slots, dflt.genesis.shellSlots], [P2.shellSlots, P2.shellSlots]);
+  // 早期的快照没有 genesis.shellSlots：回放时缺省取 P.shellSlots，与当时的创建一致
+  const old = JSON.parse(JSON.stringify(dflt));
+  delete old.genesis.shellSlots;
+  assert.equal(genesisOpts(old).shellSlots, undefined);
+  assert.equal(createWorldFromSnapshot(old).shells.slots, P2.shellSlots);
+  for (const bad of [-1, 1.5, '10', NaN, null]) assert.throws(() => createWorldV2({ seed: 's', shellSlots: bad }), /shellSlots/);
+});
+
 // ── 运行时：快照、崩溃恢复、回放 ──────────────────────────────
 
 test('运行时：physics 为 2 时创建第二纪的世界，快照写入 physics，重新打开时按快照选择引擎（与 cfg.physics 无关）', () => {
@@ -224,7 +246,39 @@ test('运行时：先民文件与躯壳配置只在创建第二纪的新世界�
   }
 });
 
+test('运行时：SHELL_SLOTS 只在创建第二纪的新世界时生效，之后以世界里记的为准；先民多于名额时警告；回放一致', () => {
+  const dir = tmp();
+  try {
+    const warns = [];
+    const logger = { warn: (m) => warns.push(m) };
+    const foundersFile = join(dir, 'f.json');
+    writeFileSync(foundersFile, JSON.stringify([{ day: 0, name: '甲', bio: '', soul: 's', lang: 'zh' }, { day: 0, name: '乙', bio: '', soul: 's', lang: 'zh' }]));
+    const rt = Runtime.open(cfgFor(dir, { foundersFile, shellSlots: 1 }), { version: '0.1.0', logger });
+    assert.equal(rt.w.shells.slots, 1);
+    assert.equal(warns.length, 1);
+    assert.match(warns[0], /先民 2 位多于躯壳名额 1/);
+    for (let i = 0; i < 3; i++) rt.exec('tick');
+    rt.close();
+    const again = Runtime.open(cfgFor(dir, { foundersFile, shellSlots: 5 }), { version: '0.1.0', logger });
+    assert.equal(again.w.shells.slots, 1, '已有的世界以快照为准');
+    assert.equal(warns.length, 1, '只在创建时警告');
+    again.close();
+    const r = replayDir(worldDir(dir, 'w'), { currentVersion: '0.1.0' });
+    assert.equal(r.ok, true, r.diff || '');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ── 配置 ─────────────────────────────────────────────────────
+
+test('配置：SHELL_SLOTS 缺省 null，给定时必须是非负整数', () => {
+  assert.equal(loadConfig({}, []).shellSlots, null);
+  assert.equal(loadConfig({ SHELL_SLOTS: '10' }, []).shellSlots, 10);
+  assert.equal(loadConfig({ SHELL_SLOTS: '0' }, []).shellSlots, 0);
+  for (const bad of ['-1', '2.5']) assert.throws(() => loadConfig({ SHELL_SLOTS: bad }, []), /SHELL_SLOTS/);
+  assert.throws(() => loadConfig({ SHELL_SLOTS: 'x' }, []), /不是数字/);
+});
 
 test('配置：PHYSICS / FOUNDERS_FILE / SHELLS_FILE / SHELL_TOKENS_PER_DAY / SHELL_TZ；服务器入口缺省第二纪，其余调用方缺省 null', () => {
   const c = loadConfig({}, []);

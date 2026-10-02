@@ -91,13 +91,14 @@ function initialCounters(extra) {
 /**
  * 创建初始世界（SPEC-E2 §4.1）。不产生事件、不消耗 world 流以外的随机数（遗法的 enact 静默执行）。
  *
- * opts：{ id, seed, codeVersion, sandboxAdoption, map, founders, shellModels, sandboxShells }
+ * opts：{ id, seed, codeVersion, sandboxAdoption, map, founders, shellModels, sandboxShells, shellSlots }
  *   map            第二纪只有 frontier（附录 B）
  *   founders       先民名单（附录 D），创建时读入 w.founders
  *   shellModels    躯壳醒来时轮流分配的模型名（w.shells.models）
  *   sandboxShells  沙盘世界：躯壳与先民由沙盘脑驱动
+ *   shellSlots     躯壳名额（w.shells.slots）；缺省取 P.shellSlots。Q26：规格没有给出配置它的入口，服务器入口用 SHELL_SLOTS
  *
- * 回放需要的创建参数（founders、shellModels）原样记在 w.genesis——w.founders 会随先民入城而减少，
+ * 回放需要的创建参数（founders、shellModels、shellSlots）原样记在 w.genesis——w.founders 会随先民入城而减少，
  * 光靠最终的快照无法还原初始世界（见 genesisOpts）。
  */
 /**
@@ -128,10 +129,11 @@ export function validateFounders(list) {
 
 export function createWorld({
   id = 'baihua', seed, codeVersion = '0.0.0', sandboxAdoption = false, map = 'frontier',
-  founders = [], shellModels = [], sandboxShells = false,
+  founders = [], shellModels = [], sandboxShells = false, shellSlots = P.shellSlots,
 } = {}) {
   if (typeof seed !== 'string' || seed === '') throw new Error('createWorld: seed is required');
   if (map !== 'frontier') throw new Error(`createWorld: 第二纪只支持 frontier 地图，得到 ${map}`);
+  if (!Number.isSafeInteger(shellSlots) || shellSlots < 0) throw new Error(`createWorld: shellSlots must be a non-negative integer, got ${shellSlots}`);
 
   const sorted = validateFounders(founders);
   const models = shellModels.slice();
@@ -185,7 +187,7 @@ export function createWorld({
     metrics: [],
     chronicle: [], // [{ day, zh, en }]
     legacy: null, // 人类遗产存活表（每日更新）
-    shells: { slots: P.shellSlots, models },
+    shells: { slots: shellSlots, models },
     founders: sorted,
     commandN: 0,
     revealed: false,
@@ -193,7 +195,7 @@ export function createWorld({
     // 私有簿记
     recentSpeech: [], // [{ tick, place, from, text }]，只保留最近 heardTicks 刻
     redacted: { events: [] }, // 被遮盖的事件 seq
-    genesis: { founders: sorted.map((f) => ({ ...f })), shellModels: models.slice() },
+    genesis: { founders: sorted.map((f) => ({ ...f })), shellModels: models.slice(), shellSlots },
   };
 
   seedPlaces(w);
@@ -303,6 +305,7 @@ export function genesisOpts(snap) {
     founders: g.founders,
     shellModels: g.shellModels,
     sandboxShells: !!snap.sandboxShells,
+    shellSlots: g.shellSlots, // 早期的快照没有这一项：undefined → 缺省的 P.shellSlots，与当时的创建一致
   };
 }
 

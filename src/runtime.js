@@ -52,6 +52,7 @@ export class Runtime {
       engine = engineForPhysics(cfg.physics === 2 ? 2 : 1);
       const base = { id: cfg.worldId, seed, codeVersion: version, sandboxAdoption: cfg.sandboxAgents > 0, map: cfg.map || (engine.physics === 2 ? 'frontier' : 'classic') };
       w = engine.createWorld(engine.physics === 2 ? { ...base, ...genesisInputs(cfg) } : base);
+      if (engine.physics === 2 && w.founders.length > w.shells.slots) logger.warn?.(`先民 ${w.founders.length} 位多于躯壳名额 ${w.shells.slots}：他们都会入城，但名额在先民长眠之前不会空出来`);
       writeSnapshot(dir, w);
       created = true;
     }
@@ -133,11 +134,12 @@ export class Runtime {
 }
 
 /**
- * 创建第二纪新世界所需的、来自配置文件的输入（SPEC-E2 §3）：先民文件 FOUNDERS_FILE、躯壳配置 SHELLS_FILE 里的模型名，
- * 以及沙盘世界里躯壳与先民由沙盘脑驱动的标志。文件只在创建世界时读取，内容进入世界状态的 genesis（回放需要）。
+ * 创建第二纪新世界所需的、来自配置的输入（SPEC-E2 §3）：先民文件 FOUNDERS_FILE、躯壳配置 SHELLS_FILE 里的模型名、
+ * 躯壳名额 SHELL_SLOTS（Q26），以及沙盘世界里躯壳与先民由沙盘脑驱动的标志。文件只在创建世界时读取，内容进入世界状态的 genesis（回放需要）。
  */
 function genesisInputs(cfg) {
   const out = { sandboxShells: cfg.sandboxAgents > 0 };
+  if (cfg.shellSlots !== null && cfg.shellSlots !== undefined) out.shellSlots = cfg.shellSlots;
   if (cfg.foundersFile) out.founders = JSON.parse(readFileSync(cfg.foundersFile, 'utf8'));
   if (cfg.shellsFile) {
     const shells = JSON.parse(readFileSync(cfg.shellsFile, 'utf8'));
