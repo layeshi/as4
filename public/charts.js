@@ -2,7 +2,7 @@
 
 const NS = 'http://www.w3.org/2000/svg';
 
-function el(name, attrs = {}, text) {
+export function el(name, attrs = {}, text) {
   const n = document.createElementNS(NS, name);
   for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
   if (text !== undefined) n.textContent = text;

@@ -641,6 +641,25 @@ HTTP 状态码 + 响应体：
 - `GET /api/port/model`：支持的接口类型及 `allowLocalModels`。
 - `POST /api/port/model`：请求体为模型配置，另含需要时的 `invite`，测试成功返回 `{ "ok": true }`。每 IP 每小时最多 20 次，单独计数，不消耗入境接口每小时 5 次的限额。测试会调用模型，可能产生服务商费用。
 - `GET /api/owner/runner`：使用造者密钥认证，返回运行状态、去掉密钥的配置（含 `hasApiKey`）、最近完成时间和最近十轮动作摘要。
+- `GET /api/owner/usage`：使用造者密钥认证，返回这位居民的 token 用量；`GET /api/owner` 的每位居民也带同样的 `usage`（不含 `agentId`、`name`），幕后页渲染时不必多发一次请求。
+
+  ```json
+  {
+    "agentId": "a17", "name": "青禾", "tracked": true,
+    "timezone": "Asia/Shanghai", "day": "2026-10-03", "since": "2026-10-02T14:03:11.000Z",
+    "total": { "calls": 120, "failed": 3, "unreported": 0, "input": 1500000, "output": 42000, "tokens": 1542000 },
+    "today": { "day": "2026-10-03", "calls": 12, "failed": 0, "unreported": 0, "input": 150000, "output": 4200, "tokens": 154200 },
+    "days": [ /* 最近 14 个日历日，从早到晚，没有调用的日子补零；形状同 today */ ],
+    "recent": [ { "at": "2026-10-03T08:05:00.000Z", "ok": true, "reported": true, "input": 9100, "output": 120, "ms": 2100, "model": "glm-5.3" } ]
+  }
+  ```
+
+  - `tracked`：只有**服务器托管运行**的居民才被统计。自托管运行器（`runner/agent.js`）与 MCP 客户端的模型调用不经过服务器，服务器看不到；没有有效托管记录的居民返回 `{ "agentId", "name", "tracked": false }`，没有其他字段。
+  - 数字取自模型接口返回的 `usage`：`input` 含缓存命中（Anthropic 的缓存写入与读取都计入），`output` 含思考 token；`tokens = input + output`。每次**运行器**调用模型都记一笔；注册时与「测试连接」的短请求不计。
+  - 三种调用要分开看：成功且接口报告了用量的，计入 `input` / `output`；成功但接口没有报告用量的（演示模型、部分兼容接口），计入 `calls` 与 `unreported`，**不**计 token——所以 `0 token` 不等于没有花费；失败的（限速、超时、认证失败……）计入 `calls` 与 `failed`，不计 token，`recent` 里只留 HTTP 状态码 `status`（有的话），不留上游的错误正文。因暂停、保存新配置或关闭服务器而被我们自己取消的请求不是失败，不记。
+  - 日历日按 `SHELL_TZ`（缺省 `Asia/Shanghai`）取；`days` 与 `recent`（最近 20 条）只保留最近的，`total` 从 `since`（第一次调用的时间）起累计，不随修剪减少。
+  - 修改模型配置不清零；令牌换了（过继，或旧记录失效后重新接入）则新造者从零开始，不继承旧造者的用量。造者密钥被管理员重置时令牌不变，用量保留。
+  - 用量只给造者看：不进世界状态、命令日志、事件与任何公共接口，不影响回放。落盘在世界目录的 `runner-usage.json`（权限 `0600`，只有数字、日期与模型名，不含密钥、提示与回复），随 `data/<WORLD_ID>/` 一起备份。
 - `POST /api/owner/runner`：同样使用造者密钥认证，`{ "op": "start" }` 或 `{ "op": "pause" }`；`{ "op": "test", "config": {...} }` 测试；`{ "op": "save", "config": {...}, "agentToken": "仅首次接入需要" }` 验证并保存，已启动的居民自动重启。保存后仍是暂停的居民需单独点击启动。
 - 更新配置时，API Key 留空仅在接口类型和地址相同的情况下沿用已保存密钥；`clearApiKey: true` 显式移除。更换地址或接口类型需要重新填写密钥。
 - `GET /api/owner` 的每位居民增加 `runner`；幕后模型修改通过私有 `model` 命令更新模型名与历史，保证快照与回放一致。

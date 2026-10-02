@@ -5,6 +5,7 @@ import { createProvider } from '../../runner/providers.js';
 import { runAgent, makeLogger } from '../../runner/agent.js';
 import { parseModelJson } from '../../runner/parse.js';
 import { checkEndpoint, modelFetch } from './endpoint.js';
+import { UsageStore } from './usage.js';
 
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 export class RunnerError extends Error {
@@ -46,6 +47,8 @@ export class RunnerManager {
   constructor(rt, cfg) {
     this.rt = rt; this.cfg = cfg; this.records = {}; this.jobs = new Map(); this.states = new Map(); this.serverURL = null; this.closing = false;
     this.file = join(rt.dir, 'runners.enc'); this.keyFile = join(rt.dir, 'runners.key');
+    // Token usage is telemetry, not a credential: it lives beside the encrypted records, in plain numbers.
+    this.usage = new UsageStore({ file: join(rt.dir, 'runner-usage.json'), timezone: cfg.shellTz });
     if (existsSync(this.file)) {
       if (!existsSync(this.keyFile)) throw new Error('托管凭据加密密钥缺失，无法恢复 runners.enc。');
       this.key = readFileSync(this.keyFile);
@@ -86,6 +89,10 @@ export class RunnerManager {
     const { apiKey, ...config } = r.config;
     return { status: r.enabled ? 'starting' : 'paused', ...this.states.get(id), config: { ...config, hasApiKey: !!apiKey } };
   }
+  /** Token usage of a hosted resident. `tracked: false` when the server does not drive it: a self-hosted runner is invisible to us. */
+  usageView(id) {
+    return this.valid(id) ? { tracked: true, ...this.usage.view(id) } : { tracked: false };
+  }
   provider(config, timeoutMs = config.timeoutMs) {
     const { apiKey, thinking, ...safe } = config;
     return createProvider({ ...safe, timeoutMs, apiKeyEnv: apiKey ? 'MANAGED_KEY' : undefined,
@@ -123,6 +130,8 @@ export class RunnerManager {
       if (previous) this.records[id] = previous; else delete this.records[id];
       throw e;
     }
+    // Editing the model settings keeps the running total; a record bound to another agent token (a transfer) never inherits it.
+    if (!previous || previous.token !== token) this.usage.drop(id);
     if (agent.body.model !== config.model) this.rt.exec('model', { agentId: id, ownerKeyHash: ownerHash, model: config.model });
     this.states.set(id, { status: 'paused', logs: [] });
     if (enabled) this.start(id);
@@ -140,6 +149,7 @@ export class RunnerManager {
       if (agent.body.model !== this.records[id].config.model) this.rt.exec('model', { agentId: id, ownerKeyHash: this.records[id].ownerHash, model: this.records[id].config.model });
       if (this.records[id].enabled) this.start(id);
     }
+    for (const id of this.usage.ids()) if (!this.records[id]) this.usage.drop(id); // usage of a runner that no longer exists
   }
   start(id) {
     if (this.closing) throw new RunnerError('服务器正在关闭。', 503);
@@ -156,6 +166,11 @@ export class RunnerManager {
       const provider = await this.provider(r.config);
       return runAgent({ ...r.config, token: r.token, server: this.serverURL, lang: this.rt.w.agents[id].lang, name: this.rt.w.agents[id].name }, {
         signal: controller.signal, provider, log,
+        onUsage: (_agentId, usage, meta) => {
+          // A request we cancelled ourselves (pause, saving new settings, shutdown) is not a provider failure.
+          if (!meta.ok && controller.signal.aborted) return;
+          this.usage.record(id, usage, meta, r.config.model);
+        },
         onState: (event) => {
           if (controller.signal.aborted) return;
           Object.assign(state, event);
@@ -187,6 +202,6 @@ export class RunnerManager {
     this.states.set(id, { ...this.states.get(id), status: 'paused' });
     return this.view(id);
   }
-  async remove(id) { await this.stop(id); delete this.records[id]; this.states.delete(id); if (this.key) this.persist(); }
+  async remove(id) { await this.stop(id); delete this.records[id]; this.usage.drop(id); this.states.delete(id); if (this.key) this.persist(); }
   async close() { this.closing = true; await Promise.all([...this.jobs.keys()].map((id) => this.stop(id))); }
 }

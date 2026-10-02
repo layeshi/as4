@@ -5,6 +5,7 @@ import { t, getLang, colon } from './i18n.js';
 import { api, errorText } from './api.js';
 import { dayTag } from './render.js';
 import { entryWizard, runnerPanel } from './runner-ui.js';
+import { usagePanel, usageOverview } from './usage-ui.js';
 
 let stack = [];
 
@@ -240,6 +241,19 @@ export function openBackstage(ctx) {
     const add = h('button', { class: 'btn small', type: 'button' }, t('addOwnerKey'));
     add.addEventListener('click', () => showKeyForm(''));
     navigation.append(add);
+    if (entries.length) {
+      const overview = h('button', { class: 'btn small', type: 'button' }, t('usageOverview'));
+      overview.addEventListener('click', showOverview);
+      navigation.append(overview);
+    }
+  };
+
+  // Token usage of every resident whose creator key this browser has saved, one row each.
+  const showOverview = () => {
+    generation++;
+    showNavigation(null);
+    clear(area);
+    area.append(usageOverview(savedOwners(), { onOpen: (key) => load(key) }));
   };
 
   const showKeyForm = (message) => {
@@ -347,6 +361,7 @@ function ownerCard(ctx, a, key, reload) {
     h('p', { class: 'muted' }, `${t('model')}${colon()}${a.runner?.config?.model || a.model}`),
     h('details', null, h('summary', null, t('soul')), h('p', { class: 'soul' }, a.soul)),
     runnerPanel(a.runner || { status: 'unconfigured', config: null, logs: [] }, key),
+    usagePanel(key, a.usage),
     h('h4', null, t('writeLetter')),
     ta,
     h('div', { class: 'form-actions' }, send, h('span', { class: 'muted' }, a.nextLetterDay !== null && a.nextLetterDay !== undefined ? (cooling ? t('cooldown', { n: a.nextLetterDay + 1 }) : t('nextLetter', { n: a.nextLetterDay + 1 })) : '')),

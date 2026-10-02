@@ -685,7 +685,39 @@ figcaption { font-size: 12px; color: var(--muted); text-align: center; }
 .runner-waiting, .runner-thinking { color: var(--accent); }
 .runner-error { color: var(--bad); }
 .runner-panel .form-actions { flex-wrap: wrap; }
+/* 幕后的 token 用量：数字块、近 14 日柱状图（输入在下、输出在上）、跨居民总览。只用类名，不写内联样式（CSP）。 */
+.usage-panel { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; padding: 14px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; }
+.usage-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.usage-head h4 { margin: 0; }
+.usage-body, .usage-content { display: flex; flex-direction: column; gap: 10px; }
+.usage-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.usage-tile { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line-soft); border-radius: 6px; min-width: 0; }
+.usage-label { color: var(--muted); font-size: 12px; }
+.usage-big { font-size: 20px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.usage-sub { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.usage-sub .nw { white-space: nowrap; }
+.usage-chart-title { margin: 4px 0 0; font-size: 13px; color: var(--muted); font-weight: normal; }
+.usage-chart { width: 100%; height: auto; }
+.usage-chart .grid { stroke: var(--line-soft); stroke-width: 1; }
+.usage-chart .axis { fill: var(--muted); font-size: 10px; }
+.usage-chart .hit { fill: transparent; }
+.usage-chart .in { fill: var(--c0); }
+.usage-chart .out { fill: var(--c2); }
+.usage-chart .usage-bar:hover .hit { fill: var(--ai-bg); }
+.usage-legend { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; }
+.usage-legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.usage-legend .swatch.in { background: var(--c0); }
+.usage-legend .swatch.out { background: var(--c2); margin-left: 8px; }
+.usage-recent { font-size: 13px; font-variant-numeric: tabular-nums; }
+.usage-note { margin: 0; font-size: 12px; }
+.usage-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.usage-table .usage-sub { white-space: nowrap; overflow-wrap: normal; }
+.usage-table .btn { white-space: nowrap; }
+.usage-table th:nth-child(2), .usage-table th:nth-child(3), .usage-table th:nth-child(4) { text-align: right; }
+.usage-sum td { font-weight: 600; border-top: 1px solid var(--line); }
 @media (max-width: 560px) {
+  .usage-table .last { display: none; } /* 窄屏只留数字：最近调用的时间在居民自己的面板里看得到 */
+  .usage-table th, .usage-table td { padding-left: 4px; padding-right: 4px; }
   .model-fields { grid-template-columns: minmax(0, 1fr); }
   .entry-progress li { flex-direction: column; gap: 6px; text-align: center; font-size: 12px; }
   .soul-template { flex-wrap: wrap; }

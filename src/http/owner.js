@@ -34,6 +34,7 @@ export async function getOwner(req, res, ctx, url) {
       today: engine.clockDay(rt.w),
       fosterable: a.fosterable,
       runner: ctx.runners.view(id),
+      usage: ctx.runners.usageView(id),
     }],
   });
 }

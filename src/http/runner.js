@@ -20,6 +20,13 @@ export const runnerRoutes = [
     if (!id) return sendError(res, langOf(url.searchParams), 'unauthorized');
     sendJson(res, 200, ctx.runners.view(id));
   }],
+  // Token usage of the resident this owner key belongs to. Only the server-driven (hosted) runner can be metered:
+  // `tracked: false` means the server never sees this resident's model calls.
+  ['GET', '/api/owner/usage', async (req, res, ctx, url) => {
+    const id = ctx.tokens.ownerFor(ctx.rt.w, bearer(req));
+    if (!id) return sendError(res, langOf(url.searchParams), 'unauthorized');
+    sendJson(res, 200, { agentId: id, name: ctx.rt.w.agents[id].name, ...ctx.runners.usageView(id) });
+  }],
   ['POST', '/api/owner/runner', async (req, res, ctx, url) => {
     const lang = langOf(url.searchParams), id = ctx.tokens.ownerFor(ctx.rt.w, bearer(req));
     if (!id) return sendError(res, lang, 'unauthorized');
