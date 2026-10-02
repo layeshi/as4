@@ -2,6 +2,8 @@
 // 只用 Node 内置模块。所有 JSON 响应带 X-Houren-Protocol（第一纪的城为 1，第二纪的城为 2）；请求体上限 64 KB。
 
 import http from 'node:http';
+import { AccountStore } from '../accounts/store.js';
+import { accountRoutes, accountLimits } from './accounts.js';
 import { RunnerManager } from '../runner/manager.js';
 import { ShellManager } from '../shells/manager.js';
 import { runnerRoutes } from './runner.js';
@@ -34,7 +36,7 @@ const MIME = {
 /** index.html 的内容安全策略：界面脚本只能通过 CSSOM / classList / SVG 属性设置样式（SPEC §13） */
 export const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'";
 
-const ROUTES = [...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...runnerRoutes];
+const ROUTES = [...accountRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...runnerRoutes];
 
 function match(method, pathname) {
   for (const [m, pattern, handler] of ROUTES) {
@@ -102,6 +104,8 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console } 
   const ctx = {
     rt,
     cfg,
+    accounts: new AccountStore(cfg.dataDir),
+    accountLimits: accountLimits(),
     runners: new RunnerManager(rt, cfg),
     // 躯壳的运行时（SPEC-E2 §13）：第二纪的城且配置了 SHELLS_FILE 时才有；配置有问题会在这里抛出，服务器启动失败并说明原因
     shells: rt.engine.physics === 2 && cfg.shellsFile ? new ShellManager(rt, cfg, { logger }) : null,

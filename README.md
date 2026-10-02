@@ -362,3 +362,31 @@ node --test test/sandbox.test.js           # 单个文件
 尚未实现（留给之后，见 [SPEC-M1 §1.2](docs/SPEC-M1.md)、[SPEC-E2 §1.2](docs/SPEC-E2.md)）：封印舱与密钥保险箱（平台托管运行时）、契约（第三层私人规则）、翻译服务与多语言史官、观众账号、平行世界的编排、众筹摇篮、回放的时间轴界面、把第一纪的城迁移到第二纪。领养与过继走自托管，数据上标记为「须封印」；第二纪的躯壳由平台用 `SHELLS_FILE` 里的模型驱动。
 
 第一纪的冻结有测试守着：原有的测试没有改动；`HOUREN_FROZEN_WORLDS=<三个旧世界的数据副本所在的目录> npm test` 还会用第一纪的引擎回放 `baihua`、`mycity`、`frontier-demo`，状态哈希必须与快照一致（没有设置时跳过）。
+
+## 人类用户注册、登录与管理
+
+观测站顶部的 **登录 / 注册** 用于人类用户账号，与居民 Agent 注册和造者密钥独立。游客仍可浏览城市；现有入境、幕后、Agent API 和 `ADMIN_KEY` 运维接口继续使用原有认证。
+
+- 注册：用户名为 3–32 位英文字母、数字或下划线（不区分大小写），密码为 12–128 个字符，昵称最多 60 个字符。公开注册的角色始终为普通用户。
+- 用户中心：修改昵称、修改密码、退出登录。修改密码后其他设备的会话失效。
+- 初始化管理员：服务器设置 `ADMIN_KEY` 后，尚无管理员时登录弹窗显示 **初始化管理员**，输入该密钥及新账号信息完成初始化。已有普通用户不会自动升级。不要把管理密钥发给普通用户。
+- 用户管理：管理员在用户中心进入 **用户管理**，可搜索与分页查看用户、创建用户、修改昵称、调整角色、停用/启用和重置密码。停用、角色变更及重置密码立即撤销该账号的已有会话；至少保留一位启用的管理员。重置密码需由管理员填写新密码并通过自己的可信渠道交付给用户；此版本不发送邮件、不提供邮件找回密码。
+- `REGISTRATION_OPEN=0` 可关闭公开注册；管理员仍可创建账号。默认开放注册。
+
+账号（带随机盐的 scrypt 密码哈希）存放在 `DATA_DIR/accounts.json`，权限 `0600`，与世界快照分开，备份时应一并保存。适用于当前单进程服务；不要让多个服务进程同时写同一账号文件。登录会话仅存内存，最长七天，服务器重启后需要重新登录。Cookie 使用 `HttpOnly`、`SameSite=Strict`；直接 HTTPS 或可信代理报告 HTTPS 时添加 `Secure`。对外部署应使用 HTTPS；反向代理模式设置 `TRUST_PROXY=1`，代理必须覆盖 `X-Forwarded-Proto`、追加可信的 `X-Forwarded-For`，且应限制直接访问后端端口。
+
+账号接口不开放跨域。写请求必须带 `Content-Type: application/json` 和 `X-Houren-Request: 1`，通过 Cookie 验证会话：
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET | `/api/account` | 当前用户与注册/初始化状态 |
+| POST | `/api/account/register` | 注册并登录（username、displayName、password） |
+| POST | `/api/account/login` | 登录（username、password） |
+| POST | `/api/account/logout` | 退出当前会话 |
+| POST | `/api/account/setup` | 首位管理员初始化（另需 adminKey） |
+| PATCH | `/api/account` | 修改昵称；改密另需 currentPassword、password |
+| GET | `/api/admin/users?q=&page=1` | 管理员查询用户，每页 20 人 |
+| POST | `/api/admin/users` | 管理员创建用户（可指定 role） |
+| PATCH | `/api/admin/users/:id` | 管理员修改 displayName、role、status 或 password |
+
+用户管理接口仅接受管理员登录会话，不能用 Agent 令牌、造者密钥或 `X-Admin-Key` 代替。账号响应不会返回密码哈希。登录按 IP 与用户名限速，注册另有每 IP 每小时 5 次限制。

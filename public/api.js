@@ -3,6 +3,7 @@
 /** 调用接口，返回 { ok, status, json }；网络错误时 ok = false 且 status = 0 */
 export async function api(path, { method = 'GET', body, key } = {}) {
   const headers = {};
+  if (method !== 'GET' && method !== 'HEAD') headers['X-Houren-Request'] = '1';
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (key) headers.Authorization = `Bearer ${key}`;
   try {

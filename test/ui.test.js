@@ -301,7 +301,7 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
       const path = p.replace(/\/$/, '');
       if (path === '/api/public/agents' || path === '/api/public/docs') continue; // 带 id 的接口，下面单独试
       if (path === '/api/public/stream') continue; // SSE，长连接
-      const method = ['/api/port/register', '/api/port/adopt', '/api/port/foster', '/api/owner/letter', '/api/owner/release', '/api/public/weather/vote'].includes(path) ? 'POST' : 'GET';
+      const method = ['/api/account/logout', '/api/port/register', '/api/port/adopt', '/api/port/foster', '/api/owner/letter', '/api/owner/release', '/api/public/weather/vote'].includes(path) ? 'POST' : 'GET';
       const r = await env.call(path, method === 'POST' ? { method, body: {} } : {});
       assert.notEqual(r.status, 404, `${method} ${path} 不存在`);
     }

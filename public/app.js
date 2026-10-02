@@ -2,6 +2,7 @@
 // 首屏用 GET /api/public/state 取全量，之后用 SSE：事件增量追加；tick 事件携带精简状态，
 // 其余数据在相关事件到达后按需重新拉取（防抖 1 秒）。所有 agent 文本都用 textContent 渲染。
 
+import { initAccounts, refreshAccount } from './accounts.js';
 import { h, clear, debounce, append } from './dom.js';
 import { t, getLang, setLang, ADMIN_OPS, colon } from './i18n.js';
 import { api, subscribe } from './api.js';
@@ -109,6 +110,7 @@ async function boot() {
   for (const id of ['city', 'clock', 'countdown', 'pop', 'treasury', 'well', 'weather', 'conn', 'btn-enter', 'btn-back', 'btn-lang', 'map', 'tabs', 'panel', 'banner', 'color-mode', 'color-label', 'foot', 'drawer', 'status', 'map-zoom-in', 'map-zoom-out', 'map-fit', 'map-legend']) {
     els[id] = document.getElementById(id);
   }
+  initAccounts(document.getElementById('btn-account'));
   wireStatic();
   applyLabels();
   const first = location.hash.slice(1);
@@ -190,6 +192,7 @@ function wireStatic() {
 
 /** 静态文字（按钮、页脚、着色选项） */
 function applyLabels() {
+  refreshAccount();
   document.documentElement.lang = getLang();
   els['btn-enter'].textContent = t('enter');
   els['btn-back'].textContent = t('backstage');

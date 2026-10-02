@@ -781,3 +781,21 @@ ul.reading { list-style: none; padding-left: 0; }
 .lineage .lin-node.st-dead circle, .lineage .lin-node.st-retired circle { stroke: var(--muted); stroke-dasharray: 2 2; }
 .lineage .lin-node text { fill: var(--text); font-size: 11px; }
 .lineage .lin-node:hover circle, .lineage .lin-node:focus-visible circle { stroke-width: 3; }
+
+/* Human account forms use the observatory's existing paper-and-ink palette. */
+.account-summary { border-bottom: 1px solid var(--line, #ddd); margin-bottom: 1rem; padding-bottom: .75rem; }
+.account-form { margin-bottom: 1.5rem; }
+.account-message { min-height: 1.5em; margin: .5rem 0; }
+.account-toolbar, .account-search, .account-row { display: flex; align-items: center; gap: .75rem; }
+.account-toolbar, .account-row { justify-content: space-between; }
+.account-toolbar { flex-wrap: wrap; margin-bottom: 1rem; }
+.account-search { flex: 1; }
+.account-search input { min-width: 0; width: 100%; }
+.account-row p { margin: .3rem 0; }
+.account-row > div { min-width: 0; overflow-wrap: anywhere; }
+.account-list { display: grid; gap: .65rem; margin-bottom: 1rem; }
+.account-modal .subtabs { flex-wrap: wrap; }
+#btn-account { max-width: 18rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 540px) { .account-toolbar { align-items: stretch; flex-direction: column; } }
+.account-search .btn { flex-shrink: 0; white-space: nowrap; }
+.account-search input { padding: .55rem .65rem; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-2); color: var(--text); font: inherit; }
