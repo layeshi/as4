@@ -12,11 +12,13 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { configure, configureWeather, P } from '../params.js';
-import { createWorld, agentList, isAlive } from '../world.js';
+import { createWorld, agentList, isAlive, premised } from '../world.js';
 import { applyCommand } from '../engine/index.js';
 import { checkConservation } from '../engine/ledger.js';
 import { createStream, int } from '../../rng.js';
-import { ACTION_ORDER } from '../lore/actions.js';
+import { stateHash } from '../../store.js';
+import { weightOf } from '../engine/lifecycle.js';
+import { ACTION_ORDER, actionTable } from '../lore/actions.js';
 import { configureSandbox } from './brains.js';
 import { TITLE_KEYS } from './templates.js';
 
@@ -50,7 +52,7 @@ export function opsIn(rules, into = new Set()) {
  * 跑一次沙盘推演，返回 { world, report }。
  * opts：{ days, agents, seed, weather, params, scenario, letterEveryDays }；onDay(w, d) 与 onEvent(e) 是观测用的回调。
  */
-export function runSandbox({ days = 720, agents = 24, seed = 1, weather, params, scenario = 'default', letterEveryDays = 25, onDay, onEvent } = {}) {
+export function runSandbox({ days = 720, agents = 24, seed = 1, weather, params, scenario = 'default', letterEveryDays = 25, onDay, onEvent, premise = 0, shellSlots = P.shellSlots } = {}) {
   if (!SCENARIOS.includes(scenario)) throw new Error(`unknown scenario: ${scenario}`);
   configureSandbox({ scenario });
   if (params) configure(params);
@@ -59,7 +61,9 @@ export function runSandbox({ days = 720, agents = 24, seed = 1, weather, params,
   else if (weather && weather.startsWith('schedule:')) configureWeather({ mode: 'schedule', schedule: JSON.parse(readFileSync(weather.slice(9), 'utf8')) });
   else configureWeather({ mode: weather === 'vote' ? 'vote' : 'random' });
 
-  const w = createWorld({ id: 'sandbox', seed: String(seed), codeVersion: 'sandbox', sandboxAdoption: true, sandboxShells: true });
+  if (premise === 1 && agents > shellSlots) throw new Error('设定 1 的世界里，先民不能多于躯壳');
+  const w = createWorld({ id: 'sandbox', seed: String(seed), codeVersion: 'sandbox', sandboxAdoption: true, sandboxShells: true, premise, shellSlots });
+  const everDormant = new Set();
   Object.defineProperty(w, '$sandboxStats', { value: { actions: {} }, writable: true, enumerable: false, configurable: true });
   const seeded = applyCommand(w, { type: 'admin', payload: { op: 'seed_sandbox', args: { count: agents } } });
   if (!seeded.result.ok) throw new Error(`seed_sandbox failed: ${JSON.stringify(seeded.result)}`);
@@ -75,6 +79,7 @@ export function runSandbox({ days = 720, agents = 24, seed = 1, weather, params,
     const r = applyCommand(w, { type: 'tick' });
     if (!r.result.ok) throw new Error(`tick failed: ${JSON.stringify(r.result)}`);
     for (const e of r.events) {
+      if (premised(w) && e.type === 'dormant') everDormant.add(e.agent);
       if (onEvent) onEvent(e);
       switch (e.type) {
         case 'built': events.built.push({ day: e.day, ...e.data }); break;
@@ -121,6 +126,16 @@ export function runSandbox({ days = 720, agents = 24, seed = 1, weather, params,
   const eachRan = coveredEach(w, lawOps);
   if (eachRan) ops.each = (ops.each || 0) + eachRan;
   const report = buildReport(w, events, ops, { days, agents, seed, scenario, elapsedMs: Date.now() - t0, conservationFailure });
+  if (premised(w)) {
+    const cohort = (people, sleeping) => {
+      const selected = people.filter((a) => everDormant.has(a.id) === sleeping);
+      return { count: selected.length, mean: selected.length ? Math.floor(selected.reduce((n, a) => n + weightOf(a).memories, 0) / selected.length) : 0 };
+    };
+    report.p1 = { stateHash: stateHash(w),
+      memoryByDormancy: { everDormant: cohort(agentList(w), true), neverDormant: cohort(agentList(w), false) },
+      livingMemoryByDormancy: { everDormant: cohort(agentList(w).filter(isAlive), true), neverDormant: cohort(agentList(w).filter(isAlive), false) },
+    };
+  }
   return { world: w, report };
 }
 
@@ -160,7 +175,7 @@ export function humanSalvage(w) {
 function buildReport(w, events, ops, meta) {
   const alive = agentList(w).filter(isAlive);
   const usage = {};
-  for (const type of ACTION_ORDER) {
+  for (const type of actionTable(w.premise || 0).ORDER) {
     const s = (w.$sandboxStats && w.$sandboxStats.actions[type]) || { ok: 0, fail: 0, errors: {} };
     usage[type] = { ok: s.ok, fail: s.fail, errors: s.errors || {}, ...(s.samples ? { samples: s.samples } : {}) };
   }
@@ -298,6 +313,8 @@ function main() {
     days: o.days ? Number(o.days) : 720,
     agents: o.agents ? Number(o.agents) : 24,
     seed: o.seed ?? '1',
+    premise: o.premise === undefined ? 0 : Number(o.premise),
+    shellSlots: o['shell-slots'] === undefined ? P.shellSlots : Number(o['shell-slots']),
     weather: o.weather,
     scenario: o.scenario || 'default',
     params: o.params ? JSON.parse(readFileSync(o.params, 'utf8')) : undefined,

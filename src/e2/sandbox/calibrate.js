@@ -92,6 +92,7 @@ export function summarize(report, { seed, scenario, agents }) {
     series: { alive, treasury, well },
     elapsedMs: report.meta.elapsedMs,
     conservationFailure: report.meta.conservationFailure,
+    ...(report.p1 ? { premise: 1, stateHash: report.p1.stateHash, memoryByDormancy: report.p1.memoryByDormancy, livingMemoryByDormancy: report.p1.livingMemoryByDormancy } : {}),
   };
 }
 
@@ -116,6 +117,18 @@ export function shockRecoveries(run) {
 
 /** 返回 [{ name, target, values: [每个种子的值], value: 中位数, pass }]；pass 为 null 的是信息项（只报告，不判定） */
 export function evaluate(scenario, runs) {
+  if (runs.some((r) => r.premise === 1)) {
+    const item = (name, target, values, test) => ({ name, target, values, value: median(values), pass: test ? values.every(test) : null });
+    const out = [
+      item('账本守恒', '所有种子无失败', runs.map((r) => r.conservationFailure === null ? 1 : 0), (x) => x === 1),
+      item('同种子两次状态哈希一致', '所有种子一致', runs.map((r) => r.deterministic ? 1 : 0), (x) => x === 1),
+    ];
+    if (scenario === 'default') out.unshift(item('720 日内最低在世人口', '每个种子 ≥ 8', runs.map((r) => r.minAlive), (x) => x >= 8));
+    if (scenario === 'laissez') {
+      out.unshift(item('沉睡过者平均记忆分量（全部已创建居民）', '只报告', runs.map((r) => r.memoryByDormancy.everDormant.mean)), item('未沉睡者平均记忆分量（全部已创建居民）', '只报告', runs.map((r) => r.memoryByDormancy.neverDormant.mean)));
+    }
+    return out;
+  }
   const per = (f) => runs.map(f);
   // 判定用的是精确的中位数；记录时保留两位小数（59.5 不能被四舍五入成 60 而看起来达标）
   const check = (name, target, values, ok) => {
@@ -184,9 +197,9 @@ async function pool(items, limit, fn) {
  * 跑一组标定。opts：{ seeds, days, agents, scenarios, params, label }
  * 返回 { label, opts, runs: { scenario: [summary] }, verdicts: { scenario: [criterion] } }
  */
-export async function calibrate({ seeds = [1, 2, 3, 4, 5], days = 720, agents = 24, scenarios = SCENARIOS, params, label = 'baseline' } = {}) {
+export async function calibrate({ seeds = [1, 2, 3, 4, 5], days = 720, agents = 24, scenarios = SCENARIOS, params, label = 'baseline', premise = 0, shellSlots } = {}) {
   const jobs = [];
-  for (const scenario of scenarios) for (const seed of seeds) jobs.push({ scenario, seed, days, agents, params });
+  for (const scenario of scenarios) for (const seed of seeds) jobs.push({ scenario, seed, days, agents, params, premise, shellSlots });
   const done = await pool(jobs, Math.max(1, availableParallelism() - 1), runInWorker);
   const runs = {};
   for (const r of done) (runs[r.scenario] ||= []).push(r);
@@ -195,7 +208,7 @@ export async function calibrate({ seeds = [1, 2, 3, 4, 5], days = 720, agents = 
     runs[scenario].sort((a, b) => a.seed - b.seed);
     verdicts[scenario] = evaluate(scenario, runs[scenario]);
   }
-  return { label, opts: { seeds, days, agents, scenarios, params: params || null }, runs, verdicts };
+  return { label, opts: { seeds, days, agents, scenarios, params: params || null, ...(premise === 1 ? { premise, shellSlots } : {}) }, runs, verdicts };
 }
 
 // ── 输出 ───────────────────────────────────────────────────────
@@ -252,6 +265,8 @@ async function main() {
     scenarios: o.scenarios ? o.scenarios.split(',') : undefined,
     params: o.params ? JSON.parse(readFileSync(o.params, 'utf8')) : undefined,
     label: o.label,
+    premise: o.premise === undefined ? 0 : Number(o.premise),
+    shellSlots: o['shell-slots'] === undefined ? undefined : Number(o['shell-slots']),
   });
   if (o.out) {
     mkdirSync(dirname(o.out), { recursive: true });
@@ -275,9 +290,14 @@ async function main() {
 // ── worker 入口 ────────────────────────────────────────────────
 
 if (!isMainThread && workerData && workerData.scenario) {
-  const { scenario, seed, days, agents, params } = workerData;
-  const { report } = runSandbox({ scenario, seed, days, agents, params });
-  parentPort.postMessage(summarize(report, { seed, scenario, agents }));
+  const { scenario, seed, days, agents, params, premise = 0, shellSlots } = workerData;
+  const { report } = runSandbox({ scenario, seed, days, agents, params, premise, shellSlots });
+  const summary = summarize(report, { seed, scenario, agents });
+  if (premise === 1) {
+    const again = runSandbox({ scenario, seed, days, agents, params, premise, shellSlots });
+    summary.deterministic = report.p1.stateHash === again.report.p1.stateHash;
+  }
+  parentPort.postMessage(summary);
 } else if (isMainThread && process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((e) => {
     console.error(e);

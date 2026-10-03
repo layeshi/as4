@@ -32,6 +32,7 @@ export function goldenSamples() {
 }
 export function sandboxBaseline() {
   const { report } = runSandbox({ days: 120, agents: 10, seed: 1 });
+  // TODO(spec): Q34 — normalize only wall-clock duration for the report comparison.
   report.meta.elapsedMs = 0; // runtime duration is not a deterministic simulation output
   return stateHash(report);
 }

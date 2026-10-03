@@ -19,8 +19,8 @@
 
 import { P, MODULE_DEFS } from '../params.js';
 import { next, int } from '../../rng.js';
-import { agentList, isNameTaken, idNum } from '../world.js';
-import { emit, bad } from '../engine/core.js';
+import { agentList, isNameTaken, idNum, premised } from '../world.js';
+import { emit, bad, textWeight } from '../engine/core.js';
 import { buildPerception } from '../engine/perception.js';
 import { actCommand } from '../engine/actions.js';
 import { bornFromSoul, refundSponsors } from '../engine/souls.js';
@@ -147,7 +147,7 @@ export function seedSandboxFounders(w, n) {
       let name = NAMES[lang][used[lang]++ % NAMES[lang].length];
       let suffix = 1;
       while (isNameTaken(w, name)) name = `${NAMES[lang][(used[lang] + suffix) % NAMES[lang].length]}${suffix++}`;
-      const f = { day: FOUNDER_DAYS[b], name, bio: '', soul: founderSoul(name, temperaments[i], lang === 'zh' ? 'zh' : 'en'), lang, temperament: temperaments[i] };
+      const f = { day: premised(w) ? 0 : FOUNDER_DAYS[b], name, bio: '', soul: founderSoul(name, temperaments[i], lang === 'zh' ? 'zh' : 'en'), lang, temperament: temperaments[i] };
       w.founders.push(f);
       added.push(f);
     }
@@ -160,6 +160,7 @@ export function seedSandboxFounders(w, n) {
 EXTRA_ADMIN_OPS.seed_sandbox = (w, args) => {
   const count = args.count;
   if (!Number.isInteger(count) || count < 0 || count > 200) return bad('invalid_request', { field: 'count' });
+  if (premised(w) && count + w.founders.length + w.shells.bodies.filter((b) => b.occupant !== null).length > w.shells.slots) return bad('invalid_request', { field: 'count' });
   const added = seedSandboxFounders(w, count);
   emit(w, 'admin', { data: { op: 'seed_sandbox', count: added.length } });
   return { ok: true, count: added.length };
@@ -259,6 +260,15 @@ export function contextOf(w, a, p, r) {
 export function decide(w, a, p, r, count) {
   const you = p.you;
   const ctx = contextOf(w, a, p, r);
+  if (premised(w)) {
+    if (you.memories.length >= 3) {
+      const m = r.pick(you.memories);
+      if (you.energy >= Math.ceil(textWeight(m.text) / P.trainCostDivisor) + 30 && r.chance(0.02)) return [{ type: 'internalize', memory: m.index }];
+    }
+    const peers = p.here.present;
+    if (you.memories.length && peers.length && r.chance(0.02)) return [{ type: 'impart', to: r.pick(peers).id, memory: r.pick(you.memories).index }];
+    if (you.memoryOffers.length && you.memories.length < P.memorySlots && r.chance(0.5)) return [{ type: 'remember', gift: you.memoryOffers[0].id }];
+  }
   const out = [];
   // 收件箱只递送一次：管事收到入会申请就当场答复（不然多半就错过了）
   const request = p.inbox.find((i) => i.kind === 'group' && i.event === 'request');

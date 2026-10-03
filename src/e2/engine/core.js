@@ -7,6 +7,7 @@
 import { P } from '../params.js';
 import { nextSeq, clockDay } from '../world.js';
 import { checkText, textWeight } from '../../text.js';
+export { textWeight } from '../../text.js';
 import { screen } from '../../moderation.js';
 
 /**
