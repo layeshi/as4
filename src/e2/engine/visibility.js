@@ -11,7 +11,7 @@ import { HUMAN_DEFS, WILD_ZONE_IDS } from '../map/index.js';
 import { lawReading, authorView, isSuspended, isProcedureLaw, persistentCount } from './laws.js';
 import { renderRules, renderProcedureClass } from '../rules/render.js';
 import { isFunctioning, wallInscriptions, ownerView } from './places.js';
-import { visibleOmens } from './weather.js';
+import { visibleOmens, weatherCodesFor } from './weather.js';
 import { openProjectsAt } from './projects.js';
 import { livingShells, shellsFree, queuePosition, bodyList } from './shells.js';
 import { HUMAN_PROCEDURE } from '../lore/humanlaws.js';
@@ -327,6 +327,7 @@ function wildsSummary(w) {
 export function publicWeather(w) {
   const day = clockDay(w);
   return {
+    types: weatherCodesFor(w).filter((c) => c !== 'calm'),
     active: w.weather.active.map((x) => ({ type: x.type, startDay: x.startDay, endDay: x.endDay, daysLeft: x.endDay - day + 1 })),
     history: w.weather.history.map((h) => ({ ...h, votes: { ...h.votes } })),
     votes: { month: w.weather.votes.month, tallies: { ...w.weather.votes.tallies } },

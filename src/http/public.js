@@ -3,6 +3,7 @@
 // 私语、独白、记忆在一个世界月之后才出现。
 
 import { randomBytes } from 'node:crypto';
+import { weatherTypes } from '../e2/facade.js';
 import { WEATHER_CODES } from '../params.js';
 import { normLang } from '../lore/index.js';
 import { clientIp, langOf, parseCookies, readJson, sendError, sendEngineError, sendJson, sha256hex } from './util.js';
@@ -199,7 +200,7 @@ export async function postWeatherVote(req, res, ctx, url) {
   const parsed = await readJson(req);
   if (!parsed.ok) return sendError(res, lang, parsed.code);
   // 先校验类型：格式错误是 400，即使这位投票者本月已经投过
-  if (typeof parsed.value.type !== 'string' || !WEATHER_CODES.includes(parsed.value.type)) return sendError(res, lang, 'invalid_request', { field: 'type' });
+  if (typeof parsed.value.type !== 'string' || !(ctx.rt.engine.physics === 2 ? weatherTypes(ctx.rt.w) : WEATHER_CODES).includes(parsed.value.type)) return sendError(res, lang, 'invalid_request', { field: 'type' });
   const headers = {};
   const cookies = parseCookies(req.headers.cookie);
   const hasCookie = /^[0-9a-f]{32}$/.test(cookies.hv || '');

@@ -1,3 +1,7 @@
+import { premised as isPremised } from './world.js';
+import { weatherCodesFor } from './engine/weather.js';
+// TODO(spec): Q32 — preserve premise 0 calm votes; premise 1 HTTP uses public types.
+export const weatherTypes = (w) => isPremised(w) ? weatherCodesFor(w).filter((c) => c !== 'calm') : weatherCodesFor(w);
 // SPEC-E2 §2.1：第二纪引擎 v2 的门面。形状与 src/engine/facade.js（v1）相同。
 //
 // 运行时、HTTP、回放、沙盘命令行只通过门面使用引擎。

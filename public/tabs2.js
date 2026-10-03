@@ -390,7 +390,7 @@ export function renderWeather(ctx, root) {
     for (const [type, n] of entries) tallies.append(h('li', null, `${name(type)} × ${n}`));
   };
   showTallies(W.votes.tallies);
-  const buttons = WEATHER_TYPES.map((type) => {
+  const buttons = (W.types || WEATHER_TYPES).map((type) => {
     const b = h('button', { class: 'btn small', type: 'button', disabled: voted }, name(type));
     b.addEventListener('click', async () => {
       for (const x of buttons) x.disabled = true;

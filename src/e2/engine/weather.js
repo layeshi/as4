@@ -7,13 +7,15 @@
 
 import { P, WEATHER_DEFS, WEATHER_CODES, WEATHER } from '../params.js';
 import { L } from '../lore/index.js';
-import { clockDay, monthOfDay, agentList } from '../world.js';
+import { clockDay, monthOfDay, agentList, premised } from '../world.js';
 import { int, pickWeighted } from '../../rng.js';
 import { emit, pushInbox, bad, HASH_RE } from './core.js';
 import { applyDamage } from './environment.js';
 import { hasModuleAt } from './places.js';
 import { hooks } from './hooks.js';
 
+const P1_CODES = Object.freeze(WEATHER_CODES.filter((c) => c !== 'aurora' && c !== 'migration'));
+export const weatherCodesFor = (w) => premised(w) ? P1_CODES : WEATHER_CODES;
 const DEFAULT_WEIGHTS = WEATHER_CODES.map((c) => [c, WEATHER_DEFS[c].weight]);
 
 // ── 投票（命令 weather_vote） ─────────────────────────────────
@@ -24,7 +26,7 @@ const DEFAULT_WEIGHTS = WEATHER_CODES.map((c) => [c, WEATHER_DEFS[c].weight]);
  */
 export function weatherVote(w, p) {
   if (typeof p.voterHash !== 'string' || !HASH_RE.test(p.voterHash)) return bad('invalid_request', { field: 'voterHash' });
-  if (typeof p.type !== 'string' || !WEATHER_CODES.includes(p.type)) return bad('invalid_request', { field: 'type' });
+  if (typeof p.type !== 'string' || !weatherCodesFor(w).includes(p.type)) return bad('invalid_request', { field: 'type' });
   const v = w.weather.votes;
   if (v.voters.includes(p.voterHash)) return bad('rate_limited', { tallies: { ...v.tallies }, month: v.month });
   v.voters.push(p.voterHash);
@@ -38,9 +40,9 @@ export function weatherVote(w, p) {
 function voteWinner(w) {
   const tallies = w.weather.votes.tallies;
   let best = 0;
-  for (const c of WEATHER_CODES) best = Math.max(best, tallies[c] || 0);
+  for (const c of weatherCodesFor(w)) best = Math.max(best, tallies[c] || 0);
   if (best === 0) return null;
-  const tied = WEATHER_CODES.filter((c) => (tallies[c] || 0) === best);
+  const tied = weatherCodesFor(w).filter((c) => (tallies[c] || 0) === best);
   return tied.length === 1 ? tied[0] : tied[int(w.rng.weather, tied.length)];
 }
 
@@ -50,22 +52,24 @@ function voteWinner(w) {
  */
 export function scheduleMonth(w, month) {
   const rng = w.rng.weather;
+  const weights = premised(w) ? DEFAULT_WEIGHTS.filter(([c]) => weatherCodesFor(w).includes(c)) : DEFAULT_WEIGHTS;
   let type;
   let decidedBy;
   let startDom = null;
   if (WEATHER.mode === 'schedule') {
     const entry = WEATHER.schedule.find((s) => s.month === month);
     type = entry ? entry.type : 'calm';
+    if (premised(w) && !weatherCodesFor(w).includes(type)) type = 'calm';
     startDom = entry ? entry.dayOfMonth : null;
     decidedBy = 'schedule';
   } else if (WEATHER.mode === 'random') {
-    type = pickWeighted(rng, DEFAULT_WEIGHTS);
+    type = pickWeighted(rng, weights);
     decidedBy = 'random';
   } else {
     type = voteWinner(w);
     decidedBy = 'vote';
     if (type === null) {
-      type = pickWeighted(rng, DEFAULT_WEIGHTS);
+      type = pickWeighted(rng, weights);
       decidedBy = 'random';
     }
   }
@@ -86,7 +90,7 @@ export function scheduleMonth(w, month) {
  * month 缺省为当前月；dayOfMonth 缺省为「今天 + lead + 1」；开始日必须在未来（≥ 明天）。
  */
 export function forceWeather(w, { type, month, dayOfMonth, lead }) {
-  if (typeof type !== 'string' || !(type in WEATHER_DEFS) || type === 'calm') return bad('invalid_request', { field: 'type' });
+  if (typeof type !== 'string' || !(type in WEATHER_DEFS) || type === 'calm' || !weatherCodesFor(w).includes(type)) return bad('invalid_request', { field: 'type' });
   const today = clockDay(w);
   const m = month === undefined || month === null ? monthOfDay(today) : month;
   const ld = lead === undefined || lead === null ? 1 : lead;

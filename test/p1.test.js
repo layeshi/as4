@@ -198,3 +198,15 @@ test('P1 T9: mock provider receives rebuilt system after acquired changes; MCP i
   const mcp=createMcp({env:{HOUREN_SERVER:'http://mock.local',HOUREN_TOKEN:'test-mock-only'},fetch:async()=>new Response(JSON.stringify(e2.buildPerception(w,a.id,{ack:false})),{headers:{'content-type':'application/json'}})});
   const r=await mcp.handle({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'houren_rules',arguments:{}}});assert.ok(r.result.content[0].text.includes('【习得】'));assert.ok(!r.result.content[0].text.includes('【你的灵魂】'));
 });
+
+import { configureWeather, P as params2 } from '../src/e2/params.js';
+import { scheduleMonth, weatherCodesFor, weatherVote, forceWeather } from '../src/e2/engine/weather.js';
+test('P1 T10: no dreams, filtered random/scheduled/forced/voted weather; p0 remains unchanged', () => {
+  const w=bareWorld('no-dreams',{premise:1});const a=reg(w,'甲');a.energy=1000;
+  let events=[];for(let i=0;i<30*params2.ticksPerDay;i++)events.push(...e2.applyCommand(w,{type:'tick'}).events);assert.ok(!events.some(e=>e.type==='dream'));assert.ok(!a.inbox.some(e=>e.kind==='dream'));
+  assert.equal(e2.publicWeather(w).types.length,6);assert.equal(e2.publicWeather(bareWorld()).types.length,8);
+  const rng=e2.createWorld({seed:'weather-filter',premise:1});configureWeather({mode:'random'});for(let m=1;m<120;m++){scheduleMonth(rng,m);assert.ok(!['aurora','migration'].includes(rng.weather.scheduled?.type));}
+  for(const type of ['aurora','migration']){assert.equal(weatherVote(w,{voterHash:'a'.repeat(64),type}).error.code,'invalid_request');assert.equal(forceWeather(w,{type}).error.code,'invalid_request');configureWeather({mode:'schedule',schedule:[{month:1,type,dayOfMonth:5}]});scheduleMonth(rng,1);assert.equal(rng.weather.scheduled,null);}
+  configureWeather({mode:'vote'});
+  const old=bareWorld();assert.equal(weatherVote(old,{voterHash:'a'.repeat(64),type:'aurora'}).ok,true);assert.equal(weatherCodesFor(old).length,9);
+});

@@ -111,7 +111,7 @@ export function dailySettlement(w, d) {
       emit(w, 'month', { data: { month } });
       scheduleMonth(w, month); // 13 一个月的第 0 日开始：排期这个月的天象
     }
-    dailyDreams(w, auroraToday); // 14 梦
+    if (!premised(w)) dailyDreams(w, auroraToday); // 14 梦
     recordPlaceHistory(w); // 15（私有簿记）地点完好度的近况，供观测站画趋势
     STEPS.metrics(w, d); // 15–16 指标快照、遗产存活表、史官
     emit(w, 'day', { data: { day: d, output: w.dayLog.output, population: population(w) } });

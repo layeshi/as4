@@ -430,3 +430,9 @@
 - 选项：A 过继时模型确实改变也清空 trained / pending，计 trainedWiped 并通知 trained_lost / B 仅 model 命令清空。
 - 我的建议：A，与已定的「换模型即抹掉」一致，同模型过继保留习得。
 - 状态：按用户授权暂行 A；待设计方确认，代码保留 TODO(spec): Q31。
+
+## Q32 · calm 投票与公开 types 的口径（2026-10-03）
+- 上下文：SPEC-P1 §10 的 weatherCodesFor 保留 calm，weatherVote 允许它；publicWeather.types 却排除 calm，HTTP 又要求按 types 校验。原 premise 0 HTTP 接受 calm，硬约束要求旧行为不变。
+- 选项：A premise 0 HTTP 保留 calm，premise 1 HTTP 按公开 types 排除 calm；引擎命令按 weatherCodesFor 保留 calm / B 所有 HTTP 均拒绝 calm / C 所有 HTTP 均允许 calm。
+- 我的建议：A，同时遵守原世界不变与新 HTTP 按 types 校验两项明确要求；观测站按 types 显示。
+- 状态：按用户授权暂行 A；待设计方确认，门面保留 TODO(spec): Q32。
