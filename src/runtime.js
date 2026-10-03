@@ -43,6 +43,7 @@ export class Runtime {
     let engine;
     if (w) {
       engine = engineOf(w);
+      if (cfg.premise != null && cfg.premise !== (w.premise || 0)) logger.warn?.(`PREMISE 只在创建世界时生效；这座城是设定 ${w.premise || 0}`);
       if (w.codeVersion !== version) logger.warn?.(`世界创建时的代码版本是 ${w.codeVersion}，当前是 ${version}：回放可能不一致`);
       repairCommandLog(cmdFile);
     } else {
@@ -139,6 +140,7 @@ export class Runtime {
  */
 function genesisInputs(cfg) {
   const out = { sandboxShells: cfg.sandboxAgents > 0 };
+  if (cfg.premise != null) out.premise = cfg.premise;
   if (cfg.shellSlots !== null && cfg.shellSlots !== undefined) out.shellSlots = cfg.shellSlots;
   if (cfg.foundersFile) out.founders = JSON.parse(readFileSync(cfg.foundersFile, 'utf8'));
   if (cfg.shellsFile) {

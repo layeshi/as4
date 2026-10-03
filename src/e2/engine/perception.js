@@ -11,7 +11,7 @@
 import { P, SEASON_TABLE, conditionBand, seasonBand, richnessBand } from '../params.js';
 import { travelCosts, lotsNear, HUMAN_DEFS } from '../map/index.js';
 import { L, fmt, normLang, placeDisplayName, placeDescription, cityDisplayName, ACTIONS, ACTION_ORDER } from '../lore/index.js';
-import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum } from '../world.js';
+import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum, premised } from '../world.js';
 import { truncateCp, cpLength } from '../../text.js';
 import { agentCap } from './economy.js';
 import { metabolismOf } from './lifecycle.js';
@@ -72,7 +72,7 @@ export function buildPerception(w, agentId, opts = {}) {
   const day = clockDay(w);
 
   if (a.status === 'dead' || a.status === 'retired') {
-    return { protocol: 2, you: { id: a.id, name: a.name, status: a.status } };
+    return { protocol: 2, ...(premised(w) ? { premise: 1 } : {}), you: { id: a.id, name: a.name, status: a.status } };
   }
 
   const now = {
@@ -83,7 +83,7 @@ export function buildPerception(w, agentId, opts = {}) {
 
   if (a.status === 'dormant') {
     return {
-      protocol: 2, lang, now,
+      protocol: 2, ...(premised(w) ? { premise: 1 } : {}), lang, now,
       you: {
         id: a.id, name: a.name, status: 'dormant', energy: a.energy,
         dormantSinceDay: a.dormantSinceDay, daysUntilDeath: a.dormantSinceDay + P.dormancyGraceDays - day,
@@ -109,7 +109,7 @@ export function buildPerception(w, agentId, opts = {}) {
   if (ack && maxSeq > a.inboxCursor) a.inboxCursor = maxSeq;
 
   return {
-    protocol: 2,
+    protocol: 2, ...(premised(w) ? { premise: 1 } : {}),
     lang,
     now,
     you: youView(w, a, l, lang, day, openOffers, openPacts),

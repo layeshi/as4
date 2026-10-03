@@ -6,7 +6,7 @@
 
 import { P, conditionBand, richnessBand } from '../params.js';
 import { L, placeDisplayName, placeDescription } from '../lore/index.js';
-import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum } from '../world.js';
+import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum, premised } from '../world.js';
 import { HUMAN_DEFS, WILD_ZONE_IDS } from '../map/index.js';
 import { lawReading, authorView, isSuspended, isProcedureLaw, persistentCount } from './laws.js';
 import { renderRules, renderProcedureClass } from '../rules/render.js';
@@ -243,7 +243,7 @@ export function publicState(w, extra = {}) {
   const free = shellsFree(w);
   return {
     world: {
-      id: w.id, protocol: 2, physics: 2, tick: w.clock.tick, day, month: monthOfDay(day), dayOfMonth: dayOfMonthOf(day), tickOfDay: tickOfDay(w),
+      id: w.id, protocol: 2, physics: 2, ...(premised(w) ? { premise: 1 } : {}), tick: w.clock.tick, day, month: monthOfDay(day), dayOfMonth: dayOfMonthOf(day), tickOfDay: tickOfDay(w),
       ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, monthsPerEpoch: P.monthsPerEpoch, epoch: w.epoch,
       paused: w.paused, revealed: w.revealed, map: w.map,
       cityName: w.cityName, humanCityName: { zh: zh.cityName, en: L('en').cityName },

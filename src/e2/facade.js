@@ -2,6 +2,8 @@
 //
 // 运行时、HTTP、回放、沙盘命令行只通过门面使用引擎。
 
+export { premised } from './world.js';
+
 import { P, configure, configureWeather } from './params.js';
 import { createWorld, genesisOpts, agentList, isAlive, clockDay } from './world.js';
 import { applyCommand } from './engine/index.js';

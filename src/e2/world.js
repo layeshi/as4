@@ -14,9 +14,10 @@ import { MAP, LOT_IDS } from './map/index.js';
 import { GENESIS_STEPS } from './genesis.js';
 
 export const WORLD_VERSION = 2;
+export const premised = (w) => (w.premise || 0) >= 1;
 
 /** 当日摘要，供指标与史官使用，日终清空（§4.1 dayLog） */
-export function newDayLog() {
+export function newDayLog(p1 = false) {
   return {
     output: 0, // 源井日产
     ration: 0, // 当日公库的每日分配（遗法 l3 的配给）：每人所得
@@ -70,6 +71,7 @@ export function newDayLog() {
     adoptions: [], // [{ soulId, agentId }]
     successors: [], // [{ from, soulId, name }]
     purposeChanges: 0,
+    ...(p1 ? { p1: { imparts: 0, impartsAccepted: 0, dormancyLosses: 0, forks: [], internalized: 0, trainedEvicted: 0, trainedWiped: 0, backstage: [] } } : {}),
   };
 }
 
@@ -129,12 +131,14 @@ export function validateFounders(list) {
 
 export function createWorld({
   id = 'baihua', seed, codeVersion = '0.0.0', sandboxAdoption = false, map = 'frontier',
-  founders = [], shellModels = [], sandboxShells = false, shellSlots = P.shellSlots,
+  founders = [], shellModels = [], sandboxShells = false, shellSlots = P.shellSlots, premise = 0,
 } = {}) {
   if (typeof seed !== 'string' || seed === '') throw new Error('createWorld: seed is required');
   if (map !== 'frontier') throw new Error(`createWorld: 第二纪只支持 frontier 地图，得到 ${map}`);
   if (!Number.isSafeInteger(shellSlots) || shellSlots < 0) throw new Error(`createWorld: shellSlots must be a non-negative integer, got ${shellSlots}`);
 
+  if (premise !== 0 && premise !== 1) throw new Error('PREMISE 只能是 0 或 1');
+  if (premise === 1 && founders.length > shellSlots) throw new Error('设定 1 的世界里，先民不能多于躯壳');
   const sorted = validateFounders(founders);
   const models = shellModels.slice();
 
@@ -197,6 +201,14 @@ export function createWorld({
     redacted: { events: [] }, // 被遮盖的事件 seq
     genesis: { founders: sorted.map((f) => ({ ...f })), shellModels: models.slice(), shellSlots },
   };
+
+  if (premised({ premise })) {
+    w.premise = 1;
+    w.genesis.premise = 1;
+    w.backstage = { code: null, bodies: null, budget: null };
+    w.shells.bodies = Array.from({ length: shellSlots }, (_, i) => ({ id: `b${i + 1}`, model: models.length ? models[i % models.length] : '', occupant: null, vacantSince: 0, trained: [], pending: [] }));
+    w.dayLog = newDayLog(true);
+  }
 
   seedPlaces(w);
   seedCharter(w);
@@ -305,6 +317,7 @@ export function genesisOpts(snap) {
     founders: g.founders,
     shellModels: g.shellModels,
     sandboxShells: !!snap.sandboxShells,
+    premise: g.premise,
     shellSlots: g.shellSlots, // 早期的快照没有这一项：undefined → 缺省的 P.shellSlots，与当时的创建一致
   };
 }
