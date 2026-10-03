@@ -1,0 +1,4 @@
+interface:
+  display_name: "后人纪运行审计"
+  short_description: "检查服务、模型、游戏规则与经济账本，汇报运行证据并提出修改建议"
+  default_prompt: "使用 $as4-runtime-audit 检查服务器运行状态，分析异常与公库变化，并提出有证据的软件修改建议。"
