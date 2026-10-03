@@ -7,7 +7,7 @@ import { h, clear, debounce, append } from './dom.js';
 import { t, getLang, setLang, ADMIN_OPS, colon } from './i18n.js';
 import { api, subscribe } from './api.js';
 import { createMap } from './map.js';
-import { renderLive, liveAppend, renderChronicle, renderLaws, renderResidents, renderGroups } from './tabs1.js';
+import { renderLive, liveAppend, refreshLive, LIVE_KEEP, renderChronicle, renderLaws, renderResidents, renderGroups } from './tabs1.js';
 import {
   renderEnvironment, renderLibrary, renderCemetery, renderMetrics, renderLegacy, renderWeather, openDoc as setOpenDoc, wallBlock,
 } from './tabs2.js';
@@ -290,20 +290,24 @@ function indexState() {
   placeIndex = new Map(S.state.places.map((p) => [p.id, p]));
 }
 
-/** 分页取回环形缓冲里的事件（最多 8 页 × 500 条） */
-async function loadEvents(since = S.lastSeq) {
-  let cursor = since;
-  for (let page = 0; page < 8; page++) {
-    const r = await api(`/api/public/events?since=${cursor}&limit=500`);
-    if (!r.ok) break;
-    for (const e of r.json.events) ingest(e, { live: false });
-    if (r.json.events.length < 500) {
-      cursor = Math.max(cursor, r.json.last);
-      break;
-    }
-    cursor = r.json.last;
-  }
-  S.lastSeq = Math.max(S.lastSeq, cursor);
+/** 初次进入或重连时只取一次最近窗口，不追赶全部历史。 */
+async function loadEvents() {
+  const before = new Set(S.events);
+  const r = await api(`/api/public/events?recent=1&limit=${LIVE_KEEP}`);
+  if (!r.ok) return;
+  // 请求期间 SSE 仍会到达：保留这些新消息，按公开顺序合并并去重。
+  const arrived = S.events.filter((e) => !before.has(e));
+  for (const e of r.json.events) ingest(e, { live: false });
+  const keys = new Set();
+  const merged = [...r.json.events, ...arrived].filter((e) => {
+    const key = `${e.seq}${e.delayed ? 'd' : ''}`;
+    if (keys.has(key)) return false;
+    keys.add(key);
+    return true;
+  });
+  S.events.splice(0, S.events.length, ...merged.slice(-LIVE_KEEP));
+  S.lastSeq = Math.max(S.lastSeq, r.json.last);
+  refreshLive();
 }
 
 const refreshNow = debounce(async () => {
@@ -317,15 +321,13 @@ function ingest(e, { live }) {
   const key = `${e.seq}${e.delayed ? 'd' : ''}`;
   if (seen.has(key)) return false;
   seen.add(key);
-  if (seen.size > 6000) {
-    for (const k of [...seen].slice(0, 2000)) seen.delete(k);
-  }
+  while (seen.size > LIVE_KEEP * 2) seen.delete(seen.values().next().value);
   if (!e.delayed) S.lastSeq = Math.max(S.lastSeq, e.seq);
   S.events.push(e);
-  if (S.events.length > 2500) S.events.splice(0, S.events.length - 2000);
+  const expired = S.events.length > LIVE_KEEP ? S.events.splice(0, S.events.length - LIVE_KEEP) : [];
   if (e.agent && !NOT_ACTION.has(e.type) && !e.delayed) S.lastAct[e.agent] = { type: e.type, tick: e.tick };
   if (live) {
-    liveAppend(ctx, e);
+    liveAppend(ctx, e, expired);
     if (map) map.onEvent(e);
     if (!QUIET.has(e.type)) refreshNow();
     else S.dirty = true;
@@ -610,4 +612,3 @@ function openPlace(id) {
 }
 
 boot();
-

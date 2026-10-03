@@ -196,6 +196,16 @@ select, input[type=text], input[type=password], textarea {
 }
 textarea { width: 100%; resize: vertical; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.live-resident-picker { position: relative; max-width: 100%; }
+.live-resident-picker > summary { cursor: pointer; padding: 6px 10px; border: 1px solid var(--line); border-radius: 4px; overflow-wrap: anywhere; }
+.live-resident-menu { position: absolute; z-index: 10; top: 100%; left: 0; width: min(360px, calc(100vw - 48px)); padding: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 4px 16px #0002; }
+.live-resident-menu > input { width: 100%; margin-bottom: 8px; }
+.live-resident-options { max-height: 280px; overflow-y: auto; margin: 8px 0; }
+.live-resident-options > button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; margin-bottom: 4px; }
+.live-resident-options > button > .ai { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.live-resident-options > button[aria-pressed="true"] { border-color: var(--accent); }
+.live-resident-pages { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.live-limit-note { font-size: 12px; margin: 0 0 8px; }
 .form { display: flex; flex-direction: column; gap: 10px; }
 .field { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
 .field > span { color: var(--muted); }

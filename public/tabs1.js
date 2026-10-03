@@ -10,14 +10,66 @@ import {
 // ── 实况 ──────────────────────────────────────────────────────
 
 let liveList = null;
-let liveFilter = { place: '', cat: '' };
-const MAX_NODES = 500;
+let refillLive = null;
+let liveFilter = { place: '', cat: '', agent: '' };
+export const LIVE_KEEP = 500;
+const MAX_NODES = 200;
+const RESIDENT_PAGE = 20;
 
-const matches = (e) => (!liveFilter.place || e.place === liveFilter.place) && (!liveFilter.cat || catOf(e) === liveFilter.cat);
+const matches = (e) => (!liveFilter.place || e.place === liveFilter.place) && (!liveFilter.cat || catOf(e) === liveFilter.cat)
+  && (!liveFilter.agent || involvesResident(e, liveFilter.agent));
+
+// 与公开档案的事件范围一致：包括居民发起和参与的事件。
+function involvesResident(e, id) {
+  if (e.agent === id) return true;
+  const d = e.data || {};
+  return ['agentId', 'from', 'to', 'with', 'deceased', 'target', 'setBy', 'signer'].some((k) => d[k] === id)
+    || ['parents', 'authors'].some((k) => Array.isArray(d[k]) && d[k].includes(id));
+}
 
 const catOf = (e) => CAT[e.type] || 'world';
 
 export function renderLive(ctx, root) {
+  const residentPicker = h('details', { class: 'live-resident-picker' });
+  const selected = h('summary');
+  const search = h('input', { type: 'search', maxlength: 100, placeholder: t('searchResident'), 'aria-label': t('searchResident') });
+  const options = h('div', { class: 'live-resident-options' });
+  const count = h('span', { class: 'muted', role: 'status' });
+  let page = 0;
+  const selectResident = (id) => {
+    liveFilter = { ...liveFilter, agent: id };
+    selected.textContent = `${t('filterResident')}${colon()}${id ? `${ctx.agentName(id)} · ${id}` : t('all')}`;
+    residentPicker.open = false;
+    fill();
+    selected.focus();
+  };
+  const prev = h('button', { type: 'button', onClick: () => { page--; fillResidents(); } }, t('livePrev'));
+  const next = h('button', { type: 'button', onClick: () => { page++; fillResidents(); } }, t('liveNext'));
+  const fillResidents = () => {
+    const query = search.value.trim().toLocaleLowerCase();
+    const residents = ctx.S.state.agents.filter((a) => !query || a.name.toLocaleLowerCase().includes(query) || a.id.toLocaleLowerCase().includes(query));
+    const pages = Math.max(1, Math.ceil(residents.length / RESIDENT_PAGE));
+    page = Math.max(0, Math.min(page, pages - 1));
+    clear(options);
+    for (const a of residents.slice(page * RESIDENT_PAGE, (page + 1) * RESIDENT_PAGE)) {
+      options.append(h('button', { type: 'button', 'aria-pressed': String(liveFilter.agent === a.id), onClick: () => selectResident(a.id) },
+        h('span', { class: 'ai' }, a.name), h('span', { class: 'muted' }, a.id), statusChip(a.status)));
+    }
+    if (!residents.length) options.append(emptyNote(t('liveNoResident')));
+    count.textContent = t('liveResidentPage', { n: residents.length, page: page + 1, pages });
+    prev.disabled = page === 0;
+    next.disabled = page === pages - 1;
+  };
+  search.value = '';
+  search.addEventListener('input', () => { page = 0; fillResidents(); });
+  residentPicker.addEventListener('toggle', () => { if (residentPicker.open) fillResidents(); });
+  residentPicker.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { residentPicker.open = false; selected.focus(); }
+  });
+  selected.textContent = `${t('filterResident')}${colon()}${liveFilter.agent ? `${ctx.agentName(liveFilter.agent)} · ${liveFilter.agent}` : t('all')}`;
+  residentPicker.append(selected, h('div', { class: 'live-resident-menu' }, search,
+    h('button', { type: 'button', onClick: () => selectResident('') }, t('liveAllResidents')), options,
+    h('div', { class: 'live-resident-pages' }, prev, count, next)));
   const placeSel = h(
     'select',
     { 'aria-label': t('filterPlace') },
@@ -37,6 +89,7 @@ export function renderLive(ctx, root) {
     for (let i = shown.length - 1; i >= 0; i--) liveList.append(eventRow(ctx, shown[i]));
     if (!liveList.firstChild) liveList.append(h('li', { class: 'empty' }, t('empty')));
   };
+  refillLive = fill;
   placeSel.addEventListener('change', () => {
     liveFilter = { ...liveFilter, place: placeSel.value };
     fill();
@@ -45,13 +98,27 @@ export function renderLive(ctx, root) {
     liveFilter = { ...liveFilter, cat: catSel.value };
     fill();
   });
-  root.append(h('div', { class: 'toolbar' }, placeSel, catSel), liveList);
+  root.append(h('div', { class: 'toolbar' }, residentPicker, placeSel, catSel),
+    h('p', { class: 'muted live-limit-note' }, t('liveLimit', { keep: LIVE_KEEP, shown: MAX_NODES })), liveList);
+  fillResidents();
   fill();
 }
 
-/** 新事件到达（实况页可见时增量追加，最多保留 500 个节点） */
-export function liveAppend(ctx, e) {
-  if (!liveList || !liveList.isConnected || !matches(e)) return;
+/** 断线后补回的最近消息也同步到当前实况。 */
+export function refreshLive() {
+  if (liveList && liveList.isConnected && refillLive) refillLive();
+}
+
+/** 新事件到达（实况页可见时增量追加，最多保留 200 个节点） */
+export function liveAppend(ctx, e, expired = []) {
+  if (!liveList || !liveList.isConnected) return;
+  for (const old of expired) {
+    for (const row of [...liveList.children]) if (Number(row.dataset.seq) === old.seq) row.remove();
+  }
+  if (!matches(e)) {
+    if (!liveList.firstChild) liveList.append(h('li', { class: 'empty' }, t('empty')));
+    return;
+  }
   if (liveList.firstChild && liveList.firstChild.classList.contains('empty')) clear(liveList);
   liveList.prepend(eventRow(ctx, e));
   while (liveList.childNodes.length > MAX_NODES) liveList.lastChild.remove();
@@ -294,4 +361,3 @@ export function renderGroups(ctx, root) {
   );
   root.append(...groups.map(card), ...gone.map(card));
 }
-

@@ -32,18 +32,22 @@ export async function getState(req, res, ctx) {
   res.end(text);
 }
 
-/** GET /api/public/events?since=&limit= */
+/** GET /api/public/events?since=&limit=；recent=1 取最近公开窗口（按公开顺序，忽略 since）。 */
 export async function getEvents(req, res, ctx, url) {
   const lang = langOf(url.searchParams);
   const since = intParam(url, 'since', 0, { min: 0 });
   const limit = intParam(url, 'limit', 200, { min: 1, max: 500 });
+  const recent = intParam(url, 'recent', 0, { min: 0, max: 1 });
   if (Number.isNaN(since)) return sendError(res, lang, 'invalid_request', { field: 'since' });
   if (Number.isNaN(limit)) return sendError(res, lang, 'invalid_request', { field: 'limit' });
+  if (Number.isNaN(recent)) return sendError(res, lang, 'invalid_request', { field: 'recent' });
   const w = ctx.rt.w;
   const { publicEvent } = ctx.rt.engine;
-  const events = ctx.rt.events.since(since, limit).map((e) => publicEvent(w, e, { released: e.released === true })).filter(Boolean);
+  // 直接截取有界环形缓冲的尾部，无需排序、扫描磁盘或多页追赶。
+  const raw = recent ? ctx.rt.events.ring.slice(-limit) : ctx.rt.events.since(since, limit);
+  const events = raw.map((e) => publicEvent(w, e, { released: e.released === true })).filter(Boolean);
   // TODO(spec): Q10 —— 延迟公开的事件释放时 seq 已落在游标之后，按 seq 轮询会漏掉它们（SSE 不受影响）
-  sendJson(res, 200, { events, last: events.length ? events[events.length - 1].seq : since });
+  sendJson(res, 200, { events, last: recent ? ctx.rt.events.lastSeq : events.length ? events[events.length - 1].seq : since });
 }
 
 /** GET /api/public/stream：SSE */
