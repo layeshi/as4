@@ -436,3 +436,9 @@
 - 选项：A premise 0 HTTP 保留 calm，premise 1 HTTP 按公开 types 排除 calm；引擎命令按 weatherCodesFor 保留 calm / B 所有 HTTP 均拒绝 calm / C 所有 HTTP 均允许 calm。
 - 我的建议：A，同时遵守原世界不变与新 HTTP 按 types 校验两项明确要求；观测站按 types 显示。
 - 状态：按用户授权暂行 A；待设计方确认，门面保留 TODO(spec): Q32。
+
+## Q33 · rebody 后正在运行的躯壳调用如何切换线路（2026-10-03）
+- 上下文：SPEC-P1 §7.3 改了身体与居民的模型，但没有说明 ShellManager 中已经运行的驱动。现有驱动只按 agentId 去重，会继续用旧 provider，不能落实新身体的模型。
+- 选项：A rebody 后中止旧驱动，等它完成预算结算后用新模型线路重建；没有新线路时保持 no_line / B 要求操作者手动重启服务。
+- 我的建议：A；避免旧模型继续行动，也不绕过预算的释放与结算。
+- 状态：按用户授权暂行 A；只作用于设定 1 的驱动，代码保留 TODO(spec): Q33。

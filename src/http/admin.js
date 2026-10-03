@@ -152,6 +152,7 @@ async function resetOwnerCredential(req, res, ctx, url, params) {
 
 export const adminRoutes = [
   ['POST', /^\/api\/admin\/agents\/([^/]+)\/owner-key$/, resetOwnerCredential],
+  ['POST', '/api/admin/backstage', op('backstage')],
   ['POST', '/api/admin/rebody', op('rebody')],
   ['POST', '/api/admin/pause', op('pause')],
   ['POST', '/api/admin/resume', op('resume')],

@@ -9,10 +9,11 @@
 //   shell_models     设定躯壳醒来时轮流分配的模型名（第 8 步）
 //   seed_sandbox     开发用：放入 N 位由沙盘脑驱动的先民（第 13 步；生产环境必须为 0）
 
+import { premised, agentList, isAlive } from '../world.js';
 import { LIMITS } from '../params.js';
 import { nameKey, normalizeText, cpLength } from '../../text.js';
 import { source } from './ledger.js';
-import { emit, bad, creditEnergy } from './core.js';
+import { emit, bad, creditEnergy, pushInbox } from './core.js';
 import { forceWeather } from './weather.js';
 import { resetOwnerKey } from '../../owner-key.js';
 
@@ -33,6 +34,7 @@ export function adminCommand(w, p) {
     case 'resume':
       w.paused = false;
       emit(w, 'admin', { data: { op: 'resume' } });
+      if (premised(w)) notifyBackstage(w, 'resume');
       return { ok: true, paused: false };
     case 'curtain':
       w.revealed = true;
@@ -96,3 +98,25 @@ function adjust(w, { agentId, energy = 0, coins = 0, reason }) {
   emit(w, 'admin', { data: { op: 'adjust', agentId: a.id, energy, coins, reason: why } });
   return { ok: true, agentId: a.id, energy: a.energy, coins: a.coins };
 }
+
+export function notifyBackstage(w, kind, direction) {
+  const data = { kind, ...(kind === 'budget' ? { direction } : {}) };
+  emit(w, 'backstage', { data });
+  w.dayLog.p1.backstage.push(kind);
+  const code = kind === 'budget' ? `backstage_budget_${direction}` : `backstage_${kind}`;
+  for (const a of agentList(w)) if (isAlive(a)) pushInbox(w, a, 'system', { code });
+}
+EXTRA_ADMIN_OPS.backstage = (w, args) => {
+  if (!premised(w)) return bad('invalid_request', { field: 'op' });
+  const { kind, fp, direction, initial } = args;
+  if (!['code', 'bodies', 'budget'].includes(kind)) return bad('invalid_request', { field: 'kind' });
+  if (fp !== undefined && fp !== null && typeof fp !== 'string') return bad('invalid_request', { field: 'fp' });
+  if (initial !== undefined && typeof initial !== 'boolean') return bad('invalid_request', { field: 'initial' });
+  if (direction !== undefined && (!['up', 'down'].includes(direction) || kind !== 'budget')) return bad('invalid_request', { field: 'direction' });
+  if (kind === 'budget' && !initial && direction === undefined) return bad('invalid_request', { field: 'direction' });
+  if (initial) { w.backstage[kind] = fp ?? null; return { ok: true }; }
+  w.backstage[kind] = fp ?? w.backstage[kind];
+  emit(w, 'admin', { data: { op: 'backstage' } });
+  notifyBackstage(w, kind, direction);
+  return { ok: true };
+};

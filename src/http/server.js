@@ -1,6 +1,7 @@
 // SPEC-M1 §13：HTTP 服务。路由、静态文件、限速、CORS、CSP。
 // 只用 Node 内置模块。所有 JSON 响应带 X-Houren-Protocol（第一纪的城为 1，第二纪的城为 2）；请求体上限 64 KB。
 
+import { checkBackstage } from '../backstage.js';
 import http from 'node:http';
 import { AccountStore } from '../accounts/store.js';
 import { accountRoutes, accountLimits } from './accounts.js';
@@ -122,6 +123,8 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console } 
     cursors: new Map(), // agentId → 已经送达的最大收件 seq（内存，不进世界状态；Q9）
     cache: {},
   };
+
+  checkBackstage(rt, ctx.shells, { logger });
 
   const server = http.createServer(async (req, res) => {
     try {

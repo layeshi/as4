@@ -210,3 +210,41 @@ test('P1 T10: no dreams, filtered random/scheduled/forced/voted weather; p0 rema
   configureWeather({mode:'vote'});
   const old=bareWorld();assert.equal(weatherVote(old,{voterHash:'a'.repeat(64),type:'aurora'}).ok,true);assert.equal(weatherCodesFor(old).length,9);
 });
+
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { codeFingerprint, bodiesFingerprint, checkBackstage } from '../src/backstage.js';
+test('P1 T11: backstage initial/change/budget/resume commands and fingerprint diagnostics', () => {
+  const w=bareWorld('backstage',{premise:1});const a=reg(w,'甲');
+  const admin=(args)=>e2.applyCommand(w,{type:'admin',payload:{op:'backstage',args}});
+  const r=admin({kind:'code',fp:'initial',initial:true});assert.deepEqual(r.events,[]);assert.equal(a.inbox.length,0);
+  for(const args of [{kind:'code',fp:'changed'},{kind:'bodies'},{kind:'budget',direction:'up'},{kind:'budget',direction:'down'}]){const r=admin(args);assert.ok(r.events.some(e=>e.type==='backstage'));assert.ok(r.events.some(e=>e.type==='admin'));}
+  assert.deepEqual(a.inbox.map(i=>i.code),['backstage_code','backstage_bodies','backstage_budget_up','backstage_budget_down']);
+  e2.applyCommand(w,{type:'admin',payload:{op:'resume'}});assert.equal(a.inbox.at(-1).code,'backstage_resume');assert.equal(e2.applyCommand(bareWorld(),{type:'admin',payload:{op:'backstage',args:{kind:'code'}}}).result.error.field,'op');
+  const root=mkdtempSync(join(tmpdir(),'p1-fingerprint-'));mkdirSync(join(root,'src/e2'),{recursive:true});writeFileSync(join(root,'src/e2/a.js'),'original');
+  try {
+    const world=e2.createWorld({seed:'fps',premise:1,shellModels:['mock-a']});const rows=[];const warnings=[];
+    const rt={w:world,exec:(type,payload)=>{const r=e2.applyCommand(world,{type,payload});rows.push(r);return r;}};
+    const shells={config:{lines:[{provider:'mock',model:'mock-a',maxTokens:100}],tokensPerDay:1000}};
+    checkBackstage(rt,shells,{root});assert.equal(rows.length,3);assert.ok(rows.every(r=>r.events.length===0));const fp=codeFingerprint(root);
+    writeFileSync(join(root,'src/e2/a.js'),'changed');checkBackstage(rt,shells,{root});assert.notEqual(codeFingerprint(root),fp);assert.equal(rows.at(-1).events.at(-1).data.kind,'code');
+    shells.config.tokensPerDay=2000;checkBackstage(rt,shells,{root});assert.equal(rows.at(-1).events.at(-1).data.direction,'up');
+    const n=rows.length;shells.config.lines[0].model='mock-b';checkBackstage(rt,shells,{root,logger:{warn:s=>warnings.push(s)}});assert.equal(rows.length,n);assert.equal(warnings.length,1);
+    rt.exec('admin',{op:'rebody',args:{from:'mock-a',to:'mock-b'}});const n2=rows.length;checkBackstage(rt,shells,{root});assert.equal(rows.length,n2+1);assert.deepEqual(rows.at(-1).events,[]);
+    const base=bodiesFingerprint(shells.config.lines);assert.equal(bodiesFingerprint([{...shells.config.lines[0],baseURL:'https://different',apiKeyEnv:'SECRET_NAME',timeoutMs:5}]),base);assert.notEqual(bodiesFingerprint([{...shells.config.lines[0],effort:'high'}]),base);
+  } finally {rmSync(root,{recursive:true,force:true});}
+});
+
+import { ShellManager } from '../src/shells/manager.js';
+import { parseShellsConfig } from '../src/shells/config.js';
+test('P1 T11: rebody switches an active mock driver after settling the old call (Q33)', async () => {
+  const w=e2.createWorld({seed:'live-rebody',premise:1,founders:founders10.slice(0,1),shellSlots:1,shellModels:['old']});e2.applyCommand(w,{type:'tick'});
+  const rt={w,dir:'/unused',engine:e2,events:{subscribe:()=>()=>{}},exec:(type,payload)=>e2.applyCommand(w,{type,payload})};const seen=[];
+  const manager=new ShellManager(rt,{tickMs:900000},{config:parseShellsConfig({tokensPerDay:10000000,lines:[{model:'old',provider:'mock'},{model:'new',provider:'mock'}]}),usageFile:null,logger:{log(){},warn(){},error(){}},providerFactory:async(cfg)=>({complete:async()=>{seen.push(cfg.model);return{text:'{"actions":[]}',usage:{input:1,output:1}}}}),wait:async(ms,signal)=>new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true}))});
+  try {
+    manager.activate();for(let i=0;i<20&&!seen.length;i++)await new Promise(setImmediate);assert.deepEqual(seen,['old']);
+    rt.exec('admin',{op:'rebody',args:{from:'old',to:'new'}});manager.sync();for(let i=0;i<20&&seen.length<2;i++)await new Promise(setImmediate);assert.deepEqual(seen,['old','new']);
+    assert.equal(manager.slots.active,0);assert.equal(manager.tickets.size,0);
+  } finally {await manager.close();}
+});

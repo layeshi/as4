@@ -8,6 +8,7 @@
 //
 // 管理员的操作：pause / resume（暂停时中止在途的模型请求并停掉所有循环，不影响城内的时间与代谢）。
 
+import { premised } from '../e2/facade.js';
 import { join } from 'node:path';
 import { createProvider, ProviderError } from '../../runner/providers.js';
 import { runAgent } from '../../runner/agent.js';
@@ -64,8 +65,8 @@ export class ShellManager {
     if (JSON.stringify(have) !== JSON.stringify(want)) {
       this.warn(`世界里的躯壳模型 ${JSON.stringify(have)} 与 SHELLS_FILE 的线路 ${JSON.stringify(want)} 不一致：不自动修改（管理员用 POST /api/admin/shell-models 修改）。`);
     }
-    this.unsubscribe = this.rt.events.subscribe((name) => {
-      if (name === 'tick') this.sync();
+    this.unsubscribe = this.rt.events.subscribe((name, data) => {
+      if (name === 'tick' || (premised(this.rt.w) && name === 'admin' && data.data?.op === 'rebody')) this.sync();
     });
     this.sync();
   }
@@ -101,7 +102,17 @@ export class ShellManager {
         this.stopDriver(a.id);
         continue;
       }
-      if (this.paused || this.drivers.has(a.id)) continue;
+      // TODO(spec): Q33 — rebody must stop the old provider and start the new line.
+      const driver = this.drivers.get(a.id);
+      if (premised(this.rt.w) && driver && driver.model !== a.body.model) {
+        if (!driver.rebodyRequested) {
+          driver.rebodyRequested = true;
+          driver.controller.abort();
+          driver.promise.finally(() => { if (!this.closing) this.sync(); });
+        }
+        continue;
+      }
+      if (this.paused || driver) continue;
       const line = this.lines.get(a.body.model);
       if (!line) {
         if (!this.noLine.has(a.id)) {
@@ -170,7 +181,7 @@ export class ShellManager {
     }).finally(() => {
       this.drivers.delete(a.id);
     });
-    this.drivers.set(a.id, { controller, promise, state });
+    this.drivers.set(a.id, { controller, promise, state, ...(premised(this.rt.w) ? { model: line.cfg.model } : {}) });
   }
 
   stopDriver(id) {
@@ -207,11 +218,11 @@ export class ShellManager {
 
   /** runAgent 的 beforeModel：为假则本刻不调用模型 */
   async beforeModel(agentId, line, state, meta) {
-    if (this.closing || this.paused || line.status === 'error') return false;
+    if (this.closing || this.paused || line.status === 'error' || (premised(this.rt.w) && this.rt.w.agents[agentId]?.body.model !== line.cfg.model)) return false;
     const est = estimateTokens(meta.chars, line.cfg.maxTokens);
     const slot = await this.acquireSlot();
     if (!slot) return false;
-    if (this.closing || this.paused || line.status === 'error') {
+    if (this.closing || this.paused || line.status === 'error' || (premised(this.rt.w) && this.rt.w.agents[agentId]?.body.model !== line.cfg.model)) {
       this.releaseSlot();
       return false;
     }
