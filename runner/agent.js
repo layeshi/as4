@@ -119,6 +119,7 @@ export async function runAgent(cfg, deps = {}) {
   let lastResults = null;
   let system = null;
   let systemKey = null;
+  let lastWoke = null;
   let rounds = 0;
   let acted = 0;
   let rejected = 0; // 连续被服务商拒绝（非限速的 4xx）的次数：多半是配置错了
@@ -181,7 +182,21 @@ export async function runAgent(cfg, deps = {}) {
       const key = JSON.stringify([p.lang, p.you.soul, p.you.trained || [], p.premise]);
       if (system === null || key !== systemKey) { system = buildSystemPrompt(promptParams(p)); systemKey = key; }
     } else if (system === null) system = buildSystemPrompt(promptParams(p));
-    const userText = renderPerception(p, { lastResults: lastResults || undefined, lang: cfg.lang });
+    let resultsForRender = lastResults;
+    if (p.premise >= 1 && lastWoke !== null) {
+      const n = Math.floor((p.now.tick - lastWoke) / (cfg.actEveryTicks || 1)) - 1;
+      if (n > 0) {
+        const day = Math.floor(lastWoke / p.now.ticksPerDay);
+        const M = Math.floor(day / p.now.daysPerMonth) + 1;
+        const D = day % p.now.daysPerMonth + 1;
+        const T = lastWoke % p.now.ticksPerDay + 1;
+        const missed = cfg.lang === 'en'
+          ? `You last woke in month ${M}, day ${D}, tick ${T}; you have missed ${n} waking(s) since then.`
+          : `你上一次醒来是第 ${M} 月第 ${D} 日第 ${T} 刻；这中间你错过了 ${n} 次醒来。`;
+        resultsForRender = missed + (lastResults ? `\n${lastResults}` : '');
+      }
+    }
+    const userText = renderPerception(p, { lastResults: resultsForRender || undefined, lang: cfg.lang });
     const messages = [];
     for (const h of history) messages.push({ role: 'user', content: h.user }, { role: 'assistant', content: h.assistant });
     messages.push({ role: 'user', content: userText });
@@ -207,6 +222,8 @@ export async function runAgent(cfg, deps = {}) {
     try {
       report({ status: 'thinking' });
       reply = await provider.complete({ system, messages, perception: p, signal });
+      // TODO(spec): Q28 — confirmed: only successful calls count as waking.
+      if (p.premise >= 1) lastWoke = p.now.tick;
       reportUsage(reply.usage || null, { ok: true, replyChars: String(reply.text || '').length, ms: Date.now() - t0 });
       if (signal?.aborted) break;
       // 用时与用量：调「一刻多长」「历史留几轮」的依据

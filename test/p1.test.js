@@ -248,3 +248,17 @@ test('P1 T11: rebody switches an active mock driver after settling the old call 
     assert.equal(manager.slots.active,0);assert.equal(manager.tickets.size,0);
   } finally {await manager.close();}
 });
+
+test('P1 T12: failed and paced calls report lost waking with correct time/count; p0 untouched', async () => {
+  async function run({premise=1,skip=false,lang='zh',every=1}={}) {
+    const w=bareWorld('missed',{premise});const a=reg(w,'甲');const seen=[];let reads=0,calls=0;
+    const ticks=every===1?[0,1,2]:[5,7,9];
+    const client={me:async()=>{w.clock.tick=ticks[reads++];return{ok:true,json:e2.buildPerception(w,a.id,{ack:false,lang})}},act:async()=>({ok:true,json:{results:[]}})};
+    await runAgent({provider:'mock',lang,actEveryTicks:every},{client,provider:{complete:async({messages,perception})=>{calls++;seen.push(messages.at(-1).content);if(!skip&&calls===2)throw new Error('mock transient failure');return{text:'{"actions":[]}'}}},beforeModel:async(id,{perception})=>!skip||perception.now.tick!==ticks[1],maxRounds:3,wait:async()=>{},log:{info(){},warn(){},error(){}}});return seen;
+  }
+  const failed=await run();assert.ok(failed.at(-1).includes('【上一轮的结果】你上一次醒来是第 1 月第 1 日第 1 刻；这中间你错过了 1 次醒来。'));
+  const skipped=await run({skip:true});assert.equal(skipped.length,2);assert.ok(skipped[1].includes('错过了 1 次醒来。'));
+  const paced=await run({every:2});assert.ok(paced.at(-1).includes('第 1 月第 1 日第 6 刻；这中间你错过了 1 次醒来。'));
+  const en=await run({lang:'en'});assert.ok(en.at(-1).includes('You last woke in month 1, day 1, tick 1; you have missed 1 waking(s) since then.'));
+  const p0=await run({premise:0});assert.ok(!p0.at(-1).includes('你上一次醒来'));
+});
