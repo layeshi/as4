@@ -544,6 +544,7 @@ export const VARS = {
   trade: (e) => ({ a: A(e.data.from), b: A(e.data.to), give: AMT(e.data.give), want: AMT(e.data.want) }),
   offer_close: (e) => ({ a: A(e.agent), id: e.data.offerId, reason: e.data.reason }),
   // TODO(spec): Q29 — new event templates must be registered with their emitters.
+  backstage: () => ({}),
   impart: (e) => ({ a: A(e.agent), to: A(e.data.to), text: TX(e.data.text) }),
   remember: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
   forget: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
@@ -672,6 +673,8 @@ export const TPL = {
     trade: '{a} 与 {b} 成交：{give} 换 {want}。',
     offer_close_cancelled: '{a} 撤回了交易 {id}。',
     offer_close_expired: '{a} 的交易 {id} 过期了。',
+    backstage: '幕后有东西变了。',
+    backstage_bodies: '幕后换过了一些身体。',
     impart: '{a} 交给 {to} 一段记忆：「{text}」',
     remember: '{a} 记下：「{text}」',
     forget: '{a} 忘掉了：「{text}」',
@@ -785,6 +788,8 @@ export const TPL = {
     trade: '{a} and {b} traded: {give} for {want}.',
     offer_close_cancelled: '{a} withdrew offer {id}.',
     offer_close_expired: "{a}'s offer {id} expired.",
+    backstage: 'Something changed backstage.',
+    backstage_bodies: 'Some bodies were changed backstage.',
     impart: '{a} handed {to} a memory: “{text}”',
     remember: '{a} remembered: “{text}”',
     forget: '{a} forgot: “{text}”',
@@ -888,6 +893,7 @@ export const TPL = {
 
 /** 事件的类别（着色与筛选） */
 export const CAT = {
+  backstage: 'world',
   say: 'speech', whisper: 'speech', broadcast: 'speech', thought: 'speech', impart: 'speech', remember: 'speech', forget: 'speech', reveal: 'speech',
   give: 'econ', offer_open: 'econ', trade: 'econ', offer_close: 'econ', draw: 'econ', explore: 'econ', mint: 'econ', grant: 'econ', stipend: 'econ', stipend_skipped: 'econ', fund: 'econ', disburse: 'econ',
   propose: 'polity', vote: 'polity', law_passed: 'polity', law_rejected: 'polity', electorate_reverted: 'polity', repeal: 'polity', amend: 'polity', rename: 'polity', protect: 'polity', unprotect: 'polity', exile: 'polity', pardon: 'polity',
@@ -913,6 +919,7 @@ export function templateKey(e) {
     case 'explore': return `explore_${['energy', 'relic', 'coins'].includes(d.outcome) ? d.outcome : 'nothing'}`;
     case 'inscribe': return d.cover ? 'inscribe_cover' : 'inscribe';
     case 'revive': return /^a\d+$/.test(String(d.by)) ? 'revive_by' : 'revive';
+    case 'backstage': return e.data.kind === 'bodies' ? 'backstage_bodies' : 'backstage';
     case 'born': return d.authors ? 'born_v2' : 'born';
     case 'soul': return d.authors ? (d.successorOf ? 'soul_successor' : 'soul_v2') : 'soul';
     case 'successor': return d.failed ? 'successor_failed' : 'successor';

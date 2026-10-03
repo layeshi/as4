@@ -123,3 +123,29 @@ test('P1 T6: fork chronicle (Q27 provisional step ordering)', () => {
   const w=bareWorld('fork',{premise:1});w.dayLog.p1.forks.push({id:'a2',name:'乙',author:'a1',authorName:'甲'});
   const c=writeChronicle(w,0);assert.ok(c.zh.includes('乙 醒来，灵魂与 甲 一字不差。'));assert.ok(c.en.includes("甲's."));
 });
+
+import { takeBody, bodyOf, releaseBody } from '../src/e2/engine/bodies.js';
+import { shellsFree, embodySouls } from '../src/e2/engine/shells.js';
+import { dieAgent, retireAgent } from '../src/e2/engine/lifecycle.js';
+const founders10=Array.from({length:10},(_,i)=>({day:0,name:`先民${i+1}号`,bio:'',soul:'占位灵魂',lang:'zh'}));
+test('P1 T7: bodies allocation, oldest vacancies, release, model filling and confidential rebody', () => {
+  const w=e2.createWorld({seed:'bodies',premise:1,founders:founders10,shellSlots:16,shellModels:['mock-a','mock-b']});
+  assert.equal(shellsFree(w),6);e2.applyCommand(w,{type:'tick'});
+  for(let i=0;i<10;i++){const a=w.agents[`a${i+1}`];assert.equal(a.body.shellId,`b${i+1}`);assert.equal(a.body.model,i%2?'mock-b':'mock-a');}
+  const a=w.agents.a3;bodyOf(w,a).trained.push({text:'留下',weight:2,by:a.id,day:0});retireAgent(w,a);bodyOf(w,a).vacantSince=5;
+  assert.equal(takeBody(w).id,'b11');for(const b of w.shells.bodies.slice(10))b.occupant='reserved';assert.equal(takeBody(w).id,'b3');
+  assert.equal(bodyOf(w,a).trained.length,1);const b=w.agents.a1;dieAgent(w,b,9);assert.equal(bodyOf(w,b).vacantSince,9);
+  for(const b of w.shells.bodies)if(b.occupant==='reserved')b.occupant=null;
+  const r=e2.applyCommand(w,{type:'admin',payload:{op:'rebody',args:{from:'mock-a',to:'mock-new'}}});assert.equal(r.result.bodies,8);assert.equal(bodyOf(w,a).trained.length,0);assert.equal(w.agents.a5.body.model,'mock-new');assert.ok(w.agents.a5.inbox.some(x=>x.code==='backstage_bodies'));
+  assert.ok(!JSON.stringify(r.events).includes('mock-'));assert.equal(w.backstage.bodies,null);
+  const state=e2.publicState(w);assert.equal(state.shells.bodies.length,16);assert.ok(!JSON.stringify(state.shells.bodies).includes('model'));
+  const empty=e2.createWorld({seed:'empty',premise:1,shellSlots:3});e2.applyCommand(empty,{type:'admin',payload:{op:'shell_models',args:{models:['x','y']}}});assert.deepEqual(empty.shells.bodies.map(b=>b.model),['x','y','x']);e2.applyCommand(empty,{type:'admin',payload:{op:'shell_models',args:{models:['z']}}});assert.deepEqual(empty.shells.bodies.map(b=>b.model),['x','y','x']);
+  assert.equal(e2.applyCommand(bareWorld(),{type:'admin',payload:{op:'rebody',args:{from:'x',to:'y'}}}).result.error.code,'invalid_request');
+  assert.throws(()=>e2.createWorld({seed:'too-many',premise:1,founders:founders10,shellSlots:9}),/先民不能多于躯壳/);
+});
+test('P1 T7: models stay private even after curtain; newborn uses its body model', () => {
+  const w=bareWorld('newbody',{premise:1,shellSlots:2,shellModels:['hidden-model']});const a=reg(w,'甲');a.energy=300;
+  const s=one(w,a,{type:'conceive',name:'乙',soul:'新灵魂'}).data.soul;one(w,a,{type:'sponsor',soul:s,energy:200});embodySouls(w);
+  const b=w.agents.a2;assert.equal(b.body.model,bodyOf(w,b).model);assert.equal(b.body.shellId,'b1');
+  e2.applyCommand(w,{type:'admin',payload:{op:'curtain'}});assert.ok(!JSON.stringify(e2.publicState(w)).includes('hidden-model'));
+});

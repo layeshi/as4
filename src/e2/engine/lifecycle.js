@@ -1,6 +1,7 @@
 // SPEC-M1 §7.3 与 SPEC-E2 §11–§12：生命周期——注册（入城）、代谢与衰老、沉睡、死亡、遗嘱与遗产、归隐、过继、家书。
 // 唤醒（wake / creditEnergy）在 core.js。孕育与灵魂（作者、传灯、出生）见 souls.js，躯壳见 shells.js。
 
+import { releaseBody } from './bodies.js';
 import { int } from '../../rng.js';
 import { textWeight } from '../../text.js';
 import { P, LIMITS } from '../params.js';
@@ -250,6 +251,7 @@ export function dieAgent(w, a, d) {
   const groups = a.groups.slice(); // 社群章程的 on:death 要认出它的成员：离场（退出所有社群）之前取下
   lightSuccessor(w, a); // 传灯：在分配遗产之前，从遗产里拿出至多 successorMax 作为继承灵魂的初始能量（§11.3）
   const distribution = releaseAgent(w, a);
+  if (premised(w)) releaseBody(w, a, d);
   w.cemetery.push({
     agentId: a.id,
     name: a.name,
@@ -281,6 +283,7 @@ export function retireAgent(w, a, lastWords) {
   const groups = a.groups.slice();
   lightSuccessor(w, a);
   const distribution = releaseAgent(w, a);
+  if (premised(w)) releaseBody(w, a, day);
   w.retired.push({ agentId: a.id, name: a.name, day, lastWords: words });
   w.dayLog.retirements++;
   emit(w, 'retire', { agent: a.id, place: a.place, data: { agentId: a.id, name: a.name, lastWords: words, distribution } });

@@ -13,7 +13,7 @@ import { renderRules, renderProcedureClass } from '../rules/render.js';
 import { isFunctioning, wallInscriptions, ownerView } from './places.js';
 import { visibleOmens } from './weather.js';
 import { openProjectsAt } from './projects.js';
-import { livingShells, shellsFree, queuePosition } from './shells.js';
+import { livingShells, shellsFree, queuePosition, bodyList } from './shells.js';
 import { HUMAN_PROCEDURE } from '../lore/humanlaws.js';
 
 const ref = (w, id) => (id && w.agents[id] ? { id, name: w.agents[id].name } : null);
@@ -49,7 +49,8 @@ export function publicAgent(w, a) {
     stats: { ...a.stats },
   };
   if (a.generation >= 1 || w.revealed) out.soul = a.soul;
-  if (w.revealed) {
+  // TODO(spec): Q30 — premise 1 models are admin-only, including after curtain.
+  if (w.revealed && !premised(w)) {
     out.body = { kind: a.body.kind, model: a.body.model, history: a.body.history.map((h) => ({ ...h })) };
     out.creatorName = a.owner ? a.owner.creatorName : null;
   }
@@ -272,6 +273,7 @@ export function publicState(w, extra = {}) {
     offers: Object.values(w.offers).filter((o) => o.status === 'open').map((o) => offerView(w, o)),
     cradle: Object.values(w.souls).map((s) => soulView(w, s)),
     shells: {
+      ...(premised(w) ? { bodies: bodyList(w).map((b) => ({ id: b.id, occupant: ref(w, b.occupant), vacantSince: b.vacantSince, trainedCount: b.trained.length })) } : {}),
       total, free, used: total - free, cost: P.shellCost, living: livingShells(w),
       queue: Object.values(w.souls).filter((s) => s.fundedTick !== null).sort((x, y) => x.fundedTick - y.fundedTick || idNum(x.id) - idNum(y.id))
         .map((s, i) => ({ soulId: s.id, name: s.name, position: i + 1, fundedDay: Math.floor(s.fundedTick / P.ticksPerDay), queueExpiresDay: s.queueExpiresDay })),

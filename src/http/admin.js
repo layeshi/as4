@@ -1,6 +1,9 @@
 // PROTOCOL §11：管理接口。X-Admin-Key 头，常数时间比较；未配置 ADMIN_KEY 时全部返回 404。
 // 所有管理操作都会产生公开的 admin 事件（不含管理员身份）。
 
+import { premised } from '../e2/facade.js';
+import { bodyList } from '../e2/engine/shells.js';
+import { upkeepOf, weightOf } from '../e2/engine/lifecycle.js';
 import { randomBytes } from 'node:crypto';
 import { accountFor } from './accounts.js';
 import { readJson, sendError, sendEngineError, sendJson, sha256hex, timingEqual } from './util.js';
@@ -84,7 +87,9 @@ function shellsDisabledView(ctx) {
 /** GET /api/admin/shells：躯壳的运行情况——当前地球日、预算与已用、每条线路的状态、每具躯壳的用量与状态 */
 async function shellsView(req, res, ctx) {
   if (!authV2(ctx, req, res)) return;
-  sendJson(res, 200, ctx.shells ? ctx.shells.view() : shellsDisabledView(ctx));
+  const view = ctx.shells ? ctx.shells.view() : shellsDisabledView(ctx);
+  if (premised(ctx.rt.w)) view.bodies = bodyList(ctx.rt.w).map((b) => ({ ...b, occupant: b.occupant ? { id: b.occupant, name: ctx.rt.w.agents[b.occupant].name, upkeep: upkeepOf(ctx.rt.w.agents[b.occupant]), weight: weightOf(ctx.rt.w.agents[b.occupant]) } : null }));
+  sendJson(res, 200, view);
 }
 
 /** POST /api/admin/shells { op: "pause" | "resume" }：暂停 / 恢复全部躯壳的模型调用（不影响城内的时间与代谢） */
@@ -147,6 +152,7 @@ async function resetOwnerCredential(req, res, ctx, url, params) {
 
 export const adminRoutes = [
   ['POST', /^\/api\/admin\/agents\/([^/]+)\/owner-key$/, resetOwnerCredential],
+  ['POST', '/api/admin/rebody', op('rebody')],
   ['POST', '/api/admin/pause', op('pause')],
   ['POST', '/api/admin/resume', op('resume')],
   ['POST', '/api/admin/tick', tickNow],

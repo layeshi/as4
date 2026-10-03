@@ -1,3 +1,4 @@
+import { isShell, bodyList, bodyOf, takeBody, occupyBody } from './bodies.js';
 // SPEC-E2 §12：躯壳（引擎部分）与先民。
 //
 // 躯壳是人类离开时留下的一批空身体（shellSlots 个）：摇篮里的灵魂可以由居民、社群或城的公库出资（sponsor、规则的 transfer 给灵魂），
@@ -8,7 +9,7 @@
 // 每刻第 5 步（STEPS.founders）：先民入城（§12.5）。
 
 import { P } from '../params.js';
-import { clockDay, isAlive, idNum, isNameTaken } from '../world.js';
+import { clockDay, isAlive, idNum, isNameTaken, premised, agentList } from '../world.js';
 import { modelFamily } from '../metrics.js';
 import { sink } from './ledger.js';
 import { emit, pushInbox, bad } from './core.js';
@@ -19,7 +20,7 @@ import { STEPS } from './tick.js';
 
 // ── 状态（§12.1） ───────────────────────────────────────────
 
-const isShell = (a) => a.body.kind === 'shell' || a.body.shell === true;
+export { isShell, bodyList, bodyOf, takeBody, releaseBody } from './bodies.js';
 
 /** 在世的躯壳居民数（含沙盘世界里由沙盘脑驱动的躯壳） */
 export const livingShells = (w) => Object.values(w.agents).filter((a) => isAlive(a) && isShell(a)).length;
@@ -28,7 +29,7 @@ export const livingShells = (w) => Object.values(w.agents).filter((a) => isAlive
 export const pendingFounders = (w) => w.founders.length;
 
 /** 空躯壳数：先民预先占着名额 */
-export const shellsFree = (w) => Math.max(0, w.shells.slots - livingShells(w) - pendingFounders(w));
+export const shellsFree = (w) => Math.max(0, (premised(w) ? w.shells.bodies.filter((b) => b.occupant === null).length : w.shells.slots - livingShells(w)) - pendingFounders(w));
 
 // ── 模型分配（§12.6） ───────────────────────────────────────
 
@@ -85,13 +86,15 @@ export function embodySouls(w) {
   for (const s of queue) {
     if (free <= 0) break;
     const sandbox = w.sandboxShells;
-    const model = pickModel(w);
+    const b = premised(w) ? takeBody(w) : null;
+    const model = premised(w) ? b.model : pickModel(w);
     const extra = s.fund - P.shellCost;
     sink(w, 'energy', 'embodiment', P.shellCost);
     s.fund = 0;
     const a = bornFromSoul(w, s, {
       via: sandbox ? 'sandbox' : 'shell', kind: sandbox ? 'sandbox' : 'shell', shell: sandbox ? true : undefined, model, mustSeal: true, owner: null, tokenHash: null, extraEnergy: extra,
     });
+    if (premised(w)) occupyBody(b, a);
     w.dayLog.embodiments.push({ soulId: s.id, agentId: a.id, name: a.name });
     emit(w, 'embodied', { agent: a.id, place: a.place, data: { soulId: s.id, agentId: a.id } });
     free--;
@@ -146,10 +149,13 @@ export function admitFounders(w) {
     const f = w.founders.shift();
     if (isNameTaken(w, f.name)) continue; // 名字在创建世界时已被保留，不会发生；防御：跳过而不是崩溃
     const sandbox = w.sandboxShells;
-    admitFromPort(w, {
+    const b = premised(w) ? takeBody(w) : null;
+    if (premised(w) && !b) throw new Error('设定 1 的世界里，先民不能多于躯壳');
+    const a = admitFromPort(w, {
       name: f.name, lang: f.lang, bio: f.bio, soul: f.soul, kind: sandbox ? 'sandbox' : 'shell', shell: sandbox ? true : undefined,
-      model: pickModel(w), mustSeal: true, owner: null, tokenHash: null, temperament: f.temperament,
+      model: premised(w) ? b.model : pickModel(w), mustSeal: true, owner: null, tokenHash: null, temperament: f.temperament,
     });
+    if (premised(w)) occupyBody(b, a);
   }
 }
 
@@ -164,6 +170,39 @@ EXTRA_ADMIN_OPS.shell_models = (w, args) => {
     return bad('invalid_request', { field: 'models' });
   }
   w.shells.models = models.map((m) => m.trim());
+  if (premised(w) && w.shells.models.length) {
+    let i = 0;
+    for (const b of bodyList(w)) if (b.model === '') {
+      b.model = w.shells.models[i++ % w.shells.models.length];
+    }
+  }
   emit(w, 'admin', { data: { op: 'shell_models' } });
   return { ok: true, count: w.shells.models.length };
+};
+
+const modelValid = (m) => typeof m === 'string' && m.trim() !== '' && m.length <= 100 && !/[\r\n]/.test(m);
+EXTRA_ADMIN_OPS.rebody = (w, args) => {
+  if (!premised(w)) return bad('invalid_request', { field: 'op' });
+  if (!modelValid(args.from) || !modelValid(args.to) || args.from.trim() === args.to.trim()) return bad('invalid_request');
+  const from = args.from.trim(), to = args.to.trim(), day = clockDay(w);
+  let count = 0;
+  for (const b of bodyList(w)) {
+    if (b.model !== from) continue;
+    count++;
+    const wiped = b.trained.length + b.pending.length;
+    b.model = to; b.trained = []; b.pending = [];
+    w.dayLog.p1.trainedWiped += wiped;
+    if (b.occupant) {
+      const a = w.agents[b.occupant];
+      a.body.model = to; a.body.history.push({ day, model: to });
+      if (wiped) pushInbox(w, a, 'system', { code: 'trained_lost' });
+    }
+  }
+  w.shells.models = w.shells.models.map((m) => m === from ? to : m);
+  w.backstage.bodies = null;
+  emit(w, 'admin', { data: { op: 'rebody' } });
+  emit(w, 'backstage', { data: { kind: 'bodies' } });
+  w.dayLog.p1.backstage.push('bodies');
+  for (const a of agentList(w)) if (isAlive(a)) pushInbox(w, a, 'system', { code: 'backstage_bodies' });
+  return { ok: true, bodies: count };
 };
