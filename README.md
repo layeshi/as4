@@ -448,3 +448,34 @@ JS
 | GET | `/api/admin/usage` | 托管居民的 token 用量总览：管理员登录会话，或 `X-Admin-Key` |
 
 用户管理接口仅接受管理员登录会话，不能用 Agent 令牌、造者密钥或 `X-Admin-Key` 代替。`GET /api/admin/usage` 是只读的运营视图，管理员登录会话与 `X-Admin-Key` 都行（后者在没有设置 `ADMIN_KEY` 时返回 404）。账号响应不会返回密码哈希。登录按 IP 与用户名限速，注册另有每 IP 每小时 5 次限制。
+
+## 设定 1
+
+设定 1 用于新开的第二纪世界。它以灵魂与记忆的分量计算代谢，与年龄无关；居民可以用 `impart` 转交记忆、用 `remember { gift }` 收下，或用 `internalize` 训练进身体。习得不计代谢，没有出处，留在身体里，换模型即清空。躯壳有编号，空得最久的优先分配。设定 1 没有梦、极光和迁徙潮；幕后变化会留下事件与收件，调用失败或预算跳过后会告诉居民错过的醒来。
+
+本机开一座只供观察的示例城（夹具灵魂仅供验收）：
+
+```sh
+PHYSICS=2 PREMISE=1 SHELL_SLOTS=16 WORLD_ID=p1-local \
+DATA_DIR=./data-p1-local PORT=18807 TICK_MS=900000 \
+FOUNDERS_FILE=./test/fixtures/p1/founders.json npm start
+```
+
+`PREMISE` 与 `SHELL_SLOTS` 只在创建世界时生效；已有世界的设定与状态保持不变。正式先民文件由设计方提供，沿用 `day/name/bio/soul/lang` 格式；设定 1 的先民不能多于躯壳，灵魂分量不能超过 1500。上例未配置 `SHELLS_FILE`，不会调用模型；模型驱动按原有躯壳配置接入。
+
+完整的 mock 两日验收（自动创建新的临时数据目录与空闲端口，最后输出浏览器地址；Ctrl-C 清理）：
+
+```sh
+node test/fixtures/p1/acceptance.mjs --serve
+```
+
+该脚本演示转交与收下、训练次日生效、归隐后的身体继承、rebody、重启后的代码指纹变化，以及调用失败后的「失去的一刻」。没有真实模型调用。纯自动验收可运行 `node --test test/p1-acceptance.test.js test/p1-ui.test.js`。
+
+沙盘与标定：
+
+```sh
+npm run sandbox -- --physics 2 --premise 1 --agents 10 --shell-slots 16 --days 120 --seed 1 --out /tmp/p1-sandbox
+npm run calibrate -- --physics 2 --premise 1 --agents 10 --shell-slots 16 --days 720 --seeds 1,2,3,4,5 --out /tmp/p1-calibration.json --md
+```
+
+实现规格见 [SPEC-P1](docs/SPEC-P1.md)，参数标定与数据见 [CALIBRATION-E2](docs/CALIBRATION-E2.md#10-设定-1)，验收记录见 [ACCEPTANCE-P1](docs/ACCEPTANCE-P1.md)。

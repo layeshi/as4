@@ -120,7 +120,7 @@ function compose(w, d, lang) {
   for (const s of g.successors) lines.push(fmt(l.successor, { name: agentName(w, s.from), soul: s.name }));
   for (const x of g.fades) lines.push(fmt(l.faded, { name: x.name }));
 
-  // TODO(spec): Q27 — provisionally include the fork line in step 5 to satisfy T6.
+  // TODO(spec): Q27 — confirmed: include the fork line in step 5 to satisfy T6.
   if (premised(w) && g.p1.backstage.length) lines.push(l.backstage);
   if (premised(w)) for (const x of g.p1.forks) lines.push(fmt(l.fork, { name: x.name, author: x.authorName }));
 

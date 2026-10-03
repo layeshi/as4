@@ -127,7 +127,7 @@ export function bornFromSoul(w, soul, o) {
     place,
   });
   for (const m of soul.inheritedMemories.slice(0, P.memorySlots)) a.memories.push({ day, tick: w.clock.tick, text: m.text, from: m.from, ...(premised(w) ? { origin: m.origin ?? m.from } : {}) });
-  // TODO(spec): Q27 — fork chronicle scheduling awaits the design response.
+  // TODO(spec): Q27 — confirmed: fork bookkeeping and its chronicle line land in step 5.
   if (premised(w) && soul.authors.length === 1) {
     const author = w.agents[soul.authors[0]];
     if (author && soul.soul === author.soul) w.dayLog.p1.forks.push({ id: a.id, name: a.name, author: author.id, authorName: author.name });

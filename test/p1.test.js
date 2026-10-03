@@ -119,7 +119,7 @@ test('P1 T6: twelve inherited memories, p0 three, origin and fork bookkeeping', 
 });
 
 import { writeChronicle } from '../src/e2/chronicle.js';
-test('P1 T6: fork chronicle (Q27 provisional step ordering)', () => {
+test('P1 T6: fork chronicle (Q27 confirmed step ordering)', () => {
   const w=bareWorld('fork',{premise:1});w.dayLog.p1.forks.push({id:'a2',name:'乙',author:'a1',authorName:'甲'});
   const c=writeChronicle(w,0);assert.ok(c.zh.includes('乙 醒来，灵魂与 甲 一字不差。'));assert.ok(c.en.includes("甲's."));
 });
@@ -188,7 +188,7 @@ test('P1 T9: appendix text exactness, purpose unchanged, acquired conditional an
     const catalog=actionCatalog2(lang,{premise:1});assert.ok(catalog.includes('impart(to, memory)'));assert.ok(catalog.includes('internalize(memory)'));assert.ok(catalog.includes('remember(text | gift)'));
     for(const code of ['dormancy_loss','trained_faded','trained_lost','backstage_code','backstage_bodies','backstage_budget_up','backstage_budget_down','backstage_resume'])assert.ok(l.perception.system[code]);
   }
-  const table=specP1;const protocol=readFileSync(new URL('../docs/PROTOCOL-2.md',import.meta.url),'utf8');const newRows=[...protocol.split('### 15.3')[1].split('### 15.4')[0].matchAll(/^\| `([a-z]+)` \|/gm)].map(m=>m[1]);assert.deepEqual(newRows,['remember',...ACTION_ORDER_P1.filter(t=>!ACTION_ORDER.includes(t))]);
+  const protocol=readFileSync(new URL('../docs/PROTOCOL-2.md',import.meta.url),'utf8');const newRows=[...protocol.split('### 15.3')[1].split('### 15.4')[0].matchAll(/^\| `([a-z]+)` \|/gm)].map(m=>m[1]);assert.deepEqual(newRows,['remember',...ACTION_ORDER_P1.filter(t=>!ACTION_ORDER.includes(t))]);
 });
 test('P1 T9: mock provider receives rebuilt system after acquired changes; MCP includes acquired', async () => {
   const w=bareWorld('prompt-rebuild',{premise:1});const a=reg(w,'甲');const systems=[];
@@ -273,4 +273,8 @@ test('P1 T13: metric means, generations, acquired inheritance and chronicle', ()
   for(const [k,v] of Object.entries({imparts:2,impartsAccepted:1,dormancyLosses:3,forks:1,internalized:4,trainedEvicted:5,trainedWiped:6,backstage:2}))assert.equal(m[k],v);
   const c=writeChronicle(w,0);assert.equal(c.zh.split('是日，幕后有东西变了。').length,2);assert.ok(c.zh.includes('乙 醒来，灵魂与 甲 一字不差。'));
   const empty=dailyMetrics(e2.createWorld({seed:'empty',premise:1}),0);assert.equal(empty.upkeepMean,0);assert.equal(empty.trainedWeightMean,0);assert.deepEqual(empty.soulWeightByGeneration,{});
+});
+test('P1 T7 boundary: filling an occupied empty body synchronizes its resident model (Q35)', () => {
+  const w=e2.createWorld({seed:'fill-occupied',premise:1,shellSlots:1,founders:founders10.slice(0,1)});e2.applyCommand(w,{type:'tick'});const a=w.agents.a1;
+  e2.applyCommand(w,{type:'admin',payload:{op:'shell_models',args:{models:['mock-bound']}}});assert.equal(a.body.model,bodyOf(w,a).model);assert.equal(a.body.model,'mock-bound');assert.equal(a.body.history.at(-1).model,'mock-bound');
 });

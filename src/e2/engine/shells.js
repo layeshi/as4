@@ -174,6 +174,12 @@ EXTRA_ADMIN_OPS.shell_models = (w, args) => {
     let i = 0;
     for (const b of bodyList(w)) if (b.model === '') {
       b.model = w.shells.models[i++ % w.shells.models.length];
+      // TODO(spec): Q35 — an initial binding also updates the existing resident.
+      if (b.occupant) {
+        const a = w.agents[b.occupant];
+        a.body.model = b.model;
+        a.body.history.push({ day: clockDay(w), model: b.model });
+      }
     }
   }
   emit(w, 'admin', { data: { op: 'shell_models' } });

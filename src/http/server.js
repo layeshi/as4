@@ -103,7 +103,7 @@ async function serveStatic(req, res, pathname, dir) {
  * @param rt Runtime
  * @param cfg 配置（loadConfig 的结果，另可带 trustProxy）
  */
-export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console } = {}) {
+export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, backstageRoot } = {}) {
   const ctx = {
     rt,
     cfg,
@@ -124,7 +124,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console } 
     cache: {},
   };
 
-  checkBackstage(rt, ctx.shells, { logger });
+  checkBackstage(rt, ctx.shells, { logger, ...(backstageRoot ? { root: backstageRoot } : {}) });
 
   const server = http.createServer(async (req, res) => {
     try {
