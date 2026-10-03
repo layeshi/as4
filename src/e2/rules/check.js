@@ -13,6 +13,7 @@
 // 报错要让模型能改对：每个错误给出路径（如 rules[2].do[0].energy）、中英文说明，以及一条建议；最多返回 5 个。
 // 本文件是纯函数：不碰世界。需要世界的检查（地点是否存在……）通过 opts.lookup 注入。
 
+import { actionTable } from '../lore/actions.js';
 import { P, LIMITS, WEATHER_CODES } from '../params.js';
 import { normalizeText, cpLength } from '../../text.js';
 import { screen } from '../../moderation.js';
@@ -87,6 +88,7 @@ export function parseWhen(when, scope) {
     if (scope.kind !== 'place') return bad('before:enter 只用于地点规则（且地点须有运转中的门）', 'before:enter is only for place rules (and the place needs a functioning gate)');
     return { kind: 'before', action: 'move', enter: true };
   }
+  const { ACTIONS, ORDER: ACTION_ORDER, NO_BEFORE: NO_BEFORE_ACTIONS, NO_AFTER: NO_AFTER_ACTIONS, isKnown: isKnownAction } = actionTable(scope.premise || 0);
   if (!isKnownAction(what)) {
     return bad(`不认识的动作「${what}」`, `unknown action "${what}"`, { zh: `可用的动作：${ACTION_ORDER.join(' ')}`, en: `Available actions: ${ACTION_ORDER.join(' ')}` });
   }

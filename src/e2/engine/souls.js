@@ -9,7 +9,7 @@
 //     fund, sponsors, fundedTick, queueExpiresDay, successorOf, judged }
 
 import { P } from '../params.js';
-import { nextId, clockDay, isAlive, isNameTaken } from '../world.js';
+import { nextId, clockDay, isAlive, isNameTaken, premised } from '../world.js';
 import { sink } from './ledger.js';
 import { emit, pushInbox, creditEnergy } from './core.js';
 import { endowedEnergy, hasModuleAt } from './places.js';
@@ -35,7 +35,7 @@ export function createSoul(w, o) {
     authors: o.authors.slice(),
     generation,
     endowment: o.endowment,
-    inheritedMemories: (o.inheritedMemories || []).map((m) => ({ from: m.from, text: m.text })),
+    inheritedMemories: (o.inheritedMemories || []).map((m) => ({ from: m.from, text: m.text, ...(premised(w) ? { origin: m.origin ?? m.from } : {}) })),
     cradle: o.cradle ?? null,
     createdDay: day,
     expiresDay: day + P.cradleDays,
@@ -126,7 +126,12 @@ export function bornFromSoul(w, soul, o) {
     coins: 0,
     place,
   });
-  for (const m of soul.inheritedMemories.slice(0, P.memorySlots)) a.memories.push({ day, tick: w.clock.tick, text: m.text, from: m.from });
+  for (const m of soul.inheritedMemories.slice(0, P.memorySlots)) a.memories.push({ day, tick: w.clock.tick, text: m.text, from: m.from, ...(premised(w) ? { origin: m.origin ?? m.from } : {}) });
+  // TODO(spec): Q27 — fork chronicle scheduling awaits the design response.
+  if (premised(w) && soul.authors.length === 1) {
+    const author = w.agents[soul.authors[0]];
+    if (author && soul.soul === author.soul) w.dayLog.p1.forks.push({ id: a.id, name: a.name, author: author.id, authorName: author.name });
+  }
   delete w.souls[soul.id];
   for (const id of soul.authors) if (w.agents[id]) w.agents[id].children.push(a.id);
   const p = w.places[place];
@@ -163,7 +168,7 @@ export function lightSuccessor(w, a) {
   a.energy -= e;
   const memories = [];
   for (const i of s.memories || []) {
-    if (Number.isInteger(i) && i >= 0 && i < a.memories.length && memories.length < P.inheritMemoriesMax) memories.push({ from: a.id, text: a.memories[i].text });
+    if (Number.isInteger(i) && i >= 0 && i < a.memories.length && memories.length < (premised(w) ? P.memorySlots : P.inheritMemoriesMax)) memories.push({ from: a.id, text: a.memories[i].text, ...(premised(w) ? { origin: a.memories[i].origin ?? a.id } : {}) });
   }
   const soul = createSoul(w, { name: s.name, soul: s.soul, lang: s.lang, authors: [a.id], endowment: e, inheritedMemories: memories, successorOf: a.id });
   w.dayLog.successors.push({ from: a.id, soulId: soul.id, name: soul.name });

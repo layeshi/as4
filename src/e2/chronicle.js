@@ -6,6 +6,7 @@
 // 「史官曰」的优先顺序是 死亡 → 遗址 → 废墟 → 重订 → 建成（含开辟、加装）→ 法律通过 → 躯壳醒来 → 新居民 → 无事。
 
 import { createHash } from 'node:crypto';
+import { premised } from './world.js';
 import { P } from './params.js';
 import { L, fmt, placeDisplayName, normLang } from './lore/index.js';
 import { truncateCp } from '../text.js';
@@ -118,6 +119,9 @@ function compose(w, d, lang) {
   }
   for (const s of g.successors) lines.push(fmt(l.successor, { name: agentName(w, s.from), soul: s.name }));
   for (const x of g.fades) lines.push(fmt(l.faded, { name: x.name }));
+
+  // TODO(spec): Q27 — provisionally include the fork line in step 5 to satisfy T6.
+  if (premised(w)) for (const x of g.p1.forks) lines.push(fmt(l.fork, { name: x.name, author: x.authorName }));
 
   const q = pickQuote(g.utterances, d);
   if (q) lines.push(fmt(l.quote, { place: placeName(w, q.place, lang), quote: truncateCp(q.text, P.quoteChars) }));

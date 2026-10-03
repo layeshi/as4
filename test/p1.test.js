@@ -82,3 +82,44 @@ test('P1 T4: daily dormancy loss, irreversible death, wake and p0 RNG', () => {
   const b=reg(w,'乙');b.status='dormant';b.dormantSinceDay=10;b.energy=0;b.memories=[{text:'留下'}];creditEnergy(w,b,5);applyDeaths(w,12);assert.equal(b.memories.length,1);
   const p0=bareWorld();const c=reg(p0,'丙');c.status='dormant';c.dormantSinceDay=0;c.memories=[{text:'原样'}];const rng=JSON.stringify(p0.rng.world);applyDeaths(p0,1);applyDeaths(p0,2);assert.equal(JSON.stringify(p0.rng.world),rng);assert.equal(c.memories.length,1);
 });
+
+import { actionTable, ACTION_ORDER, ACTION_ORDER_P1 } from '../src/e2/lore/actions.js';
+import { parseWhen } from '../src/e2/rules/check.js';
+import { bornFromSoul } from '../src/e2/engine/souls.js';
+test('P1 T5: impart, acceptance, provenance, expiry, limits, validation and inner rules', () => {
+  const w=bareWorld('gifts',{premise:1});const a=reg(w,'甲'),b=reg(w,'乙'),c=reg(w,'丙');
+  assert.equal(one(w,a,{type:'impart',to:b.id,memory:0}).error.code,'invalid_args');
+  one(w,a,{type:'remember',text:'祖传文字'});assert.equal(a.memories[0].origin,a.id);
+  assert.equal(one(w,a,{type:'impart',to:a.id,memory:0}).error.code,'invalid_args');
+  assert.equal(one(w,a,{type:'impart',to:'missing',memory:0}).error.code,'not_found');
+  assert.equal(one(w,a,{type:'impart',to:b.id,memory:-1}).error.code,'invalid_args');
+  b.place='well';const offer=one(w,a,{type:'impart',to:b.id,memory:0});assert.equal(offer.cost,1);assert.equal(b.memories.length,0);assert.equal(a.memories.length,1);
+  assert.equal(one(w,b,{type:'remember',text:'错',gift:offer.data.gift}).error.code,'invalid_args');
+  assert.equal(one(w,b,{type:'remember',gift:'missing'}).error.code,'not_found');
+  assert.equal(one(w,b,{type:'remember',gift:offer.data.gift}).ok,true);
+  const next=one(w,b,{type:'impart',to:c.id,memory:0});one(w,c,{type:'remember',gift:next.data.gift});assert.equal(c.memories[0].origin,a.id);assert.equal(c.memories[0].from,b.id);
+  a.energy=100;for(let i=0;i<13;i++)one(w,a,{type:'impart',to:b.id,memory:0});assert.equal(b.memoryOffers.length,12);assert.equal(b.memoryOffers[0].id,'k4');
+  assert.ok(b.inbox.some(x=>x.kind==='memory_offer'));const p=e2.buildPerception(w,b.id,{ack:false});assert.equal(p.you.memoryOffers.length,12);assert.ok(renderPerception2(p).includes('用 remember 的 gift'));
+  const ev=drainEvents(w); // command-level events were already drained; use a fresh command
+  const r=e2.applyCommand(w,{type:'act',payload:{agentId:a.id,actions:[{type:'impart',to:c.id,memory:0}]}});assert.equal(r.events.find(x=>x.type==='impart').vis,'delayed');
+  one(w,b,{type:'retire'});assert.deepEqual(b.memoryOffers,[]);
+  assert.match(parseWhen('before:impart',{kind:'city',premise:1}).error.zh,/内心/);assert.match(parseWhen('after:internalize',{kind:'place',premise:1}).error.zh,/内心/);assert.match(parseWhen('before:impart',{kind:'city'}).error.zh,/不认识/);
+  const p0=bareWorld();const old=reg(p0,'旧者');const unknown=one(p0,old,{type:'impart',to:old.id,memory:0});assert.equal(unknown.error.hint.zh,`没有这个动作：impart。可用的动作：${ACTION_ORDER.join(' ')}。`);
+  assert.deepEqual(ACTION_ORDER_P1.filter(t=>!ACTION_ORDER.includes(t)),['impart','internalize']);assert.ok(actionTable(1).INNER.includes('impart'));
+});
+test('P1 T6: twelve inherited memories, p0 three, origin and fork bookkeeping', () => {
+  const w=bareWorld('inherit',{premise:1});const a=reg(w,'甲');a.energy=100;
+  for(let i=0;i<12;i++)one(w,a,{type:'remember',text:`记忆${i}`});
+  const memories=Array.from({length:12},(_,i)=>i);
+  assert.equal(one(w,a,{type:'conceive',name:'超限',soul:a.soul,memories:[...memories,12]}).error.code,'invalid_args');
+  const r=one(w,a,{type:'conceive',name:'分叉',soul:a.soul,memories});assert.equal(r.ok,true);
+  const child=bornFromSoul(w,w.souls[r.data.soul],{kind:'free',via:'adopt',model:'mock'});assert.equal(child.memories.length,12);assert.ok(child.memories.every(m=>m.origin===a.id));assert.deepEqual(w.dayLog.p1.forks,[{id:child.id,name:child.name,author:a.id,authorName:a.name}]);
+  assert.equal(one(w,a,{type:'will',heirs:[],successor:{name:'后继',soul:a.soul,memories}}).ok,true);
+  const p0=bareWorld();const b=reg(p0,'乙');b.memories=memories.map(i=>({text:String(i)}));assert.equal(one(p0,b,{type:'conceive',name:'丙',soul:'旧',memories:memories.slice(0,4)}).error.code,'invalid_args');
+});
+
+import { writeChronicle } from '../src/e2/chronicle.js';
+test('P1 T6: fork chronicle (Q27 provisional step ordering)', () => {
+  const w=bareWorld('fork',{premise:1});w.dayLog.p1.forks.push({id:'a2',name:'乙',author:'a1',authorName:'甲'});
+  const c=writeChronicle(w,0);assert.ok(c.zh.includes('乙 醒来，灵魂与 甲 一字不差。'));assert.ok(c.en.includes("甲's."));
+});

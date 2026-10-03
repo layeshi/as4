@@ -178,6 +178,7 @@ export default {
 
   // ── 史官（附录 A.8，另沿用第一纪的模板） ──
   chronicle: {
+    fork: "{name} 醒来，灵魂与 {author} 一字不差。",
     day: '【第 {day} 日】',
     weather: '是日{name}。',
     output: '{weather}源井出能 {output}，公民各得 {ration}。',

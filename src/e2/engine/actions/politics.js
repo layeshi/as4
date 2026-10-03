@@ -44,7 +44,7 @@ const propose = {
     let procedure = null;
     const lookup = staticLookup(w);
     if (hasRules) {
-      const v = validateRules(args.rules, { scope: { kind: 'city' }, lookup });
+      const v = validateRules(args.rules, { scope: { premise: w.premise || 0, kind: 'city' }, lookup });
       if (!v.ok) ruleInvalid(v.issues);
       rules = v.rules;
     }
@@ -146,10 +146,10 @@ const draft = {
     const lookup = staticLookup(w);
     let data;
     if (plan.rules !== null) {
-      const v = validateRules(plan.rules, { scope: plan.scope, lookup });
+      const v = validateRules(plan.rules, { scope: { ...plan.scope, premise: w.premise || 0 }, lookup });
       if (!v.ok) data = { ok: false, errors: v.issues.map(pick), reading: null, preview: [] };
       else {
-        const scopeOpts = plan.scope.kind === 'group' ? { scope: { kind: 'group', id: plan.scope.id } } : {};
+        const scopeOpts = plan.scope.kind === 'group' ? { scope: { premise: w.premise || 0, kind: 'group', id: plan.scope.id } } : {};
         data = {
           ok: true,
           errors: [],
@@ -254,7 +254,7 @@ const rules = {
         kind = 'group_procedure';
         proc = args.procedure;
       } else {
-        const v = validateRules(args.rules, { scope: { kind: 'group', id: g.id }, lookup });
+        const v = validateRules(args.rules, { scope: { premise: w.premise || 0, kind: 'group', id: g.id }, lookup });
         if (!v.ok) ruleInvalid(v.issues);
         kind = 'bylaws';
         rs = v.rules;
@@ -279,7 +279,7 @@ const rules = {
         direct = false;
       }
     }
-    const v = validateRules(args.rules, { scope: { kind: 'place', id: place.id }, lookup });
+    const v = validateRules(args.rules, { scope: { premise: w.premise || 0, kind: 'place', id: place.id }, lookup });
     if (!v.ok) ruleInvalid(v.issues);
     if (!direct && openGroupProposals(w, g.id).length >= LIMITS.openProposalsPerGroup) fail('limit_reached');
     return { target: 'place', place, g, kind: 'place_rules', rules: v.rules, procedure: null, direct, title, text, cost };

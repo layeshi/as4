@@ -177,6 +177,7 @@ export default {
 
   // The Chronicler (Appendix A.8, plus the v1 templates)
   chronicle: {
+    fork: "{name} woke with a soul identical, word for word, to {author}'s.",
     day: '[Day {day}] ',
     weather: 'That day: {name}. ',
     output: '{weather}The Well yielded {output}; each citizen received {ration}.',

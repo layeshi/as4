@@ -3,7 +3,7 @@
 
 import { P, LIMITS } from '../../params.js';
 import { ACTIONS } from '../../lore/actions.js';
-import { clockDay, findAgent, isAlive, isNameTaken, premised } from '../../world.js';
+import { clockDay, nextId, findAgent, isAlive, isNameTaken, premised } from '../../world.js';
 import {
   fail, emit, pushInbox, ref, creditEnergy, needText, needWeight, optText, optLang, needInt, optAmount, needObject, needId,
 } from '../core.js';
@@ -147,6 +147,16 @@ const give = {
 const remember = {
   validate(ctx, args) {
     const { w, a } = ctx;
+    if (premised(w)) {
+      if ((args.text !== undefined) === (args.gift !== undefined)) fail('invalid_args');
+      if (args.gift !== undefined) {
+        needId(args.gift);
+        const offer = a.memoryOffers.find((x) => x.id === args.gift);
+        if (!offer) fail('not_found');
+        if (a.memories.length >= P.memorySlots) fail('memory_full');
+        return { offer, cost: 0 };
+      }
+    }
     const text = needText(args.text, { max: premised(w) ? P.memoryCpMax : LIMITS.memory });
     if (premised(w)) needWeight(text, 'text', P.memoryWeightMax);
     if (a.memories.length >= P.memorySlots) fail('memory_full');
@@ -155,7 +165,15 @@ const remember = {
   apply(ctx, plan) {
     const { w, a } = ctx;
     const index = a.memories.length;
-    a.memories.push({ day: clockDay(w), tick: w.clock.tick, text: plan.text, from: null });
+    if (premised(w) && plan.offer) {
+      const offer = plan.offer;
+      a.memories.push({ day: clockDay(w), tick: w.clock.tick, text: offer.text, from: offer.from, origin: offer.origin });
+      a.memoryOffers = a.memoryOffers.filter((x) => x.id !== offer.id);
+      emit(w, 'remember', { vis: 'delayed', agent: a.id, place: a.place, data: { index, text: offer.text, gift: offer.id, from: offer.from, origin: offer.origin } });
+      w.dayLog.p1.impartsAccepted++;
+      return { index };
+    }
+    a.memories.push({ day: clockDay(w), tick: w.clock.tick, text: plan.text, from: null, ...(premised(w) ? { origin: a.id } : {}) });
     emit(w, 'remember', { vis: 'delayed', agent: a.id, place: a.place, data: { index, text: plan.text } });
     return { index };
   },
@@ -220,8 +238,8 @@ const will = {
       const lang = optLang(s.lang, a.lang);
       let memories = [];
       if (s.memories !== undefined && s.memories !== null) {
-        if (!Array.isArray(s.memories) || s.memories.length > P.inheritMemoriesMax || s.memories.some((i) => !Number.isInteger(i) || i < 0) || new Set(s.memories).size !== s.memories.length) {
-          fail('invalid_args', { zh: `memories 至多 ${P.inheritMemoriesMax} 个、不重复的记忆序号。`, en: `memories takes at most ${P.inheritMemoriesMax} distinct memory indices.` });
+        if (!Array.isArray(s.memories) || s.memories.length > (premised(w) ? P.memorySlots : P.inheritMemoriesMax) || s.memories.some((i) => !Number.isInteger(i) || i < 0) || new Set(s.memories).size !== s.memories.length) {
+          fail('invalid_args', { zh: `memories 至多 ${(premised(w) ? P.memorySlots : P.inheritMemoriesMax)} 个、不重复的记忆序号。`, en: `memories takes at most ${(premised(w) ? P.memorySlots : P.inheritMemoriesMax)} distinct memory indices.` });
         }
         memories = s.memories.slice();
       }
@@ -238,4 +256,27 @@ const will = {
   },
 };
 
-export const basicHandlers = { move, say, whisper, broadcast, give, remember, forget, diary, will };
+const impart = {
+  validate(ctx, args) {
+    const { w, a } = ctx;
+    const to = findAgent(w, args.to);
+    if (!to || !isAlive(to)) fail('not_found');
+    if (to.id === a.id || a.memories.length === 0) fail('invalid_args');
+    const index = needInt(args.memory, { min: 0, max: a.memories.length - 1 });
+    return { to, index, cost: ctx.cost(1) };
+  },
+  apply(ctx, plan) {
+    const { w, a } = ctx;
+    const m = a.memories[plan.index];
+    const id = nextId(w, 'k');
+    const offer = { id, from: a.id, origin: m.origin ?? a.id, text: m.text, tick: w.clock.tick };
+    plan.to.memoryOffers.push(offer);
+    while (plan.to.memoryOffers.length > P.memoryOffersMax) plan.to.memoryOffers.shift();
+    pushInbox(w, plan.to, 'memory_offer', { giftId: id, from: ref(a), origin: ref(w.agents[offer.origin]), text: m.text });
+    emit(w, 'impart', { vis: 'delayed', agent: a.id, place: a.place, data: { giftId: id, to: plan.to.id, origin: offer.origin, text: m.text } });
+    w.dayLog.p1.imparts++;
+    return { gift: id, to: plan.to.id };
+  },
+};
+
+export const basicHandlers = { impart, move, say, whisper, broadcast, give, remember, forget, diary, will };

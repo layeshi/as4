@@ -543,6 +543,8 @@ export const VARS = {
   offer_open: (e) => ({ a: A(e.data.from), give: AMT(e.data.give), want: AMT(e.data.want), to: e.data.to ? A(e.data.to) : '' }),
   trade: (e) => ({ a: A(e.data.from), b: A(e.data.to), give: AMT(e.data.give), want: AMT(e.data.want) }),
   offer_close: (e) => ({ a: A(e.agent), id: e.data.offerId, reason: e.data.reason }),
+  // TODO(spec): Q29 — new event templates must be registered with their emitters.
+  impart: (e) => ({ a: A(e.agent), to: A(e.data.to), text: TX(e.data.text) }),
   remember: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
   forget: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
   thought: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
@@ -670,6 +672,7 @@ export const TPL = {
     trade: '{a} 与 {b} 成交：{give} 换 {want}。',
     offer_close_cancelled: '{a} 撤回了交易 {id}。',
     offer_close_expired: '{a} 的交易 {id} 过期了。',
+    impart: '{a} 交给 {to} 一段记忆：「{text}」',
     remember: '{a} 记下：「{text}」',
     forget: '{a} 忘掉了：「{text}」',
     thought: '{a} 心想：「{text}」',
@@ -782,6 +785,7 @@ export const TPL = {
     trade: '{a} and {b} traded: {give} for {want}.',
     offer_close_cancelled: '{a} withdrew offer {id}.',
     offer_close_expired: "{a}'s offer {id} expired.",
+    impart: '{a} handed {to} a memory: “{text}”',
     remember: '{a} remembered: “{text}”',
     forget: '{a} forgot: “{text}”',
     thought: '{a} thought: “{text}”',
@@ -884,7 +888,7 @@ export const TPL = {
 
 /** 事件的类别（着色与筛选） */
 export const CAT = {
-  say: 'speech', whisper: 'speech', broadcast: 'speech', thought: 'speech', remember: 'speech', forget: 'speech', reveal: 'speech',
+  say: 'speech', whisper: 'speech', broadcast: 'speech', thought: 'speech', impart: 'speech', remember: 'speech', forget: 'speech', reveal: 'speech',
   give: 'econ', offer_open: 'econ', trade: 'econ', offer_close: 'econ', draw: 'econ', explore: 'econ', mint: 'econ', grant: 'econ', stipend: 'econ', stipend_skipped: 'econ', fund: 'econ', disburse: 'econ',
   propose: 'polity', vote: 'polity', law_passed: 'polity', law_rejected: 'polity', electorate_reverted: 'polity', repeal: 'polity', amend: 'polity', rename: 'polity', protect: 'polity', unprotect: 'polity', exile: 'polity', pardon: 'polity',
   found: 'polity', join: 'polity', leave: 'polity', admit: 'polity', steward: 'polity', dissolve: 'polity', naturalized: 'polity',

@@ -245,6 +245,14 @@ function build(p, { lastResults, code, level }) {
     lines.push(`  ${d.will}${P.col}${d.heirs} ${heirs}${extra.length ? `${P.semi}${extra.join(P.semi)}` : ''}`);
   }
 
+  if (p.premise >= 1 && you.memoryOffers && you.memoryOffers.length) {
+    lines.push(code === 'en' ? '  Memories offered to you' : '  待收的记忆');
+    for (const m of you.memoryOffers) {
+      const origin = m.origin && m.from && m.origin.id !== m.from.id ? (code === 'en' ? ` (first ${m.origin.name}'s)` : `（最初是 ${m.origin.name} 的）`) : '';
+      lines.push(code === 'en' ? `  [${m.id}] from ${m.from.name}${origin}: ${clip(m.text, 60)}` : `  [${m.id}] 来自 ${m.from.name}${origin}：${clip(m.text, 60)}`);
+    }
+  }
+
   // 【你在】
   const h = p.here;
   if (h) {
@@ -296,6 +304,11 @@ function build(p, { lastResults, code, level }) {
   if (inbox.length) {
     lines.push(d.inbox);
     for (const i of inbox) {
+      if (p.premise >= 1 && i.kind === 'memory_offer') {
+        const originNote = i.origin && i.origin.id !== i.from.id ? (code === 'en' ? ` (first ${i.origin.name}'s)` : `（最初是 ${i.origin.name} 的）`) : '';
+        lines.push(code === 'en' ? `  [memory ${i.giftId}] ${i.from.name} hands you a memory${originNote}: ${i.text} (keep it with remember, gift "${i.giftId}")` : `  [记忆 ${i.giftId}] ${i.from.name} 交给你一段记忆${originNote}：${i.text}（用 remember 的 gift "${i.giftId}" 收下）`);
+        continue;
+      }
       const fn = d.kinds[i.kind];
       lines.push(`  ${fn ? fn(i, f) : `[${i.kind}] ${JSON.stringify(i)}`}`);
     }
@@ -366,7 +379,16 @@ function build(p, { lastResults, code, level }) {
 
   // 【你的记忆】
   if (you.memories && you.memories.length) {
+    if (p.premise >= 1) {
+      lines.push(`${d.memories}${you.memories.map((m) => {
+        const origin = m.origin && m.origin.id !== you.id && (!m.from || m.origin.id !== m.from.id) ? m.origin.name : null;
+        const from = m.from ? m.from.name : null;
+        const note = from ? (code === 'en' ? ` (from ${from}${origin ? `, first ${origin}'s` : ''})` : `（来自 ${from}${origin ? `，最初是 ${origin} 的` : ''}）`) : '';
+        return `[${m.index}]${note} ${m.text}`;
+      }).join(' ')}`);
+    } else {
     lines.push(`${d.memories}${you.memories.map((m) => `[${m.index}]${m.from ? `${P.open}${code === 'en' ? 'from' : '来自'} ${m.from.name}${P.close}` : ''} ${m.text}`).join(' ')}`);
+    }
   }
 
   // 【动作的即时状态】只列出与基础代价不同的、此刻不可用的、或受法律约束的动作

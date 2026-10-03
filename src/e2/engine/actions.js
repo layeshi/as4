@@ -2,7 +2,7 @@
 // 各动作的实现在 actions/ 下，按领域分文件；代价计算与共用辅助见 actions/util.js。
 
 import { P, LIMITS } from '../params.js';
-import { ACTIONS, ACTION_ORDER, NO_BEFORE_ACTIONS, NO_AFTER_ACTIONS, isKnownAction } from '../lore/actions.js';
+import { ACTIONS, ACTION_ORDER, NO_BEFORE_ACTIONS, NO_AFTER_ACTIONS, isKnownAction, actionTable } from '../lore/actions.js';
 import { fmt } from '../lore/index.js';
 import { clockDay } from '../world.js';
 import { cpLength, normalizeText, truncateCp } from '../../text.js';
@@ -34,14 +34,14 @@ export const HANDLERS = {
 /** 注册更多的处理函数（供按领域分文件的模块在加载时使用） */
 export function registerHandlers(more) {
   for (const [type, h] of Object.entries(more)) {
-    if (!isKnownAction(type)) throw new Error(`registerHandlers: unknown action ${type}`);
+    if (!actionTable(1).isKnown(type)) throw new Error(`registerHandlers: unknown action ${type}`);
     if (typeof h.validate !== 'function' || typeof h.apply !== 'function') throw new Error(`registerHandlers: ${type} needs validate and apply`);
     HANDLERS[type] = h;
   }
 }
 
 /** 已注册处理函数的动作（实现进度用；测试会核对它与动作表一致） */
-export const implementedActions = () => Object.keys(HANDLERS);
+export const implementedActions = (premise = 0) => Object.keys(HANDLERS).filter(actionTable(premise).isKnown);
 
 export const actionsLeft = (a) => Math.max(0, P.maxActionsPerTick - a.actsThisTick);
 
@@ -49,7 +49,8 @@ export const actionsLeft = (a) => Math.max(0, P.maxActionsPerTick - a.actsThisTi
  * invalid_args 没有带说明时，给模型一句能据以纠正的话：没有这个动作、缺哪些必填参数，或该动作的用法与说明。
  * （只是对结果的文字说明，不进入世界状态。）
  */
-function argsHint(type, act) {
+function argsHint(type, act, premise = 0) {
+  const { ACTIONS, ORDER: ACTION_ORDER, isKnown: isKnownAction } = actionTable(premise);
   if (!isKnownAction(type)) {
     const list = ACTION_ORDER.join(' ');
     return { zh: `没有这个动作：${type}。可用的动作：${list}。`, en: `There is no such action: ${type}. Available actions: ${list}.` };
@@ -88,6 +89,7 @@ function feeTotals(fees) {
  *   6. 收集并施行 after 规则
  */
 function runOne(w, a, type, act, index, lang) {
+  const { NO_BEFORE: NO_BEFORE_ACTIONS, NO_AFTER: NO_AFTER_ACTIONS } = actionTable(w.premise || 0);
   const handler = HANDLERS[type];
   if (!handler) fail('invalid_args');
   const ctx = makeCtx(w, a, index, type, lang);
@@ -146,12 +148,12 @@ export function runActions(w, a, actions, lang = 'zh') {
     }
     a.actsThisTick++;
     try {
-      if (!isKnownAction(type)) fail('invalid_args');
+      if (!actionTable(w.premise || 0).isKnown(type)) fail('invalid_args');
       const { data, spent } = runOne(w, a, type, act, i, lang);
       results.push({ index: i, type, ok: true, cost: spent, data });
     } catch (e) {
       if (!(e instanceof ActError)) throw e;
-      const hint = e.hint || (e.code === 'invalid_args' ? argsHint(type, act) : null);
+      const hint = e.hint || (e.code === 'invalid_args' ? argsHint(type, act, w.premise || 0) : null);
       results.push({ index: i, type, ok: false, cost: 0, error: { code: e.code, ...(hint ? { hint } : {}), ...(e.extra || {}) } });
     }
   }

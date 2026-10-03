@@ -8,6 +8,7 @@
 // 副作用：默认（不传 after）会把世界状态里的收件箱游标推进到本次返回的最大 seq（自动确认）——这只能发生在命令之内
 // （沙盘脑在 tick 里感知）；传 after 或 ack: false 则不推进。HTTP 层一律传 ack: false，用自己的内存游标（floor）。
 
+import { actionTable } from '../lore/actions.js';
 import { P, SEASON_TABLE, conditionBand, seasonBand, richnessBand } from '../params.js';
 import { travelCosts, lotsNear, HUMAN_DEFS } from '../map/index.js';
 import { L, fmt, normLang, placeDisplayName, placeDescription, cityDisplayName, ACTIONS, ACTION_ORDER } from '../lore/index.js';
@@ -169,8 +170,9 @@ function youView(w, a, l, lang, day, openOffers, openPacts) {
     ...(premised(w) ? { weight: weightOf(a) } : {}),
     actionsLeft: Math.max(0, P.maxActionsPerTick - a.actsThisTick), maxActionsPerTick: P.maxActionsPerTick,
     drawnToday: a.drawnToday, repairedToday: a.repairedToday, salvagedToday: a.salvagedToday,
-    memories: a.memories.map((m, index) => ({ index, day: m.day, text: m.text, from: m.from ? refId(w, m.from) : null })),
+    memories: a.memories.map((m, index) => ({ index, day: m.day, text: m.text, from: m.from ? refId(w, m.from) : null, ...(premised(w) ? { origin: refId(w, m.origin) } : {}) })),
     memorySlots: P.memorySlots,
+    ...(premised(w) ? { memoryOffers: a.memoryOffers.map((m) => ({ ...m, from: refId(w, m.from), origin: refId(w, m.origin) })) } : {}),
     groups,
     owns,
     will: a.will
@@ -406,6 +408,7 @@ function renderProcedureOf(r, lang) {
 const MODULE_ACTIONS = new Set(['write', 'epitaph', 'offer', 'accept']);
 
 function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
+  const { ACTIONS, ORDER: ACTION_ORDER } = actionTable(w.premise || 0);
   const relay = hasRelay(w);
   const fog = isWeatherActive(w, 'fog');
   const eclipse = isWeatherActive(w, 'eclipse');
@@ -453,6 +456,8 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
       case 'remember':
         if (a.memories.length >= P.memorySlots) deny({ code: 'memory_full', text: R.memory_full });
         break;
+      case 'impart':
+      case 'internalize':
       case 'forget':
         if (a.memories.length === 0) deny({ code: 'invalid_args', text: R.nothing });
         break;
@@ -548,7 +553,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
         break;
     }
     // 规则的预求值（§7.13）：只有物理上可用的动作才有意义
-    if (!NO_PREVIEW.has(type)) {
+    if (!NO_PREVIEW.has(type) && !actionTable(w.premise || 0).INNER.includes(type)) {
       const pre = previewBefore(w, a, type, lang, beforeRules);
       if (entry.available && pre.denied) deny({ code: 'forbidden', law: pre.denied.law, text: fmt(R.forbidden, { law: pre.denied.law, reason: pre.denied.reason }) });
       if (entry.available && pre.fees.length) {

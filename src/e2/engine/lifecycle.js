@@ -69,6 +69,7 @@ export function makeAgent(w, o) {
     script: null,
     stats: { repaired: 0, contributed: 0, drawn: 0, utterances: 0, inscribed: 0, salvaged: 0 },
   };
+  if (premised(w)) a.memoryOffers = [];
   w.agents[id] = a;
   return a;
 }
@@ -178,6 +179,7 @@ export function applyDeaths(w, d) {
  * 返回遗产分配 [{ to, energy, coins }]。
  */
 export function releaseAgent(w, a) {
+  if (premised(w)) a.memoryOffers = [];
   for (const o of Object.values(w.offers)) if (o.status === 'open' && o.from === a.id) closeOffer(w, o, 'cancelled');
   for (const c of Object.values(w.pacts)) {
     if (c.status === 'open' && c.authors.includes(a.id)) closePact(w, c, 'departed');

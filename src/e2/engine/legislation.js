@@ -36,7 +36,7 @@ export function seedHumanLaws(w) {
     let rules = [];
     let procedure = null;
     if (def.rules) {
-      const v = validateRules(structuredClone(def.rules), { scope: { kind: 'city' }, human: true });
+      const v = validateRules(structuredClone(def.rules), { scope: { premise: w.premise || 0, kind: 'city' }, human: true });
       if (!v.ok) throw new Error(`human law ${def.id} is invalid: ${JSON.stringify(v.issues)}`);
       rules = v.rules;
     }

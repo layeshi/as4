@@ -33,15 +33,15 @@ function needChildName(args) {
 }
 
 /** 记忆序号：至多 inheritMemoriesMax 条、不重复、是自己记忆里的序号。返回复制下来的文本 [{ text }] */
-function pickMemories(a, v) {
+function pickMemories(w, a, v) {
   if (!given(v)) return [];
-  if (!Array.isArray(v) || v.length > P.inheritMemoriesMax) fail('invalid_args', { zh: `memories 至多 ${P.inheritMemoriesMax} 个序号。`, en: `memories takes at most ${P.inheritMemoriesMax} indices.` });
+  if (!Array.isArray(v) || v.length > (premised(w) ? P.memorySlots : P.inheritMemoriesMax)) fail('invalid_args', { zh: `memories 至多 ${(premised(w) ? P.memorySlots : P.inheritMemoriesMax)} 个序号。`, en: `memories takes at most ${(premised(w) ? P.memorySlots : P.inheritMemoriesMax)} indices.` });
   const seen = new Set();
   const out = [];
   for (const i of v) {
     if (!Number.isInteger(i) || i < 0 || i >= a.memories.length || seen.has(i)) fail('invalid_args', { zh: 'memories 须是你自己的、不重复的记忆序号。', en: 'memories must be distinct indices of your own memories.' });
     seen.add(i);
-    out.push({ text: a.memories[i].text });
+    out.push({ text: a.memories[i].text, ...(premised(w) ? { origin: a.memories[i].origin ?? a.id } : {}) });
   }
   return out;
 }
@@ -73,7 +73,7 @@ const conceive = {
         withIds.push(t.id);
       }
     }
-    const memories = pickMemories(a, args.memories);
+    const memories = pickMemories(w, a, args.memories);
     let cradle = null;
     if (given(args.cradle)) {
       needId(args.cradle);
@@ -94,7 +94,7 @@ const conceive = {
       // 分灵：付 40，立即生成灵魂
       const s = createSoul(w, {
         name: plan.name, soul: plan.soul, lang: plan.lang, authors, endowment: plan.share,
-        inheritedMemories: plan.memories.map((m) => ({ from: a.id, text: m.text })), cradle: plan.cradle,
+        inheritedMemories: plan.memories.map((m) => ({ from: a.id, text: m.text, ...(premised(w) ? { origin: m.origin } : {}) })), cradle: plan.cradle,
       });
       noteWordUse(w, a, plan.soul);
       return { soul: s.id };
@@ -124,7 +124,7 @@ const consent = {
     if (!c.authors.includes(a.id)) fail('not_allowed', { zh: '你不是这份孕育之约的共同作者。', en: 'You are not a co-author of this pact.' });
     if (Object.prototype.hasOwnProperty.call(c.consents, a.id)) fail('already');
     const share = c.shares[a.id];
-    const memories = pickMemories(a, args.memories);
+    const memories = pickMemories(w, a, args.memories);
     return { c, share, memories, cost: ctx.cost(ACTIONS.consent.base), reserve: { energy: share } };
   },
   apply(ctx, plan) {
@@ -138,7 +138,7 @@ const consent = {
     }
     // 全部同意：生成灵魂（记忆按作者顺序、各自交出的顺序），约结束
     const memories = [];
-    for (const x of c.authors) for (const m of c.consents[x].memories) memories.push({ from: x, text: m.text });
+    for (const x of c.authors) for (const m of c.consents[x].memories) memories.push({ from: x, text: m.text, ...(premised(w) ? { origin: m.origin } : {}) });
     const s = createSoul(w, { name: c.name, soul: c.soul, lang: c.lang, authors: c.authors, endowment: c.escrow, inheritedMemories: memories, cradle: c.cradle });
     c.status = 'done';
     c.escrow = 0;
