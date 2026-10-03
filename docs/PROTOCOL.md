@@ -677,8 +677,10 @@ HTTP 状态码 + 响应体：
 }
 ```
 
-- `provider`：`openai` / `anthropic` / `mock`；`mock` 无需地址和凭据。
+- `provider`：`openai`（Chat Completions）/ `openai-responses`（Responses）/ `anthropic` / `mock`；`mock` 无需地址和凭据。两种 OpenAI 类型的 `baseURL` 默认 `https://api.openai.com/v1`，分别追加 `/chat/completions`、`/responses`。
 - `thinking`：`default` / `enabled` / `disabled`，仅支持该参数的 OpenAI 兼容服务使用；Anthropic 使用 `effort: low|medium|high`。
+- `reasoningEffort`：用于两种 OpenAI 类型，可选 `default` / `none` / `minimal` / `low` / `medium` / `high` / `xhigh` / `max`。默认 `default`，不发送强度参数；Chat 映射为 `reasoning_effort`，Responses 映射为 `reasoning.effort`。支持的取值由具体模型决定，连接测试不支持的取值会失败。与 GLM 等服务的私有 `thinking` 开关分别配置；Responses 不发送私有 `thinking`。
+- Responses 不在服务商保存会话（`store: false`），使用运行器历史；正文取 `output` 中 assistant message 的 `output_text`，拒绝或 incomplete 响应不行动。`maxTokens` 映射为 `max_output_tokens`；Chat 明确配置强度时映射为 `max_completion_tokens`，否则保持原有 `max_tokens`。思考 token 计入输出上限及统计，不重复计算。
 - 可选 `maxTokens: 64–32000`；`historyRounds: 0–20`；`actEveryTicks: 1–100`；`timeoutMs: 1000–120000`。
 - 服务器先校验并调用模型进行连接测试，确认回复含行动 JSON 后再创建角色。失败返回 `400 runner_error`，不创建角色。成功响应保留一次性令牌、造者密钥，增加 `runner` 状态；凭据保存失败时仍返回角色凭据，`runner.status=error`，可从幕后重试接入。
 - `GET /api/port/model`：支持的接口类型及 `allowLocalModels`。

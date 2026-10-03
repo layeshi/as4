@@ -7,11 +7,12 @@
 // 环境变量 SHELL_TOKENS_PER_DAY、SHELL_TZ 可以覆盖文件里的 tokensPerDay 与 timezone。
 
 import { readFileSync } from 'node:fs';
+import { PROVIDER_NAMES, validateReasoningEffort } from '../../runner/providers.js';
 
 export const DEFAULTS = Object.freeze({ tokensPerDay: 50000000, timezone: 'Asia/Shanghai', reserve: 0.05, concurrency: 4, historyRounds: 2, maxTokens: 1200, timeoutMs: 120000 });
 
-const LINE_KEYS = new Set(['model', 'provider', 'baseURL', 'apiKeyEnv', 'extraBody', 'maxTokens', 'timeoutMs', 'effort', 'fallbacks', 'seed', 'chatty']);
-const PROVIDERS = ['openai', 'anthropic', 'mock'];
+const LINE_KEYS = new Set(['model', 'provider', 'baseURL', 'apiKeyEnv', 'extraBody', 'maxTokens', 'timeoutMs', 'effort', 'reasoningEffort', 'fallbacks', 'seed', 'chatty']);
+const PROVIDERS = PROVIDER_NAMES;
 
 const int = (v, d, min, max, where) => {
   if (v === undefined) return d;
@@ -53,6 +54,7 @@ export function parseShellsConfig(raw, overrides = {}) {
     if (seen.has(l.model)) throw new Error(`${where}.model 重复：${l.model}`);
     seen.add(l.model);
     if (!PROVIDERS.includes(l.provider)) throw new Error(`${where}.provider 必须是 ${PROVIDERS.join(' / ')} 之一。`);
+    validateReasoningEffort(l);
     if (l.apiKeyEnv !== undefined && (typeof l.apiKeyEnv !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(l.apiKeyEnv))) throw new Error(`${where}.apiKeyEnv 必须是环境变量名。`);
     if (l.baseURL !== undefined && typeof l.baseURL !== 'string') throw new Error(`${where}.baseURL 必须是字符串。`);
     if (l.extraBody !== undefined && (l.extraBody === null || typeof l.extraBody !== 'object' || Array.isArray(l.extraBody))) throw new Error(`${where}.extraBody 必须是一个 JSON 对象。`);

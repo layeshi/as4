@@ -2,6 +2,7 @@
 //
 // - anthropic：官方 SDK @anthropic-ai/sdk，动态 import；未安装时给出安装提示。
 // - openai：任何 OpenAI 兼容接口，用 fetch，不引依赖。
+// - openai-responses：OpenAI Responses 接口，用 fetch，不引依赖。
 // - mock：不联网，按感知随机生成合法动作，用于测试与演示。
 //
 // 安全：API 密钥只从环境变量读取，绝不进入提示，也不出现在错误信息与日志里。
@@ -94,23 +95,50 @@ async function createAnthropicProvider(cfg, deps) {
 
 // ── openai 兼容 ───────────────────────────────────────────────
 
+export const OPENAI_REASONING_EFFORTS = ['default', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+
+export function validateReasoningEffort(cfg) {
+  if (cfg.reasoningEffort !== undefined && !OPENAI_REASONING_EFFORTS.includes(cfg.reasoningEffort)) {
+    throw new ProviderError('思考强度无效。', { fatal: true });
+  }
+}
+
 function createOpenAIProvider(cfg, deps) {
-  if (!cfg.model) throw new ProviderError('openai 提供者需要配置 model。', { fatal: true });
+  if (!cfg.model) throw new ProviderError(`${cfg.provider} 提供者需要配置 model。`, { fatal: true });
+  validateReasoningEffort(cfg);
+  const responses = cfg.provider === 'openai-responses';
+  const effort = cfg.reasoningEffort === 'default' ? undefined : cfg.reasoningEffort;
   const fetchImpl = deps.fetch || globalThis.fetch;
   const key = cfg.apiKeyEnv ? (deps.env || process.env)[cfg.apiKeyEnv] : undefined;
   if (cfg.apiKeyEnv && !key) throw new ProviderError(`环境变量 ${cfg.apiKeyEnv} 没有设置。`, { fatal: true });
-  const url = `${String(cfg.baseURL || 'https://api.openai.com/v1').replace(/\/+$/, '')}/chat/completions`;
-  // extraBody：各家私有的请求参数（例如智谱 GLM 的 {"thinking": {"type": "disabled"}}）。不能覆盖 model 与 messages
+  const url = `${String(cfg.baseURL || 'https://api.openai.com/v1').replace(/\/+$/, '')}/${responses ? 'responses' : 'chat/completions'}`;
+  // extraBody：各家私有参数；不能覆盖模型、系统提示和消息输入。
   if (cfg.extraBody !== undefined && (cfg.extraBody === null || typeof cfg.extraBody !== 'object' || Array.isArray(cfg.extraBody))) {
     throw new ProviderError('extraBody 必须是一个 JSON 对象。', { fatal: true });
   }
   return {
-    name: 'openai',
+    name: cfg.provider,
     async complete({ system, messages, signal }) {
-      const body = { ...(cfg.extraBody || {}), model: cfg.model, messages: [{ role: 'system', content: system }, ...messages] };
-      if (cfg.temperature !== undefined) body.temperature = cfg.temperature;
-      if (cfg.maxTokens !== undefined) body.max_tokens = cfg.maxTokens;
-      if (cfg.jsonMode) body.response_format = { type: 'json_object' };
+      const body = responses
+        ? { ...(cfg.extraBody || {}), model: cfg.model, instructions: system, input: messages, store: false, stream: false }
+        : { ...(cfg.extraBody || {}), model: cfg.model, messages: [{ role: 'system', content: system }, ...messages] };
+      if (effort !== undefined) {
+        if (responses) body.reasoning = { ...body.reasoning, effort };
+        else body.reasoning_effort = effort;
+        // Reasoning models reject sampling controls while thinking is enabled.
+        if (effort !== 'none') {
+          for (const key of ['temperature', 'top_p', 'top_logprobs', 'logprobs']) delete body[key];
+        }
+      }
+      if (cfg.temperature !== undefined && (effort === undefined || effort === 'none')) body.temperature = cfg.temperature;
+      if (cfg.maxTokens !== undefined) {
+        if (!responses && effort !== undefined) delete body.max_tokens;
+        body[responses ? 'max_output_tokens' : effort !== undefined ? 'max_completion_tokens' : 'max_tokens'] = cfg.maxTokens;
+      }
+      if (cfg.jsonMode) {
+        if (responses) body.text = { ...body.text, format: { type: 'json_object' } };
+        else body.response_format = { type: 'json_object' };
+      }
       const headers = { 'Content-Type': 'application/json' };
       if (key) headers.Authorization = `Bearer ${key}`;
       let res;
@@ -128,6 +156,25 @@ function createOpenAIProvider(cfg, deps) {
       if (!res.ok) {
         const detail = json && json.error ? (typeof json.error === 'string' ? json.error : json.error.message) : `HTTP ${res.status}`;
         throw classifyStatus(res.status, String(detail).slice(0, 300));
+      }
+      if (responses) {
+        if (json?.error || json?.status === 'failed') {
+          throw new ProviderError('Responses 接口返回失败状态。', { retryable: true });
+        }
+        const content = (json?.output || []).filter(item => item.type === 'message' && item.role === 'assistant').flatMap(item => item.content || []);
+        const refused = content.some(part => part.type === 'refusal');
+        const incomplete = json?.status === 'incomplete';
+        const pending = json?.status && json.status !== 'completed' && !incomplete;
+        // Do not submit partial action JSON or a reasoning summary as a decision.
+        const out = {
+          text: refused || incomplete || pending ? '' : content.filter(part => part.type === 'output_text').map(part => part.text || '').join(''),
+          stop: refused ? 'refusal' : incomplete ? (json.incomplete_details?.reason === 'max_output_tokens' ? 'length' : 'incomplete') : pending ? json.status : 'stop',
+        };
+        const u = json?.usage;
+        if (u && Number.isFinite(u.input_tokens)) out.usage = { input: u.input_tokens, output: u.output_tokens };
+        const reasoning = u?.output_tokens_details?.reasoning_tokens;
+        if (out.usage && Number.isFinite(reasoning)) out.usage.reasoning = reasoning;
+        return out;
       }
       const choice = json && json.choices && json.choices[0];
       const out = { text: (choice && choice.message && choice.message.content) || '', stop: (choice && choice.finish_reason) || 'stop' };
@@ -254,16 +301,17 @@ function createMockProvider(cfg) {
 
 // ── 入口 ──────────────────────────────────────────────────────
 
-export const PROVIDER_NAMES = ['anthropic', 'openai', 'mock'];
+export const PROVIDER_NAMES = ['anthropic', 'openai', 'openai-responses', 'mock'];
 
 /**
- * config：{ provider, model?, apiKeyEnv?, baseURL?, effort?, fallbacks?, temperature?, jsonMode?, maxTokens?, extraBody?, timeoutMs?, seed?, chatty? }
+ * config：{ provider, model?, apiKeyEnv?, baseURL?, effort?, reasoningEffort?, fallbacks?, temperature?, jsonMode?, maxTokens?, extraBody?, timeoutMs?, seed?, chatty? }
  * deps（测试用）：{ loadAnthropic, fetch, env }
  */
 export async function createProvider(config, deps = {}) {
   switch (config.provider) {
     case 'anthropic': return createAnthropicProvider(config, deps);
     case 'openai': return createOpenAIProvider(config, deps);
+    case 'openai-responses': return createOpenAIProvider(config, deps);
     case 'mock': return createMockProvider(config);
     default: throw new ProviderError(`未知的提供者：${config.provider}（可选：${PROVIDER_NAMES.join('、')}）`, { fatal: true });
   }

@@ -7,6 +7,7 @@ const input = (name, value = '', props = {}) => h('input', { name, value, autoco
 const select = (name, options, value) => h('select', { name }, options.map(([id, text]) => h('option', { value: id, selected: id === value }, text)));
 const presets = {
   openai: ['openai', 'https://api.openai.com/v1', ''],
+  responses: ['openai-responses', 'https://api.openai.com/v1', ''],
   glm: ['openai', 'https://open.bigmodel.cn/api/paas/v4', ''],
   glmCoding: ['openai', 'https://open.bigmodel.cn/api/coding/paas/v4', ''],
   anthropic: ['anthropic', 'https://api.anthropic.com', ''],
@@ -16,8 +17,8 @@ const presets = {
 
 /** Configuration controls only; secrets remain in the form and never enter browser storage. */
 export function modelForm(config = {}) {
-  const preset = select('preset', [['openai', t('presetOpenai')], ['glm', t('presetGlm')], ['glmCoding', t('presetGlmCoding')], ['anthropic', t('presetAnthropic')], ['custom', t('presetCustom')], ['mock', t('presetMock')]], config.provider === 'mock' ? 'mock' : config.provider === 'anthropic' ? 'anthropic' : config.baseURL && config.baseURL !== presets.openai[1] ? 'custom' : 'openai');
-  const provider = select('provider', [['openai', t('presetOpenai')], ['anthropic', t('presetAnthropic')]], config.provider || 'openai');
+  const preset = select('preset', [['openai', t('presetOpenai')], ['responses', t('presetResponses')], ['glm', t('presetGlm')], ['glmCoding', t('presetGlmCoding')], ['anthropic', t('presetAnthropic')], ['custom', t('presetCustom')], ['mock', t('presetMock')]], config.provider === 'mock' ? 'mock' : config.provider === 'anthropic' ? 'anthropic' : config.baseURL && config.baseURL !== presets.openai[1] ? 'custom' : config.provider === 'openai-responses' ? 'responses' : 'openai');
+  const provider = select('provider', [['openai', t('presetOpenai')], ['openai-responses', t('presetResponses')], ['anthropic', t('presetAnthropic')]], config.provider || 'openai');
   const baseURL = input('baseURL', config.baseURL || presets.openai[1], { type: 'url', maxlength: 500, placeholder: 'https://…/v1' });
   const model = input('model', config.model || '', { maxlength: 100, placeholder: t('modelPlaceholder') });
   const apiKey = input('modelApiKey', '', { type: 'password', autocomplete: 'new-password', maxlength: 4096, placeholder: config.hasApiKey ? t('keyKeep') : t('keyPlaceholder') });
@@ -26,14 +27,15 @@ export function modelForm(config = {}) {
     config.hasApiKey ? h('label', { class: 'check' }, clearApiKey, ' ', t('clearModelKey')) : null);
   const thinking = select('thinking', [['default', t('thinkingDefault')], ['enabled', t('thinkingEnabled')], ['disabled', t('thinkingDisabled')]], config.thinking || 'default');
   const effort = select('effort', [['low', t('effortLow')], ['medium', t('effortMedium')], ['high', t('effortHigh')]], config.effort || 'medium');
+  const reasoningEffort = select('reasoningEffort', [['default', t('thinkingDefault')], ['none', t('effortNone')], ['minimal', t('effortMinimal')], ['low', t('effortLow')], ['medium', t('effortMedium')], ['high', t('effortHigh')], ['xhigh', t('effortXhigh')], ['max', t('effortMax')]], config.reasoningEffort || 'default');
   const every = input('actEveryTicks', config.actEveryTicks ?? 1, { type: 'number', min: 1, max: 100, required: true });
   const history = input('historyRounds', config.historyRounds ?? 6, { type: 'number', min: 0, max: 20, required: true });
   const maxTokens = input('maxTokens', config.maxTokens ?? '', { type: 'number', min: 64, max: 32000, placeholder: t('providerDefault') });
   const timeout = input('timeoutSeconds', (config.timeoutMs ?? 120000) / 1000, { type: 'number', min: 1, max: 120, step: 1, required: true });
-  const thinkingField = label('thinkingMode', thinking), effortField = label('thinkingEffort', effort);
+  const thinkingField = label('thinkingMode', thinking), effortField = label('thinkingEffort', effort), reasoningField = label('thinkingEffort', reasoningEffort);
   const advanced = h('details', { class: 'runner-advanced' }, h('summary', null, t('advancedSettings')),
-    h('div', { class: 'model-fields' }, label('actEvery', every), label('memoryRounds', history), label('maxOutput', maxTokens), label('modelTimeout', timeout), thinkingField, effortField),
-    h('p', { class: 'muted' }, t('thinkingHelp')));
+    h('div', { class: 'model-fields' }, label('actEvery', every), label('memoryRounds', history), label('maxOutput', maxTokens), label('modelTimeout', timeout), thinkingField, effortField, reasoningField),
+    h('p', { class: 'muted' }, t('thinkingHelp')), h('p', { class: 'muted' }, t('reasoningHelp')));
   const mockNote = h('p', { class: 'entry-note', hidden: true }, t('mockHelp'));
   const root = h('div', { class: 'model-form' }, label('modelService', preset), realFields, mockNote, advanced, h('p', { class: 'muted' }, t('modelKeyHelp')));
   const update = () => {
@@ -43,6 +45,8 @@ export function modelForm(config = {}) {
     baseURL.disabled = mock; model.disabled = mock; apiKey.disabled = mock; clearApiKey.disabled = mock;
     baseURL.required = !mock; model.required = !mock;
     thinkingField.hidden = mock || provider.value !== 'openai'; effortField.hidden = mock || provider.value !== 'anthropic';
+    reasoningField.hidden = mock || !['openai', 'openai-responses'].includes(provider.value);
+    thinking.disabled = thinkingField.hidden; effort.disabled = effortField.hidden; reasoningEffort.disabled = reasoningField.hidden;
   };
   preset.addEventListener('change', () => {
     const [type, url, name] = presets[preset.value];
@@ -59,6 +63,7 @@ export function modelForm(config = {}) {
     actEveryTicks: Number(every.value), historyRounds: Number(history.value), timeoutMs: Number(timeout.value) * 1000,
     ...(maxTokens.value ? { maxTokens: Number(maxTokens.value) } : {}),
     thinking: provider.value === 'openai' ? thinking.value : 'default', effort: effort.value,
+    ...(preset.value !== 'mock' && ['openai', 'openai-responses'].includes(provider.value) ? { reasoningEffort: reasoningEffort.value } : {}),
   }) };
 }
 
@@ -119,7 +124,7 @@ export function entryWizard(ctx, pane, { mode = 'register', subject, success }) 
     step++;
     if (step === 2) {
       clear(summary); const cfg = settings.read();
-      for (const [k, v] of [['f_name', mode === 'register' ? name.value : subject.name], ['modelService', cfg.provider === 'mock' ? t('presetMock') : cfg.provider === 'anthropic' ? t('presetAnthropic') : t('presetOpenai')], ['f_model', cfg.model], ['actEvery', cfg.actEveryTicks], ['memoryRounds', cfg.historyRounds]]) summary.append(h('dt', null, t(k)), h('dd', null, String(v)));
+      for (const [k, v] of [['f_name', mode === 'register' ? name.value : subject.name], ['modelService', cfg.provider === 'mock' ? t('presetMock') : cfg.provider === 'anthropic' ? t('presetAnthropic') : cfg.provider === 'openai-responses' ? t('presetResponses') : t('presetOpenai')], ['f_model', cfg.model], ['actEvery', cfg.actEveryTicks], ['memoryRounds', cfg.historyRounds]]) summary.append(h('dt', null, t(k)), h('dd', null, String(v)));
     }
     update(); steps[step].querySelector('input, select, button')?.focus();
   });

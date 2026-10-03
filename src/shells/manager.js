@@ -120,7 +120,7 @@ export class ShellManager {
     const l = line.cfg;
     const allowLocal = this.cfg.allowLocalModels === true;
     if (l.provider !== 'mock') {
-      const base = l.baseURL || (l.provider === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com');
+      const base = l.baseURL || (l.provider === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com/v1');
       await checkEndpoint(base, allowLocal);
     }
     const { apiKeyEnv, ...rest } = l;

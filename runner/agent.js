@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createClient, errorMessage } from './client.js';
-import { createProvider, PROVIDER_NAMES, ProviderError } from './providers.js';
+import { createProvider, PROVIDER_NAMES, ProviderError, validateReasoningEffort } from './providers.js';
 import { renderPerception, summarizeResults } from './render.js';
 import { buildSystemPrompt, promptParams } from './prompt.js';
 import { parseModelJson, normalizeReply } from './parse.js';
@@ -43,6 +43,7 @@ export function parseRunnerConfig(raw, env = process.env) {
     const token = env[a.tokenEnv];
     if (!token) throw new Error(`${where}：环境变量 ${a.tokenEnv} 没有设置。`);
     if (!PROVIDER_NAMES.includes(a.provider)) throw new Error(`${where}.provider 必须是 ${PROVIDER_NAMES.join(' / ')} 之一。`);
+    validateReasoningEffort(a);
     const lang = a.lang === 'en' ? 'en' : 'zh';
     const every = a.actEveryTicks === undefined ? 1 : a.actEveryTicks;
     if (!Number.isInteger(every) || every < 1) throw new Error(`${where}.actEveryTicks 必须是 ≥ 1 的整数。`);

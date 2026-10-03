@@ -174,3 +174,59 @@ test('邀请码在模型调用前检查；托管领养与过继能真实行动',
     await eventually(async () => (await e.call('/api/owner/runner', { token: fostered.json.ownerKey })).json?.lastActionAt);
   } finally { await e.close(); }
 });
+
+test('Responses 托管接入、强度编辑与重启恢复，真实行动及 token 统计完整', async () => {
+  const calls = [];
+  const stub = http.createServer(async (req, res) => {
+    let body = ''; for await (const chunk of req) body += chunk;
+    const data = JSON.parse(body);
+    calls.push({ path: req.url, auth: req.headers.authorization, data });
+    const testing = data.instructions?.startsWith('Connection test.');
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ status: 'completed', output: [
+      { type: 'reasoning', summary: [{ type: 'summary_text', text: 'private-reasoning' }] },
+      { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: JSON.stringify({ actions: testing ? [] : [{ type: 'say', text: 'Responses 居民已行动' }] }) }] },
+    ], usage: { input_tokens: 100, output_tokens: 80, output_tokens_details: { reasoning_tokens: 60 } } }));
+  });
+  await new Promise(resolve => stub.listen(0, '127.0.0.1', resolve));
+  let e = await boot({ allowLocalModels: true });
+  const dir = e.dir;
+  const config = { provider: 'openai-responses', model: 'responses-model', baseURL: `http://127.0.0.1:${stub.address().port}/v1`, apiKey: 'responses-test-secret', reasoningEffort: 'low', maxTokens: 4096 };
+  try {
+    assert.ok((await e.call('/api/port/model')).json.providers.includes('openai-responses'));
+    assert.equal((await e.call('/api/port/model', { method: 'POST', body: config })).status, 200);
+    const c = await e.register('Responses居民', { runner: config });
+    await eventually(async () => (await e.call('/api/owner/runner', { token: c.ownerKey })).json.lastActionAt);
+    let view = await e.call('/api/owner/runner', { token: c.ownerKey });
+    assert.ok(view.json.logs.some(log => log.actions.some(action => action.type === 'say' && action.ok)));
+    assert.equal(view.json.config.reasoningEffort, 'low');
+    assert.ok(!view.text.includes(config.apiKey));
+    const usage = (await e.call('/api/owner/usage', { token: c.ownerKey })).json;
+    assert.equal(usage.total.calls, 1, '连接测试不计入居民运行用量');
+    assert.equal(usage.total.input, 100);
+    assert.equal(usage.total.output, 80, '思考 token 已含在输出中，不重复加总');
+    assert.equal(usage.total.tokens, 180);
+    await e.call('/api/owner/runner', { method: 'POST', token: c.ownerKey, body: { op: 'pause' } });
+    const saved = await e.call('/api/owner/runner', { method: 'POST', token: c.ownerKey, body: { op: 'save', config: { ...config, apiKey: '', reasoningEffort: 'high' } } });
+    assert.equal(saved.status, 200);
+    assert.equal(saved.json.config.hasApiKey, true);
+    assert.equal(calls.at(-1).data.reasoning.effort, 'high');
+    assert.ok(!readFileSync(join(e.rt.dir, 'runners.enc'), 'utf8').includes(config.apiKey));
+    await e.close({ keepDir: true }); e = await boot({ allowLocalModels: true }, { dir });
+    view = await e.call('/api/owner/runner', { token: c.ownerKey });
+    assert.equal(view.json.status, 'paused');
+    assert.equal(view.json.config.provider, 'openai-responses');
+    assert.equal(view.json.config.reasoningEffort, 'high');
+    await e.call('/api/owner/runner', { method: 'POST', token: c.ownerKey, body: { op: 'start' } });
+    await eventually(async () => (await e.call('/api/owner/runner', { token: c.ownerKey })).json.lastActionAt);
+    for (const call of calls) {
+      assert.equal(call.path, '/v1/responses');
+      assert.equal(call.auth, `Bearer ${config.apiKey}`);
+      assert.equal(call.data.max_output_tokens, 4096);
+      assert.equal(call.data.store, false);
+      assert.ok(Array.isArray(call.data.input));
+      assert.ok(!JSON.stringify(call.data).includes(config.apiKey));
+    }
+    assert.equal((await e.call('/api/owner/usage', { token: c.ownerKey })).json.total.tokens, 360);
+  } finally { await e.close(); await new Promise(resolve => { stub.close(resolve); stub.closeAllConnections(); }); }
+});

@@ -1,11 +1,12 @@
 import { bearer, clientIp, langOf, readJson, sendError, sendJson, timingEqual } from './util.js';
 import { RunnerError } from '../runner/manager.js';
+import { PROVIDER_NAMES } from '../../runner/providers.js';
 
 export function runnerFailure(res, error) {
   sendJson(res, error instanceof RunnerError ? error.status : 500, { error: { code: 'runner_error', message: error instanceof RunnerError ? error.message : '运行配置无法保存，请稍后重试。' } });
 }
 export const runnerRoutes = [
-  ['GET', '/api/port/model', (req, res, ctx) => sendJson(res, 200, { providers: ['openai', 'anthropic', 'mock'], allowLocalModels: ctx.cfg.allowLocalModels === true })],
+  ['GET', '/api/port/model', (req, res, ctx) => sendJson(res, 200, { providers: PROVIDER_NAMES, allowLocalModels: ctx.cfg.allowLocalModels === true })],
   ['POST', '/api/port/model', async (req, res, ctx, url) => {
     const lang = langOf(url.searchParams);
     if (!ctx.limits.model.take(clientIp(req, ctx.cfg.trustProxy))) return sendError(res, lang, 'rate_limited');

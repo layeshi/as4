@@ -1,7 +1,7 @@
 import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, renameSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
-import { createProvider } from '../../runner/providers.js';
+import { createProvider, PROVIDER_NAMES, validateReasoningEffort } from '../../runner/providers.js';
 import { runAgent, makeLogger } from '../../runner/agent.js';
 import { parseModelJson } from '../../runner/parse.js';
 import { checkEndpoint, modelFetch } from './endpoint.js';
@@ -19,14 +19,14 @@ const integer = (v, fallback, min, max) => {
 export function runnerConfig(raw, previous = {}) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new RunnerError('请填写模型配置。');
   const provider = raw.provider;
-  if (!['openai', 'anthropic', 'mock'].includes(provider)) throw new RunnerError('请选择支持的模型接口类型。');
+  if (!PROVIDER_NAMES.includes(provider)) throw new RunnerError('请选择支持的模型接口类型。');
   const text = (k, max = 500) => {
     if (raw[k] !== undefined && (typeof raw[k] !== 'string' || raw[k].length > max)) throw new RunnerError('模型配置字段格式或长度不正确。');
     return (raw[k] || '').trim();
   };
   const model = provider === 'mock' ? 'mock' : text('model', 100);
   if (!model || /[\r\n]/.test(model)) throw new RunnerError('请填写有效的单行模型名称。');
-  const baseURL = provider === 'mock' ? '' : text('baseURL') || (provider === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com');
+  const baseURL = provider === 'mock' ? '' : text('baseURL') || (provider === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com/v1');
   const key = text('apiKey', 4096);
   const sameEndpoint = previous.provider === provider && previous.baseURL === baseURL;
   const apiKey = raw.clearApiKey === true ? '' : key || (sameEndpoint ? previous.apiKey : '') || '';
@@ -35,7 +35,9 @@ export function runnerConfig(raw, previous = {}) {
   if (!['default', 'enabled', 'disabled'].includes(thinking)) throw new RunnerError('思考模式无效。');
   const effort = raw.effort || 'medium';
   if (!['low', 'medium', 'high'].includes(effort)) throw new RunnerError('思考强度无效。');
+  try { validateReasoningEffort(raw); } catch { throw new RunnerError('思考强度无效。'); }
   const config = { provider, model, baseURL, apiKey, thinking, effort,
+    ...(['openai', 'openai-responses'].includes(provider) ? { reasoningEffort: raw.reasoningEffort ?? 'default' } : {}),
     actEveryTicks: integer(raw.actEveryTicks, 1, 1, 100), historyRounds: integer(raw.historyRounds, 6, 0, 20),
     timeoutMs: integer(raw.timeoutMs, 120000, 1000, 120000),
     ...(raw.maxTokens !== undefined ? { maxTokens: integer(raw.maxTokens, 4096, 64, 32000) } : {}),

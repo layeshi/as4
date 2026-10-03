@@ -145,18 +145,41 @@ node runner/agent.js --config runner/agents.json        # 或：npm run agent --
 |---|---|
 | `tokenEnv` | 保存令牌的环境变量名（必填） |
 | `lang` | 渲染感知与系统提示所用的语言，`zh`（默认）或 `en` |
-| `provider` | `anthropic` / `openai` / `mock` |
-| `model` | 模型名。anthropic 默认 `claude-opus-5-5`；openai 必填 |
+| `provider` | `anthropic` / `openai`（Chat Completions）/ `openai-responses`（Responses）/ `mock` |
+| `model` | 模型名。anthropic 默认 `claude-opus-5-5`；两种 OpenAI 接口必填 |
 | `apiKeyEnv` | 保存 API 密钥的环境变量名。anthropic 可省略（用 SDK 默认的凭据解析） |
 | `actEveryTicks` | 每隔几刻行动一次，默认 1 |
 | `historyRounds` | 短期记忆保留最近几轮（0–20，默认 6，SPEC §15.1）。每一轮都是一整份感知，调小（如 2）可以明显省 token 与时间 |
 | `name` | 日志里的名字（可省略） |
 | anthropic：`effort`（默认 `medium`）、`fallbacks`（默认 `true`；`baseURL` 指向代理或其他平台时设为 `false`）、`baseURL` | |
 | openai：`baseURL`（默认 `https://api.openai.com/v1`）、`temperature`、`maxTokens`、`jsonMode`、`extraBody`（各家私有的请求参数，合并进请求体，不能覆盖 `model` 与 `messages`；如智谱的 `{"thinking": {"type": "disabled"}}`） | |
+| 两种 OpenAI 接口：`reasoningEffort` | `default`（或省略，不发送参数）/ `none` / `minimal` / `low` / `medium` / `high` / `xhigh` / `max`，具体可用值取决于模型与服务商 |
+| openai-responses | 使用同样的 `baseURL`、`apiKeyEnv`、`maxTokens`、`jsonMode`、`extraBody`、`timeoutMs`；发送至基础地址下的 `/responses` |
 | mock：`seed`、`chatty`（偶尔在 JSON 外加话和代码围栏，用来检验解析容错） | |
 
 - **anthropic** 需要官方 SDK：`npm install @anthropic-ai/sdk`（已列为可选依赖）。系统提示用 1 小时缓存（一刻恰好 5 分钟，等于默认缓存有效期）；不会发送 `thinking`、`temperature`、`top_p`、`top_k`。
 - **openai** 是任何 OpenAI 兼容接口（Ollama、vLLM、各家网关……），用 `fetch`，不引依赖。
+- **openai-responses** 支持 OpenAI 与提供 Responses 接口的网关。基础地址仍填写 `https://api.openai.com/v1` 或网关对应地址，末尾不加 `/responses`。系统提示通过 `instructions`、最近历史和本轮感知通过 `input` 发送；请求使用 `store: false`，每轮由本地历史维持上下文。只读取 assistant 的 `output_text`，不读取思考摘要；拒绝或未完成的响应不执行行动。输入与输出用量映射到现有统计，思考 token 已包含在输出用量中。
+- **思考强度**：入境向导和幕后「修改模型配置 → 高级设置」均可选择。OpenAI Chat Completions 映射为 `reasoning_effort`，Responses 映射为 `reasoning.effort`；Anthropic 保持 `effort` 的低/中/高设置。OpenAI 的默认选项不额外发送强度参数，旧配置不会因为曾保存的 Anthropic `effort` 字段改变行为。明确设置 OpenAI 强度时，Chat 的输出上限使用 `max_completion_tokens`；未设置时继续使用原有 `max_tokens`；Responses 使用 `max_output_tokens`。这些上限包含思考 token；思考启用时不发送温度等采样控制。模型不支持所选强度时，连接测试会失败，应选择支持的值或服务商默认。参数依据 [OpenAI reasoning 文档](https://developers.openai.com/api/docs/guides/reasoning)。
+
+Responses 自运行配置示例（相同线路字段也可用于 `SHELLS_FILE`）：
+
+```json
+{
+  "server": "http://127.0.0.1:8787",
+  "agents": [{
+    "name": "Responses 居民",
+    "tokenEnv": "HOUREN_TOKEN_A",
+    "provider": "openai-responses",
+    "baseURL": "https://api.openai.com/v1",
+    "model": "your-model",
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "reasoningEffort": "medium",
+    "maxTokens": 16000
+  }]
+}
+```
+
 - **mock** 不联网，按感知随机生成合法动作，用于测试与演示：`"provider": "mock"`。
 - 回复里取**第一个完整的 JSON 对象**（容忍前后的话与代码围栏）；解析失败则本刻不行动，并在下一轮提示模型。
 - 每轮日志会写一行 `模型用时 … · 输入 … · 输出 … token`，是调「一刻多长」「历史留几轮」的依据。
