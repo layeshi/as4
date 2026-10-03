@@ -149,3 +149,25 @@ test('P1 T7: models stay private even after curtain; newborn uses its body model
   const b=w.agents.a2;assert.equal(b.body.model,bodyOf(w,b).model);assert.equal(b.body.shellId,'b1');
   e2.applyCommand(w,{type:'admin',payload:{op:'curtain'}});assert.ok(!JSON.stringify(e2.publicState(w)).includes('hidden-model'));
 });
+
+import { completeTraining } from '../src/e2/engine/bodies.js';
+test('P1 T8: internalize cost, pending, whole-entry eviction, private acquired and wipe', () => {
+  const w=bareWorld('training',{premise:1});const a=reg(w,'甲'),b=reg(w,'乙');
+  one(w,a,{type:'remember',text:'五个汉字呀'});const before=upkeepOf(a);const r=one(w,a,{type:'internalize',memory:0});assert.equal(r.cost,3);assert.equal(a.memories.length,0);assert.equal(upkeepOf(a),before);
+  let p=e2.buildPerception(w,a.id,{ack:false});assert.equal(p.you.training,1);assert.deepEqual(p.you.trained,[]);assert.ok(renderPerception2(p).includes('训练中 1 段（明日生效）'));
+  completeTraining(w);p=e2.buildPerception(w,a.id,{ack:false});assert.equal(p.you.training,0);assert.deepEqual(p.you.trained,['五个汉字呀']);assert.equal(one(w,a,{type:'forget',index:0}).error.code,'invalid_args');assert.equal(one(w,a,{type:'impart',to:b.id,memory:0}).error.code,'invalid_args');
+  a.body.trained=Array.from({length:6},(_,i)=>({text:`旧${i}`,weight:200,by:a.id,day:0}));a.body.pending=[{text:'新',weight:1,by:a.id,day:1}];completeTraining(w);assert.equal(a.body.trained[0].text,'旧1');assert.equal(w.dayLog.p1.trainedEvicted,1);assert.ok(a.inbox.some(x=>x.code==='trained_faded'));
+  e2.applyCommand(w,{type:'model',payload:{agentId:a.id,ownerKeyHash:a.owner.keyHash,model:'mock-changed'}});assert.deepEqual(a.body.trained,[]);assert.ok(a.inbox.some(x=>x.code==='trained_lost'));
+  b.body.pending=[{text:'未完成',weight:3,by:b.id,day:0}];dieAgent(w,b,0);completeTraining(w);assert.equal(b.body.pending.length,1);
+  const sw=bareWorld('shell-training',{premise:1,founders:founders10,shellSlots:16,shellModels:['mock']});e2.applyCommand(sw,{type:'tick'});const old=sw.agents.a1;
+  one(sw,old,{type:'remember',text:'前任习得'});one(sw,old,{type:'internalize',memory:0});dieAgent(sw,old,0);completeTraining(sw);assert.equal(bodyOf(sw,old).trained.length,1);
+  const author=sw.agents.a2;author.energy=300;for(const body of sw.shells.bodies.slice(10))body.occupant='reserved';
+  const s=one(sw,author,{type:'conceive',name:'继住者',soul:'新的灵魂'}).data.soul;one(sw,author,{type:'sponsor',soul:s,energy:200});embodySouls(sw);const child=sw.agents.a11;
+  assert.equal(child.body.shellId,'b1');assert.deepEqual(e2.buildPerception(sw,child.id,{ack:false}).you.trained,['前任习得']);
+});
+test('P1 T8: fostering with a changed model clears training (Q31)', () => {
+  const w=bareWorld('foster-trained',{premise:1});const a=reg(w,'甲');
+  a.fosterable=true;a.body.trained=[{text:'旧习得',weight:3,by:a.id,day:0}];
+  const r=e2.applyCommand(w,{type:'foster',payload:{agentId:a.id,model:'different',creatorName:'mock-owner',tokenHash:'1'.repeat(64),ownerKeyHash:'2'.repeat(64)}}).result;
+  assert.equal(r.ok,true);assert.deepEqual(a.body.trained,[]);assert.equal(w.dayLog.p1.trainedWiped,1);assert.ok(a.inbox.some(x=>x.code==='trained_lost'));
+});

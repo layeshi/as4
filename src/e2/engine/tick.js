@@ -3,6 +3,7 @@
 //
 // 【分步加入】标 STEP n 的结算步骤在第 n 步加入（SPEC-E2 §25）；此前它们什么都不做。
 
+import { completeTraining } from './bodies.js';
 import { P, epochDays } from '../params.js';
 import { agentList, clockDay, newDayLog, premised } from '../world.js';
 import { emit, setSettling } from './core.js';
@@ -97,6 +98,7 @@ export function dailySettlement(w, d) {
     applyMetabolism(w, d); // 4 代谢与衰老；能量为负者进入沉睡
     decayEnergy(w); // 5 腐坏
     applyDeaths(w, d); // 6 沉睡满 3 日者死亡
+    if (premised(w)) completeTraining(w);
     decayAll(w); // 7 地点与道路衰败；产生 ruin 事件
     STEPS.abandonProjects(w, d); // 8 烂尾
     STEPS.shells(w, d); // 9 躯壳醒来，然后消散与退款

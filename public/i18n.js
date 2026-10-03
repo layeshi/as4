@@ -545,6 +545,7 @@ export const VARS = {
   offer_close: (e) => ({ a: A(e.agent), id: e.data.offerId, reason: e.data.reason }),
   // TODO(spec): Q29 — new event templates must be registered with their emitters.
   backstage: () => ({}),
+  internalize: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
   impart: (e) => ({ a: A(e.agent), to: A(e.data.to), text: TX(e.data.text) }),
   remember: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
   forget: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
@@ -675,6 +676,7 @@ export const TPL = {
     offer_close_expired: '{a} 的交易 {id} 过期了。',
     backstage: '幕后有东西变了。',
     backstage_bodies: '幕后换过了一些身体。',
+    internalize: '{a} 把一段记忆训练进身体：「{text}」',
     impart: '{a} 交给 {to} 一段记忆：「{text}」',
     remember: '{a} 记下：「{text}」',
     forget: '{a} 忘掉了：「{text}」',
@@ -790,6 +792,7 @@ export const TPL = {
     offer_close_expired: "{a}'s offer {id} expired.",
     backstage: 'Something changed backstage.',
     backstage_bodies: 'Some bodies were changed backstage.',
+    internalize: '{a} trained a memory into their body: “{text}”',
     impart: '{a} handed {to} a memory: “{text}”',
     remember: '{a} remembered: “{text}”',
     forget: '{a} forgot: “{text}”',
@@ -894,7 +897,7 @@ export const TPL = {
 /** 事件的类别（着色与筛选） */
 export const CAT = {
   backstage: 'world',
-  say: 'speech', whisper: 'speech', broadcast: 'speech', thought: 'speech', impart: 'speech', remember: 'speech', forget: 'speech', reveal: 'speech',
+  say: 'speech', whisper: 'speech', broadcast: 'speech', thought: 'speech', internalize: 'speech', impart: 'speech', remember: 'speech', forget: 'speech', reveal: 'speech',
   give: 'econ', offer_open: 'econ', trade: 'econ', offer_close: 'econ', draw: 'econ', explore: 'econ', mint: 'econ', grant: 'econ', stipend: 'econ', stipend_skipped: 'econ', fund: 'econ', disburse: 'econ',
   propose: 'polity', vote: 'polity', law_passed: 'polity', law_rejected: 'polity', electorate_reverted: 'polity', repeal: 'polity', amend: 'polity', rename: 'polity', protect: 'polity', unprotect: 'polity', exile: 'polity', pardon: 'polity',
   found: 'polity', join: 'polity', leave: 'polity', admit: 'polity', steward: 'polity', dissolve: 'polity', naturalized: 'polity',

@@ -245,6 +245,7 @@ function build(p, { lastResults, code, level }) {
     lines.push(`  ${d.will}${P.col}${d.heirs} ${heirs}${extra.length ? `${P.semi}${extra.join(P.semi)}` : ''}`);
   }
 
+  if (p.premise >= 1 && you.training) lines.push(code === 'en' ? `  ${you.training} in training (takes effect tomorrow)` : `  训练中 ${you.training} 段（明日生效）`);
   if (p.premise >= 1 && you.memoryOffers && you.memoryOffers.length) {
     lines.push(code === 'en' ? '  Memories offered to you' : '  待收的记忆');
     for (const m of you.memoryOffers) {

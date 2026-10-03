@@ -1,7 +1,7 @@
 // SPEC-M1 §7.3 与 SPEC-E2 §11–§12：生命周期——注册（入城）、代谢与衰老、沉睡、死亡、遗嘱与遗产、归隐、过继、家书。
 // 唤醒（wake / creditEnergy）在 core.js。孕育与灵魂（作者、传灯、出生）见 souls.js，躯壳见 shells.js。
 
-import { releaseBody } from './bodies.js';
+import { isShell, wipeTraining, releaseBody } from './bodies.js';
 import { int } from '../../rng.js';
 import { textWeight } from '../../text.js';
 import { P, LIMITS } from '../params.js';
@@ -70,7 +70,10 @@ export function makeAgent(w, o) {
     script: null,
     stats: { repaired: 0, contributed: 0, drawn: 0, utterances: 0, inscribed: 0, salvaged: 0 },
   };
-  if (premised(w)) a.memoryOffers = [];
+  if (premised(w)) {
+    a.memoryOffers = [];
+    if (!isShell(a)) { a.body.trained = []; a.body.pending = []; }
+  }
   w.agents[id] = a;
   return a;
 }
@@ -346,6 +349,8 @@ export function foster(w, p) {
     // TODO(spec): Q7 —— 过继后新造者能看到旧造者寄的家书与居民迄今的日记吗？暂行：什么都不隔离（同第一纪）
     a.owner = { keyHash: f.keyHash, creatorName: f.creatorName };
     a.tokenHash = f.tokenHash;
+    // TODO(spec): Q31 — fostering that changes the model also wipes acquired training.
+    if (premised(w) && a.body.model !== f.model) wipeTraining(w, a);
     a.body.model = f.model;
     a.body.history.push({ day: clockDay(w), model: f.model });
     a.body.mustSeal = true;
@@ -366,6 +371,7 @@ export function changeModel(w, p) {
   try {
     const model = reqText(p.model, { max: LIMITS.model, field: 'model', doScreen: false, oneLine: true });
     if (a.body.model !== model) {
+      if (premised(w) && !isShell(a)) wipeTraining(w, a);
       a.body.model = model;
       a.body.history.push({ day: clockDay(w), model });
     }

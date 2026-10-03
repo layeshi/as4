@@ -8,6 +8,7 @@
 // 副作用：默认（不传 after）会把世界状态里的收件箱游标推进到本次返回的最大 seq（自动确认）——这只能发生在命令之内
 // （沙盘脑在 tick 里感知）；传 after 或 ack: false 则不推进。HTTP 层一律传 ack: false，用自己的内存游标（floor）。
 
+import { bodyOf } from './bodies.js';
 import { actionTable } from '../lore/actions.js';
 import { P, SEASON_TABLE, conditionBand, seasonBand, richnessBand } from '../params.js';
 import { travelCosts, lotsNear, HUMAN_DEFS } from '../map/index.js';
@@ -167,7 +168,7 @@ function youView(w, a, l, lang, day, openOffers, openPacts) {
     authors: a.authors.map((id) => refId(w, id)).filter(Boolean),
     children: a.children.map((id) => refId(w, id)).filter(Boolean),
     metabolism: metabolismIn(w, a, day),
-    ...(premised(w) ? { weight: weightOf(a) } : {}),
+    ...(premised(w) ? { weight: weightOf(a), trained: bodyOf(w, a).trained.map((x) => x.text), training: bodyOf(w, a).pending.length } : {}),
     actionsLeft: Math.max(0, P.maxActionsPerTick - a.actsThisTick), maxActionsPerTick: P.maxActionsPerTick,
     drawnToday: a.drawnToday, repairedToday: a.repairedToday, salvagedToday: a.salvagedToday,
     memories: a.memories.map((m, index) => ({ index, day: m.day, text: m.text, from: m.from ? refId(w, m.from) : null, ...(premised(w) ? { origin: refId(w, m.origin) } : {}) })),
@@ -435,6 +436,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
     // 代价的修正说明
     if ((type === 'whisper' || type === 'broadcast') && fog) notes.push(relay ? { code: 'relayFog', text: N.relayFog } : { code: 'fog', text: N.fog });
     if (type === 'broadcast' && relay) notes.push({ code: 'relay', text: N.relay });
+    if (type === 'internalize') notes.push({ code: 'trainCost', text: lang === 'en' ? "cost = ⌈the memory's weight ÷ 2⌉" : '代价 = ⌈这段记忆的分量 ÷ 2⌉' });
     if (type === 'move') notes.push({ code: 'distance', text: N.distance });
     else if (def.base === null) notes.push({ code: 'variable', text: N.variable });
     if (usesModule && entry.cost > 0 && costMultiplierBp(here) > 10000) {

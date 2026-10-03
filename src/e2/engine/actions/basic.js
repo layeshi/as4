@@ -1,6 +1,8 @@
 // 生命与能量的动作（SPEC-E2 §25 第 3 步）：move say whisper broadcast give remember forget diary will
 // （孕育与立志见 descent.js；出资 sponsor 在第 8 步）
 
+import { bodyOf } from '../bodies.js';
+import { textWeight } from '../../../text.js';
 import { P, LIMITS } from '../../params.js';
 import { ACTIONS } from '../../lore/actions.js';
 import { clockDay, nextId, findAgent, isAlive, isNameTaken, premised } from '../../world.js';
@@ -279,4 +281,21 @@ const impart = {
   },
 };
 
-export const basicHandlers = { impart, move, say, whisper, broadcast, give, remember, forget, diary, will };
+const internalize = {
+  validate(ctx, args) {
+    const { a } = ctx;
+    if (a.memories.length === 0) fail('invalid_args');
+    const index = needInt(args.memory, { min: 0, max: a.memories.length - 1 });
+    const weight = textWeight(a.memories[index].text);
+    return { index, weight, cost: ctx.cost(Math.ceil(weight / P.trainCostDivisor)) };
+  },
+  apply(ctx, plan) {
+    const { w, a } = ctx;
+    const [m] = a.memories.splice(plan.index, 1);
+    bodyOf(w, a).pending.push({ text: m.text, weight: plan.weight, by: a.id, day: clockDay(w) });
+    emit(w, 'internalize', { vis: 'delayed', agent: a.id, place: a.place, data: { index: plan.index, text: m.text, weight: plan.weight } });
+    w.dayLog.p1.internalized++;
+    return { index: plan.index, weight: plan.weight };
+  },
+};
+export const basicHandlers = { internalize, impart, move, say, whisper, broadcast, give, remember, forget, diary, will };
