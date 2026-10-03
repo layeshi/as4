@@ -152,3 +152,13 @@ export function countWord(text, wordKey) {
   const found = hay.match(m.re);
   return found ? found.length : 0;
 }
+
+const WEIGHT_CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+/** CJK code points count one; all remaining code points together count ceil(n / 3). */
+export function textWeight(s) {
+  if (typeof s !== 'string' || s === '') return 0;
+  let cjk = 0;
+  let other = 0;
+  for (const ch of s) { if (WEIGHT_CJK.test(ch)) cjk++; else other++; }
+  return cjk + Math.ceil(other / 3);
+}

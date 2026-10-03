@@ -7,7 +7,7 @@
 
 import { P, LIMITS, epochDays } from './params.js';
 import { createStreams, shuffle } from '../rng.js';
-import { nameKey, normalizeText, cpLength } from '../text.js';
+import { nameKey, normalizeText, cpLength, textWeight } from '../text.js';
 import { nameShapeOk, LANG_RE } from './names.js';
 import { L, CHARTER, CHARTER_LANGS, charterWallText, CANON, LETTER } from './lore/index.js';
 import { MAP, LOT_IDS } from './map/index.js';
@@ -107,7 +107,7 @@ function initialCounters(extra) {
  * 校验并规范化先民名单（SPEC-E2 附录 D）：名字唯一且形状合法（同注册）；day 为 0–719 的整数；lang 为语言标签；灵魂与介绍的长度。
  * 校验失败抛 Error，信息里带第几条（从 0 数起）。返回按 day 再按文件顺序排序的副本。
  */
-export function validateFounders(list) {
+export function validateFounders(list, { premise = 0 } = {}) {
   if (!Array.isArray(list)) throw new Error('founders: must be an array');
   const seen = new Set();
   const out = list.map((f, i) => {
@@ -124,6 +124,7 @@ export function validateFounders(list) {
     if (bio === null || cpLength(bio) > LIMITS.bio) throw new Error(`${at}.bio: at most ${LIMITS.bio} characters`);
     const soul = normalizeText(f.soul);
     if (soul === null || soul === '' || cpLength(soul) > LIMITS.soul) throw new Error(`${at}.soul: 1–${LIMITS.soul} characters`);
+    if (premised({ premise }) && textWeight(soul) > P.soulWeightMax) throw new Error(`${at}.soul: 分量不能超过 ${P.soulWeightMax}（现在 ${textWeight(soul)}）`);
     return { day: f.day, name, bio, soul, lang: f.lang, ...(typeof f.temperament === 'string' ? { temperament: f.temperament } : {}) };
   });
   return out.map((f, i) => ({ f, i })).sort((a, b) => a.f.day - b.f.day || a.i - b.i).map(({ f }) => f);
@@ -139,7 +140,7 @@ export function createWorld({
 
   if (premise !== 0 && premise !== 1) throw new Error('PREMISE 只能是 0 或 1');
   if (premise === 1 && founders.length > shellSlots) throw new Error('设定 1 的世界里，先民不能多于躯壳');
-  const sorted = validateFounders(founders);
+  const sorted = validateFounders(founders, { premise });
   const models = shellModels.slice();
 
   const w = {

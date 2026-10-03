@@ -10,8 +10,8 @@
 
 import { P, LIMITS } from '../../params.js';
 import { ACTIONS } from '../../lore/actions.js';
-import { clockDay, nextId, findAgent, isAlive, isNameTaken } from '../../world.js';
-import { fail, emit, pushInbox, ref, needText, optText, optLang, needId, needInt } from '../core.js';
+import { clockDay, nextId, findAgent, isAlive, isNameTaken, premised } from '../../world.js';
+import { fail, emit, pushInbox, ref, needText, needWeight, optText, optLang, needId, needInt } from '../core.js';
 import { credit } from '../accounts.js';
 import { hasModuleAt } from '../places.js';
 import { checkNameShape } from '../lifecycle.js';
@@ -57,6 +57,7 @@ const conceive = {
     const { w, a } = ctx;
     const name = needChildName(args);
     const soul = needText(args.soul, { max: LIMITS.soul });
+    if (premised(w)) needWeight(soul, 'soul', P.soulWeightMax);
     const lang = optLang(args.lang, a.lang);
     // 共同作者：0–4 位不重复、不是自己的 ID；每一位在世、醒着、与你同在一地
     let withIds = [];

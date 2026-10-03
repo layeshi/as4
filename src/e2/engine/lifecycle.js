@@ -1,8 +1,9 @@
 // SPEC-M1 §7.3 与 SPEC-E2 §11–§12：生命周期——注册（入城）、代谢与衰老、沉睡、死亡、遗嘱与遗产、归隐、过继、家书。
 // 唤醒（wake / creditEnergy）在 core.js。孕育与灵魂（作者、传灯、出生）见 souls.js，躯壳见 shells.js。
 
+import { textWeight } from '../../text.js';
 import { P, LIMITS } from '../params.js';
-import { nextId, clockDay, agentList, isNameTaken } from '../world.js';
+import { nextId, clockDay, agentList, isNameTaken, premised } from '../world.js';
 import { source, sink } from './ledger.js';
 import { emit, pushInbox, ref, creditEnergy, ReqError, bad, reqText, reqLang, reqHash } from './core.js';
 import { endowedEnergy } from './places.js';
@@ -106,6 +107,7 @@ export function register(w, p) {
     checkNameShape(name);
     const bio = reqText(p.bio ?? '', { max: LIMITS.bio, min: 0, field: 'bio' });
     const soul = reqText(p.soul, { max: LIMITS.soul, field: 'soul', doScreen: false });
+    if (premised(w) && textWeight(soul) > P.soulWeightMax) return bad('text_too_long', { field: 'soul', limit: P.soulWeightMax, weight: textWeight(soul) });
     const lang = reqLang(p.lang);
     const model = reqText(p.model, { max: LIMITS.model, field: 'model', doScreen: false, oneLine: true });
     const creatorName = reqText(p.creatorName ?? '', { max: LIMITS.creatorName, min: 0, field: 'creatorName', doScreen: false, oneLine: true });

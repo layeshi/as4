@@ -3,9 +3,9 @@
 
 import { P, LIMITS } from '../../params.js';
 import { ACTIONS } from '../../lore/actions.js';
-import { clockDay, findAgent, isAlive, isNameTaken } from '../../world.js';
+import { clockDay, findAgent, isAlive, isNameTaken, premised } from '../../world.js';
 import {
-  fail, emit, pushInbox, ref, creditEnergy, needText, optText, optLang, needInt, optAmount, needObject, needId,
+  fail, emit, pushInbox, ref, creditEnergy, needText, needWeight, optText, optLang, needInt, optAmount, needObject, needId,
 } from '../core.js';
 import { checkNameShape } from '../lifecycle.js';
 import { moveBaseCost, isWildOpen, hasGate, hasEnterRule, defaultMayEnter } from '../movement.js';
@@ -146,8 +146,9 @@ const give = {
 
 const remember = {
   validate(ctx, args) {
-    const { a } = ctx;
-    const text = needText(args.text, { max: LIMITS.memory });
+    const { w, a } = ctx;
+    const text = needText(args.text, { max: premised(w) ? P.memoryCpMax : LIMITS.memory });
+    if (premised(w)) needWeight(text, 'text', P.memoryWeightMax);
     if (a.memories.length >= P.memorySlots) fail('memory_full');
     return { text, cost: ctx.cost(ACTIONS.remember.base) };
   },
@@ -215,6 +216,7 @@ const will = {
         fail('invalid_args');
       }
       const soul = needText(s.soul, { max: LIMITS.soul });
+      if (premised(w)) needWeight(soul, 'successor.soul', P.soulWeightMax);
       const lang = optLang(s.lang, a.lang);
       let memories = [];
       if (s.memories !== undefined && s.memories !== null) {

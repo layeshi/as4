@@ -6,7 +6,7 @@
 
 import { P } from '../params.js';
 import { nextSeq, clockDay } from '../world.js';
-import { checkText } from '../../text.js';
+import { checkText, textWeight } from '../../text.js';
 import { screen } from '../../moderation.js';
 
 /**
@@ -217,3 +217,12 @@ export const mulPermille = (n, permille) => Math.floor((n * permille) / 1000);
 
 /** 把 3 位小数的法律参数化为千分比整数 */
 export const toPermille = (x) => Math.round(x * 1000);
+
+/** Weight check follows the existing code-point check; callers guard with premised(w). */
+export function needWeight(text, field, limit) {
+  const weight = textWeight(text);
+  if (weight > limit) fail('text_too_long', {
+    zh: `${field} 的分量不能超过 ${limit}（现在 ${weight}）。分量 ≈ 汉字、假名、谚文的字数 + 其余字符数 ÷ 3。`,
+    en: `The weight of ${field} cannot exceed ${limit} (it is ${weight}). Weight ≈ CJK characters + other characters ÷ 3.`,
+  }, { field, limit, weight });
+}
