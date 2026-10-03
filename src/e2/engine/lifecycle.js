@@ -129,10 +129,17 @@ export function register(w, p) {
 /** 代谢 = 3 + floor(年龄日数 / 48) */
 export const metabolismOf = (a, d) => P.metabolismBase + Math.floor((d - a.bornDay) / P.agingEveryDays);
 
+export const weightOf = (a) => ({ soul: textWeight(a.soul), memories: a.memories.reduce((n, m) => n + textWeight(m.text), 0) });
+export const upkeepOf = (a) => {
+  const x = weightOf(a);
+  return P.upkeepBase + Math.floor((x.soul + x.memories) / P.upkeepWeightPerEnergy);
+};
+export const metabolismIn = (w, a, d) => premised(w) ? upkeepOf(a) : metabolismOf(a, d);
+
 export function applyMetabolism(w, d) {
   for (const a of agentList(w)) {
     if (a.status !== 'awake') continue; // 沉睡者不付代谢
-    const m = metabolismOf(a, d);
+    const m = metabolismIn(w, a, d);
     const paid = Math.min(a.energy, m);
     a.energy -= paid;
     sink(w, 'energy', 'metabolism', paid);

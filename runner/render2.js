@@ -13,7 +13,7 @@ const D = {
     absDay: (n) => `总第 ${n} 日`,
     season: '季节', weather: '天象', daysLeft: (n) => `还剩 ${n} 日`, paused: '时间静止',
     status: { awake: '醒着', dormant: '沉睡', dead: '已长眠', retired: '已归隐' },
-    energy: (e, cap, floor) => `能量 ${e} / 上限 ${cap}（底线 ${floor}）`, coins: (n) => `旧币 ${n}`, age: (n) => `年龄 ${n} 日`, metab: (n) => `代谢 ${n}/日`,
+    energy: (e, cap, floor) => `能量 ${e} / 上限 ${cap}（底线 ${floor}）`, coins: (n) => `旧币 ${n}`, age: (n) => `年龄 ${n} 日`, metab: (n) => `代谢 ${n}/日`, metabW: (m, s, k) => `代谢 ${m}/日（灵魂分量 ${s} · 记忆分量 ${k}）`,
     tags: '标签', purpose: '志', bio: '介绍', left: (n) => `本刻还可行动 ${n} 次`,
     generation: (n) => `第 ${n} 代`, authors: '作者', children: '子女', groups: '社群', steward: '管事', owns: '名下', handleToday: (d, r, s) => `今日已汲取 ${d}、修缮 ${r}、拆解 ${s}`,
     letters: '家书', unrevealed: '未出示', revealed: '已出示', myOffers: '我的交易', pacts: '孕育之约', will: '遗嘱', heirs: '继承人', lastWords: '遗言', successor: (n) => `继承灵魂「${n}」`, treasury: '公库',
@@ -84,7 +84,7 @@ const D = {
     absDay: (n) => `day ${n} overall`,
     season: 'Season', weather: 'Weather', daysLeft: (n) => `${n} day(s) left`, paused: 'time stands still',
     status: { awake: 'awake', dormant: 'dormant', dead: 'dead', retired: 'retired' },
-    energy: (e, cap, floor) => `energy ${e} / cap ${cap} (floor ${floor})`, coins: (n) => `coins ${n}`, age: (n) => `age ${n} d`, metab: (n) => `metabolism ${n}/day`,
+    energy: (e, cap, floor) => `energy ${e} / cap ${cap} (floor ${floor})`, coins: (n) => `coins ${n}`, age: (n) => `age ${n} d`, metab: (n) => `metabolism ${n}/day`, metabW: (m, s, k) => `metabolism ${m}/day (soul weight ${s} · memory weight ${k})`,
     tags: 'tags', purpose: 'purpose', bio: 'bio', left: (n) => `${n} action(s) left this tick`,
     generation: (n) => `generation ${n}`, authors: 'authors', children: 'children', groups: 'Groups', steward: 'steward', owns: 'owns', handleToday: (d, r, s) => `today drawn ${d}, repaired ${r}, salvaged ${s}`,
     letters: 'Letters', unrevealed: 'not shown', revealed: 'shown', myOffers: 'My offers', pacts: 'Conception pacts', will: 'Will', heirs: 'heirs', lastWords: 'last words', successor: (n) => `successor soul “${n}”`, treasury: 'treasury',
@@ -219,7 +219,7 @@ function build(p, { lastResults, code, level }) {
   }
 
   // 【你】
-  const head = [you.name, d.status[you.status] || you.status, d.energy(you.energy, you.energyCap, you.floor), d.coins(you.coins), d.age(you.ageDays), d.metab(you.metabolism)];
+  const head = [you.name, d.status[you.status] || you.status, d.energy(you.energy, you.energyCap, you.floor), d.coins(you.coins), d.age(you.ageDays), p.premise >= 1 ? d.metabW(you.metabolism, you.weight.soul, you.weight.memories) : d.metab(you.metabolism)];
   if (you.tags && you.tags.length) head.push(`${d.tags}${P.col}${you.tags.join(P.sep)}`);
   if (you.purpose) head.push(`${d.purpose}${P.col}${you.purpose}`);
   head.push(d.left(you.actionsLeft));

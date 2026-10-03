@@ -53,3 +53,18 @@ test('P1 T2: text weight vectors and hard limits', () => {
   const f=[{day:0,name:'己',bio:'',soul:'汉'.repeat(1501),lang:'zh'}];
   assert.throws(()=>validateFounders(f,{premise:1}),/founders\[0\].*1501/); assert.equal(validateFounders(f).length,1);
 });
+
+import { upkeepOf, weightOf, metabolismIn, applyMetabolism } from '../src/e2/engine/lifecycle.js';
+import { renderPerception2 } from '../runner/render2.js';
+test('P1 T3: weight metabolism anchors, age independence and private rendering', () => {
+  for (const [s,k,m] of [[176,0,3],[176,2400,15],[1500,2400,22]]) {
+    const a={soul:'汉'.repeat(s),memories:[{text:'汉'.repeat(k)}]}; assert.deepEqual(weightOf(a),{soul:s,memories:k}); assert.equal(upkeepOf(a),m);
+  }
+  const w=bareWorld('upkeep',{premise:1});const a=reg(w,'甲');
+  assert.equal(metabolismIn(w,a,0),metabolismIn(w,a,500));
+  a.energy=40; applyMetabolism(w,500);assert.equal(a.energy,37);
+  const p=e2.buildPerception(w,a.id,{ack:false});assert.equal(p.you.metabolism,3);assert.deepEqual(p.you.weight,weightOf(a));
+  assert.ok(renderPerception2(p).includes('代谢 3/日（灵魂分量 3 · 记忆分量 0）'));
+  assert.ok(renderPerception2(e2.buildPerception(w,a.id,{ack:false,lang:'en'})).includes('soul weight 3'));
+  const publicA=e2.publicState(w).agents[0];assert.equal(Object.hasOwn(publicA,'weight'),false);assert.equal(Object.hasOwn(publicA,'metabolism'),false);
+});

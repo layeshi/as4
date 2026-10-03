@@ -14,7 +14,7 @@ import { L, fmt, normLang, placeDisplayName, placeDescription, cityDisplayName, 
 import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum, premised } from '../world.js';
 import { truncateCp, cpLength } from '../../text.js';
 import { agentCap } from './economy.js';
-import { metabolismOf } from './lifecycle.js';
+import { metabolismIn, weightOf } from './lifecycle.js';
 import { actionCost } from './actions/util.js';
 import { isWeatherActive } from './environment.js';
 import { omensAt } from './weather.js';
@@ -165,7 +165,8 @@ function youView(w, a, l, lang, day, openOffers, openPacts) {
     ageDays: day - a.bornDay, generation: a.generation,
     authors: a.authors.map((id) => refId(w, id)).filter(Boolean),
     children: a.children.map((id) => refId(w, id)).filter(Boolean),
-    metabolism: metabolismOf(a, day),
+    metabolism: metabolismIn(w, a, day),
+    ...(premised(w) ? { weight: weightOf(a) } : {}),
     actionsLeft: Math.max(0, P.maxActionsPerTick - a.actsThisTick), maxActionsPerTick: P.maxActionsPerTick,
     drawnToday: a.drawnToday, repairedToday: a.repairedToday, salvagedToday: a.salvagedToday,
     memories: a.memories.map((m, index) => ({ index, day: m.day, text: m.text, from: m.from ? refId(w, m.from) : null })),
