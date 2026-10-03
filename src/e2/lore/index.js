@@ -76,6 +76,7 @@ export function publicLore(lang) {
     lang: nl,
     cityName: d.cityName, redacted: d.redacted, unreadableInscription: d.unreadableInscription,
     place: d.place, district: d.district, band: d.band, wellBand: d.wellBand, richnessWild: d.richnessWild, season: d.season,
+    physicsP1: d.physicsP1, shellsP1: d.shellsP1,
     weather: d.weather, omen: d.omen, module: d.module, physics: d.physics, shells: d.shells,
     razedName: d.razedName, razedDesc: d.razedDesc, lotName: d.lotName,
   };

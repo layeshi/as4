@@ -171,3 +171,30 @@ test('P1 T8: fostering with a changed model clears training (Q31)', () => {
   const r=e2.applyCommand(w,{type:'foster',payload:{agentId:a.id,model:'different',creatorName:'mock-owner',tokenHash:'1'.repeat(64),ownerKeyHash:'2'.repeat(64)}}).result;
   assert.equal(r.ok,true);assert.deepEqual(a.body.trained,[]);assert.equal(w.dayLog.p1.trainedWiped,1);assert.ok(a.inbox.some(x=>x.code==='trained_lost'));
 });
+
+import { L as lore2 } from '../src/e2/lore/index.js';
+import { buildSystemPrompt, promptParams, actionCatalog2 } from '../runner/prompt.js';
+import { runAgent } from '../runner/agent.js';
+import { createMcp } from '../mcp/server.js';
+const specP1=readFileSync(new URL('../docs/SPEC-P1.md',import.meta.url),'utf8');
+test('P1 T9: appendix text exactness, purpose unchanged, acquired conditional and action protocol', () => {
+  const a1=[...specP1.split('### A.1')[1].split('### A.2')[0].matchAll(/^> (.+)$/gm)].map(m=>m[1]);
+  for(const [i,lang] of ['zh','en'].entries()) {
+    const l=lore2(lang);for(let n=0;n<3;n++)assert.ok(l.promptP1.head.includes(a1[n*2+i]));
+    const purpose=l.prompt.head.split(lang==='zh'?'【目的】':'[Purpose]')[1].split('\n')[0];assert.ok(l.promptP1.head.includes(purpose));
+    const s=buildSystemPrompt({protocol:2,premise:1,lang,soul:'SOUL',trained:['ACQUIRED']});assert.ok(s.endsWith('ACQUIRED'));assert.ok(s.includes(l.promptP1.trainedHead));assert.ok(s.indexOf('SOUL')<s.indexOf(l.promptP1.trainedHead));
+    const empty=buildSystemPrompt({protocol:2,premise:1,lang,soul:null});assert.ok(!empty.includes(l.promptP1.trainedHead));
+    for(const gone of ['每人每日限汲 5','先用 draft 试算，再 propose','限额须区分累计投入和累计补贴','at most 5 a day per person','Use draft to try rules before you propose','distinguish cumulative spending from cumulative subsidy'])assert.ok(!s.includes(gone));
+    const catalog=actionCatalog2(lang,{premise:1});assert.ok(catalog.includes('impart(to, memory)'));assert.ok(catalog.includes('internalize(memory)'));assert.ok(catalog.includes('remember(text | gift)'));
+    for(const code of ['dormancy_loss','trained_faded','trained_lost','backstage_code','backstage_bodies','backstage_budget_up','backstage_budget_down','backstage_resume'])assert.ok(l.perception.system[code]);
+  }
+  const table=specP1;const protocol=readFileSync(new URL('../docs/PROTOCOL-2.md',import.meta.url),'utf8');const newRows=[...protocol.split('### 15.3')[1].split('### 15.4')[0].matchAll(/^\| `([a-z]+)` \|/gm)].map(m=>m[1]);assert.deepEqual(newRows,['remember',...ACTION_ORDER_P1.filter(t=>!ACTION_ORDER.includes(t))]);
+});
+test('P1 T9: mock provider receives rebuilt system after acquired changes; MCP includes acquired', async () => {
+  const w=bareWorld('prompt-rebuild',{premise:1});const a=reg(w,'甲');const systems=[];
+  const client={me:async()=>({ok:true,json:e2.buildPerception(w,a.id,{ack:false})}),act:async()=>({ok:true,json:{results:[]}})};
+  await runAgent({provider:'mock',lang:'zh',actEveryTicks:1},{client,provider:{complete:async({system})=>{systems.push(system);return{text:'{"actions":[]}'}}},wait:async()=>{w.clock.tick++;a.body.trained=[{text:'新习得',weight:3,by:a.id,day:0}];},maxRounds:2,log:{info(){},warn(){},error(){}}});
+  assert.equal(systems.length,2);assert.ok(!systems[0].includes(lore2('zh').promptP1.trainedHead));assert.ok(systems[1].includes('【习得】这些不是记忆：你说不清是从哪里学来的，也忘不掉。\n新习得'));
+  const mcp=createMcp({env:{HOUREN_SERVER:'http://mock.local',HOUREN_TOKEN:'test-mock-only'},fetch:async()=>new Response(JSON.stringify(e2.buildPerception(w,a.id,{ack:false})),{headers:{'content-type':'application/json'}})});
+  const r=await mcp.handle({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'houren_rules',arguments:{}}});assert.ok(r.result.content[0].text.includes('【习得】'));assert.ok(!r.result.content[0].text.includes('【你的灵魂】'));
+});

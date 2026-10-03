@@ -118,6 +118,7 @@ export async function runAgent(cfg, deps = {}) {
   let cursor; // 收件箱游标：成功行动（或决定不行动）之后才确认，保证「至少一次」
   let lastResults = null;
   let system = null;
+  let systemKey = null;
   let rounds = 0;
   let acted = 0;
   let rejected = 0; // 连续被服务商拒绝（非限速的 4xx）的次数：多半是配置错了
@@ -176,7 +177,10 @@ export async function runAgent(cfg, deps = {}) {
 
     rounds++;
     // 系统提示只在第一次（或换了语言 / 灵魂）时构建：整轮不变，便于提供者缓存
-    if (system === null) system = buildSystemPrompt(promptParams(p));
+    if (p.premise >= 1) {
+      const key = JSON.stringify([p.lang, p.you.soul, p.you.trained || [], p.premise]);
+      if (system === null || key !== systemKey) { system = buildSystemPrompt(promptParams(p)); systemKey = key; }
+    } else if (system === null) system = buildSystemPrompt(promptParams(p));
     const userText = renderPerception(p, { lastResults: lastResults || undefined, lang: cfg.lang });
     const messages = [];
     for (const h of history) messages.push({ role: 'user', content: h.user }, { role: 'assistant', content: h.assistant });
