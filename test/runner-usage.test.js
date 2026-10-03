@@ -1,7 +1,6 @@
 // 托管运行器的 token 用量：存储（分桶、修剪、落盘）与 HTTP（只统计托管运行器的真实调用、只有造者能看、过继清零、不泄露、不影响回放）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import http from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,37 +8,10 @@ import { boot } from './http-helpers.js';
 import { UsageStore, USAGE_DAYS, USAGE_RECENT, DEFAULT_USAGE_TZ } from '../src/runner/usage.js';
 import { replayDir } from '../src/tools/replay.js';
 import { sha256hex } from '../src/http/util.js';
+import { eventually, startStub } from './model-stub.js';
 
 const mock = { provider: 'mock', model: 'mock', historyRounds: 2, actEveryTicks: 1 };
 const HOUR = 3600 * 1000;
-
-async function eventually(fn, what = '条件') {
-  for (let i = 0; i < 150; i++) {
-    if (await fn()) return;
-    await new Promise((r) => setTimeout(r, 20));
-  }
-  assert.fail(`${what}没有在限定时间内成立`);
-}
-
-/** 一个本机的 OpenAI 兼容接口：连接测试照常通过；运行器的调用按 mode 回应 */
-async function startStub(usage = { prompt_tokens: 1234, completion_tokens: 56 }) {
-  const stub = { mode: 'ok', usage, calls: [] };
-  stub.server = http.createServer(async (req, res) => {
-    let body = '';
-    for await (const chunk of req) body += chunk;
-    const data = JSON.parse(body);
-    const probe = data.messages[0].content.startsWith('Connection test.');
-    stub.calls.push({ probe, model: data.model });
-    res.setHeader('Content-Type', 'application/json');
-    if (!probe && stub.mode === 'hang') { req.on('close', () => res.destroy()); return; }
-    if (!probe && stub.mode === 'limit') { res.writeHead(429).end(JSON.stringify({ error: { message: 'do-not-leak-upstream-detail' } })); return; }
-    res.end(JSON.stringify({ choices: [{ message: { content: '{"actions":[]}' }, finish_reason: 'stop' }], ...(stub.usage ? { usage: stub.usage } : {}) }));
-  });
-  await new Promise((r) => stub.server.listen(0, '127.0.0.1', r));
-  stub.config = (extra = {}) => ({ provider: 'openai', baseURL: `http://127.0.0.1:${stub.server.address().port}/v1`, model: 'test-model', apiKey: 'usage-test-api-key', ...extra });
-  stub.close = () => new Promise((r) => { stub.server.close(r); stub.server.closeAllConnections(); });
-  return stub;
-}
 
 const usageOf = async (e, key) => (await e.call('/api/owner/usage', { token: key })).json;
 

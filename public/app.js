@@ -110,7 +110,7 @@ async function boot() {
   for (const id of ['city', 'clock', 'countdown', 'pop', 'treasury', 'well', 'weather', 'conn', 'btn-enter', 'btn-back', 'btn-lang', 'map', 'tabs', 'panel', 'banner', 'color-mode', 'color-label', 'foot', 'drawer', 'status', 'map-zoom-in', 'map-zoom-out', 'map-fit', 'map-legend']) {
     els[id] = document.getElementById(id);
   }
-  initAccounts(document.getElementById('btn-account'));
+  initAccounts(document.getElementById('btn-account'), ctx);
   wireStatic();
   applyLabels();
   const first = location.hash.slice(1);

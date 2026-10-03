@@ -2,6 +2,7 @@
 // 所有管理操作都会产生公开的 admin 事件（不含管理员身份）。
 
 import { randomBytes } from 'node:crypto';
+import { accountFor } from './accounts.js';
 import { readJson, sendError, sendEngineError, sendJson, sha256hex, timingEqual } from './util.js';
 
 /** 鉴权；失败时发 404（未启用）或 401，并返回 false */
@@ -15,6 +16,25 @@ function auth(ctx, req, res) {
     return false;
   }
   return true;
+}
+
+/** 只读的运营视图：管理员账号的登录会话，或 X-Admin-Key 都行（后者在 ADMIN_KEY 未设置时 404） */
+function authOperator(ctx, req, res) {
+  const user = accountFor(ctx, req);
+  if (user && user.role === 'admin') return true;
+  return auth(ctx, req, res);
+}
+
+/** GET /api/admin/usage：托管居民（玩家用自己的模型密钥驱动的）的 token 用量总览，每位居民标上关联了它的账号 */
+async function hostedUsage(req, res, ctx) {
+  if (!authOperator(ctx, req, res)) return;
+  const overview = ctx.runners.usageOverview();
+  const links = ctx.accounts.linkIndex(ctx.rt.w.id);
+  for (const row of overview.agents) {
+    const token = ctx.rt.w.agents[row.agentId].tokenHash; // 令牌换过（过继）的关联不算
+    row.accounts = (links.get(row.agentId) || []).filter((l) => l.token === token).map((l) => l.username);
+  }
+  sendJson(res, 200, overview);
 }
 
 /** 通用的 admin 命令转发：POST 体作为 args */
@@ -135,6 +155,7 @@ export const adminRoutes = [
   ['POST', '/api/admin/adjust', op('adjust')],
   ['POST', '/api/admin/curtain', op('curtain')],
   ['GET', '/api/admin/research', research],
+  ['GET', '/api/admin/usage', hostedUsage],
   ['GET', '/api/admin/shells', shellsView],
   ['POST', '/api/admin/shells', shellsOp],
   ['POST', '/api/admin/shell-models', shellModels],

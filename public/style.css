@@ -688,7 +688,7 @@ figcaption { font-size: 12px; color: var(--muted); text-align: center; }
 /* 幕后的 token 用量：数字块、近 14 日柱状图（输入在下、输出在上）、跨居民总览。只用类名，不写内联样式（CSP）。 */
 .usage-panel { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; padding: 14px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; }
 .usage-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.usage-head h4 { margin: 0; }
+.usage-head h3, .usage-head h4 { margin: 0; }
 .usage-body, .usage-content { display: flex; flex-direction: column; gap: 10px; }
 .usage-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
 .usage-tile { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line-soft); border-radius: 6px; min-width: 0; }
@@ -710,13 +710,17 @@ figcaption { font-size: 12px; color: var(--muted); text-align: center; }
 .usage-legend .swatch.out { background: var(--c2); margin-left: 8px; }
 .usage-recent { font-size: 13px; font-variant-numeric: tabular-nums; }
 .usage-note { margin: 0; font-size: 12px; }
-.usage-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.usage-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.usage-table td.num { white-space: nowrap; } /* 表头可以换行，窄屏才放得下 */
 .usage-table .usage-sub { white-space: nowrap; overflow-wrap: normal; }
 .usage-table .btn { white-space: nowrap; }
-.usage-table th:nth-child(2), .usage-table th:nth-child(3), .usage-table th:nth-child(4) { text-align: right; }
+.usage-table .row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
+.usage-table .row-actions .usage-sub { white-space: normal; }
+.account-claim .field-row input { min-width: 0; }
+.usage-table th.num { text-align: right; }
 .usage-sum td { font-weight: 600; border-top: 1px solid var(--line); }
 @media (max-width: 560px) {
-  .usage-table .last { display: none; } /* 窄屏只留数字：最近调用的时间在居民自己的面板里看得到 */
+  .usage-table .last, .usage-table .opt { display: none; } /* 窄屏只留数字：最近调用、状态、造者与模型在居民自己的面板 / 宽屏里看得到 */
   .usage-table th, .usage-table td { padding-left: 4px; padding-right: 4px; }
   .model-fields { grid-template-columns: minmax(0, 1fr); }
   .entry-progress li { flex-direction: column; gap: 6px; text-align: center; font-size: 12px; }

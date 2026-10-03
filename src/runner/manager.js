@@ -93,6 +93,33 @@ export class RunnerManager {
   usageView(id) {
     return this.valid(id) ? { tracked: true, ...this.usage.view(id) } : { tracked: false };
   }
+  /**
+   * The operator's overview: every resident this server drives with a player's own model key, busiest today first, with the city-wide
+   * totals and the last days summed. Shells (paid for by the platform) are not here; `unhosted` counts living residents the server
+   * does not drive (self-hosted or never connected), which no usage can be seen for.
+   */
+  usageOverview() {
+    const base = this.usage.view(''); // an empty view: today's date, the day window, zeroed buckets
+    const add = (sum, b) => { for (const k of ['calls', 'failed', 'unreported', 'input', 'output', 'tokens']) sum[k] += b[k]; return sum; };
+    const zero = () => ({ calls: 0, failed: 0, unreported: 0, input: 0, output: 0, tokens: 0 });
+    const total = zero(), today = zero(), days = base.days.map((d) => ({ ...d }));
+    const agents = [];
+    for (const id of Object.keys(this.records)) {
+      if (!this.valid(id)) continue;
+      const a = this.rt.w.agents[id], u = this.usage.view(id);
+      add(total, u.total); add(today, u.today);
+      u.days.forEach((d, i) => add(days[i], d));
+      agents.push({
+        agentId: id, name: a.name, status: a.status, model: this.records[id].config.model, creatorName: a.owner ? a.owner.creatorName ?? null : null,
+        runnerStatus: this.view(id).status,
+        usage: { since: u.since, lastCallAt: u.recent.length ? u.recent[u.recent.length - 1].at : null, total: u.total, today: u.today },
+      });
+    }
+    agents.sort((x, y) => y.usage.today.tokens - x.usage.today.tokens || y.usage.total.tokens - x.usage.total.tokens || (x.agentId < y.agentId ? -1 : 1));
+    const hosted = new Set(agents.map((x) => x.agentId));
+    const unhosted = Object.values(this.rt.w.agents).filter((a) => a.owner && a.tokenHash && ['awake', 'dormant'].includes(a.status) && !hosted.has(a.id)).length;
+    return { timezone: base.timezone, day: base.day, hosted: agents.length, unhosted, total, today, days, agents };
+  }
   provider(config, timeoutMs = config.timeoutMs) {
     const { apiKey, thinking, ...safe } = config;
     return createProvider({ ...safe, timeoutMs, apiKeyEnv: apiKey ? 'MANAGED_KEY' : undefined,

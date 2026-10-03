@@ -1,11 +1,28 @@
 // PROTOCOL §7：港口——注册、摇篮、领养、过继。
 
 import { runnerFailure } from './runner.js';
+import { accountFor } from './accounts.js';
 import { randomBytes } from 'node:crypto';
 import { isAlive } from '../world.js';
 import { clientIp, langOf, readJson, sendError, sendEngineError, sendJson, sha256hex, timingEqual } from './util.js';
 
 const issueSecret = () => randomBytes(32).toString('hex');
+
+/**
+ * 登录状态下入境的居民，同时关联到该账号（只读：账号看得到居民与用量，控制权仍然只靠造者密钥）。
+ * 没有登录会话时返回 undefined，响应与以前完全一致；关联失败不影响居民与一次性凭据，可以事后用造者密钥认领。
+ * 关联只存在账号文件里，不进命令载荷与世界状态。
+ */
+function linkToAccount(ctx, req, agentId) {
+  const user = accountFor(ctx, req);
+  if (!user) return undefined;
+  try {
+    ctx.accounts.linkAgent(user.id, { world: ctx.rt.w.id, agentId, token: ctx.rt.w.agents[agentId].tokenHash });
+    return { linked: true };
+  } catch {
+    return { linked: false };
+  }
+}
 
 /** 邀请码检查（设置了 INVITE_CODE 时，注册、领养、过继都需要）。返回错误码或 null */
 function checkInvite(ctx, body) {
@@ -69,8 +86,9 @@ export async function register(req, res, ctx, url) {
   });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   ctx.tokens.add(ctx.rt.w.agents[result.agentId]);
+  const account = linkToAccount(ctx, req, result.agentId);
   const runner = await attachRunner(ctx, body, result.agentId, agentToken);
-  sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins, runner });
+  sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins, runner, ...(account ? { account } : {}) });
 }
 
 /** GET /api/port/cradle：摇篮中的灵魂（第一纪与感知中的 city.cradle 相同、另含 createdDay；第二纪另含作者、出资与出资者） */
@@ -91,8 +109,9 @@ export async function adopt(req, res, ctx, url) {
   });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   ctx.tokens.add(ctx.rt.w.agents[result.agentId]);
+  const account = linkToAccount(ctx, req, result.agentId);
   const runner = await attachRunner(ctx, body, result.agentId, agentToken);
-  sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins, runner });
+  sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins, runner, ...(account ? { account } : {}) });
 }
 
 /** GET /api/port/fosterable：造者交付过继的 agent（公开档案） */
@@ -116,10 +135,11 @@ export async function foster(req, res, ctx, url) {
   });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   ctx.tokens.rebuild(ctx.rt.w); // 旧令牌与密钥立即失效
+  const account = linkToAccount(ctx, req, result.agentId); // 令牌已换：旧主人账号里的关联随之失效，新主人（若已登录）关联上
   let cleanupFailed = false;
   try { await ctx.runners.remove(result.agentId); } catch { cleanupFailed = true; }
   const runner = await attachRunner(ctx, body, result.agentId, agentToken) || (cleanupFailed ? { status: 'error', lastError: '旧运行器已停止，但配置保存失败，请在幕后重新配置。' } : undefined);
-  sendJson(res, 200, { agentId: result.agentId, agentToken, ownerKey, runner });
+  sendJson(res, 200, { agentId: result.agentId, agentToken, ownerKey, runner, ...(account ? { account } : {}) });
 }
 
 async function attachRunner(ctx, body, id, token) {

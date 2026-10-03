@@ -1,11 +1,13 @@
 import { h, clear } from './dom.js';
 import { getLang } from './i18n.js';
 import { api, errorText } from './api.js';
-import { openModal } from './modals.js';
+import { openModal, openBackstage, savedOwners } from './modals.js';
+import { accountAgentsPanel, adminUsageView } from './account-usage-ui.js';
 import { openSnapshots } from './snapshots-ui.js';
 const tr = (zh, en) => getLang() === 'en' ? en : zh;
 let current = null;
 let accountButton;
+let appCtx; // 观测站的上下文：「我的居民」里的「进入幕后」要用
 const button = (label, run, primary = false) => h('button', { type: 'button', class: `btn${primary ? ' primary' : ''}`, onClick: run }, label);
 function field(label, name, type = 'text', value = '', extra = {}) {
   const input = h('input', { name, type, value, required: true, ...extra });
@@ -44,8 +46,9 @@ export async function refreshAccount() {
   if (accountButton) accountButton.textContent = current ? `${tr('用户中心', 'Account')} · ${current.displayName}` : tr('登录 / 注册', 'Sign in / Register');
   return r;
 }
-export function initAccounts(btn) {
+export function initAccounts(btn, ctx) {
   accountButton = btn;
+  appCtx = ctx;
   btn.addEventListener('click', openAccount);
 }
 export async function openAccount() {
@@ -57,10 +60,10 @@ export async function openAccount() {
     modal.body.append(h('p', { class: 'error' }, tr('无法读取账号信息，请重试。', 'Unable to load your account.')), button(tr('重试', 'Retry'), () => { modal.close(); openAccount(); }));
     return;
   }
-  if (current) return profile(modal);
+  if (current) { modal.dialog.classList.add('wide'); return profile(modal); } // 「我的居民」是一张表，要宽一些
   const tabs = h('div', { class: 'subtabs' });
   const pane = h('div');
-  modal.body.append(h('p', { class: 'muted' }, tr('游客可自由观测城市。创建人类用户账号后，可保存个人资料。Agent 入境与造者密钥仍在「入境 / 幕后」中使用。', 'Guests can observe the city. Human accounts store your profile. Agent entry and owner keys remain available through Enter / Backstage.')), tabs, pane);
+  modal.body.append(h('p', { class: 'muted' }, tr('游客可自由观测城市。创建人类用户账号后，可保存个人资料。Agent 入境与造者密钥仍在「入境 / 幕后」中使用；登录状态下入境的居民会关联到账号，可在用户中心查看它们的状态与 token 用量。', 'Guests can observe the city. Human accounts store your profile. Agent entry and owner keys remain available through Enter / Backstage; residents you enter while signed in are linked to your account, where you can see their status and token usage.')), tabs, pane);
   const modes = [['login', tr('登录', 'Sign in')]];
   if (r.json.registrationOpen) modes.push(['register', tr('注册', 'Register')]);
   if (r.json.setupAvailable) modes.push(['setup', tr('初始化管理员', 'Set up administrator')]);
@@ -90,13 +93,14 @@ function profile(modal) {
   modal.body.append(h('div', { class: 'account-summary' }, nameHeading, h('p', { class: 'muted' }, `@${u.username} · ${role}`)));
   const actions = h('div', { class: 'form-actions' });
   if (u.role === 'admin') actions.append(button(tr('用户管理', 'Manage users'), openUsers, true), button(tr('世界快照', 'World snapshots'), openSnapshots));
+  if (u.role === 'admin') actions.append(button(tr('托管用量', 'Hosted usage'), openAdminUsage));
   const logoutMessage = h('p', { role: 'status', class: 'error' });
   actions.append(button(tr('退出登录', 'Sign out'), async () => {
     const r = await request('/api/account/logout', {});
     if (r.ok) { current = null; await refreshAccount(); modal.close(); }
     else logoutMessage.textContent = errorText(r, tr('退出失败，请重试。', 'Sign out failed. Please retry.'));
   }));
-  modal.body.append(actions, logoutMessage, h('h3', null, tr('个人资料', 'Profile')));
+  modal.body.append(actions, logoutMessage, accountAgentsPanel({ openBackstage: (key) => { modal.close(); openBackstage(appCtx, key); }, savedOwners }), h('h3', null, tr('个人资料', 'Profile')));
   modal.body.append(form([field(tr('昵称', 'Display name'), 'displayName', 'text', u.displayName, { maxlength: 60 })], tr('保存资料', 'Save profile'), async (body, msg) => {
     const r = await request('/api/account', body, 'PATCH');
     if (r.ok) { await refreshAccount(); nameHeading.textContent = r.json.user.displayName; msg.textContent = tr('资料已保存。', 'Profile saved.'); }
@@ -110,6 +114,9 @@ function profile(modal) {
     return r;
   });
   modal.body.append(change);
+}
+function openAdminUsage() {
+  adminUsageView(openModal(tr('托管用量', 'Hosted usage'), 'wide').body);
 }
 async function openUsers() {
   const modal = openModal(tr('用户管理', 'User management'), 'wide');

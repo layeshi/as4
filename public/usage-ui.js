@@ -8,25 +8,25 @@ import { api, errorText } from './api.js';
 import { el, niceMax } from './charts.js';
 
 const POLL_MS = 15000;
-const locale = () => (getLang() === 'en' ? 'en' : 'zh-CN');
-const num = (n) => (Number.isFinite(n) ? n.toLocaleString(locale()) : '–');
+export const locale = () => (getLang() === 'en' ? 'en' : 'zh-CN');
+export const num = (n) => (Number.isFinite(n) ? n.toLocaleString(locale()) : '–');
 /** 纵轴刻度用的紧凑写法 */
 const compact = (n) => (n >= 1e6 ? `${parseFloat((n / 1e6).toFixed(2))}M` : n >= 1e3 ? `${parseFloat((n / 1e3).toFixed(1))}K` : String(parseFloat(n.toFixed(1))));
-const stamp = (iso) => (iso ? new Date(iso).toLocaleString(locale()) : '–');
+export const stamp = (iso) => (iso ? new Date(iso).toLocaleString(locale()) : '–');
 const inOut = (b) => `${t('usageInput')} ${num(b.input)} · ${t('usageOutput')} ${num(b.output)}`;
 /** 同样的内容，但「标签 数字」不会在行尾被拆开 */
-const inOutNodes = (b) => [h('span', { class: 'nw' }, `${t('usageInput')} ${num(b.input)}`), ' · ', h('span', { class: 'nw' }, `${t('usageOutput')} ${num(b.output)}`)];
+export const inOutNodes = (b) => [h('span', { class: 'nw' }, `${t('usageInput')} ${num(b.input)}`), ' · ', h('span', { class: 'nw' }, `${t('usageOutput')} ${num(b.output)}`)];
 /** 失败与「接口没有报告用量」的次数：这两种调用不进 token 数，必须让人看得见，否则 0 token 会被误读成免费 */
-const oddNotes = (total) => [total.failed ? t('usageFailed', { n: total.failed }) : '', total.unreported ? t('usageUnreported', { n: total.unreported }) : ''].filter(Boolean);
+export const oddNotes = (total) => [total.failed ? t('usageFailed', { n: total.failed }) : '', total.unreported ? t('usageUnreported', { n: total.unreported }) : ''].filter(Boolean);
 /** 服务器给出的完整视图才画图：任何字段缺失（旧服务器、意外的响应）都当作没有数据 */
-const complete = (u) => !!(u && u.tracked === true && u.total && u.today && Array.isArray(u.days) && Array.isArray(u.recent));
+export const complete = (u) => !!(u && u.tracked === true && u.total && u.today && Array.isArray(u.days) && Array.isArray(u.recent));
 
-function tile(label, big, sub) {
+export function tile(label, big, sub) {
   return h('div', { class: 'usage-tile' }, h('span', { class: 'usage-label' }, label), h('strong', { class: 'usage-big' }, big), sub ? h('span', { class: 'usage-sub' }, sub) : null);
 }
 
 /** 近 N 日每天的 token：输入在下、输出在上；每一天（含没有调用的日子）悬停都有读数 */
-function dayChart(days) {
+export function dayChart(days) {
   // 图按容器宽度等比缩放：手机上用更窄的画布，坐标轴的字才不会缩到看不清（下一次轮询时按当时的窗口宽度重画）
   const narrow = typeof innerWidth === 'number' && innerWidth <= 560;
   const W = narrow ? 300 : 560, H = narrow ? 132 : 124, M = { l: 46, r: 6, t: 8, b: 20 };
@@ -126,7 +126,7 @@ export function usageOverview(entries, { onOpen }) {
   const rows = entries.map((entry) => h('tr', null, h('td', { colspan: 6, class: 'muted' }, `${entry.name ? `${entry.name} · ` : ''}${entry.agentId || ''} …`)));
   const root = h('section', { class: 'usage-overview' }, h('h3', null, t('usageOverview')), h('p', { class: 'muted' }, t('usageOverviewHelp')),
     h('div', { class: 'table-wrap' }, h('table', { class: 'tbl usage-table' },
-      h('thead', null, h('tr', null, [t('usageColAgent'), t('usageColToday'), t('usageColTotal'), t('usageColCalls'), t('usageColLast'), ''].map((c, i) => h('th', { class: i === 4 ? 'last' : null }, c)))),
+      h('thead', null, h('tr', null, [t('usageColAgent'), t('usageColToday'), t('usageColTotal'), t('usageColCalls'), t('usageColLast'), ''].map((c, i) => h('th', { class: i >= 1 && i <= 3 ? 'num' : i === 4 ? 'last' : null }, c)))),
       h('tbody', null, rows, sum))));
   const open = (entry, who) => {
     const b = h('button', { class: 'btn small', type: 'button', 'aria-label': `${t('usageOpen')} ${who}`.trim() }, t('usageOpen'));

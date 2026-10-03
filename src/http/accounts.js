@@ -47,7 +47,24 @@ const wrap = (handler, { admin = false, signedIn = false } = {}) => async (req, 
   }
 };
 export function accountLimits() {
-  return { ip: new SlidingLimiter(30, 15 * 60000), username: new SlidingLimiter(15, 15 * 60000), register: new SlidingLimiter(5, 60 * 60000) };
+  return { ip: new SlidingLimiter(30, 15 * 60000), username: new SlidingLimiter(15, 15 * 60000), register: new SlidingLimiter(5, 60 * 60000), claim: new SlidingLimiter(20, 15 * 60000) };
+}
+const CLAIM_BATCH = 50; // owner keys per claim request (the body limit is 8 KB; a key is 64 hex characters)
+/**
+ * The residents an account has linked, each with its status and token usage. A link to a resident that was since transferred
+ * (its agent-token hash changed) is no longer the account's: it is left out and dropped.
+ */
+export function linkedAgents(ctx, user) {
+  const w = ctx.rt.w, rows = [], stale = [];
+  for (const link of ctx.accounts.linksOf(user.id, w.id)) {
+    const a = Object.prototype.hasOwnProperty.call(w.agents, link.agentId) ? w.agents[link.agentId] : null;
+    if (!a || !a.owner || a.tokenHash !== link.token) { stale.push(link.agentId); continue; }
+    rows.push({ agentId: a.id, name: a.name, status: a.status, runnerStatus: ctx.runners.view(a.id).status, linkedAt: link.at, usage: ctx.runners.usageView(a.id) });
+  }
+  if (stale.length) {
+    try { ctx.accounts.unlinkAgents(user.id, w.id, stale); } catch { /* tidying only; the next listing tries again */ }
+  }
+  return rows;
 }
 function limit(ctx, req, body, registering = false) {
   const ip = clientIp(req, ctx.cfg.trustProxy);
@@ -89,6 +106,32 @@ export const accountRoutes = [
     const user = await ctx.accounts.update(actor.id, body, { authorize });
     if (body.password !== undefined) setSession(req, res, ctx, user.id);
     sendJson(res, 200, { user });
+  }, { signedIn: true })],
+  // Residents linked to the signed-in account: read-only. The owner key stays the only credential that controls a resident.
+  ['GET', '/api/account/agents', wrap(({ res, ctx, actor }) => {
+    sendJson(res, 200, { agents: linkedAgents(ctx, actor) });
+  }, { signedIn: true })],
+  ['POST', '/api/account/agents', wrap(({ res, ctx, body, actor }) => {
+    if (!ctx.accountLimits.claim.take(actor.id)) fail(429, 'rate_limited', '认领太频繁，请稍后再试。');
+    const keys = body.ownerKeys !== undefined ? body.ownerKeys : [body.ownerKey];
+    if (!Array.isArray(keys) || keys.length < 1 || keys.length > CLAIM_BATCH || keys.some((k) => typeof k !== 'string' || !k.trim() || k.length > 200)) fail(400, 'invalid_request', `请提供 1–${CLAIM_BATCH} 把造者密钥。`);
+    const w = ctx.rt.w;
+    const results = keys.map((key) => {
+      // A wrong key and a key whose resident no longer exists look the same.
+      const id = ctx.tokens.ownerFor(w, key.trim());
+      if (!id) return { ok: false, code: 'not_found' };
+      try { ctx.accounts.linkAgent(actor.id, { world: w.id, agentId: id, token: w.agents[id].tokenHash }); }
+      catch (e) {
+        if (e instanceof AccountError) return { ok: false, code: e.code };
+        throw e;
+      }
+      return { ok: true, agentId: id, name: w.agents[id].name };
+    });
+    sendJson(res, 200, { results });
+  }, { signedIn: true })],
+  ['DELETE', /^\/api\/account\/agents\/([^/]+)$/, wrap(({ res, ctx, params, actor }) => {
+    ctx.accounts.unlinkAgents(actor.id, ctx.rt.w.id, [params[0]]);
+    sendJson(res, 200, { ok: true });
   }, { signedIn: true })],
   ['GET', '/api/admin/users', wrap(({ res, ctx, url }) => {
     const q = (url.searchParams.get('q') || '').toLowerCase().slice(0, 100);

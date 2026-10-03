@@ -188,7 +188,7 @@ const KEY_STORE = 'houren.ownerKey';
 const KEYS_STORE = 'houren.ownerKeys';
 
 // Keep the legacy current key so existing browsers migrate without losing access.
-function savedOwners() {
+export function savedOwners() {
   let entries = [];
   try {
     const stored = JSON.parse(storageGet(KEYS_STORE) || '[]');
@@ -215,7 +215,7 @@ function forgetOwner(key) {
   return entries;
 }
 
-export function openBackstage(ctx) {
+export function openBackstage(ctx, openKey) {
   const m = openModal(t('backTitle'), 'wide');
   const warn = h('p', { class: 'warn persistent', role: 'note' }, t('backWarn'));
   const area = h('div', { class: 'back-area' });
@@ -302,7 +302,7 @@ export function openBackstage(ctx) {
     });
   };
 
-  const saved = storageGet(KEY_STORE) || savedOwners()[0]?.key;
+  const saved = openKey || storageGet(KEY_STORE) || savedOwners()[0]?.key;
   if (saved) load(saved);
   else showKeyForm('');
 }

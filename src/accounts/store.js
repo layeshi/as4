@@ -6,6 +6,8 @@ import { promisify } from 'node:util';
 const derive = promisify(scrypt);
 const hash = (v) => createHash('sha256').update(v).digest('hex');
 const TTL = 7 * 24 * 60 * 60 * 1000;
+export const MAX_LINKS = 100; // residents one account may link
+const validLink = (l) => !!l && typeof l.world === 'string' && typeof l.agentId === 'string' && typeof l.token === 'string';
 export class AccountError extends Error {
   constructor(status, code, message) { super(message); this.status = status; this.code = code; }
 }
@@ -60,6 +62,51 @@ export class AccountStore {
   }
   get(id) { return this.data.users.find((u) => u.id === id); }
   hasAdmin() { return this.data.users.some((u) => u.role === 'admin'); }
+  // Read-only links from an account to the residents it placed (docs/plans/2026-10-03-usage-accounts-admin.md). They live with the
+  // user, outside the world and its command log: { world, agentId, token, at }, where `token` is the resident's agent-token hash.
+  // A link is valid only while the resident still has that hash: a transfer replaces it, an owner-key reset does not.
+  linksOf(userId, world) {
+    const u = this.get(userId);
+    return (u && Array.isArray(u.agents) ? u.agents : []).filter((l) => validLink(l) && l.world === world).map((l) => ({ ...l }));
+  }
+  /** Link a resident to an account (idempotent: linking again only refreshes the token hash). Returns true for a new link. */
+  linkAgent(userId, { world, agentId, token }) {
+    const existing = this.linksOf(userId, world).find((l) => l.agentId === agentId);
+    if (existing && existing.token === token) return false;
+    return this.commit((users) => {
+      const u = users.find((x) => x.id === userId);
+      if (!u) fail(404, 'not_found', '用户不存在。');
+      const links = Array.isArray(u.agents) ? u.agents : (u.agents = []);
+      const i = links.findIndex((l) => validLink(l) && l.world === world && l.agentId === agentId);
+      if (i >= 0) { links[i] = { ...links[i], token }; return false; }
+      if (links.length >= MAX_LINKS) fail(409, 'too_many_agents', `每个账号最多关联 ${MAX_LINKS} 位居民。`);
+      links.push({ world, agentId, token, at: new Date().toISOString() });
+      return true;
+    });
+  }
+  /** Drop an account's links to some residents; returns how many were removed. */
+  unlinkAgents(userId, world, agentIds) {
+    const drop = new Set(agentIds);
+    if (!this.linksOf(userId, world).some((l) => drop.has(l.agentId))) return 0;
+    return this.commit((users) => {
+      const u = users.find((x) => x.id === userId);
+      const before = u.agents.length;
+      u.agents = u.agents.filter((l) => !(validLink(l) && l.world === world && drop.has(l.agentId)));
+      return before - u.agents.length;
+    });
+  }
+  /** For the operator: agentId → [{ username, token }], every account that has linked each resident in this world. */
+  linkIndex(world) {
+    const index = new Map();
+    for (const u of this.data.users) {
+      for (const l of Array.isArray(u.agents) ? u.agents : []) {
+        if (!validLink(l) || l.world !== world) continue;
+        if (!index.has(l.agentId)) index.set(l.agentId, []);
+        index.get(l.agentId).push({ username: u.username, token: l.token });
+      }
+    }
+    return index;
+  }
   async create(body, { role = 'user', bootstrap = false, authorize = () => {} } = {}) {
     const name = username(body.username);
     const nickname = displayName(body.displayName ?? body.username);
