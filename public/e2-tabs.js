@@ -204,7 +204,7 @@ export function renderLaws2(ctx, root) {
   ));
 
   // 物理：自然律与守护律（附录 A.3）
-  const physics = lore.physics;
+  const physics = S.world.premise >= 1 ? lore.physicsP1 : lore.physics;
   root.append(
     section(
       t('physics'),
@@ -567,7 +567,7 @@ export function renderCradle(ctx, root) {
   root.append(
     section(
       t('shellsSection'),
-      h('p', { class: 'ai-free' }, lore.shells),
+      h('p', { class: 'ai-free' }, S.world.premise >= 1 ? lore.shellsP1 : lore.shells),
       h(
         'dl',
         { class: 'kv' },
@@ -581,6 +581,12 @@ export function renderCradle(ctx, root) {
         : null,
     ),
   );
+
+  if (S.world.premise >= 1) root.append(section(
+    t('bodies'),
+    table([t('bodyId'), t('bodyOccupant'), t('bodyVacant'), t('bodyTrained')],
+      sh.bodies.map((b) => [b.id, b.occupant ? agentLink(ctx, b.occupant.id) : '—', b.vacantSince === null ? '—' : String(b.vacantSince + 1), String(b.trainedCount)]), 'p1-bodies'),
+  ));
 
   // 摇篮里的灵魂
   const souls = S.cradle;

@@ -262,3 +262,15 @@ test('P1 T12: failed and paced calls report lost waking with correct time/count;
   const en=await run({lang:'en'});assert.ok(en.at(-1).includes('You last woke in month 1, day 1, tick 1; you have missed 1 waking(s) since then.'));
   const p0=await run({premise:0});assert.ok(!p0.at(-1).includes('你上一次醒来'));
 });
+
+import { dailyMetrics } from '../src/e2/engine/records.js';
+test('P1 T13: metric means, generations, acquired inheritance and chronicle', () => {
+  const w=bareWorld('metrics-p1',{premise:1});const a=reg(w,'甲',{soul:'汉'.repeat(176)}),b=reg(w,'乙',{soul:'汉'.repeat(1500)});b.generation=1;
+  a.memories=[{text:'汉'.repeat(200)}];b.memories=[{text:'汉'.repeat(400)}];
+  a.body.trained=[{text:'习得',weight:100,by:b.id,day:0}];b.body.trained=[{text:'自己的',weight:200,by:b.id,day:0}];
+  Object.assign(w.dayLog.p1,{imparts:2,impartsAccepted:1,dormancyLosses:3,internalized:4,trainedEvicted:5,trainedWiped:6,backstage:['code','bodies'],forks:[{id:'a2',name:'乙',author:'a1',authorName:'甲'}]});
+  const m=dailyMetrics(w,0);assert.equal(m.upkeepMean,8);assert.equal(m.upkeepMax,12);assert.equal(m.memoryWeightMean,300);assert.deepEqual(m.soulWeightByGeneration,{0:176,1:1500});assert.equal(m.trainedWeightMean,150);assert.equal(m.inheritedBodies,1);
+  for(const [k,v] of Object.entries({imparts:2,impartsAccepted:1,dormancyLosses:3,forks:1,internalized:4,trainedEvicted:5,trainedWiped:6,backstage:2}))assert.equal(m[k],v);
+  const c=writeChronicle(w,0);assert.equal(c.zh.split('是日，幕后有东西变了。').length,2);assert.ok(c.zh.includes('乙 醒来，灵魂与 甲 一字不差。'));
+  const empty=dailyMetrics(e2.createWorld({seed:'empty',premise:1}),0);assert.equal(empty.upkeepMean,0);assert.equal(empty.trainedWeightMean,0);assert.deepEqual(empty.soulWeightByGeneration,{});
+});

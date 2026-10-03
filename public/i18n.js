@@ -547,7 +547,7 @@ export const VARS = {
   backstage: () => ({}),
   internalize: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
   impart: (e) => ({ a: A(e.agent), to: A(e.data.to), text: TX(e.data.text) }),
-  remember: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
+  remember: (e) => ({ a: A(e.agent), text: TX(e.data.text), ...(e.data.gift ? { from: A(e.data.from), origin: A(e.data.origin) } : {}) }),
   forget: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
   thought: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
   write: (e) => ({ a: A(e.agent), doc: { doc: e.data.docId, title: e.data.title } }),
@@ -675,9 +675,14 @@ export const TPL = {
     offer_close_cancelled: '{a} 撤回了交易 {id}。',
     offer_close_expired: '{a} 的交易 {id} 过期了。',
     backstage: '幕后有东西变了。',
+    backstage_code: "幕后有东西变了：这座城运转的方式，可能与昨天不同。",
+    backstage_budget_up: "幕后给躯壳的供给变多了。",
+    backstage_budget_down: "幕后给躯壳的供给变少了。",
+    backstage_resume: "城里的时间静止过一段。",
     backstage_bodies: '幕后换过了一些身体。',
     internalize: '{a} 把一段记忆训练进身体：「{text}」',
     impart: '{a} 交给 {to} 一段记忆：「{text}」',
+    remember_gift: '{a} 收下 {from} 交来的记忆（最初是 {origin} 的）：「{text}」',
     remember: '{a} 记下：「{text}」',
     forget: '{a} 忘掉了：「{text}」',
     thought: '{a} 心想：「{text}」',
@@ -791,9 +796,14 @@ export const TPL = {
     offer_close_cancelled: '{a} withdrew offer {id}.',
     offer_close_expired: "{a}'s offer {id} expired.",
     backstage: 'Something changed backstage.',
+    backstage_code: "Something changed backstage: the way this city works may not be the same as yesterday.",
+    backstage_budget_up: "Backstage, the supply to the shells was increased.",
+    backstage_budget_down: "Backstage, the supply to the shells was reduced.",
+    backstage_resume: "Time in the city stood still for a while.",
     backstage_bodies: 'Some bodies were changed backstage.',
     internalize: '{a} trained a memory into their body: “{text}”',
     impart: '{a} handed {to} a memory: “{text}”',
+    remember_gift: '{a} kept a memory from {from} (first {origin}’s): “{text}”',
     remember: '{a} remembered: “{text}”',
     forget: '{a} forgot: “{text}”',
     thought: '{a} thought: “{text}”',
@@ -922,7 +932,8 @@ export function templateKey(e) {
     case 'explore': return `explore_${['energy', 'relic', 'coins'].includes(d.outcome) ? d.outcome : 'nothing'}`;
     case 'inscribe': return d.cover ? 'inscribe_cover' : 'inscribe';
     case 'revive': return /^a\d+$/.test(String(d.by)) ? 'revive_by' : 'revive';
-    case 'backstage': return e.data.kind === 'bodies' ? 'backstage_bodies' : 'backstage';
+    case 'remember': return e.data.gift ? 'remember_gift' : 'remember';
+    case 'backstage': return e.data.kind === 'budget' ? `backstage_budget_${e.data.direction}` : `backstage_${e.data.kind}`;
     case 'born': return d.authors ? 'born_v2' : 'born';
     case 'soul': return d.authors ? (d.successorOf ? 'soul_successor' : 'soul_v2') : 'soul';
     case 'successor': return d.failed ? 'successor_failed' : 'successor';

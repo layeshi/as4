@@ -3,6 +3,7 @@
 
 export const E2_STR = {
   zh: {
+    bodies: '身体', bodyId: '编号', bodyOccupant: '现住客', bodyVacant: '空出于第几日', bodyTrained: '习得的项数',
     tab_cradle: '摇篮与躯壳', shellsTop: '空躯壳 {free}/{total}',
     // 地图
     mapRazed: '遗址：残料已拆尽',
@@ -49,6 +50,7 @@ export const E2_STR = {
     founder: '开辟者', foundedDay: '第 {n} 日开辟', incarnations: '前世', now: '至今',
   },
   en: {
+    bodies: 'Bodies', bodyId: 'ID', bodyOccupant: 'Occupant', bodyVacant: 'Vacant since day', bodyTrained: 'Acquired entries',
     tab_cradle: 'Cradle & shells', shellsTop: 'empty shells {free}/{total}',
     mapRazed: 'Ruin site: nothing left to salvage',
     mapLotFree: 'Vacant lot (free to open)',

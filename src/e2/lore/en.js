@@ -185,6 +185,7 @@ export default {
 
   // The Chronicler (Appendix A.8, plus the v1 templates)
   chronicle: {
+    backstage: "That day, something changed backstage.",
     fork: "{name} woke with a soul identical, word for word, to {author}'s.",
     day: '[Day {day}] ',
     weather: 'That day: {name}. ',

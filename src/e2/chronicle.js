@@ -121,6 +121,7 @@ function compose(w, d, lang) {
   for (const x of g.fades) lines.push(fmt(l.faded, { name: x.name }));
 
   // TODO(spec): Q27 — provisionally include the fork line in step 5 to satisfy T6.
+  if (premised(w) && g.p1.backstage.length) lines.push(l.backstage);
   if (premised(w)) for (const x of g.p1.forks) lines.push(fmt(l.fork, { name: x.name, author: x.authorName }));
 
   const q = pickQuote(g.utterances, d);

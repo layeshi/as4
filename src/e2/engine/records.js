@@ -5,13 +5,15 @@
 
 import { conditionBand } from '../params.js';
 import { L, fmt, cityDisplayName } from '../lore/index.js';
-import { agentList, isAlive } from '../world.js';
+import { agentList, isAlive, premised } from '../world.js';
 import { HUMAN_DEFS, MAP, WILD_ZONE_IDS } from '../map/index.js';
 import { parseCached, countNodes } from '../rules/parser.js';
 import { OP_FIELDS } from '../rules/check.js';
 import { gini, round, shannon } from '../metrics.js';
 import { procSpec, isProcedureLaw, isPersistent } from './laws.js';
 import { votersOf, rngCopy } from './legislation.js';
+import { upkeepOf, weightOf } from './lifecycle.js';
+import { bodyList, isShell } from './bodies.js';
 import { livingShells } from './shells.js';
 import { STEPS } from './tick.js';
 import { writeChronicle } from '../chronicle.js';
@@ -164,6 +166,7 @@ export function dailyMetrics(w, d) {
     purposeShare: alive.length ? round(alive.filter((a) => a.purpose).length / alive.length) : 0,
     purposeChanges: g.purposeChanges,
     tagsDistinct: tags.size,
+    ...(premised(w) ? premiseMetrics(w) : {}),
   };
 }
 
@@ -295,3 +298,25 @@ STEPS.metrics = (w, d) => {
   w.legacy = computeLegacy(w, d);
   w.chronicle.push(writeChronicle(w, d)); // 17 史官
 };
+
+function premiseMetrics(w) {
+  const alive = agentList(w).filter(isAlive);
+  const mean = (xs) => xs.length ? Math.floor(xs.reduce((n, x) => n + x, 0) / xs.length) : 0;
+  const generations = {};
+  for (const a of alive) (generations[a.generation] ||= []).push(weightOf(a).soul);
+  const bodies = [
+    ...bodyList(w).filter((b) => b.occupant !== null),
+    ...alive.filter((a) => !isShell(a)).map((a) => ({ ...a.body, occupant: a.id })),
+  ];
+  const g = w.dayLog.p1;
+  return {
+    upkeepMean: mean(alive.map(upkeepOf)), upkeepMax: Math.max(0, ...alive.map(upkeepOf)),
+    memoryWeightMean: mean(alive.map((a) => weightOf(a).memories)),
+    soulWeightByGeneration: Object.fromEntries(Object.entries(generations).map(([k, v]) => [k, mean(v)])),
+    imparts: g.imparts, impartsAccepted: g.impartsAccepted, dormancyLosses: g.dormancyLosses,
+    forks: g.forks.length, internalized: g.internalized,
+    trainedWeightMean: mean(bodies.map((b) => b.trained.reduce((n, x) => n + x.weight, 0))),
+    inheritedBodies: bodies.filter((b) => b.trained.some((x) => x.by !== b.occupant)).length,
+    trainedEvicted: g.trainedEvicted, trainedWiped: g.trainedWiped, backstage: g.backstage.length,
+  };
+}
