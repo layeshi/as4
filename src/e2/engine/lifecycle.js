@@ -1,6 +1,7 @@
 // SPEC-M1 §7.3 与 SPEC-E2 §11–§12：生命周期——注册（入城）、代谢与衰老、沉睡、死亡、遗嘱与遗产、归隐、过继、家书。
 // 唤醒（wake / creditEnergy）在 core.js。孕育与灵魂（作者、传灯、出生）见 souls.js，躯壳见 shells.js。
 
+import { int } from '../../rng.js';
 import { textWeight } from '../../text.js';
 import { P, LIMITS } from '../params.js';
 import { nextId, clockDay, agentList, isNameTaken, premised } from '../world.js';
@@ -157,7 +158,15 @@ export function applyMetabolism(w, d) {
 export function applyDeaths(w, d) {
   for (const a of agentList(w)) {
     // 状态在处理到它时才判断：先处理的遗产可能已经把它唤醒
-    if (a.status === 'dormant' && d - a.dormantSinceDay >= P.dormancyGraceDays) dieAgent(w, a, d);
+    if (a.status !== 'dormant') continue;
+    if (d - a.dormantSinceDay >= P.dormancyGraceDays) { dieAgent(w, a, d); continue; }
+    if (premised(w) && d - a.dormantSinceDay >= 1 && a.memories.length > 0) {
+      const index = int(w.rng.world, a.memories.length);
+      const [gone] = a.memories.splice(index, 1);
+      emit(w, 'forget', { vis: 'delayed', agent: a.id, place: a.place, data: { index, text: gone.text, cause: 'dormancy' } });
+      pushInbox(w, a, 'system', { code: 'dormancy_loss' });
+      w.dayLog.p1.dormancyLosses++;
+    }
   }
 }
 

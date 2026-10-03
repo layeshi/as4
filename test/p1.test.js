@@ -68,3 +68,17 @@ test('P1 T3: weight metabolism anchors, age independence and private rendering',
   assert.ok(renderPerception2(e2.buildPerception(w,a.id,{ack:false,lang:'en'})).includes('soul weight 3'));
   const publicA=e2.publicState(w).agents[0];assert.equal(Object.hasOwn(publicA,'weight'),false);assert.equal(Object.hasOwn(publicA,'metabolism'),false);
 });
+
+import { applyDeaths } from '../src/e2/engine/lifecycle.js';
+import { drainEvents, creditEnergy } from '../src/e2/engine/core.js';
+test('P1 T4: daily dormancy loss, irreversible death, wake and p0 RNG', () => {
+  const w=bareWorld('loss',{premise:1});const a=reg(w,'甲');
+  a.memories=Array.from({length:3},(_,i)=>({text:`记忆${i}`,day:0,tick:0,from:null}));
+  a.body.trained=[{text:'习得',weight:2}];a.status='dormant';a.dormantSinceDay=5;
+  applyDeaths(w,5);assert.equal(a.memories.length,3);
+  for (const d of [6,7]) { applyDeaths(w,d);const loss=drainEvents(w).filter(e=>e.type==='forget');assert.equal(loss.length,1);assert.equal(loss[0].vis,'delayed');assert.equal(loss[0].data.cause,'dormancy'); }
+  assert.equal(w.dayLog.p1.dormancyLosses,2);assert.equal(a.inbox.filter(x=>x.code==='dormancy_loss').length,2);
+  applyDeaths(w,8);assert.equal(a.status,'dead');assert.equal(w.cemetery[0].memories.length,1);assert.equal(a.body.trained.length,1);
+  const b=reg(w,'乙');b.status='dormant';b.dormantSinceDay=10;b.energy=0;b.memories=[{text:'留下'}];creditEnergy(w,b,5);applyDeaths(w,12);assert.equal(b.memories.length,1);
+  const p0=bareWorld();const c=reg(p0,'丙');c.status='dormant';c.dormantSinceDay=0;c.memories=[{text:'原样'}];const rng=JSON.stringify(p0.rng.world);applyDeaths(p0,1);applyDeaths(p0,2);assert.equal(JSON.stringify(p0.rng.world),rng);assert.equal(c.memories.length,1);
+});
