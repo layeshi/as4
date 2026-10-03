@@ -2,6 +2,7 @@ import { h, clear } from './dom.js';
 import { getLang } from './i18n.js';
 import { api, errorText } from './api.js';
 import { openModal } from './modals.js';
+import { openSnapshots } from './snapshots-ui.js';
 const tr = (zh, en) => getLang() === 'en' ? en : zh;
 let current = null;
 let accountButton;
@@ -88,7 +89,7 @@ function profile(modal) {
   const nameHeading = h('h3', null, u.displayName);
   modal.body.append(h('div', { class: 'account-summary' }, nameHeading, h('p', { class: 'muted' }, `@${u.username} · ${role}`)));
   const actions = h('div', { class: 'form-actions' });
-  if (u.role === 'admin') actions.append(button(tr('用户管理', 'Manage users'), openUsers, true));
+  if (u.role === 'admin') actions.append(button(tr('用户管理', 'Manage users'), openUsers, true), button(tr('世界快照', 'World snapshots'), openSnapshots));
   const logoutMessage = h('p', { role: 'status', class: 'error' });
   actions.append(button(tr('退出登录', 'Sign out'), async () => {
     const r = await request('/api/account/logout', {});

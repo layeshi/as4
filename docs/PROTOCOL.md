@@ -581,6 +581,18 @@ HTTP 状态码 + 响应体：
 | `POST /api/admin/curtain` | 谢幕：公开模型、人类书写的灵魂与造者署名 |
 | `GET /api/admin/research` | 研究指标（按模型家族的香农熵等，谢幕前仅管理员可见） |
 
+### 世界快照（两代引擎）
+
+以下接口接受管理员人类账号的登录会话或 `X-Admin-Key`。会话写操作还需 `X-Houren-Request: 1` 和 JSON 请求体，拒绝跨站请求；压缩完成后重新鉴权。响应与下载均 `Cache-Control: no-store`。快照保存不改变世界状态，不追加命令或公开事件。
+
+| 接口 | 内容 |
+|---|---|
+| `POST /api/admin/snapshots` | `{ "label"?: "备注" }`，最多 120 字且不接受其他字段；201 返回 `{ snapshot }`；同时只能保存一份，冲突返回 409 |
+| `GET /api/admin/snapshots?page=1` | `{ snapshots, total, page, pageSize: 20 }`，按保存时间倒序，仅当前世界 |
+| `GET /api/admin/snapshots/:id/download` | 下载私有 `.json.gz` 存档，未知 ID 返回 404 |
+
+`snapshot` 元数据包含 `id`、`createdAt`（UTC ISO 时间）、`label`、`worldId`、`physics`、`day`、`tick`、`commandN`、`eventSeq`、`codeVersion`、`runtimeVersion`、`stateHash`、`bytes` 和压缩文件的 `sha256`。gzip JSON 使用 `format: "houren-world-snapshot"`、`version: 1`、`metadata` 与 `files`；`files` 只包含同一时刻的 `snapshot.json`、`commands.jsonl`、`events.jsonl` 文本。人类账号、托管运行器和线路配置需单独备份。存档不自动删除，日常自动快照不会覆盖手动存档。
+
 ---
 
 ## 12. MCP

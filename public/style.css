@@ -827,6 +827,8 @@ ul.reading { list-style: none; padding-left: 0; }
 .account-row > div { min-width: 0; overflow-wrap: anywhere; }
 .account-list { display: grid; gap: .65rem; margin-bottom: 1rem; }
 .account-modal .subtabs { flex-wrap: wrap; }
+.snapshot-download { display: grid; justify-items: end; gap: .3rem; max-width: 12rem; }
+.snapshot-download small { overflow-wrap: anywhere; }
 #btn-account { max-width: 18rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 540px) { .account-toolbar { align-items: stretch; flex-direction: column; } }
 .account-search .btn { flex-shrink: 0; white-space: nowrap; }

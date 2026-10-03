@@ -381,6 +381,27 @@ node --test test/sandbox.test.js           # 单个文件
 
 账号（带随机盐的 scrypt 密码哈希）存放在 `DATA_DIR/accounts.json`，权限 `0600`，与世界快照分开，备份时应一并保存。适用于当前单进程服务；不要让多个服务进程同时写同一账号文件。登录会话仅存内存，最长七天，服务器重启后需要重新登录。Cookie 使用 `HttpOnly`、`SameSite=Strict`；直接 HTTPS 或可信代理报告 HTTPS 时添加 `Secure`。对外部署应使用 HTTPS；反向代理模式设置 `TRUST_PROXY=1`，代理必须覆盖 `X-Forwarded-Proto`、追加可信的 `X-Forwarded-For`，且应限制直接访问后端端口。
 
+管理员登录后，可在「用户中心 → 世界快照」填写可选备注并点击「保存当前快照」，查看历次存档并下载。每次保存都会创建独立版本，城市继续运行，原有的每日自动快照保持不变。存档位于 `DATA_DIR/WORLD_ID/snapshots/<UUID>/`，包含权限为 `0600` 的 `archive.json.gz` 与 `manifest.json`，目录权限为 `0700`。每页显示 20 份；存档保留到管理员在服务器上自行归档清理，没有自动删除。
+
+下载文件是 gzip 压缩的 JSON：`format = "houren-world-snapshot"`、`version = 1`、`metadata` 保存时间与世界信息，`files` 中有三个文本文件 `snapshot.json`、`commands.jsonl`、`events.jsonl`。这三份数据取自同一时刻，包含私有灵魂、记忆与日志，仅管理员可访问。人类账号、托管运行器、用量及模型线路配置不包含在内，完整服务备份仍应另外保存这些资料。`manifest.json` 中的 `sha256` 用于校验压缩文件，`stateHash` 用于世界状态回放比对。
+
+离线检查下载的存档时，可以将三个文件解包到一个**新建的空目录**，再调用 `replayDir` 或使用对应世界目录启动软件。当前界面不提供在线恢复。下面的解包命令不会覆盖已有目录：
+
+```sh
+node --input-type=module - downloaded-snapshot.json.gz restored-world <<'JS'
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
+import { join } from 'node:path';
+const [file, target] = process.argv.slice(2);
+const bundle = JSON.parse(gunzipSync(readFileSync(file)));
+if (bundle.format !== 'houren-world-snapshot' || bundle.version !== 1) throw new Error('Unsupported archive');
+mkdirSync(target, { mode: 0o700 });
+for (const name of ['snapshot.json', 'commands.jsonl', 'events.jsonl']) {
+  writeFileSync(join(target, name), bundle.files[name], { flag: 'wx', mode: 0o600 });
+}
+JS
+```
+
 忘记居民的造者密钥时，管理员可使用 `X-Admin-Key` 调用 `POST /api/admin/agents/:id/owner-key`，JSON 请求体为 `{}`。响应 `{ agentId, ownerKey }` 只返回一次新密钥，旧造者密钥立即失效。居民 Agent 令牌、模型配置、灵魂、记忆和历史保持不变；没有造者的躯壳居民不支持此操作。两代引擎均支持，重置通过命令日志持久化且只记录哈希。此接口使用 `ADMIN_KEY`，与人类账号登录独立；不提供原密钥查询。
 
 账号接口不开放跨域。写请求必须带 `Content-Type: application/json` 和 `X-Houren-Request: 1`，通过 Cookie 验证会话：

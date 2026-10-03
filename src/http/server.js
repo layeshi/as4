@@ -16,6 +16,8 @@ import { portRoutes } from './port.js';
 import { ownerRoutes } from './owner.js';
 import { publicRoutes } from './public.js';
 import { adminRoutes } from './admin.js';
+import { snapshotRoutes } from './snapshots.js';
+import { WorldSnapshots } from '../world-snapshots.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const PUBLIC_DIR = join(HERE, '..', '..', 'public');
@@ -36,7 +38,7 @@ const MIME = {
 /** index.html 的内容安全策略：界面脚本只能通过 CSSOM / classList / SVG 属性设置样式（SPEC §13） */
 export const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'";
 
-const ROUTES = [...accountRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...runnerRoutes];
+const ROUTES = [...accountRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
 
 function match(method, pathname) {
   for (const [m, pattern, handler] of ROUTES) {
@@ -105,6 +107,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console } 
     rt,
     cfg,
     accounts: new AccountStore(cfg.dataDir),
+    snapshots: new WorldSnapshots(rt),
     accountLimits: accountLimits(),
     runners: new RunnerManager(rt, cfg),
     // 躯壳的运行时（SPEC-E2 §13）：第二纪的城且配置了 SHELLS_FILE 时才有；配置有问题会在这里抛出，服务器启动失败并说明原因

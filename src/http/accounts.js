@@ -18,7 +18,7 @@ function setSession(req, res, ctx, id) {
   ctx.accounts.logout(tokenOf(req));
   res.setHeader('Set-Cookie', cookie(req, ctx, ctx.accounts.issue(id)));
 }
-function mutationGate(req) {
+export function mutationGate(req) {
   // Custom header cannot be supplied by cross-origin HTML forms. No account CORS.
   if (req.headers['x-houren-request'] !== '1') fail(403, 'csrf', '请求验证失败，请刷新页面。');
   if (req.headers['sec-fetch-site'] === 'cross-site') fail(403, 'csrf', '不允许跨站请求。');
