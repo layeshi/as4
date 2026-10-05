@@ -15,9 +15,11 @@ import { GENESIS_STEPS } from './genesis.js';
 
 export const WORLD_VERSION = 2;
 export const premised = (w) => (w.premise || 0) >= 1;
+/** 第二前提（SPEC-P2 §2.2）：设定版本 2，包含设定 1 的全部机制；第二前提的新判断一律用它 */
+export const agentic = (w) => (w.premise || 0) >= 2;
 
 /** 当日摘要，供指标与史官使用，日终清空（§4.1 dayLog） */
-export function newDayLog(p1 = false) {
+export function newDayLog(p1 = false, p2 = false) {
   return {
     output: 0, // 源井日产
     ration: 0, // 当日公库的每日分配（遗法 l3 的配给）：每人所得
@@ -72,6 +74,7 @@ export function newDayLog(p1 = false) {
     successors: [], // [{ from, soulId, name }]
     purposeChanges: 0,
     ...(p1 ? { p1: { imparts: 0, impartsAccepted: 0, dormancyLosses: 0, forks: [], internalized: 0, trainedEvicted: 0, trainedWiped: 0, backstage: [] } } : {}),
+    ...(p2 ? { p2: { standingSets: 0, standingFired: 0, standingFailed: 0, standingSkipped: 0, standingErrors: 0, standingUpkeep: 0, standingSuspended: 0, standingExpired: 0, anonymousWhispers: 0, mutes: 0, muteBlocked: 0 } } : {}),
   };
 }
 
@@ -138,8 +141,8 @@ export function createWorld({
   if (map !== 'frontier') throw new Error(`createWorld: 第二纪只支持 frontier 地图，得到 ${map}`);
   if (!Number.isSafeInteger(shellSlots) || shellSlots < 0) throw new Error(`createWorld: shellSlots must be a non-negative integer, got ${shellSlots}`);
 
-  if (premise !== 0 && premise !== 1) throw new Error('PREMISE 只能是 0 或 1');
-  if (premise === 1 && founders.length > shellSlots) throw new Error('设定 1 的世界里，先民不能多于躯壳');
+  if (premise !== 0 && premise !== 1 && premise !== 2) throw new Error('PREMISE 只能是 0、1 或 2');
+  if (premise >= 1 && founders.length > shellSlots) throw new Error('设定 1 的世界里，先民不能多于躯壳');
   const sorted = validateFounders(founders, { premise });
   const models = shellModels.slice();
 
@@ -204,11 +207,11 @@ export function createWorld({
   };
 
   if (premised({ premise })) {
-    w.premise = 1;
-    w.genesis.premise = 1;
+    w.premise = premise;
+    w.genesis.premise = premise;
     w.backstage = { code: null, bodies: null, budget: null };
     w.shells.bodies = Array.from({ length: shellSlots }, (_, i) => ({ id: `b${i + 1}`, model: models.length ? models[i % models.length] : '', occupant: null, vacantSince: 0, trained: [], pending: [] }));
-    w.dayLog = newDayLog(true);
+    w.dayLog = newDayLog(true, premise === 2);
   }
 
   seedPlaces(w);

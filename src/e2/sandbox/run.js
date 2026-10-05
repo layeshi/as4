@@ -61,7 +61,7 @@ export function runSandbox({ days = 720, agents = 24, seed = 1, weather, params,
   else if (weather && weather.startsWith('schedule:')) configureWeather({ mode: 'schedule', schedule: JSON.parse(readFileSync(weather.slice(9), 'utf8')) });
   else configureWeather({ mode: weather === 'vote' ? 'vote' : 'random' });
 
-  if (premise === 1 && agents > shellSlots) throw new Error('设定 1 的世界里，先民不能多于躯壳');
+  if (premise >= 1 && agents > shellSlots) throw new Error('设定 1 的世界里，先民不能多于躯壳');
   const w = createWorld({ id: 'sandbox', seed: String(seed), codeVersion: 'sandbox', sandboxAdoption: true, sandboxShells: true, premise, shellSlots });
   const everDormant = new Set();
   Object.defineProperty(w, '$sandboxStats', { value: { actions: {} }, writable: true, enumerable: false, configurable: true });

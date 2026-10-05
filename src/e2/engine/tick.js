@@ -5,7 +5,7 @@
 
 import { completeTraining } from './bodies.js';
 import { P, epochDays } from '../params.js';
-import { agentList, clockDay, newDayLog, premised } from '../world.js';
+import { agentList, clockDay, newDayLog, premised, agentic } from '../world.js';
 import { emit, setSettling } from './core.js';
 import { produceWell, decayEnergy } from './economy.js';
 import { applyMetabolism, applyDeaths } from './lifecycle.js';
@@ -121,7 +121,7 @@ export function dailySettlement(w, d) {
       emit(w, 'ledger_mismatch', { vis: 'internal', data: chk });
     }
     closeLedgerDay(w);
-    w.dayLog = newDayLog(premised(w)); // 18
+    w.dayLog = newDayLog(premised(w), agentic(w)); // 18
     if (d + 1 === epochDays()) {
       // 19 纪元结束：暂停并记「大沉睡」（快照由运行时在命令结束后写入）
       w.paused = true;

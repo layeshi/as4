@@ -5,7 +5,7 @@ import { isShell, wipeTraining, releaseBody } from './bodies.js';
 import { int } from '../../rng.js';
 import { textWeight } from '../../text.js';
 import { P, LIMITS } from '../params.js';
-import { nextId, clockDay, agentList, isNameTaken, premised } from '../world.js';
+import { nextId, clockDay, agentList, isNameTaken, premised, agentic } from '../world.js';
 import { source, sink } from './ledger.js';
 import { emit, pushInbox, ref, creditEnergy, ReqError, bad, reqText, reqLang, reqHash } from './core.js';
 import { endowedEnergy } from './places.js';
@@ -73,6 +73,10 @@ export function makeAgent(w, o) {
   if (premised(w)) {
     a.memoryOffers = [];
     if (!isShell(a)) { a.body.trained = []; a.body.pending = []; }
+  }
+  if (agentic(w)) {
+    a.standing = []; // 常驻指令（SPEC-P2 §5.1）
+    a.muted = []; // 屏蔽名单（SPEC-P2 §5.10）
   }
   w.agents[id] = a;
   return a;

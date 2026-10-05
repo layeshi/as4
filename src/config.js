@@ -63,8 +63,8 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
   if (cfg.tickMs < 1 || cfg.ticksPerDay < 1 || cfg.daysPerMonth < 1 || cfg.monthsPerEpoch < 1) throw new Error('时间参数必须 ≥ 1');
   if (!MAP_IDS.includes(cfg.map)) throw new Error(`MAP 必须是 ${MAP_IDS.join(' / ')} 之一`);
   if (cfg.physics !== null && cfg.physics !== 1 && cfg.physics !== 2) throw new Error('PHYSICS 必须是 1 或 2');
-  if (cfg.premise !== null && cfg.premise !== 0 && cfg.premise !== 1) throw new Error('PREMISE 只能是 0 或 1');
-  if (cfg.premise === 1 && cfg.physics !== 2) throw new Error('PREMISE=1 只用于第二纪（PHYSICS=2）');
+  if (cfg.premise !== null && cfg.premise !== 0 && cfg.premise !== 1 && cfg.premise !== 2) throw new Error('PREMISE 只能是 0、1 或 2');
+  if (cfg.premise !== null && cfg.premise >= 1 && cfg.physics !== 2) throw new Error('PREMISE=1 或 2 只用于第二纪（PHYSICS=2）');
   if (cfg.physics === 2 && cfg.map !== 'frontier') throw new Error('PHYSICS=2 只支持 MAP=frontier（第二纪没有经典地图）');
   if (cfg.shellTokensPerDay !== null && (!Number.isInteger(cfg.shellTokensPerDay) || cfg.shellTokensPerDay < 1)) throw new Error('SHELL_TOKENS_PER_DAY 必须是正整数');
   if (cfg.shellSlots !== null && (!Number.isInteger(cfg.shellSlots) || cfg.shellSlots < 0)) throw new Error('SHELL_SLOTS 必须是非负整数');

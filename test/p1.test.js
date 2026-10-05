@@ -25,11 +25,11 @@ test('P1 T1: version, all perception forms, genesis and determinism', () => {
   }
   const run = () => { const x = e2.createWorld({ seed: 'same', premise: 1 }); for (let i = 0; i < 120; i++) e2.applyCommand(x, { type: 'tick' }); return stateHash(x); };
   assert.equal(run(), run()); assert.equal(e2.publicState(w).world.premise, 1);
-  assert.throws(() => e2.createWorld({ seed: 'x', premise: 2 }), /PREMISE/);
+  assert.throws(() => e2.createWorld({ seed: 'x', premise: 3 }), /PREMISE/); // SPEC-P2 §0.3：2 现在是合法的设定版本，非法值改用 3
 });
 test('P1 T1: configuration validation', () => {
   assert.equal(loadConfig({ PHYSICS: '2', PREMISE: '1' }, []).premise, 1);
-  assert.throws(() => loadConfig({ PREMISE: '2' }, []), /PREMISE 只能/);
+  assert.throws(() => loadConfig({ PREMISE: '3' }, []), /PREMISE 只能/); // 同上（SPEC-P2 §0.3 允许的唯一一处改动）
   assert.throws(() => loadConfig({ PREMISE: '1', PHYSICS: '1' }, []), /只用于第二纪/);
 });
 
