@@ -46,7 +46,7 @@ export function minAliveAfterFirstDeath(report, window = 120) {
 }
 
 /** 从一次运行的 report 里取出判定需要的量（不含大数组，只留三条日序列） */
-export function summarize(report, { seed, scenario, agents }) {
+export function summarize(report, { seed, scenario, agents, premise = 0 }) {
   const m = report.metrics;
   const alive = m.map((x) => x.awake + x.dormant);
   const treasury = m.map((x) => x.treasuryEnergy);
@@ -92,7 +92,7 @@ export function summarize(report, { seed, scenario, agents }) {
     series: { alive, treasury, well },
     elapsedMs: report.meta.elapsedMs,
     conservationFailure: report.meta.conservationFailure,
-    ...(report.p1 ? { premise: 1, stateHash: report.p1.stateHash, memoryByDormancy: report.p1.memoryByDormancy, livingMemoryByDormancy: report.p1.livingMemoryByDormancy } : {}),
+    ...(report.p1 ? { premise: premise || 1, stateHash: report.p1.stateHash, memoryByDormancy: report.p1.memoryByDormancy, livingMemoryByDormancy: report.p1.livingMemoryByDormancy } : {}),
   };
 }
 
@@ -117,7 +117,7 @@ export function shockRecoveries(run) {
 
 /** 返回 [{ name, target, values: [每个种子的值], value: 中位数, pass }]；pass 为 null 的是信息项（只报告，不判定） */
 export function evaluate(scenario, runs) {
-  if (runs.some((r) => r.premise === 1)) {
+  if (runs.some((r) => r.premise >= 1)) {
     const item = (name, target, values, test) => ({ name, target, values, value: median(values), pass: test ? values.every(test) : null });
     const out = [
       item('账本守恒', '所有种子无失败', runs.map((r) => r.conservationFailure === null ? 1 : 0), (x) => x === 1),
@@ -208,7 +208,7 @@ export async function calibrate({ seeds = [1, 2, 3, 4, 5], days = 720, agents = 
     runs[scenario].sort((a, b) => a.seed - b.seed);
     verdicts[scenario] = evaluate(scenario, runs[scenario]);
   }
-  return { label, opts: { seeds, days, agents, scenarios, params: params || null, ...(premise === 1 ? { premise, shellSlots } : {}) }, runs, verdicts };
+  return { label, opts: { seeds, days, agents, scenarios, params: params || null, ...(premise >= 1 ? { premise, shellSlots } : {}) }, runs, verdicts };
 }
 
 // ── 输出 ───────────────────────────────────────────────────────
@@ -292,8 +292,8 @@ async function main() {
 if (!isMainThread && workerData && workerData.scenario) {
   const { scenario, seed, days, agents, params, premise = 0, shellSlots } = workerData;
   const { report } = runSandbox({ scenario, seed, days, agents, params, premise, shellSlots });
-  const summary = summarize(report, { seed, scenario, agents });
-  if (premise === 1) {
+  const summary = summarize(report, { seed, scenario, agents, premise });
+  if (premise >= 1) {
     const again = runSandbox({ scenario, seed, days, agents, params, premise, shellSlots });
     summary.deterministic = report.p1.stateHash === again.report.p1.stateHash;
   }

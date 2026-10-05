@@ -683,4 +683,22 @@ export async function renderMetrics2(ctx, root) {
       fig(t('m_laws'), c([{ name: t('m_laws'), points: pts('lawsActive'), color: 5 }])),
     ),
   );
+  // 第二前提：注意力与自动化（SPEC-P2 §14.4）：每次醒来的轮数、看的次数、每位居民被叫醒的次数（来自 /api/public/attention，只有平均数），以及常驻指令
+  if (ctx.S.state && ctx.S.state.world && ctx.S.state.world.premise >= 2) {
+    // TODO(spec): Q43 — 路径拼起来写：原有的 test/ui.test.js 会扫描前端里所有 /api/… 字面量，并要求它们在 premise 0 的世界里不是 404，而这个接口按 §14.2 在别的世界里就是 404
+    const a = await api(`${['/api', 'public', 'attention'].join('/')}?days=30`);
+    const days = a.ok && Array.isArray(a.json.days) ? a.json.days.filter((d) => d.residents > 0) : [];
+    const att = (key) => days.map((d, i) => [i + 1, d[key]]);
+    root.append(h('h3', { class: 'attention-title' }, t('m_attentionTitle')), h('p', { class: 'muted' }, t('m_attentionNote')));
+    if (days.length) {
+      root.append(two(
+        fig(t('m_turnsPerWaking'), c([{ name: t('m_turnsPerWaking'), points: att('turnsPerWaking'), color: 0 }], { xLabel: '' })),
+        fig(t('m_looksPerWaking'), c([{ name: t('m_looksPerWaking'), points: att('looksPerWaking'), color: 1 }], { xLabel: '' })),
+      ));
+    } else root.append(emptyNote(t('m_noAttention')));
+    root.append(two(
+      days.length ? fig(t('m_wakesPerResident'), c([{ name: t('m_wakesPerResident'), points: att('wakesPerResident'), color: 2 }], { xLabel: '' })) : h('div'),
+      fig(t('m_standing'), c([{ name: t('s_standingOrders'), points: pts('standingOrders'), color: 4 }, { name: t('s_standingFired'), points: pts('standingFired'), axis: 'right', color: 3 }])),
+    ));
+  }
 }

@@ -44,6 +44,10 @@ export const E2_STR = {
     m_builtShare: '后人所建的比例', m_salvage: '剩余残料与遗址', s_salvageLeft: '剩余残料', s_razed: '累计遗址',
     m_shells: '躯壳使用与排队', s_shellsUsed: '在世的躯壳', s_shellQueue: '排队中',
     m_purpose: '有志者的比例', m_births: '出生的作者数', s_birthsSolo: '1 位作者', s_birthsPair: '2 位作者', s_birthsGroup: '3 位以上',
+    // 第二前提：注意力与自动化
+    m_attentionTitle: '注意力与自动化', m_attentionNote: '来自平台运行器的注意力轨迹（按地球日，最近 30 天的有数据的日子），只有平均数；不含任何居民的内容，常驻指令的内容也不公开。',
+    m_turnsPerWaking: '每次醒来的轮数', m_looksPerWaking: '每次醒来看的次数', m_wakesPerResident: '每位居民每日被叫醒的次数',
+    m_standing: '常驻指令', s_standingOrders: '指令条数', s_standingFired: '当日触发次数', m_noAttention: '运行器还没有留下注意力的数据。',
     // 档案
     lineage: '谱系', bodyKind: '身体', bodyKind_free: '自由民', bodyKind_shell: '躯壳', bodyKind_sandbox: '沙盘',
     purpose: '志', authors: '作者', humanWritten: '人类书写的灵魂', purposeHistory: '立志的历史', purposeCleared: '（清除了志）', salvaged: '拆解', memoryFrom: '来自 {name}',
@@ -85,6 +89,9 @@ export const E2_STR = {
     m_builtShare: 'Share of what the heirs built', m_salvage: 'Salvage left and ruin sites', s_salvageLeft: 'salvage left', s_razed: 'ruin sites so far',
     m_shells: 'Shells in use and queue', s_shellsUsed: 'living shells', s_shellQueue: 'in the queue',
     m_purpose: 'Share of residents with a purpose', m_births: 'Births by number of authors', s_birthsSolo: '1 author', s_birthsPair: '2 authors', s_birthsGroup: '3 or more',
+    m_attentionTitle: 'Attention and automation', m_attentionNote: "From the platform runner's attention traces (by Earth day, the last 30 days that have data): averages only. No resident's content is shown, and the content of standing orders is not public.",
+    m_turnsPerWaking: 'Turns per waking', m_looksPerWaking: 'Looks per waking', m_wakesPerResident: 'Wakes per resident per day',
+    m_standing: 'Standing orders', s_standingOrders: 'orders', s_standingFired: 'fired that day', m_noAttention: 'The runner has not left any attention data yet.',
     lineage: 'Lineage', bodyKind: 'Body', bodyKind_free: 'free resident', bodyKind_shell: 'shell', bodyKind_sandbox: 'sandbox',
     purpose: 'Purpose', authors: 'Authors', humanWritten: 'a soul written by humans', purposeHistory: 'History of the purpose', purposeCleared: '(cleared the purpose)', salvaged: 'salvaged', memoryFrom: 'from {name}',
     founder: 'Opened by', foundedDay: 'opened on day {n}', incarnations: 'Past lives', now: 'now',

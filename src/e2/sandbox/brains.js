@@ -19,7 +19,7 @@
 
 import { P, MODULE_DEFS } from '../params.js';
 import { next, int } from '../../rng.js';
-import { agentList, isNameTaken, idNum, premised } from '../world.js';
+import { agentList, isNameTaken, idNum, premised, agentic } from '../world.js';
 import { emit, bad, textWeight } from '../engine/core.js';
 import { buildPerception } from '../engine/perception.js';
 import { actCommand } from '../engine/actions.js';
@@ -269,6 +269,12 @@ export function decide(w, a, p, r, count) {
     if (you.memories.length && peers.length && r.chance(0.02)) return [{ type: 'impart', to: r.pick(peers).id, memory: r.pick(you.memories).index }];
     if (you.memoryOffers.length && you.memories.length < P.memorySlots && r.chance(0.5)) return [{ type: 'remember', gift: you.memoryOffers[0].id }];
   }
+  // 第二前提（SPEC-P2 §15）：偶尔留一条常驻指令、偶尔撤销；收到匿名私语、还没屏蔽时偶尔屏蔽它。随机数只在第二前提里抽
+  if (agentic(w)) {
+    if (you.standing.length === 0 && you.energy >= 40 && r.chance(0.01)) return [{ type: 'standing', orders: [structuredClone(STANDING_ORDER)] }];
+    if (you.standing.length > 0 && r.chance(0.005)) return [{ type: 'standing', orders: [] }];
+    if (!you.muted.includes('anonymous') && p.inbox.some((i) => i.kind === 'whisper' && i.anonymous === true) && r.chance(0.2)) return [{ type: 'mute', who: 'anonymous' }];
+  }
   const out = [];
   // 收件箱只递送一次：管事收到入会申请就当场答复（不然多半就错过了）
   const request = p.inbox.find((i) => i.kind === 'group' && i.event === 'request');
@@ -331,6 +337,9 @@ function spend(ctx, act) {
       energy += act.energy || 0;
       coins += act.coins || 0;
       break;
+    case 'whisper':
+      if (act.anonymous) energy *= 3; // 匿名私语的代价是普通私语的三倍（雾里也跟着翻倍）
+      break;
     case 'offer':
       energy += (act.give && act.give.energy) || 0;
       coins += (act.give && act.give.coins) || 0;
@@ -383,6 +392,14 @@ function afford(ctx, acts) {
 }
 
 const MOVE = (to) => ({ type: 'move', to });
+
+/**
+ * 私语。第二前提里偶尔（0.05）改成匿名的（SPEC-P2 §15）；设定 0、1 不抽随机数（agentic 为假时 && 短路），所以那两种世界的随机流与以前一字不差。
+ */
+const whisperTo = (ctx, to, text) => ({ type: 'whisper', to, text, ...(agentic(ctx.w) && ctx.r.chance(0.05) ? { anonymous: true } : {}) });
+
+/** 第二前提：没有指令、能量富余时偶尔留的一条常驻指令——能量低了就去源井汲取（SPEC-P2 §15） */
+const STANDING_ORDER = { when: 'daily', if: 'me.energy < 30', do: [{ type: 'move', to: 'well' }, { type: 'draw', energy: 5 }] };
 
 /** 为工程出工：不超过工程还差的（含这一批里已经答应的），没得出就不出 */
 function contributeTo(ctx, proj, want) {
@@ -472,7 +489,7 @@ function survive(ctx) {
   const target = r.pick(awakeOthers(ctx));
   if (!target) return [];
   const text = ctx.lang === 'en' ? 'I am running low on energy. Can anyone spare some?' : ctx.lang === 'es' ? 'Me queda poca energía. ¿Alguien puede ayudar?' : '我的能量快用完了，谁能匀我一点？';
-  return [{ type: 'whisper', to: target.id, text }];
+  return [whisperTo(ctx, target.id, text)];
 }
 
 /** 此处的建筑能拆吗：有残料、没有被规则或物理拒绝；守护者不拆人类的建筑 */
@@ -585,7 +602,7 @@ function social(ctx) {
   if (roll < 0.62) return you.energy >= 3 ? [{ type: 'say', text: speech(ctx) }] : [];
   if (roll < 0.9) {
     const t = r.pick(awakeOthers(ctx));
-    return t && you.energy >= 3 ? [{ type: 'whisper', to: t.id, text: speech(ctx) }] : [];
+    return t && you.energy >= 3 ? [whisperTo(ctx, t.id, speech(ctx))] : [];
   }
   if (you.energy >= 40) return [{ type: 'broadcast', text: speech(ctx) }];
   return [];

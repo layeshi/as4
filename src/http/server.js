@@ -21,6 +21,7 @@ import { snapshotRoutes } from './snapshots.js';
 import { WorldSnapshots } from '../world-snapshots.js';
 import { agentic } from '../e2/facade.js';
 import { DEFAULT_AGENT_LOOP } from '../../runner/loop.js';
+import { TraceStore } from '../runner/traces.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const PUBLIC_DIR = join(HERE, '..', '..', 'public');
@@ -129,6 +130,13 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
 
   // 第二前提的注意力上限（SPEC-P2 §4.4）：来自躯壳配置，没有躯壳配置时用缺省值；meCore 把它写进感知的 attention
   rt.agentLoop = (ctx.shells && ctx.shells.config.agentLoop) || DEFAULT_AGENT_LOOP;
+
+  // 注意力轨迹（SPEC-P2 §14.1）：只在第二前提的世界；躯壳管理器与托管运行器共用，两个接口从 ctx.traces 读
+  ctx.traces = agentic(rt.w) ? new TraceStore({ file: join(rt.dir, 'agent-loops.jsonl'), timezone: cfg.shellTz }) : null;
+  if (ctx.traces) {
+    if (ctx.shells) ctx.shells.traces = ctx.traces;
+    ctx.runners.traces = ctx.traces;
+  }
 
   checkBackstage(rt, ctx.shells, { logger, ...(backstageRoot ? { root: backstageRoot } : {}) });
 

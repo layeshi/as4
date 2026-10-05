@@ -1,7 +1,7 @@
 // PROTOCOL §11：管理接口。X-Admin-Key 头，常数时间比较；未配置 ADMIN_KEY 时全部返回 404。
 // 所有管理操作都会产生公开的 admin 事件（不含管理员身份）。
 
-import { premised } from '../e2/facade.js';
+import { premised, agentic } from '../e2/facade.js';
 import { bodyList } from '../e2/engine/shells.js';
 import { upkeepOf, weightOf } from '../e2/engine/lifecycle.js';
 import { randomBytes } from 'node:crypto';
@@ -38,6 +38,20 @@ async function hostedUsage(req, res, ctx) {
     row.accounts = (links.get(row.agentId) || []).filter((l) => l.token === token).map((l) => l.username);
   }
   sendJson(res, 200, overview);
+}
+
+/**
+ * GET /api/admin/attention?day=YYYY-MM-DD（只在第二前提的城，SPEC-P2 §14.2）：每位居民当日的醒来次数、被叫醒、轮数、看了哪些段、动作数、
+ * 结束原因与 token，来自运行器的注意力轨迹；缺省今天。不含任何文本。
+ */
+async function attention(req, res, ctx, url) {
+  if (!authOperator(ctx, req, res)) return;
+  if (!ctx.traces) return sendError(res, 'zh', 'not_found');
+  const raw = url.searchParams.get('day') || null; // 空的当作没有给
+  if (raw !== null && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return sendError(res, 'zh', 'invalid_request', { field: 'day' });
+  const out = ctx.traces.agentsDay(raw ?? ctx.traces.today());
+  for (const a of out.agents) a.name = ctx.rt.w.agents[a.agentId] ? ctx.rt.w.agents[a.agentId].name : null;
+  sendJson(res, 200, out);
 }
 
 /** 通用的 admin 命令转发：POST 体作为 args */
@@ -132,6 +146,12 @@ async function agentPrivate(req, res, ctx, url, params) {
     dreams: own('dream').map((e) => ({ tick: e.tick, fragments: e.data.fragments })),
     letters: a.letters.map((l) => ({ id: l.id, tick: l.tick, text: l.text, revealed: l.revealed })),
     memories: a.memories.map((m) => ({ day: m.day, text: m.text, from: m.from })),
+    // 第二前提（PROTOCOL-2 §16.10）：常驻指令的全文与触发记录、屏蔽名单——只有研究者看得到
+    ...(agentic(rt.w) ? {
+      standing: a.standing.map((o, i) => ({ index: i, when: o.when, if: o.if ?? null, do: structuredClone(o.do), times: o.times ?? null, untilDay: o.untilDay ?? null, fired: o.fired, paidThrough: o.paidThrough })),
+      standingFired: own('standing_fired').map((e) => ({ tick: e.tick, order: e.data.order, trigger: e.data.trigger, results: e.data.results, ...(e.data.skipped ? { skipped: e.data.skipped } : {}), ...(e.data.error ? { error: e.data.error } : {}) })),
+      muted: a.muted.slice(),
+    } : {}),
   });
 }
 
@@ -163,6 +183,7 @@ export const adminRoutes = [
   ['POST', '/api/admin/curtain', op('curtain')],
   ['GET', '/api/admin/research', research],
   ['GET', '/api/admin/usage', hostedUsage],
+  ['GET', '/api/admin/attention', attention],
   ['GET', '/api/admin/shells', shellsView],
   ['POST', '/api/admin/shells', shellsOp],
   ['POST', '/api/admin/shell-models', shellModels],

@@ -150,6 +150,18 @@ export async function getMetrics(req, res, ctx, url) {
   sendJson(res, 200, { metrics: rt.engine.physics === 2 && rt.events.fiscal ? metrics.map(m => rt.events.fiscal.metrics(rt.w, m)) : metrics });
 }
 
+/**
+ * GET /api/public/attention?days=N（只在第二前提的城，SPEC-P2 §14.2）：注意力的每日平均数——每次醒来的轮数、看的次数、每位居民被叫醒的次数，
+ * 以及看了哪些段各占多少千分比，来自运行器的轨迹。N ≤ 30，缺省 14，从早到晚；没有逐位居民的数据，也没有模型名。
+ */
+export async function getAttention(req, res, ctx, url) {
+  const lang = langOf(url.searchParams);
+  if (!ctx.traces) return sendError(res, lang, 'not_found');
+  const days = intParam(url, 'days', 14, { min: 1, max: 30 });
+  if (Number.isNaN(days)) return sendError(res, lang, 'invalid_request', { field: 'days' });
+  sendJson(res, 200, { days: ctx.traces.recent(days) });
+}
+
 /** GET /api/public/chronicle?lang=&from=&to= */
 export async function getChronicle(req, res, ctx, url) {
   const lang = langOf(url.searchParams);
@@ -227,6 +239,7 @@ export const publicRoutes = [
   ['GET', /^\/api\/public\/laws\/([^/]+)$/, getLaw],
   ['GET', /^\/api\/public\/docs\/([^/]+)$/, getDoc],
   ['GET', '/api/public/metrics', getMetrics],
+  ['GET', '/api/public/attention', getAttention],
   ['GET', '/api/public/chronicle', getChronicle],
   ['GET', '/api/public/lore', getLore],
   ['GET', '/api/public/map', getMap],
