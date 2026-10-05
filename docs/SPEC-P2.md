@@ -3,7 +3,7 @@
 > 规格 P2.1 · 2026-10-05 · 状态：**已定，可以开始实现**（DESIGN v0.6 §21 与 PROTOCOL-2 §16 已同步）。P2.1 增补匿名私语、屏蔽与两位对抗型先民（§5.9、§5.10、§19，决定 47–50）。
 > 依据：[agent 模式方案](plans/2026-10-04-agent-mode.md)（做什么、为什么、估算）与[后人类设定](plans/2026-10-03-posthuman-premise.md)的设定 16–18。面向实现者（人或模型）。
 > 本文只写第二前提的世界（`premise = 2`）与设定 1 的世界有什么不同，外加几处对所有世界都生效、但缺省行为不变的修正（§9.4、§10.1）。没写到的一律以 [SPEC-P1](SPEC-P1.md)、[SPEC-E2](SPEC-E2.md) 与 [PROTOCOL-2](PROTOCOL-2.md) 为准。
-> 代码基线：`e211846`（分支 `codex/premise-1-implementation`，它包含 main 的全部提交）。从它拉分支。
+> 代码基线：`e211846`（分支 `codex/premise-1-implementation`，它包含 main 的全部提交）。分支 `claude/premise-2-spec` 就是它加上第二前提的文档：从 `claude/premise-2-spec` 拉分支。
 
 ---
 
@@ -53,7 +53,7 @@
 ```
 请先完整阅读 docs/DESIGN.md 的 §21 与 §19.4、docs/PROTOCOL-2.md 的 §16、docs/SPEC-P2.md（P2.1），
 再浏览 docs/plans/2026-10-04-agent-mode.md、docs/SPEC-P1.md 与现有代码（src/e2/ 是第二纪的引擎，runner/ 是运行器，src/shells/ 与 src/runner/ 是平台的运行时）。
-代码基线是 e211846（分支 codex/premise-1-implementation），从它拉一个新分支来做。上面这些文档如果不在你的分支上，先停下来问，不要凭猜测实现。
+从分支 claude/premise-2-spec 拉一个新分支来做：它就是代码基线 e211846（分支 codex/premise-1-implementation）加上这些文档。上面这些文档如果不在你的分支上，先停下来问，不要凭猜测实现。
 按 SPEC-P2 第 17 节的开发顺序逐步实现；每一步完成后运行 npm test，对照该步的验收标准自检，简要汇报后再进入下一步。
 第 1 步开始写代码之前，先按 SPEC-P2 §16.1 的 T1 录下 premise 0 与 premise 1 世界的黄金样本，之后每一步都拿它比对。
 不得改变 premise 为 0 或 1 的世界的任何行为：原有测试不改（§0.3 第 1 条写明的例外除外）、照样通过；旧世界的回放哈希不变。
