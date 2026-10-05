@@ -13,6 +13,7 @@ import {
   cityResidents, cityPlaces, cityRoads, cityLexicon, cityCradleLines, cityDeaths, cityPetitions,
   ref, resultLine,
 } from './render2.js';
+import { summarizeResults } from './render.js';
 
 /** 展开的段（附录 A.3 的 enum；单数形式带 id 看其中一项） */
 export const LOOK_WHATS = Object.freeze(['here', 'self', 'laws', 'law', 'proposals', 'proposal', 'procedure', 'groups', 'group', 'residents', 'places', 'refounds', 'cradle', 'lexicon', 'petitions']);
@@ -82,13 +83,17 @@ export const D2 = {
       tooMany: (n, k) => `你给了 ${n} 个动作，只执行了前 ${k} 个。`,
       mcpEmpty: '这段时间没有人找你。',
       mcpNoTool: '这座城没有这个工具。',
+      details: { notObject: '参数必须是一个 JSON 对象', look: 'what 必须是字符串（id 若有也是字符串）', act: 'actions 必须是数组' },
     },
     summary: {
       titles: ['【上一次醒来】', '【再上一次】', '【更早一次】'],
       time: (m, d, t, woken) => `第 ${m} 月第 ${d} 日第 ${t} 刻${woken ? '（被叫醒）' : ''}`,
       received: '收到：', from: '来自', someone: '有人', more: (k) => `（另有 ${k} 条）`,
       looked: '看了：', did: '做了：', thought: '独白：',
-      kinds: { whisper: '私语', offer: '交易', pact: '孕育之约', memory_offer: '交来的记忆', group: '入社申请', say: '说话', broadcast: '宣告', gift: '赠予', standing: '常驻指令', system: '系统', trade: '成交', law: '法案', soul: '灵魂', witness: '目睹', announce: '宣告' },
+      kinds: {
+        whisper: '私语', offer: '交易', pact: '孕育之约', memory_offer: '交来的记忆', group: '入社申请', say: '说话', broadcast: '宣告', gift: '赠予', standing: '常驻指令', system: '系统', trade: '成交', law: '法案', soul: '灵魂', witness: '目睹', announce: '宣告',
+        tag: '标签', transfer: '规则的收支', letter: '家书', reveal: '出示的家书', offer_closed: '交易结束', pact_closed: '孕育之约的结果', refound: '重订', procedure: '立法程序', revived: '唤醒', exile: '放逐', pardon: '赦免', project: '工程', weather: '天象', dream: '梦',
+      },
       ended: { actions: '（动作次数用完）', turns: '（轮数用完）', deadline: '（到了截止的时候）', budget: '（没有醒全）', error: (k) => `（在第 ${k} 轮中断）`, refusal: '（中断）', asleep: '（睡去了）', paused: '（时间静止）', format: '（回复无法解析）' },
     },
     wake: { woken: '【被叫醒】这一刻还没结束，有人找你。', earlier: '【这一刻早些时候】' },
@@ -151,13 +156,17 @@ export const D2 = {
       tooMany: (n, k) => `You gave ${n} actions; only the first ${k} were carried out.`,
       mcpEmpty: 'No one sought you in that time.',
       mcpNoTool: 'This city has no such tool.',
+      details: { notObject: 'the arguments must be a JSON object', look: 'what must be a string (and id, if given, too)', act: 'actions must be an array' },
     },
     summary: {
       titles: ['[Your last waking]', '[The one before]', '[Earlier]'],
       time: (m, d, t, woken) => `Month ${m}, day ${d}, tick ${t}${woken ? ' (woken)' : ''}`,
       received: 'Received: ', from: 'from', someone: 'someone', more: (k) => `(${k} more)`,
       looked: 'Looked at: ', did: 'Did: ', thought: 'Monologue: ',
-      kinds: { whisper: 'whisper', offer: 'offer', pact: 'pact', memory_offer: 'memory handed over', group: 'request to join', say: 'speech', broadcast: 'announcement', gift: 'gift', standing: 'standing order', system: 'system', trade: 'trade', law: 'bill', soul: 'soul', witness: 'witnessed', announce: 'announcement' },
+      kinds: {
+        whisper: 'whisper', offer: 'offer', pact: 'pact', memory_offer: 'memory handed over', group: 'request to join', say: 'speech', broadcast: 'announcement', gift: 'gift', standing: 'standing order', system: 'system', trade: 'trade', law: 'bill', soul: 'soul', witness: 'witnessed', announce: 'announcement',
+        tag: 'tag', transfer: 'rule transfer', letter: 'letter', reveal: 'letter shown', offer_closed: 'offer closed', pact_closed: 'pact result', refound: 'refounding', procedure: 'procedure', revived: 'woken', exile: 'exile', pardon: 'pardon', project: 'project', weather: 'weather', dream: 'dream',
+      },
       ended: { actions: '(out of actions)', turns: '(out of turns)', deadline: '(time ran out)', budget: '(did not fully wake)', error: (k) => `(interrupted at turn ${k})`, refusal: '(interrupted)', asleep: '(fell dormant)', paused: '(time stood still)', format: '(replies could not be parsed)' },
     },
     wake: { woken: '[Woken] This tick is not over yet; someone is looking for you.', earlier: '[Earlier this tick] ' },
@@ -239,7 +248,8 @@ function summaryLines(e, code) {
   const lines = [];
   const rec = e.received || [];
   if (rec.length) {
-    const shown = rec.slice(0, 8).map((r) => `${s.kinds[r.kind] || r.kind} ${s.from} ${r.from || s.someone}${r.text60 ? `${code === 'en' ? ': ' : '：'}${r.text60}` : ''}`);
+    // from：发送者的名字；null 是匿名（「有人」）；没有这一项的收件（成交、系统通知……）不写「来自」
+    const shown = rec.slice(0, 8).map((r) => `${s.kinds[r.kind] || r.kind}${r.from === undefined ? '' : ` ${s.from} ${r.from || s.someone}`}${r.text60 ? `${code === 'en' ? ': ' : '：'}${r.text60}` : ''}`);
     lines.push(`  ${s.received}${shown.join(code === 'en' ? '; ' : '；')}${rec.length > 8 ? s.more(rec.length - 8) : ''}`);
   }
   if ((e.looks || []).length) lines.push(`  ${s.looked}${e.looks.join(sep)}`);
@@ -396,3 +406,48 @@ export function clipLook(text, maxChars, lang) {
   return `${cps.slice(0, maxChars).join('')}\n${D2[codeOf(lang)].look.truncated(cps.length)}`;
 }
 
+
+// ═══════════════════════════════════════════════════════════════
+// 工具的结果（附录 A.5）
+// ═══════════════════════════════════════════════════════════════
+
+/** 当前所在的地点：名字 [编号] */
+function placeText(p) {
+  return p.here ? `${p.here.name} [${p.here.place}]` : (p.you && p.you.place) || '?';
+}
+
+/** 新到的收件（附在 act 的结果里）：同【收件箱】的行，标题换成【新到的收件】；items 是感知里 seq 大于已展示的那些 */
+export function renderArrived(p, items, { lang } = {}) {
+  if (!items.length) return [];
+  const code = codeOf(lang || p.lang);
+  const lines = secInbox(makeCtx({ ...p, inbox: items }, { code, level: 0 }));
+  lines[0] = D2[code].res.arrived;
+  return lines;
+}
+
+/** 移动之后：【你到了】地点一行；在场：…（没有在场者则只有前半） */
+export function renderArrival(p, { lang } = {}) {
+  const code = codeOf(lang || p.lang);
+  const c = makeCtx(p, { code, level: 0 });
+  const place = hereLine(c)[0];
+  if (!place) return [];
+  const present = herePresent(c)[0];
+  return [`${D2[code].res.moved}${place.slice(c.d.here.length)}${present ? `${code === 'en' ? '; ' : '；'}${present.trim()}` : ''}`];
+}
+
+/**
+ * 一次 act 的结果文字：【行动的结果】、逐项的结果（一项一行）、丢弃与截断的说明（F7）、此刻一行、新到的收件、移动之后的新地点。
+ * opts：{ results（act 接口返回的逐项结果）, notes（说明的句子）, arrived（新到的收件）, moved, fresh（重新感知成功了吗：不成功就不写此刻一行）, lang }
+ */
+export function renderActResult(p, { results, notes = [], arrived = [], moved = false, fresh = true, lang }) {
+  const code = codeOf(lang || p.lang);
+  const res = D2[code].res;
+  const lines = [res.results];
+  if (results.length) for (const r of results) lines.push(summarizeResults([r], code));
+  else lines.push(summarizeResults([], code));
+  lines.push(...notes);
+  if (fresh && p.you) lines.push(res.now({ status: p.you.status, energy: p.you.energy, coins: p.you.coins, actionsLeft: p.you.actionsLeft, place: placeText(p) }));
+  if (fresh) lines.push(...renderArrived(p, arrived, { lang: code }));
+  if (fresh && moved) lines.push(...renderArrival(p, { lang: code }));
+  return lines.join('\n');
+}

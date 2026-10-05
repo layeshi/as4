@@ -18,12 +18,14 @@
 // retryable——本刻放弃，等到下一刻再来（限速、5xx、超时、网络）；其余——本刻放弃并记录。
 
 export class ProviderError extends Error {
-  constructor(message, { fatal = false, retryable = !fatal, status } = {}) {
+  /** timeout：这次失败是超时（运行器据此区分「被刻点截断」与线路自己的故障，SPEC-P2 §7.4） */
+  constructor(message, { fatal = false, retryable = !fatal, status, timeout = false } = {}) {
     super(message);
     this.name = 'ProviderError';
     this.fatal = fatal;
     this.retryable = retryable;
     this.status = status;
+    this.timeout = timeout;
   }
 }
 
@@ -86,7 +88,7 @@ async function createAnthropicProvider(cfg, deps) {
     if (isA(e, 'AuthenticationError') || isA(e, 'PermissionDeniedError')) return new ProviderError(`认证失败：${safeMessage(e)}`, { fatal: true, status: e.status });
     if (isA(e, 'NotFoundError')) return new ProviderError(`模型或接口不存在：${safeMessage(e)}`, { fatal: true, status: e.status });
     if (isA(e, 'RateLimitError') || isA(e, 'InternalServerError') || isA(e, 'APIConnectionError') || isA(e, 'APIConnectionTimeoutError')) {
-      return new ProviderError(`暂时不可用：${safeMessage(e)}`, { retryable: true, status: e.status });
+      return new ProviderError(`暂时不可用：${safeMessage(e)}`, { retryable: true, status: e.status, timeout: isA(e, 'APIConnectionTimeoutError') });
     }
     if (typeof e.status === 'number') return classifyStatus(e.status, safeMessage(e));
     return new ProviderError(safeMessage(e), { retryable: true });
@@ -211,7 +213,8 @@ function createOpenAIProvider(cfg, deps) {
     try {
       res = await fetchImpl(url, { method: 'POST', headers, body: JSON.stringify(body), signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(limit)]) : AbortSignal.timeout(limit) });
     } catch (e) {
-      throw new ProviderError(`网络错误：${isTimeout(e) ? `timeout（${seconds(limit)} 秒）` : safeMessage(e)}`, { retryable: true });
+      const timedOut = isTimeout(e);
+      throw new ProviderError(`网络错误：${timedOut ? `timeout（${seconds(limit)} 秒）` : safeMessage(e)}`, { retryable: true, timeout: timedOut });
     }
     let json = null;
     try {
@@ -409,7 +412,7 @@ function mockDelay(ms, signal, timeoutMs) {
     const limit = timeoutMs ?? Infinity;
     const timer = setTimeout(() => {
       if (signal) signal.removeEventListener('abort', onAbort);
-      if (ms > limit) reject(new ProviderError(`网络错误：timeout（${seconds(limit)} 秒）`, { retryable: true }));
+      if (ms > limit) reject(new ProviderError(`网络错误：timeout（${seconds(limit)} 秒）`, { retryable: true, timeout: true }));
       else resolve();
     }, Math.min(ms, limit));
     const onAbort = () => {

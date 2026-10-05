@@ -10,6 +10,7 @@ import { createProvider, PROVIDER_NAMES, ProviderError, validateReasoningEffort 
 import { renderPerception, summarizeResults } from './render.js';
 import { buildSystemPrompt, promptParams } from './prompt.js';
 import { parseModelJson, normalizeReply } from './parse.js';
+import { runWaking, waitTickOrWake } from './loop.js';
 
 const KEEP_ROUNDS = 6; // 短期记忆：默认只保留最近 6 轮（配置项 historyRounds 可以调小以省 token）
 const FALLBACK_TICK_MS = 300000;
@@ -88,12 +89,16 @@ function defaultWait(ms, signal) {
  * 驱动一个 agent，直到它长眠 / 归隐 / 认证失败 / 被中止 / 达到 maxRounds。
  * cfg：一项 loadRunnerConfig 的结果（或等价的对象：server、token、lang、provider…）。
  * deps（多为测试用）：{ client, provider, providerDeps, log, wait(ms, signal), signal, maxRounds,
- *                      beforeModel, onUsage }
+ *                      beforeModel, onUsage, waitWake, onWaking }
  *   client       注入的客户端（与 runner/client.js 同接口：me / act）。躯壳居民没有令牌，由进程内客户端感知与行动（SPEC-E2 §13.2）
  *   beforeModel  (agentId, meta) → Promise<boolean>：每次调用模型之前问一声，为假则本刻不调用（预算、匀速、硬上限）。
  *                meta：{ chars（系统提示 + 消息的字符数）, perception }。不传则总是调用
  *   onUsage      (agentId, usage, meta)：每次调用模型之后报告用量。usage 为 { input, output }，提供者没报告时为 null；
- *                meta：{ ok, chars, replyChars, ms, error? }——调用失败（限速、超时……）时 ok 为 false，用来释放预留
+ *                meta：{ ok, chars, replyChars, ms, error? }——调用失败（限速、超时……）时 ok 为 false，用来释放预留。
+ *                第二前提另有 cancelled（因截止而中止）与 waking: { tick, kind, turn }
+ *   waitWake     第二前提：({ after, timeoutMs, signal }) → { ok, status, json: { items, cursor, status? } }，等待会叫醒的收件（SPEC-P2 §6.4）。
+ *                缺省用 client.wait；两者都没有就不会被叫醒；为 false 表示明确不要被叫醒
+ *   onWaking     第二前提：(agentId, rec) 每次醒来（含被叫醒）结束时回报一条轨迹记录，不含任何文本（SPEC-P2 §7.8）
  * 返回 { rounds, acted, stopped }，stopped ∈ dead | retired | auth | provider | aborted | maxRounds
  * 协议 1 与协议 2 共用：系统提示与感知的渲染按感知里的 protocol 选择（runner/prompt.js、runner/render.js）。
  */
@@ -132,6 +137,13 @@ export async function runAgent(cfg, deps = {}) {
     const target = next + (n - 1) * tickMs;
     const ms = Math.max(1000, target - Date.now()) + Math.random() * 0.1 * tickMs;
     await wait(ms, signal, p);
+  };
+
+  // 第二前提（agent 模式）：这位 agent 的可变状态，工具循环在 runner/loop.js（SPEC-P2 §7.1）；其余的世界不用它
+  const S = {
+    cfg, deps, client, provider, log, signal, report, waitTick,
+    cursor: undefined, lastWoke: null, system: null, systemKey: null, history: [], mainEntry: null, rejected: 0,
+    looks: { tick: -1, n: 0 }, wakes: { tick: -1, n: 0 }, wakeSeen: 0, warnedNoStep: false,
   };
 
   let stopped = 'aborted';
@@ -173,6 +185,22 @@ export async function runAgent(cfg, deps = {}) {
     if (p.now && p.now.paused) {
       log.info('城中的时间静止了，等待。');
       await waitTick(p);
+      continue;
+    }
+
+    if (p.premise >= 2) {
+      // 第二前提：感知 → 一次醒来（看、行动、再看）→ 等到下一刻，期间可能被叫醒
+      rounds++;
+      S.cursor = cursor;
+      const waking = await runWaking(S, p, { kind: 'main' });
+      acted += waking.acted;
+      cursor = S.cursor;
+      if (waking.stop) { stopped = waking.stop; break; }
+      if (signal?.aborted) break;
+      const waited = await waitTickOrWake(S, p, cfg.actEveryTicks || 1);
+      acted += waited.acted;
+      cursor = S.cursor;
+      if (waited.stop) { stopped = waited.stop; break; }
       continue;
     }
 
