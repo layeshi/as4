@@ -26,6 +26,13 @@ export class Runtime {
     this.nextTickAt = null;
     this.timer = null;
     this.stopped = false;
+    this.wakeSubs = new Set(); // 第二前提：运行器订阅「有人找上门」的通知（SPEC-P2 §6.2）；不落盘、不经 SSE、不进事件流
+  }
+
+  /** 订阅唤醒通知 fn({ agentId, seq, kind })；返回取消订阅的函数。只有 exec 发出，open 里回放命令时不发 */
+  onWake(fn) {
+    this.wakeSubs.add(fn);
+    return () => this.wakeSubs.delete(fn);
   }
 
   /**
@@ -86,6 +93,15 @@ export class Runtime {
       out = { result: { ok: false, error: { code: 'internal' } }, events: this.engine.drainEvents(this.w) };
     }
     this.events.append(out.events, { tick: this.w.clock.tick });
+    for (const wake of out.wakes || []) {
+      for (const fn of [...this.wakeSubs]) {
+        try {
+          fn(wake);
+        } catch (e) {
+          this.logger.warn?.(`唤醒通知的订阅者出错：${e && e.message}`);
+        }
+      }
+    }
     if (type === 'tick' && out.result.ok) {
       this.events.release(this.w.clock.tick);
       if (out.result.settled) this.snapshot();

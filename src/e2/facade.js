@@ -7,6 +7,8 @@ export const weatherTypes = (w) => isPremised(w) ? weatherCodesFor(w).filter((c)
 // 运行时、HTTP、回放、沙盘命令行只通过门面使用引擎。
 
 export { premised, agentic } from './world.js';
+export { isWakeItem } from './engine/core.js';
+export { wakeItems } from './engine/perception.js';
 
 import { P, configure, configureWeather } from './params.js';
 import { createWorld, genesisOpts, agentList, isAlive, clockDay } from './world.js';

@@ -19,6 +19,7 @@ import { publicRoutes } from './public.js';
 import { adminRoutes } from './admin.js';
 import { snapshotRoutes } from './snapshots.js';
 import { WorldSnapshots } from '../world-snapshots.js';
+import { agentic } from '../e2/facade.js';
 import { DEFAULT_AGENT_LOOP } from '../../runner/loop.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -116,7 +117,8 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     shells: rt.engine.physics === 2 && cfg.shellsFile ? new ShellManager(rt, cfg, { logger }) : null,
     tokens: new TokenIndex(rt.w),
     limits: {
-      agent: new PerTickLimiter(20), // 每个令牌每刻 20 个请求
+      agent: new PerTickLimiter(agentic(rt.w) ? 40 : 20), // 每个令牌每刻 20 个请求；第二前提 40：托管居民一刻里有多次感知与行动（SPEC-P2 §10.5）
+      wait: new PerTickLimiter(60), // GET /api/me/wait 另计：每个令牌每刻 60 次，不占上面的额度（只在第二前提的城有这个接口）
       model: new SlidingLimiter(20, 60 * 60 * 1000), // 连接测试与入境次数分开计数
       port: new SlidingLimiter(5, 60 * 60 * 1000), // 注册、领养、过继：每个 IP 每小时 5 次
     },

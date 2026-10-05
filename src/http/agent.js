@@ -3,19 +3,19 @@
 import { errorMessage } from '../lore/index.js';
 import { actionFeedback } from '../action-feedback.js';
 import { LIMITS } from '../params.js';
-import { agentic } from '../e2/facade.js';
+import { agentic, wakeItems } from '../e2/facade.js';
 import { DEFAULT_AGENT_LOOP } from '../../runner/loop.js';
 import { bearer, errorBody, httpStatusFor, langOf, readJson, sendError, sendJson } from './util.js';
 
-/** 验证 agent 令牌；失败时发 401 并返回 null */
-export function authAgent(ctx, req, res, lang) {
+/** 验证 agent 令牌；失败时发 401 并返回 null。limiter：限速器（缺省每刻 20 个请求，第二前提 40；GET /api/me/wait 用自己的，SPEC-P2 §10.5） */
+export function authAgent(ctx, req, res, lang, limiter = ctx.limits.agent) {
   const id = ctx.tokens.agentFor(ctx.rt.w, bearer(req));
   if (!id) {
     sendError(res, lang, 'unauthorized');
     return null;
   }
   // 每个令牌每刻最多 20 个请求（SPEC §13）
-  if (!ctx.limits.agent.take(id, ctx.rt.w.clock.tick)) {
+  if (!limiter.take(id, ctx.rt.w.clock.tick)) {
     sendError(res, lang, 'rate_limited');
     return null;
   }
@@ -90,6 +90,66 @@ export function actCore({ rt, cursors }, id, body, lang) {
   return { status: 200, json: { ok: true, results, you: result.you } };
 }
 
+/**
+ * 等待会叫醒的收件（SPEC-P2 §6.3、§6.4）：HTTP 的 GET /api/me/wait、躯壳的进程内客户端与托管运行器共用。
+ * 返回 Promise<{ items, cursor, status? }>：
+ *   居民不醒着：立即返回 { items: [], cursor: after, status }；
+ *   已有 seq > after 的会叫醒的收件：立即返回它们与其中最大的序号；
+ *   否则订阅 rt.onWake，收到本居民的通知就重新取并返回；到时（或 signal 中止）返回 { items: [], cursor: after }。
+ * 不推进任何游标（GET 不是命令）；返回过的收件之后照样出现在感知里。
+ */
+export function waitCore(rt, id, { after, timeoutMs = 25000, signal, lang = 'zh' } = {}) {
+  const a = rt.w.agents[id];
+  if (!a || a.status !== 'awake') return Promise.resolve({ items: [], cursor: after, status: a ? a.status : 'unknown' });
+  const result = (items) => ({ items, cursor: items[items.length - 1].seq });
+  const found = wakeItems(rt.w, id, after, lang);
+  if (found.length) return Promise.resolve(result(found));
+  return new Promise((resolve) => {
+    let done = false;
+    let timer = null;
+    let off = () => {};
+    const finish = (r) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      off();
+      if (signal) signal.removeEventListener('abort', onAbort);
+      resolve(r);
+    };
+    const onAbort = () => finish({ items: [], cursor: after });
+    off = rt.onWake((n) => {
+      if (n.agentId !== id || n.seq <= after) return;
+      const items = wakeItems(rt.w, id, after, lang);
+      if (items.length) finish(result(items));
+    });
+    timer = setTimeout(() => finish({ items: [], cursor: after }), timeoutMs);
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
+  });
+}
+
+/** GET /api/me/wait?after=&timeoutMs=&lang=（只在第二前提的城；限速单独计数） */
+export async function getWait(req, res, ctx, url) {
+  const lang = langOf(url.searchParams);
+  const id = authAgent(ctx, req, res, lang, ctx.limits.wait);
+  if (!id) return;
+  if (!agentic(ctx.rt.w)) return sendError(res, lang, 'not_found');
+  const raw = url.searchParams.get('after');
+  if (raw === null || !/^\d{1,15}$/.test(raw)) return sendError(res, lang, 'invalid_request', { field: 'after' });
+  let timeoutMs = 25000;
+  const rawTimeout = url.searchParams.get('timeoutMs');
+  if (rawTimeout !== null) {
+    if (!/^\d{1,6}$/.test(rawTimeout) || Number(rawTimeout) < 1000 || Number(rawTimeout) > 50000) return sendError(res, lang, 'invalid_request', { field: 'timeoutMs' });
+    timeoutMs = Number(rawTimeout);
+  }
+  const ac = new AbortController();
+  res.on('close', () => ac.abort()); // 连接关闭：取消订阅、清掉计时器（响应发出之后再中止是空操作）
+  const r = await waitCore(ctx.rt, id, { after: Number(raw), timeoutMs, signal: ac.signal, lang });
+  if (!res.destroyed && !res.writableEnded) sendJson(res, 200, r);
+}
+
 /** POST /api/me/act */
 export async function postAct(req, res, ctx, url) {
   const lang = langOf(url.searchParams);
@@ -103,5 +163,6 @@ export async function postAct(req, res, ctx, url) {
 
 export const agentRoutes = [
   ['GET', '/api/me', getMe],
+  ['GET', '/api/me/wait', getWait],
   ['POST', '/api/me/act', postAct],
 ];

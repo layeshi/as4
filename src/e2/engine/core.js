@@ -72,12 +72,35 @@ export function drainEvents(w) {
 
 // ── 收件箱（PROTOCOL §5） ───────────────────────────────────
 
-/** 给 agent 的收件箱追加一条，只保留最近 P.inboxKeep 条；溢出时留下一条 system 通知 */
+/**
+ * 会叫醒居民的收件（SPEC-P2 §6.1）：私语（含匿名的）、定向交易（pushInbox 只对定向交易调用）、孕育之约的邀请、交给你的记忆、
+ * 申请加入你担任管事的社群。说话、宣告、目睹、法案结果、天象、系统通知、常驻指令的回报都不叫醒。
+ */
+export function isWakeItem(kind, fields = {}) {
+  return kind === 'whisper' || kind === 'offer' || kind === 'pact' || kind === 'memory_offer' || (kind === 'group' && fields.event === 'request');
+}
+
+/**
+ * 给 agent 的收件箱追加一条，只保留最近 P.inboxKeep 条；溢出时留下一条 system 通知。
+ * 第二前提里，会叫醒的收件另记进隐藏列表 w.$wakes（同 w.$out：不可枚举，不进快照与状态哈希），由 applyCommand 在命令结束时取走。
+ */
 export function pushInbox(w, agent, kind, fields = {}) {
   const item = { seq: nextSeq(w, 'inbox'), tick: w.clock.tick, kind, ...fields };
   agent.inbox.push(item);
   trimInbox(w, agent);
+  if (agentic(w) && isWakeItem(kind, fields)) {
+    if (!Object.prototype.hasOwnProperty.call(w, '$wakes')) hidden(w, '$wakes', []);
+    w.$wakes.push({ agentId: agent.id, seq: item.seq, kind });
+  }
   return item;
+}
+
+/** 取走并清空隐藏列表：[{ agentId, seq, kind }]（SPEC-P2 §6.1） */
+export function drainWakes(w) {
+  const out = w.$wakes;
+  if (!out || out.length === 0) return [];
+  w.$wakes = [];
+  return out;
 }
 
 function trimInbox(w, agent) {

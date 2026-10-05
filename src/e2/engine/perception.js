@@ -9,7 +9,7 @@
 // （沙盘脑在 tick 里感知）；传 after 或 ack: false 则不推进。HTTP 层一律传 ack: false，用自己的内存游标（floor）。
 
 import { bodyOf } from './bodies.js';
-import { isMuted } from './core.js';
+import { isMuted, isWakeItem } from './core.js';
 import { actionTable } from '../lore/actions.js';
 import { P, SEASON_TABLE, conditionBand, seasonBand, richnessBand } from '../params.js';
 import { travelCosts, lotsNear, HUMAN_DEFS } from '../map/index.js';
@@ -124,10 +124,18 @@ export function buildPerception(w, agentId, opts = {}) {
   };
 }
 
-function localizeInbox(item, l) {
+export function localizeInbox(item, l) {
   if (item.kind !== 'system') return item;
   const tpl = l.perception.system[item.code] || l.perception.system.unknown;
   return { ...item, text: fmt(tpl, { n: item.dropped, name: item.name }) };
+}
+
+/** 第二前提：seq > after 的、会叫醒的收件，按语言本地化（GET /api/me/wait、进程内的 wait 与托管运行器的 waitWake 用；SPEC-P2 §6.3） */
+export function wakeItems(w, agentId, after, lang) {
+  const a = w.agents[agentId];
+  if (!a) return [];
+  const l = L(normLang(lang));
+  return a.inbox.filter((i) => i.seq > after && isWakeItem(i.kind, i)).map((i) => localizeInbox(i, l));
 }
 
 /** 一位居民的收件箱（最近 n 条），system 项带本地化文本——造者后台用 */

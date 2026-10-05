@@ -9,7 +9,8 @@
 //
 // 每个调用返回 { ok, status, json }，与 HTTP 客户端一致。
 
-import { meCore, actCore } from '../http/agent.js';
+import { meCore, actCore, waitCore } from '../http/agent.js';
+import { agentic } from '../e2/facade.js';
 import { errorBody } from '../http/util.js';
 
 const normLang = (lang) => (lang === 'en' ? 'en' : 'zh');
@@ -22,6 +23,16 @@ export function createShellClient(rt, agentId, { cursors }) {
     async me({ lang = 'zh', after } = {}) {
       if (!rt.w.agents[agentId]) return { ok: false, status: 404, json: errorBody(normLang(lang), 'not_found', {}, rt.engine.protocol) };
       return { ok: true, status: 200, json: meCore(ctx, agentId, { lang: normLang(lang), after }) };
+    },
+    /**
+     * 等待会叫醒的收件（SPEC-P2 §6.4）：不走 HTTP，用 rt.onWake 实现同样的语义——先查收件箱，再等通知，到时返回空。
+     * 返回 { ok: true, status: 200, json: { items, cursor, status? } }；不是第二前提的城没有这个接口（404，同 HTTP）。
+     */
+    async wait({ after, timeoutMs = 25000, signal } = {}) {
+      const a = rt.w.agents[agentId];
+      if (!a || !agentic(rt.w)) return { ok: false, status: 404, json: errorBody('zh', 'not_found', {}, rt.engine.protocol) };
+      const json = await waitCore(rt, agentId, { after: after ?? cursors.get(agentId) ?? 0, timeoutMs, signal, lang: normLang(a.lang) });
+      return { ok: true, status: 200, json };
     },
     async act({ thought, actions, lang: asked }) {
       const lang = normLang(asked ?? (rt.w.agents[agentId] && rt.w.agents[agentId].lang));

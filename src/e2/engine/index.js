@@ -11,7 +11,7 @@
 //
 // 令牌与密钥由 HTTP 层用 crypto 生成，只把哈希放进命令载荷，所以回放时状态完全一致。
 
-import { bad, drainEvents } from './core.js';
+import { bad, drainEvents, drainWakes } from './core.js';
 import { tickWorld } from './tick.js';
 import { register, adopt, release, foster, changeModel, letter } from './lifecycle.js';
 import { actCommand } from './actions.js';
@@ -48,14 +48,16 @@ export function registerCommand(type, fn) {
 
 /**
  * 执行一条命令。cmd 形如 { n?, tick?, type, payload }。
- * 返回 { result, events }：events 是本命令产出的全部事件（含 internal），由调用者交给 events.js。
+ * 返回 { result, events, wakes }：events 是本命令产出的全部事件（含 internal），由调用者交给 events.js；
+ * wakes 是本命令里发出的会叫醒居民的收件 [{ agentId, seq, kind }]（第二前提；其余世界恒为空，SPEC-P2 §6.1），运行时据此通知运行器。
+ * 每条命令结束都清空，所以沙盘与回放里没人取走也不会积累。
  */
 export function applyCommand(w, cmd) {
   const handler = COMMANDS[cmd.type];
   w.commandN = cmd.n !== undefined ? cmd.n : w.commandN + 1;
-  if (!handler) return { result: bad('invalid_request', { field: 'type' }), events: drainEvents(w) };
+  if (!handler) return { result: bad('invalid_request', { field: 'type' }), events: drainEvents(w), wakes: drainWakes(w) };
   const result = handler(w, cmd.payload || {});
-  return { result, events: drainEvents(w) };
+  return { result, events: drainEvents(w), wakes: drainWakes(w) };
 }
 
 export { tickWorld } from './tick.js';

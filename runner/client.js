@@ -10,7 +10,7 @@ const DEFAULT_TIMEOUT_MS = 30000;
 export function createClient({ server, token, fetch: fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS, signal }) {
   const base = String(server).replace(/\/+$/, '');
 
-  async function call(path, { method = 'GET', body } = {}) {
+  async function call(path, { method = 'GET', body, timeoutMs: limit = timeoutMs } = {}) {
     const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     try {
@@ -18,7 +18,7 @@ export function createClient({ server, token, fetch: fetchImpl = globalThis.fetc
         method,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(limit)]) : AbortSignal.timeout(limit),
       });
       let json = null;
       try {
@@ -40,6 +40,16 @@ export function createClient({ server, token, fetch: fetchImpl = globalThis.fetc
       const q = new URLSearchParams({ lang });
       if (after !== undefined && after !== null) q.set('after', String(after));
       return call(`/api/me?${q}`);
+    },
+    /**
+     * 等待会叫醒的收件（只在第二前提的城，SPEC-P2 §6.4）：GET /api/me/wait。有 seq > after 的就立即返回，否则等到有或到时返回空。
+     * 服务器要求 timeoutMs 在 1000–50000 之间，这里夹进去；这一次请求自己的超时是 timeoutMs + 10 秒。
+     */
+    wait({ after, timeoutMs: ms = 25000, lang } = {}) {
+      const t = Math.min(50000, Math.max(1000, Math.floor(ms)));
+      const q = new URLSearchParams({ after: String(after ?? 0), timeoutMs: String(t) });
+      if (lang) q.set('lang', lang);
+      return call(`/api/me/wait?${q}`, { timeoutMs: t + 10000 });
     },
     /** lang 为 en 时动作错误的说明用英文（缺省 zh，请求路径不变）；第二纪里它还进入命令（draft 的说明、read { law } 的读法） */
     act({ thought, actions, lang }) {
