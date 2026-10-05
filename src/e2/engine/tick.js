@@ -21,6 +21,7 @@ export const STEPS = {
   dailyRules: () => {}, // STEP 4：daily 与 monthly 规则（§7.6）
   abandonProjects: () => {}, // STEP 6：烂尾（§10.5）
   shells: () => {}, // STEP 8：躯壳醒来、消散与退款（§12.3–§12.4）
+  standing: () => {}, // SPEC-P2 §5.4：常驻指令（第二前提，engine/standing.js 安装）
   sandboxAdopt: () => {}, // STEP 13：沙盘世界里的沙盘领养判定（§14.2 第 9 步的后半，同 v1）
   revert: () => {}, // STEP 4：自动回退（§8.5）
   tallyProposals: () => {}, // STEP 4：计票（§8.3、§8.7）
@@ -44,6 +45,7 @@ export function tickWorld(w) {
     dailySettlement(w, w.clock.tick / P.ticksPerDay - 1); // 6
     settled = true;
   }
+  if (agentic(w)) STEPS.standing(w); // 6.5 常驻指令（SPEC-P2 §5.4）：日终结算之后、沙盘脑之前
   STEPS.sandbox(w); // 7 沙盘脑行动（按 ID 升序）
   w.recentSpeech = w.recentSpeech.filter((s) => s.tick > w.clock.tick - P.heardTicks); // 8
   return { ok: true, tick: w.clock.tick, day: clockDay(w), settled };

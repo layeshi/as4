@@ -140,7 +140,7 @@ const RESULT_INTS = {
 };
 
 /** 把动作返回的 data（或参数里的对象）化成规则能读的记录：标量，嵌套的对象至多一层 */
-function plainRecord(v, depth = 0, hidden = []) {
+export function plainRecord(v, depth = 0, hidden = []) {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
   const out = {};
   for (const [k, x] of Object.entries(v)) {
@@ -199,7 +199,7 @@ export function eventRecord(type, data) {
 }
 
 /** 执行者所在之处的、在世居民列表（含执行者） */
-function hereOf(w, placeId) {
+export function hereOf(w, placeId) {
   const out = [];
   for (const o of Object.values(w.agents)) if (isAlive(o) && o.place === placeId) out.push(agentRef(o.id));
   return out;

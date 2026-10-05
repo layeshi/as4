@@ -5,7 +5,7 @@
 // 这样引擎本身没有 I/O，回放时只要丢弃取出的事件即可。
 
 import { P } from '../params.js';
-import { nextSeq, clockDay } from '../world.js';
+import { nextSeq, clockDay, agentic } from '../world.js';
 import { checkText, textWeight } from '../../text.js';
 export { textWeight } from '../../text.js';
 import { screen } from '../../moderation.js';
@@ -100,6 +100,14 @@ function trimInbox(w, agent) {
 
 /** 引用某位 agent 的精简写法 { id, name } */
 export const ref = (a) => ({ id: a.id, name: a.name });
+
+/**
+ * 第二前提的屏蔽（SPEC-P2 §5.10）：recipient 的屏蔽名单里有发送者；匿名私语没有发送者（senderId 为 null），写作 'anonymous'。
+ * 设定 0、1 的世界里恒为假（它们的居民没有 muted）。
+ */
+export function isMuted(w, recipient, senderId) {
+  return agentic(w) && Array.isArray(recipient.muted) && recipient.muted.includes(senderId ?? 'anonymous');
+}
 
 // ── 能量入账与唤醒 ──────────────────────────────────────────
 

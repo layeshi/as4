@@ -548,6 +548,8 @@ export const VARS = {
   internalize: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
   impart: (e) => ({ a: A(e.agent), to: A(e.data.to), text: TX(e.data.text) }),
   standing: (e) => ({ a: A(e.agent), count: e.data.count }), // 第二前提：常驻指令（SPEC-P2 §5.2；观测者在一个月后才看得到）
+  standing_fired: (e) => ({ a: A(e.agent), types: (e.data.results || []).map((r) => `${r.type}${r.ok ? '' : '✗'}`).join(', ') }),
+  mute: (e) => ({ a: A(e.agent), who: e.data.who === 'anonymous' ? '' : A(e.data.who) }),
   remember: (e) => ({ a: A(e.agent), text: TX(e.data.text), ...(e.data.gift ? { from: A(e.data.from), origin: A(e.data.origin) } : {}) }),
   forget: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
   thought: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
@@ -685,6 +687,13 @@ export const TPL = {
     impart: '{a} 交给 {to} 一段记忆：「{text}」',
     standing: '{a} 留下了 {count} 条常驻指令。',
     standing_none: '{a} 撤销了常驻指令。',
+    standing_fired: '{a} 的常驻指令执行了：{types}',
+    standing_fired_none: '{a} 的常驻指令触发了，但什么也没做。',
+    whisper_anonymous: '{a} 匿名私语了 {b}：「{text}」',
+    mute: '{a} 屏蔽了 {who}。',
+    mute_off: '{a} 解除了对 {who} 的屏蔽。',
+    mute_anonymous: '{a} 屏蔽了所有匿名私语。',
+    mute_off_anonymous: '{a} 解除了对所有匿名私语的屏蔽。',
     remember_gift: '{a} 收下 {from} 交来的记忆（最初是 {origin} 的）：「{text}」',
     remember: '{a} 记下：「{text}」',
     forget: '{a} 忘掉了：「{text}」',
@@ -808,6 +817,13 @@ export const TPL = {
     impart: '{a} handed {to} a memory: “{text}”',
     standing: '{a} left {count} standing order(s).',
     standing_none: '{a} withdrew their standing orders.',
+    standing_fired: "{a}'s standing order carried out: {types}",
+    standing_fired_none: "{a}'s standing order fired but did nothing.",
+    whisper_anonymous: '{a} whispered anonymously to {b}: “{text}”',
+    mute: '{a} muted {who}.',
+    mute_off: '{a} unmuted {who}.',
+    mute_anonymous: '{a} muted all anonymous whispers.',
+    mute_off_anonymous: '{a} unmuted all anonymous whispers.',
     remember_gift: '{a} kept a memory from {from} (first {origin}’s): “{text}”',
     remember: '{a} remembered: “{text}”',
     forget: '{a} forgot: “{text}”',
@@ -922,7 +938,7 @@ export const CAT = {
   rule_op: 'polity', pact_open: 'life', successor: 'life', declare: 'life', sponsor: 'life', embodied: 'life', rule_error: 'polity', announce: 'polity', law_replaced: 'polity', law_suspended: 'polity', procedure_reverted: 'polity',
   refound_open: 'polity', refound_sign: 'polity', refounded: 'polity', refound_expired: 'polity', petition: 'polity', cede: 'polity', seize: 'polity', draft: 'polity', bylaws: 'polity', group_procedure: 'polity', place_rules: 'polity', dismantle: 'env', razed: 'env',
   omen: 'world', weather_start: 'world', weather_end: 'world', day: 'world', month: 'world', great_sleep: 'world',
-  standing: 'life',
+  standing: 'life', standing_fired: 'life', mute: 'life',
   admin: 'admin', redacted: 'admin',
 };
 
@@ -940,6 +956,9 @@ export function templateKey(e) {
     case 'revive': return /^a\d+$/.test(String(d.by)) ? 'revive_by' : 'revive';
     case 'remember': return e.data.gift ? 'remember_gift' : 'remember';
     case 'standing': return d.count === 0 ? 'standing_none' : 'standing';
+    case 'standing_fired': return (d.results || []).length ? 'standing_fired' : 'standing_fired_none';
+    case 'whisper': return d.anonymous ? 'whisper_anonymous' : 'whisper';
+    case 'mute': return `mute${d.on === false ? '_off' : ''}${d.who === 'anonymous' ? '_anonymous' : ''}`;
     case 'backstage': return e.data.kind === 'budget' ? `backstage_budget_${e.data.direction}` : `backstage_${e.data.kind}`;
     case 'born': return d.authors ? 'born_v2' : 'born';
     case 'soul': return d.authors ? (d.successorOf ? 'soul_successor' : 'soul_v2') : 'soul';

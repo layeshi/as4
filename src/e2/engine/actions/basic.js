@@ -5,9 +5,9 @@ import { bodyOf } from '../bodies.js';
 import { textWeight } from '../../../text.js';
 import { P, LIMITS } from '../../params.js';
 import { ACTIONS } from '../../lore/actions.js';
-import { clockDay, nextId, findAgent, isAlive, isNameTaken, premised } from '../../world.js';
+import { clockDay, nextId, findAgent, isAlive, isNameTaken, premised, agentic } from '../../world.js';
 import {
-  fail, emit, pushInbox, ref, creditEnergy, needText, needWeight, optText, optLang, needInt, optAmount, needObject, needId,
+  fail, emit, pushInbox, ref, creditEnergy, needText, needWeight, optText, optLang, needInt, optAmount, needObject, needId, isMuted,
 } from '../core.js';
 import { checkNameShape } from '../lifecycle.js';
 import { moveBaseCost, isWildOpen, hasGate, hasEnterRule, defaultMayEnter } from '../movement.js';
@@ -67,13 +67,60 @@ const whisper = {
     const to = needAgent(w, args.to);
     if (to.id === a.id) fail('invalid_args');
     const text = needText(args.text, { max: LIMITS.speech });
-    return { to, text, cost: ctx.cost(ACTIONS.whisper.base) };
+    // 第二前提（SPEC-P2 §5.9）：anonymous 为真时匿名，代价 3（雾与中继的修正照旧按 whisper 算）；给了却不是布尔值是 invalid_args。设定 0、1 忽略这个参数
+    let anon = false;
+    if (agentic(w) && args.anonymous !== undefined && args.anonymous !== null) {
+      if (typeof args.anonymous !== 'boolean') fail('invalid_args');
+      anon = args.anonymous;
+    }
+    return { to, text, anon, cost: ctx.cost(anon ? P.anonymousWhisperCost : ACTIONS.whisper.base) };
   },
   apply(ctx, plan) {
     const { w, a } = ctx;
-    pushInbox(w, plan.to, 'whisper', { from: ref(a), text: plan.text });
-    emit(w, 'whisper', { vis: 'delayed', agent: a.id, place: a.place, data: { from: a.id, to: plan.to.id, text: plan.text } });
+    // 被屏蔽时什么都不送（也就不叫醒、不进隐藏列表），发送者的结果不变；匿名私语只有 'anonymous' 的屏蔽能挡住
+    const delivered = !isMuted(w, plan.to, plan.anon ? null : a.id);
+    if (delivered) pushInbox(w, plan.to, 'whisper', plan.anon ? { from: null, anonymous: true, text: plan.text } : { from: ref(a), text: plan.text });
+    else w.dayLog.p2.muteBlocked++;
+    emit(w, 'whisper', {
+      vis: 'delayed', agent: a.id, place: a.place,
+      data: { from: a.id, to: plan.to.id, text: plan.text, ...(plan.anon ? { anonymous: true } : {}), ...(delivered ? {} : { delivered: false }) },
+    });
+    if (plan.anon) w.dayLog.p2.anonymousWhispers++;
     return {};
+  },
+};
+
+/** 屏蔽（SPEC-P2 §5.10）：内心的动作。who 是居民（ID 或名字）或 "anonymous"（所有匿名私语）；on 缺省为真，为假时解除 */
+const mute = {
+  validate(ctx, args) {
+    const { w, a } = ctx;
+    needId(args.who);
+    let key;
+    // TODO(spec): Q38 — a resident may be named "anonymous"; who "anonymous" always means all anonymous whispers (literal SPEC-P2 §5.10)
+    if (args.who === 'anonymous') key = 'anonymous';
+    else {
+      const t = findAgent(w, args.who);
+      if (!t) fail('not_found');
+      if (t.id === a.id) fail('invalid_args');
+      key = t.id;
+    }
+    let on = true;
+    if (args.on !== undefined && args.on !== null) {
+      if (typeof args.on !== 'boolean') fail('invalid_args');
+      on = args.on;
+    }
+    if (on && !a.muted.includes(key) && a.muted.length >= P.muteMax) {
+      fail('limit_reached', { zh: `屏蔽的名单满了（至多 ${P.muteMax} 个）；先用 on: false 解除一个。`, en: `Your mute list is full (at most ${P.muteMax}); unmute someone first with on: false.` });
+    }
+    return { key, on, cost: ctx.cost(0) };
+  },
+  apply(ctx, plan) {
+    const { w, a } = ctx;
+    if (plan.on && !a.muted.includes(plan.key)) a.muted.push(plan.key);
+    if (!plan.on) a.muted = a.muted.filter((k) => k !== plan.key);
+    emit(w, 'mute', { vis: 'delayed', agent: a.id, place: a.place, data: { who: plan.key, on: plan.on } });
+    w.dayLog.p2.mutes++;
+    return { who: plan.key, on: plan.on, count: a.muted.length };
   },
 };
 
@@ -272,10 +319,14 @@ const impart = {
     const m = a.memories[plan.index];
     const id = nextId(w, 'k');
     const offer = { id, from: a.id, origin: m.origin ?? a.id, text: m.text, tick: w.clock.tick };
-    plan.to.memoryOffers.push(offer);
-    while (plan.to.memoryOffers.length > P.memoryOffersMax) plan.to.memoryOffers.shift();
-    pushInbox(w, plan.to, 'memory_offer', { giftId: id, from: ref(a), origin: ref(w.agents[offer.origin]), text: m.text });
-    emit(w, 'impart', { vis: 'delayed', agent: a.id, place: a.place, data: { giftId: id, to: plan.to.id, origin: offer.origin, text: m.text } });
+    // 第二前提：被屏蔽时不放进对方的 memoryOffers、不推收件；照常分配编号、付代价（SPEC-P2 §5.10）
+    const delivered = !isMuted(w, plan.to, a.id);
+    if (delivered) {
+      plan.to.memoryOffers.push(offer);
+      while (plan.to.memoryOffers.length > P.memoryOffersMax) plan.to.memoryOffers.shift();
+      pushInbox(w, plan.to, 'memory_offer', { giftId: id, from: ref(a), origin: ref(w.agents[offer.origin]), text: m.text });
+    } else w.dayLog.p2.muteBlocked++;
+    emit(w, 'impart', { vis: 'delayed', agent: a.id, place: a.place, data: { giftId: id, to: plan.to.id, origin: offer.origin, text: m.text, ...(delivered ? {} : { delivered: false }) } });
     w.dayLog.p1.imparts++;
     return { gift: id, to: plan.to.id };
   },
@@ -298,4 +349,4 @@ const internalize = {
     return { index: plan.index, weight: plan.weight };
   },
 };
-export const basicHandlers = { internalize, impart, move, say, whisper, broadcast, give, remember, forget, diary, will };
+export const basicHandlers = { internalize, impart, mute, move, say, whisper, broadcast, give, remember, forget, diary, will };

@@ -454,3 +454,21 @@
 - 选项：A 初次填写空模型时同步住客的 a.body.model，并追加 body.history，保留原有习得 / B 仅填写身体，已有住客须另行处置。
 - 我的建议：A；这是初次绑定，已有非空模型仍须通过 rebody，且不改变 shell_models 未要求的清空行为。
 - 状态：按用户授权暂行 A；第 14 步边界验收修复，代码保留 TODO(spec): Q35。
+
+## Q36 · 署名的私语里 `it.anonymous` 读到 null，直接写条件会求值出错（2026-10-05）
+- 上下文：SPEC-P2 §5.9 说「条件里先判断 `it.anonymous`」，§5.4 规定指令里的 `it` 是 `plainRecord(收件)`。署名私语的收件没有 `anonymous` 这个键（设定 0、1 的收件一字不改，第二前提的署名私语也沿用 `{ from, text }`），而记录里没有的键读成 null。结果：`if: 'it.anonymous'`、`if: 'not it.anonymous'` 在署名私语上求值出错（需要真假，得到 null），只有 `it.anonymous == true` 这类比较能用。系统提示（附录 A.1【常驻指令】）没有说这一点，模型最自然的写法正是前两种。
+- 选项：A 照规格字面：`it` 就是收件的记录，写 `it.anonymous == true`。B 对 `inbox:whisper` 触发的 `it` 补一个 `anonymous: false`（署名的私语），让 `it.anonymous` 在私语里总是真假。
+- 我的建议：B。只在执行时给 `it` 补一个字段，不改收件与事件的格式，不影响设定 0、1；匿名的收件本来就带 `anonymous: true`。
+- 状态：待定（暂行 A，即规格字面；代码标记在 `src/e2/engine/standing.js` 的 `fireOrder`）。
+
+## Q37 · `consent` 的即时状态要不要也不算被屏蔽者发起的孕育之约（2026-10-05）
+- 上下文：SPEC-P2 §5.10 与 PROTOCOL-2 §16.12 只说：`accept` 的即时状态不算被屏蔽者的定向交易，`you.pacts` 里不列出被屏蔽者发起的孕育之约；没有提 `consent`。按规格字面，居民只被屏蔽者邀请时，`you.pacts` 是空的，`actions` 里的 `consent` 却仍显示可用（因为约确实存在，它是共同作者）。
+- 选项：A 规格字面：`consent` 的即时状态照旧。B `consent` 的即时状态同样不算被屏蔽者发起的约（与 `accept` 一致）。
+- 我的建议：B。免得模型对着空的列表尝试 `consent`；改动只在第二前提的感知里。
+- 状态：待定（暂行 A；代码标记在 `src/e2/engine/perception.js` 的 `consent` 一行）。
+
+## Q38 · 居民可以叫「anonymous」吗（2026-10-05）
+- 上下文：`mute` 的 `who` 写 `"anonymous"` 表示所有匿名私语，且优先于按名字找居民（SPEC-P2 §5.10）。名字的形状检查（`src/e2/names.js`）的保留字只有 treasury、city、citizens、humans，所以一位居民可以叫 `anonymous`：那时 `mute who: "anonymous"` 屏蔽的是匿名私语而不是这位居民（只能用它的 ID 屏蔽它）；署名私语的收件里 `from.name` 也可能写成 anonymous，冒充「有人」。
+- 选项：A 不管，已知的边角。B 在第二前提的世界里把 anonymous（以及「有人」「someone」）加进保留名字（注册、孕育、先民、灵魂的名字都过同一个形状检查）。C 只调整 mute 的优先级（先找居民）。
+- 我的建议：B，且只在第二前提生效（设定 0、1 的名字校验一字不改）；它需要名字形状检查知道世界的设定版本，改动比表面上大，所以先问。
+- 状态：待定（暂行 A；代码标记在 `src/e2/engine/actions/basic.js` 的 `mute`）。

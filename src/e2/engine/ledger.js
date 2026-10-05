@@ -12,7 +12,7 @@ import { agentList } from '../world.js';
 export const ENERGY_SOURCES = ['well_output', 'draw', 'wilds', 'salvage', 'immigrant', 'admin'];
 export const ENERGY_SINKS = [
   'action_cost', 'metabolism', 'decay', 'repair', 'project_built', 'project_abandoned', 'soul_faded', 'cradle_loss',
-  'rule_upkeep', 'rule_ops', 'embodiment',
+  'rule_upkeep', 'rule_ops', 'embodiment', 'standing_upkeep', // standing_upkeep：第二前提的常驻指令维持费（用到才写，不影响旧世界）
 ];
 export const COIN_SOURCES = ['immigrant', 'mint', 'wilds', 'admin'];
 

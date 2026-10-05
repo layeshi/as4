@@ -8,6 +8,7 @@ import { loadConfig } from '../src/config.js';
 import { stateHash } from '../src/store.js';
 import { reg, tickDays, assertInvariants } from './e2-helpers.js';
 
+const P2_METRIC_KEYS = ['standingOrders', 'standingHolders', 'standingSets', 'standingFired', 'standingFailed', 'standingSkipped', 'standingErrors', 'standingUpkeep', 'standingSuspended', 'standingExpired', 'anonymousWhispers', 'mutes', 'muteBlocked', 'mutedPairs'];
 const P2_DAYLOG_KEYS = ['standingSets', 'standingFired', 'standingFailed', 'standingSkipped', 'standingErrors', 'standingUpkeep', 'standingSuspended', 'standingExpired', 'anonymousWhispers', 'mutes', 'muteBlocked'];
 
 // ═══════════════════════════════════════════════════════════════
@@ -127,5 +128,6 @@ test('P2 T1: 同种子、同命令得到同样的哈希；第二前提的世界�
   w2.genesis.premise = 1;
   delete w2.dayLog.p2;
   for (const a of Object.values(w2.agents)) { delete a.standing; delete a.muted; }
+  for (const m of w2.metrics) for (const k of P2_METRIC_KEYS) delete m[k]; // 每日指标里第二前提多出来的键（SPEC-P2 §5.8）
   assert.equal(stateHash(w2), stateHash(w1));
 });

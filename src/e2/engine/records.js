@@ -5,7 +5,7 @@
 
 import { conditionBand } from '../params.js';
 import { L, fmt, cityDisplayName } from '../lore/index.js';
-import { agentList, isAlive, premised } from '../world.js';
+import { agentList, isAlive, premised, agentic } from '../world.js';
 import { HUMAN_DEFS, MAP, WILD_ZONE_IDS } from '../map/index.js';
 import { parseCached, countNodes } from '../rules/parser.js';
 import { OP_FIELDS } from '../rules/check.js';
@@ -167,6 +167,7 @@ export function dailyMetrics(w, d) {
     purposeChanges: g.purposeChanges,
     tagsDistinct: tags.size,
     ...(premised(w) ? premiseMetrics(w) : {}),
+    ...(agentic(w) ? agenticMetrics(w) : {}),
   };
 }
 
@@ -298,6 +299,20 @@ STEPS.metrics = (w, d) => {
   w.legacy = computeLegacy(w, d);
   w.chronicle.push(writeChronicle(w, d)); // 17 史官
 };
+
+/** 第二前提的指标（SPEC-P2 §5.8）：常驻指令、匿名私语与屏蔽 */
+function agenticMetrics(w) {
+  const alive = agentList(w).filter(isAlive);
+  const g = w.dayLog.p2;
+  return {
+    standingOrders: alive.reduce((n, a) => n + a.standing.length, 0),
+    standingHolders: alive.filter((a) => a.standing.length > 0).length,
+    standingSets: g.standingSets, standingFired: g.standingFired, standingFailed: g.standingFailed, standingSkipped: g.standingSkipped,
+    standingErrors: g.standingErrors, standingUpkeep: g.standingUpkeep, standingSuspended: g.standingSuspended, standingExpired: g.standingExpired,
+    anonymousWhispers: g.anonymousWhispers, mutes: g.mutes, muteBlocked: g.muteBlocked,
+    mutedPairs: alive.reduce((n, a) => n + a.muted.filter((k) => k !== 'anonymous' && w.agents[k] && isAlive(w.agents[k])).length, 0),
+  };
+}
 
 function premiseMetrics(w) {
   const alive = agentList(w).filter(isAlive);

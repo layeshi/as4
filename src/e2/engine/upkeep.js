@@ -9,7 +9,8 @@
 // 停摆（paidThrough < 今日）的规则，除 enact 外都不执行（rules.js 里的 isSuspended）。
 
 import { P } from '../params.js';
-import { emit } from './core.js';
+import { agentList, agentic } from '../world.js';
+import { emit, pushInbox } from './core.js';
 import { sink } from './ledger.js';
 import { persistentCount } from './laws.js';
 import { STEPS } from './tick.js';
@@ -57,6 +58,32 @@ export function payUpkeep(w, d) {
     if (!p.rules || p.owner.kind === 'city') continue;
     const account = p.owner.kind === 'group' ? w.groups[p.owner.id].treasury : w.agents[p.owner.id];
     if (!pay(w, p.rules, upkeepOf(p.rules.rules), account, d)) suspend(w, d, p.rules, `place:${p.id}`, p.id, p.name);
+  }
+  // 常驻指令（第二前提）
+  if (agentic(w)) payStanding(w, d);
+}
+
+/**
+ * 常驻指令的维持费（SPEC-P2 §5.5）：醒着的居民的每条指令每日 standingUpkeep 能量，去处 standing_upkeep。
+ * 自愿付的，不受生存底线限制；付不起的那条当日停摆（paidThrough 不推进），并给本人一条 system: standing_suspended。
+ * 沉睡的居民不付，也不推进 paidThrough：醒来之后、下一次日终结算之前，它的指令停摆。
+ */
+function payStanding(w, d) {
+  for (const a of agentList(w)) { // ID 升序
+    if (a.status !== 'awake' || !a.standing || a.standing.length === 0) continue;
+    let unpaid = 0;
+    for (const o of a.standing) {
+      if (a.energy >= P.standingUpkeep) {
+        a.energy -= P.standingUpkeep;
+        sink(w, 'energy', 'standing_upkeep', P.standingUpkeep);
+        w.dayLog.p2.standingUpkeep += P.standingUpkeep;
+        o.paidThrough = d + 1;
+      } else unpaid++;
+    }
+    if (unpaid > 0) {
+      w.dayLog.p2.standingSuspended += unpaid;
+      pushInbox(w, a, 'system', { code: 'standing_suspended' });
+    }
   }
 }
 

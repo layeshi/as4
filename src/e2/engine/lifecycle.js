@@ -188,6 +188,7 @@ export function applyDeaths(w, d) {
  */
 export function releaseAgent(w, a) {
   if (premised(w)) a.memoryOffers = [];
+  if (agentic(w)) a.standing = []; // 常驻指令随长眠与归隐清除（SPEC-P2 §5.6）
   for (const o of Object.values(w.offers)) if (o.status === 'open' && o.from === a.id) closeOffer(w, o, 'cancelled');
   for (const c of Object.values(w.pacts)) {
     if (c.status === 'open' && c.authors.includes(a.id)) closePact(w, c, 'departed');

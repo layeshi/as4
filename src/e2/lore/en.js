@@ -123,6 +123,8 @@ export default {
       backstage_budget_up: "Backstage, the supply to the shells was increased.",
       backstage_budget_down: "Backstage, the supply to the shells was reduced.",
       backstage_resume: "Time in the city stood still for a while.",
+      standing_suspended: "Some of your standing orders could not be paid for; they stand still today.",
+      standing_expired: "One of your standing orders ran out or expired and was removed.",
       inbox_overflow: '{n} inbox item(s) were dropped because there were too many.',
       soul_faded: 'Your child "{name}" was never adopted and has faded away.',
       unknown: 'System notice.',

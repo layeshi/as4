@@ -11,7 +11,7 @@
 import { P, LIMITS } from '../../params.js';
 import { ACTIONS } from '../../lore/actions.js';
 import { clockDay, nextId, findAgent, isAlive, isNameTaken, premised } from '../../world.js';
-import { fail, emit, pushInbox, ref, needText, needWeight, optText, optLang, needId, needInt } from '../core.js';
+import { fail, emit, pushInbox, ref, needText, needWeight, optText, optLang, needId, needInt, isMuted } from '../core.js';
 import { credit } from '../accounts.js';
 import { hasModuleAt } from '../places.js';
 import { checkNameShape } from '../lifecycle.js';
@@ -109,7 +109,10 @@ const conceive = {
       name: plan.name, soul: plan.soul, lang: plan.lang, cradle: plan.cradle,
       escrow: plan.share, openedTick: w.clock.tick, expiresTick: w.clock.tick + P.pactTicks, status: 'open',
     };
-    for (const x of plan.withIds) pushInbox(w, w.agents[x], 'pact', { pactId: id, from: ref(a), name: plan.name, soul: plan.soul, lang: plan.lang, authors: authors.map((y) => ref(w.agents[y])) });
+    for (const x of plan.withIds) {
+      if (isMuted(w, w.agents[x], a.id)) { w.dayLog.p2.muteBlocked++; continue; } // 第二前提：那位作者屏蔽了发起者——约照常存在（到期作废），只是不推收件（SPEC-P2 §5.10）
+      pushInbox(w, w.agents[x], 'pact', { pactId: id, from: ref(a), name: plan.name, soul: plan.soul, lang: plan.lang, authors: authors.map((y) => ref(w.agents[y])) });
+    }
     emit(w, 'pact_open', { agent: a.id, place: a.place, data: { pactId: id, authors: authors.slice(), name: plan.name } });
     return { pact: id };
   },

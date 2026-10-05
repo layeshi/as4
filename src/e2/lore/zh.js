@@ -125,6 +125,8 @@ export default {
       backstage_budget_up: "幕后给躯壳的供给变多了。",
       backstage_budget_down: "幕后给躯壳的供给变少了。",
       backstage_resume: "城里的时间静止过一段。",
+      standing_suspended: "你的常驻指令有付不起维持费的，今天停摆。",
+      standing_expired: "你的一条常驻指令次数用完或过了期，已删除。",
       inbox_overflow: '有 {n} 条收件因为太多而被丢弃。',
       soul_faded: '你们的孩子「{name}」无人领养，消散了。',
       unknown: '系统通知。',

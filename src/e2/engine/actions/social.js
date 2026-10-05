@@ -11,7 +11,7 @@ import { ACTIONS } from '../../lore/actions.js';
 import { clockDay, nextId, isAlive, findAgent } from '../../world.js';
 import { nameKey } from '../../../text.js';
 import {
-  fail, emit, pushInbox, ref, creditEnergy, needText, optText, optLang, optAmount, needObject, needId,
+  fail, emit, pushInbox, ref, creditEnergy, needText, optText, optLang, optAmount, needObject, needId, isMuted,
 } from '../core.js';
 import { hasRelay, hasModuleAt } from '../places.js';
 import { isWeatherActive } from '../environment.js';
@@ -86,7 +86,10 @@ const join = {
     }
     g.pending.push(a.id);
     const steward = w.agents[g.steward];
-    if (steward && isAlive(steward)) pushInbox(w, steward, 'group', { groupId: g.id, event: 'request', from: ref(a) });
+    if (steward && isAlive(steward)) {
+      if (isMuted(w, steward, a.id)) w.dayLog.p2.muteBlocked++; // 第二前提：管事屏蔽了申请者——申请照常进入待审名单，只是不给管事推收件（SPEC-P2 §5.10）
+      else pushInbox(w, steward, 'group', { groupId: g.id, event: 'request', from: ref(a) });
+    }
     emit(w, 'join', { agent: a.id, place: a.place, data: { groupId: g.id, pending: true } });
     return { group: g.id, joined: false, pending: true };
   },
@@ -226,7 +229,10 @@ const offer = {
       openedTick: w.clock.tick, expiresTick: w.clock.tick + P.offerTicks, status: 'open', acceptedBy: null,
     };
     w.offers[id] = o;
-    if (to) pushInbox(w, to, 'offer', { offerId: id, from: ref(a), give, want, note });
+    if (to) {
+      if (isMuted(w, to, a.id)) w.dayLog.p2.muteBlocked++; // 第二前提：对方屏蔽了你——交易照常建立、托管，不推收件；到期照常退回（SPEC-P2 §5.10）
+      else pushInbox(w, to, 'offer', { offerId: id, from: ref(a), give, want, note });
+    }
     emit(w, 'offer_open', {
       agent: a.id, place: a.place,
       data: { offerId: id, from: a.id, to: o.to, board: o.board, give, want, note, expiresTick: o.expiresTick },

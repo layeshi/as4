@@ -22,6 +22,7 @@ import './upkeep.js'; // 维持费（STEPS.upkeep）
 import './legislation.js'; // 遗法（创世时）、计票、自动回退、重订（STEPS.*）
 import './bylaws.js'; // 社群章程、地点规则、社群的程序与社群提案
 import './shells.js'; // 躯壳：出资排队、醒来、消散、先民入城（STEPS.shells / STEPS.founders）
+import './standing.js'; // 第二前提：常驻指令的执行（STEPS.standing）
 import './records.js'; // 每日指标、人类遗产存活表、史官（STEPS.metrics）
 import '../sandbox/brains.js'; // 沙盘脑 v2：每刻行动（STEPS.sandbox）、沙盘领养（STEPS.sandboxAdopt）与 admin seed_sandbox
 

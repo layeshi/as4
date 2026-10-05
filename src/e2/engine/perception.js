@@ -9,6 +9,7 @@
 // （沙盘脑在 tick 里感知）；传 after 或 ack: false 则不推进。HTTP 层一律传 ack: false，用自己的内存游标（floor）。
 
 import { bodyOf } from './bodies.js';
+import { isMuted } from './core.js';
 import { actionTable } from '../lore/actions.js';
 import { P, SEASON_TABLE, conditionBand, seasonBand, richnessBand } from '../params.js';
 import { travelCosts, lotsNear, HUMAN_DEFS } from '../map/index.js';
@@ -149,11 +150,15 @@ function youView(w, a, l, lang, day, openOffers, openPacts) {
   const offers = [];
   for (const o of openOffers) {
     if (o.from === a.id) offers.push({ id: o.id, role: 'from', to: o.to, board: o.board, give: o.give, want: o.want, note: o.note, expiresTick: o.expiresTick });
-    else if (o.to === a.id) offers.push({ id: o.id, role: 'to', from: ref(w.agents[o.from]), to: o.to, give: o.give, want: o.want, note: o.note, expiresTick: o.expiresTick });
+    else if (o.to === a.id) {
+      if (agentic(w) && isMuted(w, a, o.from)) continue; // 第二前提：被屏蔽者发来的定向交易不列出（SPEC-P2 §5.10）
+      offers.push({ id: o.id, role: 'to', from: ref(w.agents[o.from]), to: o.to, give: o.give, want: o.want, note: o.note, expiresTick: o.expiresTick });
+    }
   }
   const pacts = [];
   for (const c of openPacts) {
     if (!c.authors.includes(a.id)) continue;
+    if (agentic(w) && c.from !== a.id && isMuted(w, a, c.from)) continue; // 第二前提：被屏蔽者发起的孕育之约不列出（SPEC-P2 §5.10）
     pacts.push({
       id: c.id, role: c.from === a.id ? 'initiator' : 'author', name: c.name, soul: c.soul, lang: c.lang, expiresTick: c.expiresTick,
       authors: c.authors.map((x) => ({ id: x, name: w.agents[x].name, consented: Object.prototype.hasOwnProperty.call(c.consents, x) })),
@@ -484,7 +489,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
         if (!hasModuleAt(w, a.place, 'archive')) deny({ code: 'no_module', text: fmt(R.no_module, { module: l.module.archive.name }) });
         break;
       case 'accept':
-        if (!openOffers.some((o) => o.from !== a.id && (o.to === a.id || (o.to === null && o.board === a.place)))) deny({ code: 'not_found', text: R.nothing });
+        if (!openOffers.some((o) => o.from !== a.id && ((o.to === a.id && !(agentic(w) && isMuted(w, a, o.from))) || (o.to === null && o.board === a.place)))) deny({ code: 'not_found', text: R.nothing });
         break;
       case 'cancel':
         if (!openOffers.some((o) => o.from === a.id)) deny({ code: 'not_found', text: R.nothing });
@@ -556,6 +561,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
         else if (wallCount >= here.wallSlots) notes.push({ code: 'wall_full', text: N.wallFull });
         break;
       case 'consent':
+        // TODO(spec): Q37 — consent's availability still counts pacts started by a muted resident (literal SPEC-P2 §5.10)
         if (!openPacts.some((c) => c.authors.includes(a.id) && !Object.prototype.hasOwnProperty.call(c.consents, a.id))) deny({ code: 'not_found', text: R.nothing });
         break;
       case 'sponsor':

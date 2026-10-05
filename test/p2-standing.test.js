@@ -11,7 +11,11 @@ import {
 import { checkExpression, parseWhen, validateRules } from '../src/e2/rules/check.js';
 import { namesFor, ALL_NAMES, ALL_NAMES_P2, T } from '../src/e2/rules/types.js';
 import { implementedActions, HANDLERS } from '../src/e2/engine/actions.js';
-import { one, oneWithEvents, setHoldings, putAt, tickDays } from './e2-helpers.js';
+import { applyCommand } from '../src/e2/engine/index.js';
+import { stateHash } from '../src/store.js';
+import { genesisOpts } from '../src/e2/world.js';
+import { checkConservation } from '../src/e2/engine/ledger.js';
+import { reg, one, oneWithEvents, setHoldings, putAt, tick, tickDays, eventsOf, assertInvariants } from './e2-helpers.js';
 import { enactP2 as enact, town as makeTown } from './p2-helpers.js';
 import { describeEvent, templateKey, setLang, CAT } from '../public/i18n.js';
 
@@ -65,11 +69,12 @@ test('P2 T3: 动作表——第二前提 45 个动作：standing 在 declare 之
   assert.equal(actionArgKind('say', 'text'), 'str');
 });
 
-test('P2 T3: standing 有处理函数并通过规格的注册检查；mute 要到第 4 步', () => {
-  assert.ok(HANDLERS.standing);
-  assert.ok(implementedActions(2).includes('standing'));
-  assert.ok(!implementedActions(1).includes('standing'));
-  assert.ok(!implementedActions(0).includes('standing'));
+test('P2 T3: 第二前提动作表里的每个动作都有处理函数，没有多的；设定 0、1 的也一样', () => {
+  assert.ok(HANDLERS.standing && HANDLERS.mute);
+  for (const premise of [0, 1, 2]) assert.deepEqual(implementedActions(premise).slice().sort(), actionTable(premise).ORDER.slice().sort(), `premise ${premise}`);
+  assert.equal(implementedActions(2).length, 45);
+  assert.ok(!implementedActions(1).includes('standing') && !implementedActions(1).includes('mute'));
+  assert.ok(!implementedActions(0).includes('standing') && !implementedActions(0).includes('mute'));
 });
 
 test('P2 T3: 设定 0、1 的世界里 standing 是不存在的动作，提示文字不变', () => {
@@ -438,4 +443,455 @@ test('P2 T3: 观测站的事件模板随 standing 事件一起登记（Q29 的�
   } finally {
     setLang('zh');
   }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// T4：执行（SPEC-P2 §5.4）
+// ═══════════════════════════════════════════════════════════════
+
+const standingItems = (a) => a.inbox.filter((i) => i.kind === 'standing');
+
+test('P2 T4: tick 的指令每刻执行一次；执行的动作与亲手做的一样（事件的形状相同、付代价）；条件为假不计次、不发收件、不发事件', () => {
+  const { w, people } = town(2, 'exec-tick');
+  const [a, b] = people;
+  set(w, a, [{ when: 'tick', if: 'me.energy < 95', do: [{ type: 'say', text: '我在' }] }]);
+  assert.equal(a.energy, 99);
+  // 能量 99 ≥ 95：条件为假
+  const quiet = tick(w, 3);
+  assert.equal(a.standing[0].fired, 0);
+  assert.equal(standingItems(a).length, 0);
+  assert.equal(eventsOf(quiet, 'standing_fired').length, 0);
+  assert.equal(eventsOf(quiet, 'say').length, 0);
+  assert.equal(w.dayLog.p2.standingFired, 0);
+  // 条件为真：每刻一次
+  setHoldings(w, a, { energy: 50 });
+  const evs = tick(w, 3);
+  assert.equal(a.standing[0].fired, 3);
+  assert.equal(eventsOf(evs, 'say').length, 3);
+  assert.equal(a.energy, 50 - 3, '每次 say 付 1');
+  assert.equal(standingItems(a).length, 3);
+  assert.equal(w.dayLog.p2.standingFired, 3);
+  // 与亲手做的 say 相同：事件的形状一样，没有任何「自动」的标记
+  const manual = oneWithEvents(w, b, { type: 'say', text: '我在' }).events.find((e) => e.type === 'say');
+  const auto = eventsOf(evs, 'say')[0];
+  assert.deepEqual(Object.keys(auto).sort(), Object.keys(manual).sort());
+  assert.deepEqual(Object.keys(auto.data).sort(), Object.keys(manual.data).sort());
+  assert.equal(auto.vis, manual.vis);
+  assert.equal(auto.agent, a.id);
+  assert.equal(auto.place, a.place);
+  // 同处的人听到的收件也一样
+  assert.deepEqual(Object.keys(b.inbox.filter((i) => i.kind === 'say' && i.from.id === a.id)[0]).sort(), Object.keys(b.inbox.filter((i) => i.kind === 'say' && i.from.id === b.id)[0] || b.inbox.find((i) => i.kind === 'say')).sort());
+});
+
+test('P2 T4: daily 只在日界刻（新一日的第 1 刻）执行', () => {
+  const { w, people } = town(1, 'exec-daily');
+  const [a] = people;
+  set(w, a, [{ when: 'daily', do: [{ type: 'say', text: '早安' }] }]);
+  const evs = tick(w, 36); // 第 12、24、36 刻是日界刻
+  assert.equal(a.standing[0].fired, 3);
+  assert.deepEqual(eventsOf(evs, 'standing_fired').map((e) => e.tick), [12, 24, 36]);
+  assert.deepEqual(eventsOf(evs, 'say').map((e) => e.tick), [12, 24, 36]);
+});
+
+test('P2 T4: inbox:<类别> 每条收件触发一次；seen 推进；设定之前到达的收件不触发；别的类别与发给别人的不触发', () => {
+  const { w, people } = town(3, 'exec-inbox');
+  const [a, b, c] = people;
+  one(w, b, { type: 'whisper', to: a.id, text: '设定之前的私语' });
+  set(w, a, [{ when: 'inbox:whisper', do: [{ type: 'say', text: '收到' }] }]);
+  assert.equal(a.standing[0].seen, a.inbox.at(-1).seq);
+  tick(w, 1);
+  assert.equal(a.standing[0].fired, 0, '设定之前到达的收件不触发');
+  // 两条私语，另有别的类别（赠予）与发给别人的私语
+  one(w, b, { type: 'whisper', to: a.id, text: '第一条' });
+  one(w, c, { type: 'whisper', to: a.id, text: '第二条' });
+  one(w, b, { type: 'whisper', to: c.id, text: '不是给你的' });
+  one(w, b, { type: 'give', to: a.id, energy: 1 });
+  const evs = tick(w, 1);
+  assert.equal(a.standing[0].fired, 2, '一条收件一次');
+  assert.equal(eventsOf(evs, 'say').length, 2);
+  const whisperSeqs = a.inbox.filter((i) => i.kind === 'whisper' && i.text !== '设定之前的私语').map((i) => i.seq);
+  assert.deepEqual(standingItems(a).map((i) => i.trigger), whisperSeqs.map((seq) => ({ when: 'inbox:whisper', seq })));
+  assert.equal(a.standing[0].seen, a.inbox.filter((i) => i.kind !== 'standing').at(-1).seq, 'seen 推进到看过的最大序号');
+  // 没有新的收件：不再触发
+  tick(w, 2);
+  assert.equal(a.standing[0].fired, 2);
+});
+
+test('P2 T4: 六类收件各自触发——私语、定向交易、孕育之约、交来的记忆、入社申请（group 只算有人申请加入）、赠予', () => {
+  const { w, people } = town(4, 'exec-kinds');
+  const [a, b, c, d] = people;
+  const diary = (when) => ({ when, do: [{ type: 'diary', text: when }] });
+  set(w, a, [diary('inbox:whisper'), diary('inbox:offer'), diary('inbox:pact')]);
+  set(w, d, [diary('inbox:memory_offer'), diary('inbox:group'), diary('inbox:gift')]);
+  one(w, d, { type: 'found', name: '小会', manifesto: '一起', open: false });
+  one(w, b, { type: 'whisper', to: a.id, text: '私语' });
+  one(w, b, { type: 'offer', to: a.id, give: { energy: 0, coins: 1 }, want: { energy: 1, coins: 0 }, note: '换' });
+  assert.equal(one(w, b, { type: 'conceive', name: '孩子', soul: '孩子的灵魂', with: [a.id] }).ok, true);
+  one(w, b, { type: 'remember', text: '要交出去的记忆' });
+  assert.equal(one(w, b, { type: 'impart', to: d.id, memory: 0 }).ok, true);
+  assert.equal(one(w, c, { type: 'join', group: 'g1' }).ok, true);
+  one(w, b, { type: 'give', to: d.id, energy: 3, note: '送' });
+  tick(w, 1);
+  assert.deepEqual(a.standing.map((o) => o.fired), [1, 1, 1]);
+  assert.deepEqual(d.standing.map((o) => o.fired), [1, 1, 1]);
+  assert.deepEqual(standingItems(a).map((i) => i.trigger.when), ['inbox:whisper', 'inbox:offer', 'inbox:pact']);
+  assert.deepEqual(standingItems(d).map((i) => i.trigger.when), ['inbox:memory_offer', 'inbox:group', 'inbox:gift']);
+  // 申请被接纳之后的通知（admitted）发给申请者，不再触发管事的指令
+  one(w, d, { type: 'admit', group: 'g1', agent: c.id });
+  tick(w, 2);
+  assert.deepEqual(d.standing.map((o) => o.fired), [1, 1, 1]);
+});
+
+test('P2 T4: = 参数的求值——it.from.id、left；居民、社群、灵魂、城公库的引用化成 ID；记录与列表是 type 规则错误，记在收件里，指令保留', () => {
+  const { w, people } = town(2, 'exec-args');
+  const [a, b] = people;
+  set(w, a, [{ when: 'inbox:whisper', do: [{ type: 'whisper', to: '=it.from.id', text: "=if(left >= 3, '收到', '满了')" }] }]);
+  one(w, b, { type: 'whisper', to: a.id, text: '你好' });
+  tick(w, 1);
+  const reply = b.inbox.filter((i) => i.kind === 'whisper').at(-1);
+  assert.deepEqual([reply.from.id, reply.text], [a.id, '收到']);
+  const item = standingItems(a)[0];
+  assert.deepEqual(item.results.map((r) => [r.type, r.ok, r.cost]), [['whisper', true, 1]]);
+  // 其余的情形直接把状态放好：每刻触发的指令
+  const give = (to) => { a.standing = [{ when: 'tick', if: null, do: [{ type: 'give', to, energy: 1 }], times: null, untilDay: null, fired: 0, seen: 0, paidThrough: clockDay(w) }]; };
+  const [bEnergy, treasury] = [b.energy, w.treasury.energy];
+  give("=agent('居民2')");
+  tick(w, 1);
+  assert.equal(b.energy, bEnergy + 1, '居民的引用化成 ID');
+  give('=treasury');
+  tick(w, 1);
+  assert.equal(w.treasury.energy, treasury + 1, '城公库化成 treasury');
+  // 记录与列表
+  const errors = [];
+  for (const to of ['=city', '=here', '=agents', '=it', '=var']) {
+    give(to);
+    tick(w, 1);
+    const last = standingItems(a).at(-1);
+    errors.push(last.error);
+    assert.deepEqual(last.results, []);
+    assert.equal(a.standing.length, 1, '指令保留');
+    assert.equal(a.standing[0].fired, 1, '出错也计一次');
+  }
+  assert.deepEqual(errors, ['type', 'type', 'type', 'type', 'type']);
+  assert.equal(w.dayLog.p2.standingErrors, 5);
+  // 除零：求值出错
+  give('=1 / 0');
+  tick(w, 1);
+  assert.equal(standingItems(a).at(-1).error, 'div0');
+  // 条件求值出错（it 在 tick 指令里没有值）也一样
+  a.standing = [{ when: 'tick', if: 'me.energy > 0', do: [{ type: 'say', text: '=it.x' }], times: null, untilDay: null, fired: 0, seen: 0, paidThrough: clockDay(w) }];
+  tick(w, 1);
+  assert.equal(standingItems(a).at(-1).error, 'type');
+});
+
+test('P2 T4: 占本刻的名额；名额用完时整条跳过并记录；本人亲手做的动作这一刻也没有名额了', () => {
+  const { w, people } = town(1, 'exec-slots');
+  const [a] = people;
+  const say2 = (text) => ({ when: 'tick', do: [{ type: 'say', text }, { type: 'say', text }] });
+  set(w, a, [say2('一'), say2('二'), say2('三')]);
+  tick(w, 1);
+  const items = standingItems(a);
+  assert.equal(items.length, 3);
+  assert.deepEqual(items[0].results.map((r) => r.ok), [true, true]);
+  assert.deepEqual(items[1].results.map((r) => r.ok), [true, true]);
+  assert.deepEqual(items[2].results, []);
+  assert.equal(items[2].skipped, 2, '本刻 4 个名额已用完：跳过 2 个动作');
+  assert.equal(a.actsThisTick, 4);
+  assert.deepEqual(a.standing.map((o) => o.fired), [1, 1, 1], '跳过也计一次触发');
+  assert.equal(w.dayLog.p2.standingFired, 2);
+  assert.equal(w.dayLog.p2.standingSkipped, 1);
+  // 本人这一刻亲手做的动作：没有名额（走真实的 act 命令，测试辅助会把名额清零）
+  const real = applyCommand(w, { type: 'act', payload: { agentId: a.id, actions: [{ type: 'say', text: '没名额了' }] } }).result.results[0];
+  assert.equal(real.error.code, 'budget_exhausted');
+});
+
+test('P2 T4: 失败的动作照样占名额，记入 standingFailed', () => {
+  const { w, people } = town(1, 'exec-failed');
+  const [a] = people;
+  set(w, a, [{ when: 'tick', do: [{ type: 'move', to: 'nowhere' }, { type: 'say', text: '后一个' }] }]);
+  const evs = tick(w, 1);
+  const last = standingItems(a).at(-1);
+  assert.deepEqual(last.results.map((r) => [r.type, r.ok, r.error && r.error.code]), [['move', false, 'invalid_args'], ['say', true, undefined]]);
+  assert.equal(w.dayLog.p2.standingFailed, 1);
+  assert.equal(w.dayLog.p2.standingFired, 1);
+  assert.equal(a.actsThisTick, 2, '失败的 move 与成功的 say 各占一个名额');
+  assert.equal(eventsOf(evs, 'say').length, 1);
+  assert.equal(a.energy, 100 - 1 - 1, '失败的动作不扣代价');
+});
+
+test('P2 T4: 本刻名额不够做全部动作：做得了的做，其余记为跳过', () => {
+  const { w, people } = town(1, 'exec-partial');
+  const [a] = people;
+  // 先让别的指令占去 3 个名额：第一条 3 个动作不行（至多 2 个），所以用两条：2 + 1，再来第三条 2 个动作只剩 1 个名额
+  set(w, a, [
+    { when: 'tick', do: [{ type: 'say', text: 'a' }, { type: 'say', text: 'b' }] },
+    { when: 'tick', do: [{ type: 'say', text: 'c' }] },
+    { when: 'tick', do: [{ type: 'say', text: 'd' }, { type: 'say', text: 'e' }] },
+  ]);
+  tick(w, 1);
+  const last = standingItems(a).at(-1);
+  assert.deepEqual(last.results.map((r) => [r.ok, r.error && r.error.code]), [[true, undefined], [false, 'budget_exhausted']]);
+  assert.equal(last.skipped, 1);
+  assert.equal(w.dayLog.p2.standingFired, 3);
+  assert.equal(w.dayLog.p2.standingSkipped, 0, 'standingSkipped 只记整条被跳过的');
+  assert.equal(w.dayLog.p2.standingFailed, 0, '名额用完不算失败');
+});
+
+test('P2 T4: times 用尽与 untilDay 过期时删除，给本人一条 system: standing_expired；untilDay 是总第 N 日', () => {
+  const { w, people } = town(1, 'exec-expire');
+  const [a] = people;
+  set(w, a, [
+    { when: 'tick', do: [{ type: 'diary', text: '两次' }], times: 2 },
+    { when: 'tick', do: [{ type: 'diary', text: '到总第 1 日' }], untilDay: 1 },
+    { when: 'tick', do: [{ type: 'diary', text: '长命' }] },
+  ]);
+  tick(w, 1);
+  assert.deepEqual(a.standing.map((o) => o.fired), [1, 1, 1]);
+  tick(w, 1);
+  assert.equal(a.standing.length, 2, 'times: 2 用尽，删除');
+  assert.deepEqual(a.standing.map((o) => o.untilDay), [1, null]);
+  assert.equal(w.dayLog.p2.standingExpired, 1);
+  assert.deepEqual(a.inbox.filter((i) => i.kind === 'system').map((i) => i.code), ['standing_expired']);
+  // 总第 1 日（钟面的第 0 日）整日都执行；日界刻 12 钟面翻到第 1 日，总第 2 日——过期，在执行之前删除
+  tick(w, 9); // 第 11 刻
+  assert.equal(a.standing[0].fired, 11);
+  tick(w, 1); // 第 12 刻
+  assert.equal(a.standing.length, 1);
+  assert.equal(a.standing[0].untilDay, null);
+  assert.equal(a.standing[0].fired, 12);
+  assert.equal(w.dayLog.p2.standingExpired, 1, '日界刻的日终已把前一日的计数清零：这是新一日的第一次');
+});
+
+test('P2 T4: 沉睡的居民不执行；按居民 ID 升序（低 ID 的私语同一刻触发高 ID 的指令，反过来要等下一刻）', () => {
+  const { w, people } = town(2, 'exec-order');
+  const [a, b] = people;
+  // a（低 ID）每刻私语 b；b（高 ID）收到私语就私语回 a
+  set(w, a, [{ when: 'tick', times: 1, do: [{ type: 'whisper', to: b.id, text: '问' }] }, { when: 'inbox:whisper', do: [{ type: 'diary', text: '收到回信' }] }]);
+  set(w, b, [{ when: 'inbox:whisper', do: [{ type: 'whisper', to: '=it.from.id', text: '答' }] }]);
+  tick(w, 1);
+  assert.equal(b.standing[0].fired, 1, '同一刻：a 的指令先执行，b 的 inbox:whisper 指令接着看到');
+  assert.equal(a.standing.filter((o) => o.when === 'inbox:whisper')[0].fired, 0, 'b 的回信要等下一刻才被 a 的指令看到');
+  tick(w, 1);
+  assert.equal(a.standing[0].fired, 1);
+  // 沉睡：不执行
+  const c = reg(w, '居民3');
+  setHoldings(w, c, { energy: 50 });
+  set(w, c, [{ when: 'tick', do: [{ type: 'say', text: '醒着才说' }] }]);
+  c.status = 'dormant';
+  c.dormantSinceDay = 0;
+  tick(w, 3);
+  assert.equal(c.standing[0].fired, 0);
+  assert.equal(standingItems(c).length, 0);
+});
+
+test('P2 T4: 收件与延迟事件的内容；法律照常管它（before: 拒绝、收费）；回放一致', () => {
+  const { w, people } = town(2, 'exec-content');
+  const [a, b] = people;
+  tickDays(w, 3);
+  setHoldings(w, a, { energy: 100, coins: 5 });
+  const treasury = w.treasury.energy;
+  enact(w, [{ when: 'before:say', if: "actor.place == 'port'", do: [{ op: 'fee', to: 'treasury', energy: '2' }] }, { when: 'before:give', do: [{ op: 'deny', reason: '不许给' }] }], { title: '管指令的法', author: b.id });
+  set(w, a, [{ when: 'tick', do: [{ type: 'say', text: '收费的话' }, { type: 'give', to: b.id, energy: 1 }], times: 1 }]);
+  const evs = tick(w, 1);
+  const item = standingItems(a)[0];
+  assert.deepEqual(item.trigger, { when: 'tick' });
+  assert.equal(item.order, 0);
+  assert.deepEqual(item.results[0], { type: 'say', ok: true, cost: 1 + 2, data: { fees: [{ law: 'l7', energy: 2, coins: 0, to: 'treasury' }] } });
+  assert.deepEqual(item.results[1], { type: 'give', ok: false, error: { code: 'forbidden' } });
+  assert.equal(Object.hasOwn(item, 'skipped'), false);
+  assert.equal(w.treasury.energy, treasury + 2);
+  // 事件 standing_fired：延迟公开，只有类型与成败
+  const ev = eventsOf(evs, 'standing_fired')[0];
+  assert.equal(ev.vis, 'delayed');
+  assert.equal(ev.agent, a.id);
+  assert.deepEqual(ev.data, { order: 0, trigger: { when: 'tick' }, results: [{ type: 'say', ok: true }, { type: 'give', ok: false, error: 'forbidden' }] });
+  assert.equal(w.dayLog.p2.standingFailed, 1);
+  // 用尽之后删除
+  assert.deepEqual(a.standing, []);
+  // 回放：同样的命令得到同样的状态
+  assertInvariants(w);
+});
+
+test('P2 T4: 回放——同样的命令序列重建出同样的状态（设定、执行、维持费、过期都在命令之内）', () => {
+  const run = () => {
+    const w = newWorldFor('replay');
+    const log = [];
+    const exec = (cmd) => { log.push(cmd); return applyCommand(w, cmd); };
+    const ids = [];
+    for (const n of ['甲', '乙', '丙']) ids.push(exec({ type: 'register', payload: { name: n, bio: '', soul: `我是${n}`, lang: 'zh', model: 'm', creatorName: 't', tokenHash: 'a'.repeat(64), ownerKeyHash: 'b'.repeat(64) } }).result.agentId);
+    exec({ type: 'act', payload: { agentId: ids[0], actions: [{ type: 'standing', orders: [
+      { when: 'tick', if: 'me.energy < 200', do: [{ type: 'say', text: '我在' }], times: 30 },
+      { when: 'inbox:whisper', do: [{ type: 'whisper', to: '=it.from.id', text: '收到' }] },
+      { when: 'daily', do: [{ type: 'diary', text: '日记' }], untilDay: 3 },
+    ] }] } });
+    for (let i = 0; i < 80; i++) {
+      exec({ type: 'tick' });
+      if (i % 7 === 0) exec({ type: 'act', payload: { agentId: ids[1], actions: [{ type: 'whisper', to: ids[0], text: `第 ${i} 刻` }] } });
+      if (i % 11 === 0) exec({ type: 'act', payload: { agentId: ids[2], actions: [{ type: 'give', to: ids[0], energy: 1 }] } });
+    }
+    return { w, log };
+  };
+  const { w, log } = run();
+  assert.ok(w.agents.a1.standing.length >= 1);
+  assert.ok(w.dayLog.p2 && w.metrics.length >= 6);
+  // 由创建参数与命令日志重建
+  const again = e2.createWorld(genesisOpts(JSON.parse(JSON.stringify(w))));
+  for (const cmd of log) applyCommand(again, cmd);
+  assert.equal(stateHash(again), stateHash(w));
+  assert.equal(checkConservation(w).ok, true);
+  assert.equal(w.ledger.mismatches, 0);
+});
+
+function newWorldFor(seed) {
+  return e2.createWorld({ id: 'replay', seed, codeVersion: '0.1.0', premise: 2, shellSlots: 8 });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// T5：维持费、离场、沉睡、换身（SPEC-P2 §5.5、§5.6）
+// ═══════════════════════════════════════════════════════════════
+
+import { payUpkeep } from '../src/e2/engine/upkeep.js';
+import { sha } from './e2-helpers.js';
+
+const order = (extra = {}) => ({ when: 'tick', do: [{ type: 'diary', text: '记' }], ...extra });
+const ownerOf = (w, a) => ({ agentId: a.id, ownerKeyHash: a.owner.keyHash });
+
+test('P2 T5: 每条指令每日付 1 能量（在日终结算的维持费一步），去处 standing_upkeep；守恒', () => {
+  const { w, people } = town(2, 'upkeep');
+  const [a, b] = people;
+  set(w, a, [order(), order(), order()]);
+  set(w, b, [order()]);
+  const [ea, eb] = [a.energy, b.energy];
+  const treasury = w.treasury.energy;
+  payUpkeep(w, 0); // 日终结算第 2 步：付的是第 1 日（d + 1）的
+  assert.equal(a.energy, ea - 3);
+  assert.equal(b.energy, eb - 1);
+  assert.equal(w.treasury.energy, treasury, '不进公库：是能量的去处');
+  assert.equal(w.ledger.snk.energy.standing_upkeep, 4);
+  assert.equal(w.dayLog.p2.standingUpkeep, 4);
+  assert.deepEqual([...a.standing, ...b.standing].map((o) => o.paidThrough), [1, 1, 1, 1]);
+  assert.equal(w.dayLog.p2.standingSuspended, 0);
+  // 过完整的几日：账本守恒，每日指标里记着
+  const full = town(2, 'upkeep-days');
+  set(full.w, full.people[0], [order(), order()]);
+  tickDays(full.w, 3);
+  assertInvariants(full.w);
+  assert.equal(full.w.ledger.mismatches, 0);
+  assert.deepEqual(full.w.metrics.slice(0, 3).map((m) => m.standingUpkeep), [2, 2, 2]);
+  assert.deepEqual(full.w.metrics.slice(0, 3).map((m) => m.standingOrders), [2, 2, 2]);
+  assert.deepEqual(full.w.metrics.slice(0, 3).map((m) => m.standingHolders), [1, 1, 1]);
+});
+
+test('P2 T5: 付不起的那条当日停摆（按序号先后付）、给本人一条 system: standing_suspended；停摆的不执行；能量回来之后下一次结算起恢复', () => {
+  const { w, people } = town(2, 'suspend');
+  const [a, b] = people;
+  set(w, a, [order({ do: [{ type: 'diary', text: '一' }] }), order({ do: [{ type: 'diary', text: '二' }] }), order({ do: [{ type: 'diary', text: '三' }] })]); // 日记不花能量
+  setHoldings(w, a, { energy: 2 }); // 只够两条
+  tickDays(w, 1); // 第 12 刻：日终先付维持费，再代谢
+  assert.deepEqual(a.standing.map((o) => o.paidThrough), [1, 1, 0], '前两条付了，第三条停摆');
+  assert.equal(a.standing.length, 3);
+  assert.deepEqual(a.inbox.filter((i) => i.kind === 'system' && i.code === 'standing_suspended').length, 1, '一次结算只发一条通知');
+  assert.equal(w.metrics[0].standingSuspended, 1);
+  assert.equal(w.metrics[0].standingUpkeep, 2);
+  // 新订的指令第 0 日视为已付，所以前 11 刻三条都执行了；第 12 刻（日界刻）起只有付了费的两条执行
+  const pers = e2.buildPerception(w, a.id, { ack: false });
+  assert.deepEqual(pers.you.standing.map((o) => o.suspended), [false, false, true]);
+  assert.deepEqual(a.standing.map((o) => o.fired), [12, 12, 11], '第三条停在 11 次');
+  tick(w, 3);
+  assert.deepEqual(a.standing.map((o) => o.fired), [15, 15, 11], '停摆的不执行');
+  // 能量回来，下一次日终结算付上，之后恢复执行
+  setHoldings(w, a, { energy: 50 });
+  tick(w, 3);
+  assert.equal(a.standing[2].fired, 11, '还没结算，仍停摆');
+  tickDays(w, 1);
+  assert.deepEqual(a.standing.map((o) => o.paidThrough), [2, 2, 2]);
+  assert.ok(a.standing[2].fired > 11, '结算付上之后恢复');
+  // 一条也付不起：全部停摆，仍只发一条通知
+  const c = reg(w, '居民3');
+  setHoldings(w, c, { energy: 50 });
+  set(w, c, [order(), order()]);
+  setHoldings(w, c, { energy: 0 });
+  const day = clockDay(w);
+  const suspendedBefore = w.dayLog.p2.standingSuspended;
+  payUpkeep(w, day);
+  assert.deepEqual(c.standing.map((o) => o.paidThrough), [day, day], '没有付，paidThrough 不动');
+  assert.equal(w.dayLog.p2.standingSuspended, suspendedBefore + 2);
+  assert.equal(c.inbox.filter((i) => i.kind === 'system' && i.code === 'standing_suspended').length, 1);
+  assert.equal(c.energy, 0);
+  void b;
+});
+
+test('P2 T5: 新订的指令当日视为已付（立刻能执行），下一次日终结算才收费', () => {
+  const { w, people } = town(1, 'new-paid');
+  const [a] = people;
+  tick(w, 5);
+  set(w, a, [order({ do: [{ type: 'say', text: '新订的' }] })]);
+  assert.equal(a.standing[0].paidThrough, clockDay(w));
+  tick(w, 1);
+  assert.equal(a.standing[0].fired, 1, '当日就执行');
+  const before = a.energy;
+  w.dayLog.p2.standingUpkeep = 0;
+  payUpkeep(w, 0);
+  assert.equal(a.energy, before - 1);
+  assert.equal(a.standing[0].paidThrough, 1);
+});
+
+test('P2 T5: 沉睡的居民不付、不推进 paidThrough：醒来之后、下一次日终结算之前，指令停摆', () => {
+  const { w, people } = town(2, 'dormant');
+  const [a, b] = people;
+  set(w, a, [order({ do: [{ type: 'say', text: '醒着才说' }] })]);
+  tick(w, 3);
+  const firedBefore = a.standing[0].fired;
+  assert.equal(firedBefore, 3);
+  // 沉睡（直接改状态；遗法的基本配给让居民不会自然沉睡）
+  setHoldings(w, a, { energy: 2 });
+  a.status = 'dormant';
+  a.dormantSinceDay = 0;
+  const upkeepBefore = w.dayLog.p2.standingUpkeep;
+  tickDays(w, 1);
+  assert.equal(a.standing[0].paidThrough, 0, '沉睡中没有付，paidThrough 不动');
+  assert.equal(a.standing[0].fired, firedBefore, '沉睡中不执行');
+  assert.equal(w.metrics[0].standingUpkeep, upkeepBefore, '没有收费');
+  assert.equal(a.energy, 2, '沉睡者也不付代谢');
+  // 被唤醒（有人赠予能量）：下一次结算之前停摆
+  setHoldings(w, b, { energy: 100 });
+  assert.equal(one(w, b, { type: 'give', to: a.id, energy: 10 }).ok, true);
+  assert.equal(a.status, 'awake');
+  assert.equal(e2.buildPerception(w, a.id, { ack: false }).you.standing[0].suspended, true);
+  tick(w, 4);
+  assert.equal(a.standing[0].fired, firedBefore, '醒来之后到下一次结算之前仍停摆');
+  tickDays(w, 1);
+  assert.equal(a.standing[0].paidThrough, clockDay(w));
+  tick(w, 2);
+  assert.ok(a.standing[0].fired > firedBefore, '结算付上之后恢复');
+});
+
+test('P2 T5: 归隐、长眠时清除；换身（改模型）、过继不影响；不转交、不遗传', () => {
+  const { w, people } = town(3, 'leave');
+  const [a, b, c] = people;
+  for (const x of [a, b, c]) set(w, x, [order(), order()]);
+  assert.equal(one(w, a, { type: 'retire' }).ok, true);
+  assert.deepEqual(a.standing, [], '归隐清除');
+  // 长眠：沉睡满 3 日
+  b.status = 'dormant';
+  b.dormantSinceDay = 0;
+  setHoldings(w, b, { energy: 0 });
+  tickDays(w, 4);
+  assert.equal(b.status, 'dead');
+  assert.deepEqual(b.standing, [], '长眠清除');
+  // 换身：玩家换模型、过继都不影响
+  assert.equal(c.standing.length, 2);
+  const keyed = reg(w, '有造者', { ownerKeyHash: sha('k:有造者') });
+  set(w, keyed, [order()]);
+  const res = applyCommand(w, { type: 'model', payload: { agentId: keyed.id, ownerKeyHash: sha('k:有造者'), model: 'another-model' } }).result;
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(keyed.body.model, 'another-model');
+  assert.equal(keyed.standing.length, 1);
+  applyCommand(w, { type: 'release', payload: { agentId: keyed.id, release: true } });
+  const f = applyCommand(w, { type: 'foster', payload: { agentId: keyed.id, model: 'third-model', creatorName: '新造者', tokenHash: sha('tok2'), ownerKeyHash: sha('key2') } }).result;
+  assert.equal(f.ok, true, JSON.stringify(f));
+  assert.equal(keyed.standing.length, 1, '过继不影响指令');
+  // 不遗传、不转交：孕育的灵魂没有 standing（出生的居民从空开始）
+  assert.equal(one(w, c, { type: 'conceive', name: '后人', soul: '后人的灵魂' }).ok, true);
+  void ownerOf;
 });
