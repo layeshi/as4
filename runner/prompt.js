@@ -37,7 +37,7 @@ export function actionCatalog(lang, { memorySlots, distance = false, protocol = 
 /** 第二纪的动作表（SPEC-E2 §22）：src/e2/lore/actions.js 生成，格式同第一纪 */
 export function actionCatalog2(lang, { memorySlots = P2.memorySlots, premise = 0 } = {}) {
   const { ACTIONS: ACTIONS2, ORDER: ACTION_ORDER2 } = actionTable(premise);
-  const l = premise >= 1 ? L2(lang).promptP1 : L2(lang).prompt;
+  const l = promptDict(L2(lang), premise);
   const code = normLang(lang);
   return ACTION_ORDER2.map((type) => {
     const a = ACTIONS2[type];
@@ -51,14 +51,18 @@ export function actionCatalog2(lang, { memorySlots = P2.memorySlots, premise = 0
   }).join('\n');
 }
 
+/** 第二纪按设定版本取提示的字典：第二前提 promptP2、第一前提 promptP1、设定 0 prompt */
+const promptDict = (dict, premise) => (premise >= 2 ? dict.promptP2 : premise >= 1 ? dict.promptP1 : dict.prompt);
+
 /**
  * 系统提示。
- * opts：{ lang, cityName, maxActions, ticksPerDay, daysPerMonth, graceDays?, memorySlots?, soul?, protocol?, floor? }
+ * opts：{ lang, cityName, maxActions, ticksPerDay, daysPerMonth, graceDays?, memorySlots?, soul?, protocol?, floor?, premise?, trained?, toolMode? }
  * soul 为空（null / undefined）时不含「你的灵魂」一节。
  * protocol 为 2 时用附录 A.1 的第二纪提示：{ruleLanguage} 填附录 A.2，{floor} 是规则不能把居民的能量扣到的底线（感知的 you.floor）。
+ * toolMode（只在第二前提）：'native' | 'json'（缺省）| 'mcp'，决定【怎样行动】一段写哪一种（SPEC-P2 §11.1）。
  */
-export function buildSystemPrompt({ protocol = 1, lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays, memorySlots, distance = false, soul = null, floor, premise = 0, trained = [] }) {
-  if (protocol === 2) return buildSystemPrompt2({ lang, cityName, maxActions, ticksPerDay, daysPerMonth, graceDays, memorySlots, soul, floor, premise, trained });
+export function buildSystemPrompt({ protocol = 1, lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays, memorySlots, distance = false, soul = null, floor, premise = 0, trained = [], toolMode = 'json' }) {
+  if (protocol === 2) return buildSystemPrompt2({ lang, cityName, maxActions, ticksPerDay, daysPerMonth, graceDays, memorySlots, soul, floor, premise, trained, toolMode });
   graceDays ??= P.dormancyGraceDays;
   memorySlots ??= P.memorySlots;
   const l = L(lang).prompt;
@@ -74,10 +78,11 @@ export function buildSystemPrompt({ protocol = 1, lang = 'zh', cityName, maxActi
   return `${head}\n\n${fmt(l.soul, { soul })}`;
 }
 
-/** 第二纪的系统提示（附录 A.1）；不含灵魂的一节在 soul 为空时省略 */
-export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays = P2.dormancyGraceDays, memorySlots = P2.memorySlots, soul = null, floor = P2.lawFloor, premise = 0, trained = [] }) {
+/** 第二纪的系统提示（附录 A.1）；不含灵魂的一节在 soul 为空时省略。第二前提（premise >= 2）按 toolMode 填【怎样行动】，并有【常驻指令】一段 */
+export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays = P2.dormancyGraceDays, memorySlots = P2.memorySlots, soul = null, floor = P2.lawFloor, premise = 0, trained = [], toolMode = 'json' }) {
   const dict = L2(lang);
-  const l = premise >= 1 ? dict.promptP1 : dict.prompt;
+  const l = promptDict(dict, premise);
+  const agent = premise >= 2 ? { howToAct: l[toolMode === 'native' ? 'howToActNative' : toolMode === 'mcp' ? 'howToActMcp' : 'howToActJson'], standingLanguage: l.standingLanguage } : {};
   const head = fmt(l.head, {
     cityName: cityName || dict.cityName,
     maxActions,
@@ -87,6 +92,7 @@ export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, tick
     floor,
     ruleLanguage: fmt(l.ruleLanguage, { floor }), // 规则语言的说明里也提到底线；先填好再嵌入（fmt 一遍过，不会重复替换）
     actionCatalog: actionCatalog2(lang, { memorySlots, premise }),
+    ...agent,
   });
   let text = soul === null || soul === undefined ? head : `${head}\n\n${fmt(l.soul, { soul })}`;
   if (premise >= 1 && trained.length) text += `\n\n${l.trainedHead}\n${trained.join('\n')}`;

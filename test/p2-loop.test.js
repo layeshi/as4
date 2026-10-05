@@ -654,6 +654,10 @@ test('P2 T7 调用方式：配置要求原生而提供者没有 step 时改用�
     const out3 = await drive(city, a, { script: [J({ done: true })] });
     assert.equal(out3.wakings[0].rec.mode, 'json');
     assert.ok(out3.requests[0].messages);
+    // 两种方式的系统提示不同（【怎样行动】一段；缓存键里有调用方式）
+    assert.notEqual(out2.requests[0].system, out3.requests[0].system);
+    assert.ok(out2.requests[0].system.includes('用 act 行动') && !out2.requests[0].system.includes('{\"act\"'));
+    assert.ok(out3.requests[0].system.includes('{"act": {"thought"') && !out3.requests[0].system.includes('用 act 行动'));
   } finally {
     city.close();
   }
