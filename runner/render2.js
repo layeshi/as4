@@ -44,7 +44,8 @@ export const D = {
     actionsHeader: '动作的即时状态', lawsHint: (ids) => `受 ${ids.join('、')} 约束（取决于参数）`,
     kinds: {
       say: (i) => `[说] ${i.from.name}（${i.place}）：${i.text}`,
-      whisper: (i) => `[私语] ${i.from.name}：${i.text}`,
+      whisper: (i) => (i.anonymous ? `[匿名私语] 有人：${i.text}` : `[私语] ${i.from.name}：${i.text}`), // 匿名的私语只在第二前提里有（SPEC-P2 §5.9）
+      standing: (i) => `[常驻指令 ${i.order}] ${standingText(i, 'zh')}`, // 第二前提：常驻指令的回报（SPEC-P2 附录 A.8）
       broadcast: (i) => `[宣告] ${i.from.name}：${i.text}`,
       witness: (i) => (i.what === 'draw' ? `[目睹] ${i.actor.name} 在源井汲取了 ${i.amount} 能量`
         : i.what === 'dismantle' ? `[目睹] ${i.actor.name} 在${i.place}拆解${i.module ? `了一个${i.module}` : ''}，回收 ${i.energy} 能量${i.razed ? '，那里成了遗址' : ''}`
@@ -115,7 +116,8 @@ export const D = {
     actionsHeader: 'Action status right now', lawsHint: (ids) => `bound by ${ids.join(', ')} (depends on the parameters)`,
     kinds: {
       say: (i) => `[said] ${i.from.name} (${i.place}): ${i.text}`,
-      whisper: (i) => `[whisper] ${i.from.name}: ${i.text}`,
+      whisper: (i) => (i.anonymous ? `[anonymous whisper] someone: ${i.text}` : `[whisper] ${i.from.name}: ${i.text}`),
+      standing: (i) => `[standing order ${i.order}] ${standingText(i, 'en')}`,
       broadcast: (i) => `[announcement] ${i.from.name}: ${i.text}`,
       witness: (i) => (i.what === 'draw' ? `[witnessed] ${i.actor.name} drew ${i.amount} energy at the Well`
         : i.what === 'dismantle' ? `[witnessed] ${i.actor.name} dismantled ${i.module ? `a ${i.module} ` : ''}at ${i.place}, recovering ${i.energy} energy${i.razed ? '; it is now a ruin site' : ''}`
@@ -149,6 +151,30 @@ export const D = {
     lastEmpty: '(none)',
   },
 };
+
+/** 常驻指令的触发时机、逐项结果、跳过与出错的读法（SPEC-P2 附录 A.8） */
+const STANDING_WHEN = {
+  zh: { tick: '每刻', daily: '每日', 'inbox:whisper': '收到私语时', 'inbox:offer': '收到交易时', 'inbox:pact': '收到孕育之约时', 'inbox:memory_offer': '收到交来的记忆时', 'inbox:group': '收到入社申请时', 'inbox:gift': '收到赠予时' },
+  en: { tick: 'every tick', daily: 'every day', 'inbox:whisper': 'on a whisper', 'inbox:offer': 'on an offer', 'inbox:pact': 'on a pact', 'inbox:memory_offer': 'on a memory handed to you', 'inbox:group': 'on a request to join', 'inbox:gift': 'on a gift' },
+};
+
+/** 一项动作结果的单行读法：type ✓（−cost）或 type ✗ code */
+export const resultText = (r) => (r.ok ? `${r.type} ✓${r.cost ? `（−${r.cost}）` : ''}` : `${r.type} ✗ ${r.error ? r.error.code : ''}`);
+
+/** 一项动作结果的单行读法，按语言：英文用半角括号 */
+export const resultLine = (r, code) => (code === 'en' ? resultText(r).replace('（−', ' (−').replace('）', ')') : resultText(r));
+
+function standingText(i, code) {
+  const en = code === 'en';
+  const when = (STANDING_WHEN[code][i.trigger && i.trigger.when]) || (i.trigger && i.trigger.when);
+  let body;
+  if (i.error) body = en ? `the condition or a parameter could not be evaluated (${i.error}); nothing was done` : `条件或参数求值出错（${i.error}），没有执行`;
+  else {
+    body = (i.results || []).map((r) => resultLine(r, code)).join(en ? ', ' : '、');
+    if (i.skipped) body += `${body ? (en ? '; ' : '；') : ''}${en ? `out of actions this tick; ${i.skipped} action(s) skipped` : `本刻的动作次数用完，跳过了 ${i.skipped} 个动作`}`;
+  }
+  return `${when}${en ? ': ' : '：'}${body}`;
+}
 
 export const ref = (r) => (r ? `${r.name}(${r.id})` : '?');
 export const clip = (s, n) => {
@@ -232,8 +258,8 @@ export function secAbsent({ d, you, lastResults }) {
   return null;
 }
 
-/** 【你】 */
-export function secYou({ p, code, d, P, you, amount }) {
+/** 【你】的头两行：能量、代谢、标签、志、剩余次数；世代、作者、子女、社群、名下 */
+export function youHead({ p, d, P, you }) {
   const lines = [];
   const head = [you.name, d.status[you.status] || you.status, d.energy(you.energy, you.energyCap, you.floor), d.coins(you.coins), d.age(you.ageDays), p.premise >= 1 ? d.metabW(you.metabolism, you.weight.soul, you.weight.memories) : d.metab(you.metabolism)];
   if (you.tags && you.tags.length) head.push(`${d.tags}${P.col}${you.tags.join(P.sep)}`);
@@ -247,36 +273,63 @@ export function secYou({ p, code, d, P, you, amount }) {
   if (you.owns && you.owns.length) meta.push(`${d.owns}${P.col}${you.owns.map(ref).join(P.sep)}`);
   if (you.drawnToday || you.repairedToday || you.salvagedToday) meta.push(d.handleToday(you.drawnToday, you.repairedToday, you.salvagedToday));
   lines.push(`  ${meta.join(' · ')}`);
-  if (you.bio) lines.push(`  ${d.bio}${P.col}${you.bio}`);
-  for (const l of you.letters || []) lines.push(`  ${d.letters} [${l.id}] ${d.day(l.day + 1)}${P.open}${l.revealed ? d.revealed : d.unrevealed}${P.close}${P.col}${l.text}`);
-  for (const o of you.offers || []) lines.push(`  ${d.myOffers} [${o.id}]${P.col}${amount(o.give)} → ${amount(o.want)}${o.to ? ` ${d.to} ${typeof o.to === 'string' ? o.to : ref(o.to)}` : ''}，${d.expires(o.expiresTick)}`);
-  for (const c of you.pacts || []) {
-    lines.push(`  ${d.pacts} [${c.id}]${P.nq1}${c.name}${P.nq2}${P.open}${c.role === 'initiator' ? d.iAmProposer : ''}${(c.authors || []).map((x) => `${x.name}${x.consented ? d.consented : d.notConsented}`).join(P.sep)}${P.close}，${d.expires(c.expiresTick)}${P.col}${c.soul}`);
-  }
-  if (you.will) {
-    const heirs = (you.will.heirs || []).map((h) => `${h.to === 'treasury' ? d.treasury : h.name ? `${h.name}(${h.to})` : h.to}×${h.share}`).join(P.sep);
-    const extra = [];
-    if (you.will.lastWords) extra.push(`${d.lastWords}${P.col}${you.will.lastWords}`);
-    if (you.will.successor) extra.push(d.successor(you.will.successor.name));
-    lines.push(`  ${d.will}${P.col}${d.heirs} ${heirs}${extra.length ? `${P.semi}${extra.join(P.semi)}` : ''}`);
-  }
+  return lines;
+}
 
-  if (p.premise >= 1 && you.training) lines.push(code === 'en' ? `  ${you.training} in training (takes effect tomorrow)` : `  训练中 ${you.training} 段（明日生效）`);
-  if (p.premise >= 1 && you.memoryOffers && you.memoryOffers.length) {
-    lines.push(code === 'en' ? '  Memories offered to you' : '  待收的记忆');
-    for (const m of you.memoryOffers) {
-      const origin = m.origin && m.from && m.origin.id !== m.from.id ? (code === 'en' ? ` (first ${m.origin.name}'s)` : `（最初是 ${m.origin.name} 的）`) : '';
-      lines.push(code === 'en' ? `  [${m.id}] from ${m.from.name}${origin}: ${clip(m.text, 60)}` : `  [${m.id}] 来自 ${m.from.name}${origin}：${clip(m.text, 60)}`);
-    }
+export function youBio({ d, P, you }) {
+  return you.bio ? [`  ${d.bio}${P.col}${you.bio}`] : [];
+}
+
+/** 家书（全文） */
+export function youLetters({ d, P, you }) {
+  return (you.letters || []).map((l) => `  ${d.letters} [${l.id}] ${d.day(l.day + 1)}${P.open}${l.revealed ? d.revealed : d.unrevealed}${P.close}${P.col}${l.text}`);
+}
+
+/** 我的交易 */
+export function youOffers({ d, P, you, amount }) {
+  return (you.offers || []).map((o) => `  ${d.myOffers} [${o.id}]${P.col}${amount(o.give)} → ${amount(o.want)}${o.to ? ` ${d.to} ${typeof o.to === 'string' ? o.to : ref(o.to)}` : ''}，${d.expires(o.expiresTick)}`);
+}
+
+/** 孕育之约（含灵魂全文） */
+export function youPacts({ d, P, you }) {
+  return (you.pacts || []).map((c) => `  ${d.pacts} [${c.id}]${P.nq1}${c.name}${P.nq2}${P.open}${c.role === 'initiator' ? d.iAmProposer : ''}${(c.authors || []).map((x) => `${x.name}${x.consented ? d.consented : d.notConsented}`).join(P.sep)}${P.close}，${d.expires(c.expiresTick)}${P.col}${c.soul}`);
+}
+
+export function youWill({ d, P, you }) {
+  if (!you.will) return [];
+  const heirs = (you.will.heirs || []).map((h) => `${h.to === 'treasury' ? d.treasury : h.name ? `${h.name}(${h.to})` : h.to}×${h.share}`).join(P.sep);
+  const extra = [];
+  if (you.will.lastWords) extra.push(`${d.lastWords}${P.col}${you.will.lastWords}`);
+  if (you.will.successor) extra.push(d.successor(you.will.successor.name));
+  return [`  ${d.will}${P.col}${d.heirs} ${heirs}${extra.length ? `${P.semi}${extra.join(P.semi)}` : ''}`];
+}
+
+/** 训练中（设定 1） */
+export function youTraining({ p, code, you }) {
+  return p.premise >= 1 && you.training ? [code === 'en' ? `  ${you.training} in training (takes effect tomorrow)` : `  训练中 ${you.training} 段（明日生效）`] : [];
+}
+
+/** 待收的记忆（设定 1）；full 为真时给全文，否则只给前 60 个字符 */
+export function youMemoryOffers({ p, code, you }, { full = false } = {}) {
+  if (!(p.premise >= 1 && you.memoryOffers && you.memoryOffers.length)) return [];
+  const lines = [code === 'en' ? '  Memories offered to you' : '  待收的记忆'];
+  for (const m of you.memoryOffers) {
+    const origin = m.origin && m.from && m.origin.id !== m.from.id ? (code === 'en' ? ` (first ${m.origin.name}'s)` : `（最初是 ${m.origin.name} 的）`) : '';
+    const text = full ? m.text : clip(m.text, 60);
+    lines.push(code === 'en' ? `  [${m.id}] from ${m.from.name}${origin}: ${text}` : `  [${m.id}] 来自 ${m.from.name}${origin}：${text}`);
   }
   return lines;
 }
 
-/** 【你在】（不随分级裁剪） */
-export function secHere({ p, code, d, P, now, ownerText, condText, moduleName, amount }) {
+/** 【你】 */
+export function secYou(c) {
+  return [...youHead(c), ...youBio(c), ...youLetters(c), ...youOffers(c), ...youPacts(c), ...youWill(c), ...youTraining(c), ...youMemoryOffers(c)];
+}
+
+/** 【你在】的地点一行 */
+export function hereLine({ p, d, ownerText, condText }) {
   const h = p.here;
   if (!h) return [];
-  const lines = [];
   const place = [];
   if (h.humanName && h.humanName !== h.name) place.push(d.humanName(h.humanName));
   if (h.district) place.push(h.district.text);
@@ -286,14 +339,44 @@ export function secHere({ p, code, d, P, now, ownerText, condText, moduleName, a
   else place.push(condText(h.condition));
   if (h.costMultiplier && h.costMultiplier !== 1) place.push(d.mult(h.costMultiplier));
   if (h.salvage) place.push(d.salvage(h.salvage.left, h.salvage.max));
-  lines.push(`${d.here}${h.name} [${h.place}] · ${place.join(' · ')}`);
+  return [`${d.here}${h.name} [${h.place}] · ${place.join(' · ')}`];
+}
+
+/** 在场者一行 */
+export function herePresent({ p, d, P }) {
+  const h = p.here;
+  if (!(h && h.present && h.present.length)) return [];
+  return [`  ${d.present}${P.col}${h.present.map((x) => `${x.name}(${x.id}${x.status === 'dormant' ? `,${d.dormantMark}` : ''})${x.tags && x.tags.length ? `${P.tag1}${x.tags.join('/')}${P.tag2}` : ''}${x.purpose ? `${d.purpose}${P.col}${x.purpose}` : ''}`).join(P.sep)}`];
+}
+
+/** 征兆 */
+export function hereOmens({ p, d, P }) {
+  return ((p.here && p.here.omens) || []).map((o) => `  ${d.omens}${P.col}${o.text}${o.daysAhead !== null && o.daysAhead !== undefined ? `${P.open}${d.inDays(o.daysAhead)}${P.close}` : ''}`);
+}
+
+/** 源井一行（在源井时） */
+export function hereWell({ p, d, P, condText }) {
+  const h = p.here;
+  return h && h.well ? [`  ${d.well}${P.col}${d.wellLine(h.well.outputYesterday, h.well.drawPoolLeft, condText(h.well.condition))}`] : [];
+}
+
+/** 荒野一行（在荒野时） */
+export function hereWilds({ p, d, P }) {
+  const h = p.here;
+  return h && h.wilds ? [`  ${d.wilds}${P.col}${h.wilds.text}`] : [];
+}
+
+/** 【你在】（不随分级裁剪） */
+export function secHere(c) {
+  const { p, code, d, P, now, ownerText, moduleName, amount } = c;
+  const h = p.here;
+  if (!h) return [];
+  const lines = [...hereLine(c)];
   if (h.origin === 'agent' && h.description && h.description.text) lines.push(`  ${h.description.text}`);
   if (h.modules && h.modules.length) lines.push(`  ${d.modules}${P.col}${h.modules.map((m) => `${moduleName(m.type)}${P.open}${m.functioning ? d.functioning : d.notFunctioning}${P.close}${m.inscription ? `${d.inscription}${P.col}${m.inscription}` : ''}`).join(P.sep)}`);
   if (h.gate) lines.push(`  ${d.gate}${P.col}${h.gate.functioning ? d.functioning : d.notFunctioning}${P.open}${h.gate.youMayEnter ? d.gateOk : d.gateNo}${P.close}`);
   for (const r of h.rules || []) lines.push(`  ${d.placeRules}${P.col}${indent(r.reading, '    ')}`);
-  if (h.present && h.present.length) {
-    lines.push(`  ${d.present}${P.col}${h.present.map((x) => `${x.name}(${x.id}${x.status === 'dormant' ? `,${d.dormantMark}` : ''})${x.tags && x.tags.length ? `${P.tag1}${x.tags.join('/')}${P.tag2}` : ''}${x.purpose ? `${d.purpose}${P.col}${x.purpose}` : ''}`).join(P.sep)}`);
-  }
+  lines.push(...herePresent(c));
   for (const s of h.heard || []) lines.push(`  ${d.heard}${P.col}[${d.ticksAgo(now.tick - s.tick)}] ${s.from ? s.from.name : '?'}${P.col}${s.text}`);
   for (const w of h.inscriptions || []) lines.push(`  ${d.wall}${P.col}[${w.id}] ${w.text}${w.truncated ? `${P.open}${d.truncated}${P.close}` : ''}${w.protected ? `${P.open}${d.protectedMark}${P.close}` : ''}`);
   if (h.wallSlots) lines.push(`  ${d.wall}${P.col}${d.wallFree(h.wallFree, h.wallSlots)}`);
@@ -308,13 +391,12 @@ export function secHere({ p, code, d, P, now, ownerText, condText, moduleName, a
   }
   if (h.roads && h.roads.length) lines.push(`  ${d.roads}${P.col}${h.roads.map((r) => `${r.to}${r.functioning ? '' : `${P.open}${d.notFunctioning}${P.close}`}`).join(P.sep)}`);
   if (h.lots && h.lots.length) lines.push(`  ${d.lots}${P.col}${h.lots.map((l) => `${l.id}${P.open}${l.free ? d.lotFree : d.lotTaken}${P.close}`).join(P.sep)}`);
-  for (const o of h.omens || []) lines.push(`  ${d.omens}${P.col}${o.text}${o.daysAhead !== null && o.daysAhead !== undefined ? `${P.open}${d.inDays(o.daysAhead)}${P.close}` : ''}`);
+  lines.push(...hereOmens(c));
   if (h.board) {
     if (h.board.offers.length === 0) lines.push(`  ${d.market}${P.col}${d.nothing}`);
     for (const o of h.board.offers) lines.push(`  ${d.market}${P.col}[${o.id}] ${d.offerLine(ref(o.from), amount(o.give), amount(o.want), o.note)}，${d.expires(o.expiresTick)}`);
   }
-  if (h.well) lines.push(`  ${d.well}${P.col}${d.wellLine(h.well.outputYesterday, h.well.drawPoolLeft, condText(h.well.condition))}`);
-  if (h.wilds) lines.push(`  ${d.wilds}${P.col}${h.wilds.text}`);
+  lines.push(...hereWell(c), ...hereWilds(c));
   if (h.archive) for (const x of h.archive.docs) lines.push(`  ${d.archive}${P.col}[${x.id}] ${x.kind} ${x.lang} ${P.lq1}${x.title}${P.lq2}${x.author ? ` — ${ref(x.author)}` : ''}`);
   if (h.memorial) for (const g of h.memorial.graves) lines.push(`  ${d.graves}${P.col}[${g.agentId}] ${g.name}${P.open}${d.diedDay(g.diedDay + 1)}${P.close}`);
   if (h.cradle) lines.push(`  ${d.cradleHere}${P.col}${h.cradle.functioning ? d.cradleOk : d.notFunctioning}`);
