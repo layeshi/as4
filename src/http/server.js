@@ -19,6 +19,7 @@ import { publicRoutes } from './public.js';
 import { adminRoutes } from './admin.js';
 import { snapshotRoutes } from './snapshots.js';
 import { WorldSnapshots } from '../world-snapshots.js';
+import { DEFAULT_AGENT_LOOP } from '../../runner/loop.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const PUBLIC_DIR = join(HERE, '..', '..', 'public');
@@ -123,6 +124,9 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     cursors: new Map(), // agentId → 已经送达的最大收件 seq（内存，不进世界状态；Q9）
     cache: {},
   };
+
+  // 第二前提的注意力上限（SPEC-P2 §4.4）：来自躯壳配置，没有躯壳配置时用缺省值；meCore 把它写进感知的 attention
+  rt.agentLoop = (ctx.shells && ctx.shells.config.agentLoop) || DEFAULT_AGENT_LOOP;
 
   checkBackstage(rt, ctx.shells, { logger, ...(backstageRoot ? { root: backstageRoot } : {}) });
 

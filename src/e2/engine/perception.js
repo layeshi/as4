@@ -13,7 +13,7 @@ import { actionTable } from '../lore/actions.js';
 import { P, SEASON_TABLE, conditionBand, seasonBand, richnessBand } from '../params.js';
 import { travelCosts, lotsNear, HUMAN_DEFS } from '../map/index.js';
 import { L, fmt, normLang, placeDisplayName, placeDescription, cityDisplayName, ACTIONS, ACTION_ORDER } from '../lore/index.js';
-import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum, premised } from '../world.js';
+import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum, premised, agentic } from '../world.js';
 import { truncateCp, cpLength } from '../../text.js';
 import { agentCap } from './economy.js';
 import { metabolismIn, weightOf } from './lifecycle.js';
@@ -23,7 +23,7 @@ import { omensAt } from './weather.js';
 import { hasRelay, functioningModule, hasModuleAt, isFunctioning, wallInscriptions, costMultiplier, costMultiplierBp, ownerView, moduleOf } from './places.js';
 import { gatedFor, hasGate, isWildOpen } from './movement.js';
 import { openProjectsAt } from './projects.js';
-import { lawReading, lawTitle, lawText, authorView, isSuspended, persistentCount, procSpec, isProcedureLaw } from './laws.js';
+import { lawReading, lawTitle, lawText, authorView, isSuspended, persistentCount, hasAnnounce, procSpec, isProcedureLaw } from './laws.js';
 import { renderProcedureClass, renderRules } from '../rules/render.js';
 import { HUMAN_PROCEDURE } from '../lore/humanlaws.js';
 import { previewBefore, beforeIndex } from './rules.js';
@@ -186,6 +186,13 @@ function youView(w, a, l, lang, day, openOffers, openPacts) {
     letters: a.letters.map((x) => ({ id: x.id, day: Math.floor(x.tick / P.ticksPerDay), text: x.text, revealed: x.revealed })),
     offers,
     pacts,
+    ...(agentic(w) ? {
+      standing: a.standing.map((o, index) => ({
+        index, when: o.when, if: o.if, do: structuredClone(o.do), times: o.times, untilDay: o.untilDay, fired: o.fired, suspended: o.paidThrough < clockDay(w),
+      })),
+      standingMax: P.standingMax,
+      muted: a.muted.map((k) => (k === 'anonymous' ? 'anonymous' : refId(w, k))).filter(Boolean),
+    } : {}),
   };
 }
 
@@ -301,7 +308,13 @@ function lawEntry(w, law, lang) {
     id: law.id, title: lawTitle(law, lang), author: authorView(w, law.author), enactedDay: Math.floor(law.enactedTick / P.ticksPerDay),
     text: clipText(lawText(law, lang), P.lawTextInPerception), reading: clipText(text, P.readingInPerception),
     suspended: !isProcedureLaw(law) && persistentCount(law.rules) > 0 && isSuspended(w, law),
+    ...(agentic(w) ? rulesNotes(law.rules) : {}),
   };
+}
+
+/** 第二前提：一份规则每日的维持费，以及它会不会宣告（宣告的费用由持有者另付；SPEC-P2 §4.2） */
+function rulesNotes(rules) {
+  return { upkeep: P.ruleUpkeep * persistentCount(rules || []), announces: hasAnnounce(rules) };
 }
 
 function procedureView(w, cls, lang) {
@@ -324,13 +337,17 @@ function proposalEntry(w, a, p, lang) {
   const reading = p.procedure && typeof p.procedure === 'object'
     ? ['ordinary', 'constitutional'].filter((c) => p.procedure[c]).map((c) => renderProcedureClass(p.procedure[c], lang)).join('\n')
     : p.rules ? joinReading(renderRules(p.rules, lang, p.kind === 'bylaws' ? { scope: { kind: 'group', id: p.scope.slice(6) } } : {})) : '';
+  const full = reading || (typeof p.procedure === 'string' ? p.procedure : '');
+  const c = clip(full, agentic(w) ? P.proposalReadingMax : P.readingInPerception); // 第二前提：进行中的提案读法至多 2000（SPEC-P2 §4.1）
   return {
-    id: p.id, scope: p.scope, kind: p.kind, class: p.class, title: p.title, text: p.text, reading: clipText(reading || (typeof p.procedure === 'string' ? p.procedure : ''), P.readingInPerception),
+    id: p.id, scope: p.scope, kind: p.kind, class: p.class, title: p.title, text: p.text, reading: c.text,
+    ...(agentic(w) && c.truncated ? { readingTruncated: true, readingLength: cpLength(full) } : {}),
     proposer: refId(w, p.proposer), closesTick: p.closesTick, ticksLeft: Math.max(0, p.closesTick - w.clock.tick),
     tally: { yes, no, abstain },
     ballots: p.secret ? null : Object.entries(p.votes).map(([id, v]) => ({ voter: refId(w, id), choice: v.choice, reason: v.reason })),
     yourVote: p.votes[a.id] ? { choice: p.votes[a.id].choice, reason: p.votes[a.id].reason } : null,
     eligible: p.voters.includes(a.id),
+    ...(agentic(w) ? rulesNotes(p.rules) : {}),
   };
 }
 

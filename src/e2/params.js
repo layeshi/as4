@@ -137,6 +137,17 @@ export const P = {
   lawsInPerception: 30,
   lawTextInPerception: 200,
   readingInPerception: 400,
+
+  // ── SPEC-P2 §3：第二前提（只在第二前提的分支里读）──
+  standingMax: 3, // 每人常驻指令的条数上限
+  standingDoMax: 2, // 每条指令至多几个动作
+  standingCost: 1, // 动作 standing 的代价
+  standingUpkeep: 1, // 每条指令每日的维持费
+  standingTimesMax: 1000, // times 的上限
+  standingJsonMax: 2000, // 每条指令 JSON.stringify 之后的字符数上限
+  proposalReadingMax: 2000, // 进行中的提案，读法在感知里的长度上限
+  anonymousWhisperCost: 3, // 匿名私语的基础代价
+  muteMax: 20, // 每人至多屏蔽几个
 };
 
 /** 纪元的总日数 */

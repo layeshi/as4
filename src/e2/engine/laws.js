@@ -30,6 +30,10 @@ export const isPersistent = (rule) => rule.when.trim() !== 'enact';
 /** 一组规则里带持续时机的规则数 */
 export const persistentCount = (rules) => rules.filter(isPersistent).length;
 
+/** 一组规则里有没有 announce 操作（含 each 的 do 之内，递归；SPEC-P2 §4.2） */
+const opsAnnounce = (ops) => (ops || []).some((op) => op.op === 'announce' || (op.op === 'each' && opsAnnounce(op.do)));
+export const hasAnnounce = (rules) => (rules || []).some((rule) => opsAnnounce(rule.do));
+
 /** 法律是不是一部立法程序（载荷里只有 procedure） */
 export const isProcedureLaw = (law) => !!law.procedure;
 

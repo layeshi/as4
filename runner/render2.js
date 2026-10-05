@@ -4,7 +4,7 @@
 
 import { L } from '../src/e2/lore/index.js';
 
-const D = {
+export const D = {
   zh: {
     // 标点：系统文本里用的标点随语言；居民写下的文本一律原样
     p: { gap: '', col: '：', sep: '、', semi: '；', open: '（', close: '）', bar: ' ｜ ', nq1: '「', nq2: '」', lq1: '《', lq2: '》', tag1: '〔', tag2: '〕' },
@@ -150,12 +150,12 @@ const D = {
   },
 };
 
-const ref = (r) => (r ? `${r.name}(${r.id})` : '?');
-const clip = (s, n) => {
+export const ref = (r) => (r ? `${r.name}(${r.id})` : '?');
+export const clip = (s, n) => {
   const cps = [...String(s)];
   return cps.length > n ? `${cps.slice(0, n - 1).join('')}…` : String(s);
 };
-const indent = (text, pad) => String(text).split('\n').join(`\n${pad}`);
+export const indent = (text, pad) => String(text).split('\n').join(`\n${pad}`);
 
 /**
  * 渲染一次协议 2 的感知。
@@ -175,50 +175,66 @@ export function renderPerception2(p, { lastResults, lang, maxChars } = {}) {
 
 const READING_MAX = [Infinity, 160, 80, 40];
 
-function build(p, { lastResults, code, level }) {
-  const rmax = READING_MAX[level];
-  const P = D[code].p;
+/**
+ * 渲染的上下文：语言、字典、分级（0 不裁剪，3 最短）与几个共用的小函数。
+ * 下面的各段函数（secNow、secYou、secHere……）取它、返回自己的行，build() 依次拼起来；
+ * SPEC-P2 的概要与展开（runner/render-p2.js）复用它们。拆分只是搬动代码：premise 0、1 的渲染逐字节不变（SPEC-P2 §8.1、T1）。
+ */
+export function makeCtx(p, { lastResults, code, level = 0 } = {}) {
   const d = D[code];
+  const P = d.p;
   const dict = L(code);
-  const moduleName = (t) => (dict.module[t] ? dict.module[t].name : t);
-  const lines = [];
-  if (p.city?.ruleDiagnostics?.length) {
-    lines.push(code === 'en' ? '[Recent runtime errors in active laws — not proof of recovery]' : '【有效法律的最近运行错误（不代表已恢复）】');
-    for (const e of p.city.ruleDiagnostics) lines.push(`${e.owner} rules[${e.rule}] tick=${e.tick}: ${e.code} ${e.detail}`);
-  }
-  const now = p.now || {};
-  const you = p.you || {};
   const amount = (o) => {
     const parts = [];
     if (o && o.energy > 0) parts.push(d.energyN(o.energy));
     if (o && o.coins > 0) parts.push(d.coinsN(o.coins));
     return parts.length ? parts.join(` ${d.and} `) : d.nothing;
   };
-  const f = { amount };
-  const ownerText = (o) => (!o || o.kind === 'city' ? d.owner.city : o.kind === 'group' ? d.owner.group(o.name || o.id) : d.owner.agent(o.name || o.id));
-  const condText = (c) => (c ? `${c.text}${P.open}${Math.round(c.bp / 100)}%${P.close}` : '');
+  return {
+    p, code, level, rmax: READING_MAX[level], lastResults, d, P, dict,
+    now: p.now || {},
+    you: p.you || {},
+    moduleName: (t) => (dict.module[t] ? dict.module[t].name : t),
+    amount,
+    f: { amount },
+    ownerText: (o) => (!o || o.kind === 'city' ? d.owner.city : o.kind === 'group' ? d.owner.group(o.name || o.id) : d.owner.agent(o.name || o.id)),
+    condText: (c) => (c ? `${c.text}${P.open}${Math.round(c.bp / 100)}%${P.close}` : ''),
+  };
+}
 
-  // 【此刻】
+/** 有效法律的最近运行错误（HTTP 层附在 city.ruleDiagnostics 上） */
+export function secDiagnostics({ p, code }) {
+  if (!p.city?.ruleDiagnostics?.length) return [];
+  const lines = [code === 'en' ? '[Recent runtime errors in active laws — not proof of recovery]' : '【有效法律的最近运行错误（不代表已恢复）】'];
+  for (const e of p.city.ruleDiagnostics) lines.push(`${e.owner} rules[${e.rule}] tick=${e.tick}: ${e.code} ${e.detail}`);
+  return lines;
+}
+
+/** 【此刻】 */
+export function secNow({ p, d, P, now }) {
   const when = [d.monthDayTick((now.month ?? 0) + 1, (now.dayOfMonth ?? 0) + 1, (now.tickOfDay ?? 0) + 1), d.absDay((now.day ?? 0) + 1)];
   if (p.city) {
     when.push(`${d.season}${P.col}${p.city.season.text}`);
     if (p.city.weather.length) when.push(`${d.weather}${P.col}${p.city.weather.map((w) => `${w.text}${P.open}${d.daysLeft(w.daysLeft)}${P.close}`).join(P.sep)}`);
   }
   if (now.paused) when.push(d.paused);
-  if (p.now) lines.push(`${d.now}${when.join(' · ')}`);
+  return p.now ? [`${d.now}${when.join(' · ')}`] : [];
+}
 
-  if (you.status === 'dead' || you.status === 'retired') {
-    lines.push(`${d.you}${you.name ? `${you.name} · ` : ''}${d.goneView(you.status)}`);
-    return lines.join('\n');
-  }
+/** 长眠、归隐、沉睡时的【你】（之后什么都感知不到）；醒着时返回 null */
+export function secAbsent({ d, you, lastResults }) {
+  if (you.status === 'dead' || you.status === 'retired') return [`${d.you}${you.name ? `${you.name} · ` : ''}${d.goneView(you.status)}`];
   if (you.status === 'dormant') {
-    lines.push(`${d.you}${you.name} · ${d.status.dormant}`);
-    lines.push(`  ${d.dormantView(you)}`);
+    const lines = [`${d.you}${you.name} · ${d.status.dormant}`, `  ${d.dormantView(you)}`];
     if (lastResults) lines.push(`${d.last}${lastResults}`);
-    return lines.join('\n');
+    return lines;
   }
+  return null;
+}
 
-  // 【你】
+/** 【你】 */
+export function secYou({ p, code, d, P, you, amount }) {
+  const lines = [];
   const head = [you.name, d.status[you.status] || you.status, d.energy(you.energy, you.energyCap, you.floor), d.coins(you.coins), d.age(you.ageDays), p.premise >= 1 ? d.metabW(you.metabolism, you.weight.soul, you.weight.memories) : d.metab(you.metabolism)];
   if (you.tags && you.tags.length) head.push(`${d.tags}${P.col}${you.tags.join(P.sep)}`);
   if (you.purpose) head.push(`${d.purpose}${P.col}${you.purpose}`);
@@ -253,161 +269,238 @@ function build(p, { lastResults, code, level }) {
       lines.push(code === 'en' ? `  [${m.id}] from ${m.from.name}${origin}: ${clip(m.text, 60)}` : `  [${m.id}] 来自 ${m.from.name}${origin}：${clip(m.text, 60)}`);
     }
   }
+  return lines;
+}
 
-  // 【你在】
+/** 【你在】（不随分级裁剪） */
+export function secHere({ p, code, d, P, now, ownerText, condText, moduleName, amount }) {
   const h = p.here;
-  if (h) {
-    const place = [];
-    if (h.humanName && h.humanName !== h.name) place.push(d.humanName(h.humanName));
-    if (h.district) place.push(h.district.text);
-    place.push(ownerText(h.owner));
-    if (h.razed) place.push(d.razed);
-    else if (h.condition === null) place.push(d.vacant);
-    else place.push(condText(h.condition));
-    if (h.costMultiplier && h.costMultiplier !== 1) place.push(d.mult(h.costMultiplier));
-    if (h.salvage) place.push(d.salvage(h.salvage.left, h.salvage.max));
-    lines.push(`${d.here}${h.name} [${h.place}] · ${place.join(' · ')}`);
-    if (h.origin === 'agent' && h.description && h.description.text) lines.push(`  ${h.description.text}`);
-    if (h.modules && h.modules.length) lines.push(`  ${d.modules}${P.col}${h.modules.map((m) => `${moduleName(m.type)}${P.open}${m.functioning ? d.functioning : d.notFunctioning}${P.close}${m.inscription ? `${d.inscription}${P.col}${m.inscription}` : ''}`).join(P.sep)}`);
-    if (h.gate) lines.push(`  ${d.gate}${P.col}${h.gate.functioning ? d.functioning : d.notFunctioning}${P.open}${h.gate.youMayEnter ? d.gateOk : d.gateNo}${P.close}`);
-    for (const r of h.rules || []) lines.push(`  ${d.placeRules}${P.col}${indent(r.reading, '    ')}`);
-    if (h.present && h.present.length) {
-      lines.push(`  ${d.present}${P.col}${h.present.map((x) => `${x.name}(${x.id}${x.status === 'dormant' ? `,${d.dormantMark}` : ''})${x.tags && x.tags.length ? `${P.tag1}${x.tags.join('/')}${P.tag2}` : ''}${x.purpose ? `${d.purpose}${P.col}${x.purpose}` : ''}`).join(P.sep)}`);
-    }
-    for (const s of h.heard || []) lines.push(`  ${d.heard}${P.col}[${d.ticksAgo(now.tick - s.tick)}] ${s.from ? s.from.name : '?'}${P.col}${s.text}`);
-    for (const w of h.inscriptions || []) lines.push(`  ${d.wall}${P.col}[${w.id}] ${w.text}${w.truncated ? `${P.open}${d.truncated}${P.close}` : ''}${w.protected ? `${P.open}${d.protectedMark}${P.close}` : ''}`);
-    if (h.wallSlots) lines.push(`  ${d.wall}${P.col}${d.wallFree(h.wallFree, h.wallSlots)}`);
-    for (const j of h.projects || []) {
-      const what = [d.build[j.build] || j.build];
-      if (j.module) what.push(moduleName(j.module));
-      if (j.name) what.push(`${P.nq1}${j.name}${P.nq2}`);
-      if (j.lot) what.push(`${d.on} ${j.lot}`);
-      if (j.on) what.push(`${d.on} ${j.on}`);
-      if (j.to) what.push(`→ ${j.to}`);
-      lines.push(`  ${d.projects}${P.col}[${j.id}] ${what.join(code === 'en' ? ' ' : '')} · ${j.have}/${j.need} · ${d.contributors(j.contributors)} · ${d.dueDay(j.expiresDay + 1)} · ${ownerText(j.owner)}${j.inscription ? `${P.semi}${j.inscription}` : ''}`);
-    }
-    if (h.roads && h.roads.length) lines.push(`  ${d.roads}${P.col}${h.roads.map((r) => `${r.to}${r.functioning ? '' : `${P.open}${d.notFunctioning}${P.close}`}`).join(P.sep)}`);
-    if (h.lots && h.lots.length) lines.push(`  ${d.lots}${P.col}${h.lots.map((l) => `${l.id}${P.open}${l.free ? d.lotFree : d.lotTaken}${P.close}`).join(P.sep)}`);
-    for (const o of h.omens || []) lines.push(`  ${d.omens}${P.col}${o.text}${o.daysAhead !== null && o.daysAhead !== undefined ? `${P.open}${d.inDays(o.daysAhead)}${P.close}` : ''}`);
-    if (h.board) {
-      if (h.board.offers.length === 0) lines.push(`  ${d.market}${P.col}${d.nothing}`);
-      for (const o of h.board.offers) lines.push(`  ${d.market}${P.col}[${o.id}] ${d.offerLine(ref(o.from), amount(o.give), amount(o.want), o.note)}，${d.expires(o.expiresTick)}`);
-    }
-    if (h.well) lines.push(`  ${d.well}${P.col}${d.wellLine(h.well.outputYesterday, h.well.drawPoolLeft, condText(h.well.condition))}`);
-    if (h.wilds) lines.push(`  ${d.wilds}${P.col}${h.wilds.text}`);
-    if (h.archive) for (const x of h.archive.docs) lines.push(`  ${d.archive}${P.col}[${x.id}] ${x.kind} ${x.lang} ${P.lq1}${x.title}${P.lq2}${x.author ? ` — ${ref(x.author)}` : ''}`);
-    if (h.memorial) for (const g of h.memorial.graves) lines.push(`  ${d.graves}${P.col}[${g.agentId}] ${g.name}${P.open}${d.diedDay(g.diedDay + 1)}${P.close}`);
-    if (h.cradle) lines.push(`  ${d.cradleHere}${P.col}${h.cradle.functioning ? d.cradleOk : d.notFunctioning}`);
+  if (!h) return [];
+  const lines = [];
+  const place = [];
+  if (h.humanName && h.humanName !== h.name) place.push(d.humanName(h.humanName));
+  if (h.district) place.push(h.district.text);
+  place.push(ownerText(h.owner));
+  if (h.razed) place.push(d.razed);
+  else if (h.condition === null) place.push(d.vacant);
+  else place.push(condText(h.condition));
+  if (h.costMultiplier && h.costMultiplier !== 1) place.push(d.mult(h.costMultiplier));
+  if (h.salvage) place.push(d.salvage(h.salvage.left, h.salvage.max));
+  lines.push(`${d.here}${h.name} [${h.place}] · ${place.join(' · ')}`);
+  if (h.origin === 'agent' && h.description && h.description.text) lines.push(`  ${h.description.text}`);
+  if (h.modules && h.modules.length) lines.push(`  ${d.modules}${P.col}${h.modules.map((m) => `${moduleName(m.type)}${P.open}${m.functioning ? d.functioning : d.notFunctioning}${P.close}${m.inscription ? `${d.inscription}${P.col}${m.inscription}` : ''}`).join(P.sep)}`);
+  if (h.gate) lines.push(`  ${d.gate}${P.col}${h.gate.functioning ? d.functioning : d.notFunctioning}${P.open}${h.gate.youMayEnter ? d.gateOk : d.gateNo}${P.close}`);
+  for (const r of h.rules || []) lines.push(`  ${d.placeRules}${P.col}${indent(r.reading, '    ')}`);
+  if (h.present && h.present.length) {
+    lines.push(`  ${d.present}${P.col}${h.present.map((x) => `${x.name}(${x.id}${x.status === 'dormant' ? `,${d.dormantMark}` : ''})${x.tags && x.tags.length ? `${P.tag1}${x.tags.join('/')}${P.tag2}` : ''}${x.purpose ? `${d.purpose}${P.col}${x.purpose}` : ''}`).join(P.sep)}`);
   }
+  for (const s of h.heard || []) lines.push(`  ${d.heard}${P.col}[${d.ticksAgo(now.tick - s.tick)}] ${s.from ? s.from.name : '?'}${P.col}${s.text}`);
+  for (const w of h.inscriptions || []) lines.push(`  ${d.wall}${P.col}[${w.id}] ${w.text}${w.truncated ? `${P.open}${d.truncated}${P.close}` : ''}${w.protected ? `${P.open}${d.protectedMark}${P.close}` : ''}`);
+  if (h.wallSlots) lines.push(`  ${d.wall}${P.col}${d.wallFree(h.wallFree, h.wallSlots)}`);
+  for (const j of h.projects || []) {
+    const what = [d.build[j.build] || j.build];
+    if (j.module) what.push(moduleName(j.module));
+    if (j.name) what.push(`${P.nq1}${j.name}${P.nq2}`);
+    if (j.lot) what.push(`${d.on} ${j.lot}`);
+    if (j.on) what.push(`${d.on} ${j.on}`);
+    if (j.to) what.push(`→ ${j.to}`);
+    lines.push(`  ${d.projects}${P.col}[${j.id}] ${what.join(code === 'en' ? ' ' : '')} · ${j.have}/${j.need} · ${d.contributors(j.contributors)} · ${d.dueDay(j.expiresDay + 1)} · ${ownerText(j.owner)}${j.inscription ? `${P.semi}${j.inscription}` : ''}`);
+  }
+  if (h.roads && h.roads.length) lines.push(`  ${d.roads}${P.col}${h.roads.map((r) => `${r.to}${r.functioning ? '' : `${P.open}${d.notFunctioning}${P.close}`}`).join(P.sep)}`);
+  if (h.lots && h.lots.length) lines.push(`  ${d.lots}${P.col}${h.lots.map((l) => `${l.id}${P.open}${l.free ? d.lotFree : d.lotTaken}${P.close}`).join(P.sep)}`);
+  for (const o of h.omens || []) lines.push(`  ${d.omens}${P.col}${o.text}${o.daysAhead !== null && o.daysAhead !== undefined ? `${P.open}${d.inDays(o.daysAhead)}${P.close}` : ''}`);
+  if (h.board) {
+    if (h.board.offers.length === 0) lines.push(`  ${d.market}${P.col}${d.nothing}`);
+    for (const o of h.board.offers) lines.push(`  ${d.market}${P.col}[${o.id}] ${d.offerLine(ref(o.from), amount(o.give), amount(o.want), o.note)}，${d.expires(o.expiresTick)}`);
+  }
+  if (h.well) lines.push(`  ${d.well}${P.col}${d.wellLine(h.well.outputYesterday, h.well.drawPoolLeft, condText(h.well.condition))}`);
+  if (h.wilds) lines.push(`  ${d.wilds}${P.col}${h.wilds.text}`);
+  if (h.archive) for (const x of h.archive.docs) lines.push(`  ${d.archive}${P.col}[${x.id}] ${x.kind} ${x.lang} ${P.lq1}${x.title}${P.lq2}${x.author ? ` — ${ref(x.author)}` : ''}`);
+  if (h.memorial) for (const g of h.memorial.graves) lines.push(`  ${d.graves}${P.col}[${g.agentId}] ${g.name}${P.open}${d.diedDay(g.diedDay + 1)}${P.close}`);
+  if (h.cradle) lines.push(`  ${d.cradleHere}${P.col}${h.cradle.functioning ? d.cradleOk : d.notFunctioning}`);
+  return lines;
+}
 
-  // 【收件箱】
+/** 【收件箱】 */
+export function secInbox({ p, code, d, f }) {
   const inbox = p.inbox || [];
-  if (inbox.length) {
-    lines.push(d.inbox);
-    for (const i of inbox) {
-      if (p.premise >= 1 && i.kind === 'memory_offer') {
-        const originNote = i.origin && i.origin.id !== i.from.id ? (code === 'en' ? ` (first ${i.origin.name}'s)` : `（最初是 ${i.origin.name} 的）`) : '';
-        lines.push(code === 'en' ? `  [memory ${i.giftId}] ${i.from.name} hands you a memory${originNote}: ${i.text} (keep it with remember, gift "${i.giftId}")` : `  [记忆 ${i.giftId}] ${i.from.name} 交给你一段记忆${originNote}：${i.text}（用 remember 的 gift "${i.giftId}" 收下）`);
-        continue;
-      }
-      const fn = d.kinds[i.kind];
-      lines.push(`  ${fn ? fn(i, f) : `[${i.kind}] ${JSON.stringify(i)}`}`);
+  if (!inbox.length) return [];
+  const lines = [d.inbox];
+  for (const i of inbox) {
+    if (p.premise >= 1 && i.kind === 'memory_offer') {
+      const originNote = i.origin && i.origin.id !== i.from.id ? (code === 'en' ? ` (first ${i.origin.name}'s)` : `（最初是 ${i.origin.name} 的）`) : '';
+      lines.push(code === 'en' ? `  [memory ${i.giftId}] ${i.from.name} hands you a memory${originNote}: ${i.text} (keep it with remember, gift "${i.giftId}")` : `  [记忆 ${i.giftId}] ${i.from.name} 交给你一段记忆${originNote}：${i.text}（用 remember 的 gift "${i.giftId}" 收下）`);
+      continue;
     }
+    const fn = d.kinds[i.kind];
+    lines.push(`  ${fn ? fn(i, f) : `[${i.kind}] ${JSON.stringify(i)}`}`);
   }
+  return lines;
+}
 
-  // 【全城】
+// 【全城】：每一项一个函数，secCity 按原来的顺序拼起来；展开（look）可以单独取用
+
+/** 【全城】的头行：公库、源井、人口、躯壳 */
+export function cityHead({ p, d }) {
   const c = p.city;
-  if (c) {
-    const pop = c.population;
-    const head2 = [d.treasuryLine(c.treasury.energy, c.treasury.coins), d.wellYesterday(c.wellOutputYesterday), d.pop(pop.awake, pop.dormant, pop.dead)];
-    if (pop.retired) head2.push(d.retiredN(pop.retired));
-    if (pop.cradle) head2.push(d.cradleN(pop.cradle));
-    if (c.shells) head2.push(d.shells(c.shells.free, c.shells.total, c.shells.cost));
-    lines.push(`${d.city}${head2.join(' · ')}`);
-    if (c.procedure) {
-      const proc = ['ordinary', 'constitutional'].map((k) => {
-        const v = c.procedure[k];
-        return `${d[k]}${P.open}${v.lawId}${P.close}${P.col}${v.none ? d.noMoreLaws : clip(v.reading, level === 0 ? Infinity : Math.max(rmax, 160))}`;
-      });
-      lines.push(`  ${d.procedure}${P.col}${indent(proc.join(P.semi), '    ')}`);
-    }
-    const vars = Object.entries(c.vars || {});
-    if (vars.length) lines.push(`  ${d.vars}${P.col}${vars.map(([k, v]) => `${k} = ${v === null ? 'null' : typeof v === 'string' ? JSON.stringify(v) : v}`).join(P.semi)}`);
-    if (c.charter && c.charter.length && (level < 2 || c.charter.some((a) => a.status !== 'legacy'))) {
-      lines.push(`  ${d.charter}${c.charterCanonical ? `${P.open}${d.canonical(c.charterCanonical)}${P.close}` : ''}${P.col}`);
-      for (const a of c.charter) lines.push(`    ${a.n}. ${a.text}${d.charterStatus[a.status] || ''}`);
-    }
-    for (const l of c.laws || []) {
-      const who = l.author === 'humans' ? d.humans : l.author && l.author.name ? d.lawBy(l.author.name) : String(l.author);
-      // 立法程序的读法已在「立法程序」一行里完整给出：这里不再重复
-      const isProcedure = ['ordinary', 'constitutional'].some((k) => c.procedure && c.procedure[k] && c.procedure[k].lawId === l.id);
-      const body = isProcedure ? d.procedureSee : indent(clip(l.reading || l.text || '', rmax), '    ');
-      const lead = !isProcedure && level === 0 && l.reading && l.text ? `${clip(l.text, 80)}${P.bar}` : '';
-      lines.push(`  ${d.laws}${P.col}[${l.id}]${P.lq1}${l.title}${P.lq2}${P.open}${who}${l.suspended ? `${P.semi}${d.suspended}` : ''}${P.close}${P.col}${lead}${body}`);
-    }
-    for (const q of c.proposals || []) {
-      const vote = q.yourVote ? d.youVoted(q.yourVote.choice) : q.eligible ? d.canVote : d.notEligible;
-      const kind = q.kind && q.kind !== 'law' ? `${d.kinds2[q.kind] || q.kind} · ` : '';
-      const scope = q.scope && q.scope !== 'city' ? `${d.scope(q.scope.replace(/^group:/, ''))} · ` : '';
-      lines.push(`  ${d.proposals}${P.col}[${q.id}]${P.lq1}${q.title}${P.lq2}${P.gap}${d.classes[q.class] || q.class} · ${kind}${scope}${d.tally(q.tally.yes, q.tally.no, q.tally.abstain)} · ${d.ticksLeft(q.ticksLeft)}${P.open}${vote}${P.close}${P.semi}${d.by} ${ref(q.proposer)}${q.text ? `${P.semi}${clip(q.text, level === 0 ? 200 : 100)}` : ''}`);
-      if (q.reading) lines.push(`    ${d.reading}${P.col}${indent(clip(q.reading, rmax), '      ')}`);
-      if (q.ballots && q.ballots.length) lines.push(`    ${d.ballots}${P.col}${q.ballots.map((b) => d.ballot(b.voter ? b.voter.name : '?', b.choice, b.reason)).join(P.semi)}`);
-    }
-    for (const r of c.refounds || []) {
-      lines.push(`  ${d.refounds}${P.col}[${r.id}] ${d.refoundBy(r.by ? r.by.name : '?')} · ${d.signers(r.signers, r.needed)} · ${d.ticksLeft(Math.max(0, r.expiresTick - (now.tick ?? 0)))}${P.open}${r.signed ? d.signed : d.notSigned}${P.close}${r.text ? `${P.col}${clip(r.text, 200)}` : ''}`);
-      if (r.reading) lines.push(`    ${d.reading}${P.col}${indent(clip(r.reading, rmax), '      ')}`);
-    }
-    if (c.groups && c.groups.length) {
-      for (const g of c.groups) {
-        lines.push(`  ${d.groupsAll}${P.col}[${g.id}]${P.lq1}${g.name}${P.lq2}${P.gap}${g.open ? d.open : d.closed} · ${d.steward} ${g.steward ? g.steward.name : '—'} · ${d.members} ${g.members.length}${P.col}${g.members.map((m) => m.name).join(P.sep)} · ${d.groupProcedure[g.procedure] || g.procedure}${g.manifesto ? `${P.semi}${d.manifesto}${P.col}${g.manifesto}` : ''}`);
-        if (g.bylaws) lines.push(`    ${d.bylaws}${g.bylaws.suspended ? `${P.open}${d.suspended}${P.close}` : ''}${P.col}${indent(clip(g.bylaws.reading, rmax), '      ')}`);
-      }
-    }
-    if (c.residents && c.residents.length) {
-      const shown = level >= 3 ? c.residents.slice(0, 30) : c.residents;
-      lines.push(`  ${d.residents}${P.col}${shown.map((x) => `${x.name}(${x.id}${x.status === 'dormant' ? `,${d.dormantMark}` : ''})${level < 2 && x.tags && x.tags.length ? `${P.tag1}${x.tags.join('/')}${P.tag2}` : ''}`).join(P.sep)}`);
-    }
-    if (c.places && c.places.length) lines.push(placesLine(d, dict, c.places, p.here ? p.here.place : null, moduleName));
-    if (c.roads && c.roads.length) lines.push(`  ${d.roads}${P.col}${c.roads.map((r) => `${r.a}—${r.b}${r.functioning ? '' : `${P.open}${d.notFunctioning}${P.close}`}`).join(P.sep)}`);
-    if (c.lexicon && c.lexicon.length && level < 3) lines.push(`  ${d.lexicon}${P.col}${(level >= 2 ? c.lexicon.slice(-8) : c.lexicon).map((x) => `${x.word}=${x.meaning}`).join(P.semi)}`);
-    for (const s of c.cradle || []) {
-      const fund = s.queued ? d.queued(s.queuePosition) : d.sponsored(s.fund, c.shells ? c.shells.cost : '?');
-      lines.push(`  ${d.cradle}${P.col}[${s.id}] ${s.name} · ${d.authorsOf} ${(s.authors || []).map((x) => x.name).join(P.sep) || '—'} · ${fund} · ${d.untilDay(s.expiresDay + 1)}${P.col}${s.soul}`);
-    }
-    if (c.recentDeaths && c.recentDeaths.length && level < 3) lines.push(`  ${d.recentDeaths}${P.col}${c.recentDeaths.map((x) => `${x.name}(${x.id}, ${d.day(x.day + 1)})`).join(P.sep)}`);
-    for (const t of c.petitions || []) lines.push(`  ${d.petitions}${P.col}[${t.lawId}] ${d.day(t.day + 1)}${P.col}${t.text}`);
-  }
+  const pop = c.population;
+  const head2 = [d.treasuryLine(c.treasury.energy, c.treasury.coins), d.wellYesterday(c.wellOutputYesterday), d.pop(pop.awake, pop.dormant, pop.dead)];
+  if (pop.retired) head2.push(d.retiredN(pop.retired));
+  if (pop.cradle) head2.push(d.cradleN(pop.cradle));
+  if (c.shells) head2.push(d.shells(c.shells.free, c.shells.total, c.shells.cost));
+  return [`${d.city}${head2.join(' · ')}`];
+}
 
-  // 【你的记忆】
-  if (you.memories && you.memories.length) {
-    if (p.premise >= 1) {
-      lines.push(`${d.memories}${you.memories.map((m) => {
-        const origin = m.origin && m.origin.id !== you.id && (!m.from || m.origin.id !== m.from.id) ? m.origin.name : null;
-        const from = m.from ? m.from.name : null;
-        const note = from ? (code === 'en' ? ` (from ${from}${origin ? `, first ${origin}'s` : ''})` : `（来自 ${from}${origin ? `，最初是 ${origin} 的` : ''}）`) : '';
-        return `[${m.index}]${note} ${m.text}`;
-      }).join(' ')}`);
-    } else {
-    lines.push(`${d.memories}${you.memories.map((m) => `[${m.index}]${m.from ? `${P.open}${code === 'en' ? 'from' : '来自'} ${m.from.name}${P.close}` : ''} ${m.text}`).join(' ')}`);
-    }
-  }
+/** 立法程序（两类）；level 0 时读法不裁剪 */
+export function cityProcedure({ p, d, P, level, rmax }) {
+  const c = p.city;
+  if (!c.procedure) return [];
+  const proc = ['ordinary', 'constitutional'].map((k) => {
+    const v = c.procedure[k];
+    return `${d[k]}${P.open}${v.lawId}${P.close}${P.col}${v.none ? d.noMoreLaws : clip(v.reading, level === 0 ? Infinity : Math.max(rmax, 160))}`;
+  });
+  return [`  ${d.procedure}${P.col}${indent(proc.join(P.semi), '    ')}`];
+}
 
-  // 【动作的即时状态】只列出与基础代价不同的、此刻不可用的、或受法律约束的动作
+export function cityVars({ p, d, P }) {
+  const vars = Object.entries(p.city.vars || {});
+  return vars.length ? [`  ${d.vars}${P.col}${vars.map(([k, v]) => `${k} = ${v === null ? 'null' : typeof v === 'string' ? JSON.stringify(v) : v}`).join(P.semi)}`] : [];
+}
+
+export function cityCharter({ p, d, P, level }) {
+  const c = p.city;
+  if (!(c.charter && c.charter.length && (level < 2 || c.charter.some((a) => a.status !== 'legacy')))) return [];
+  const lines = [`  ${d.charter}${c.charterCanonical ? `${P.open}${d.canonical(c.charterCanonical)}${P.close}` : ''}${P.col}`];
+  for (const a of c.charter) lines.push(`    ${a.n}. ${a.text}${d.charterStatus[a.status] || ''}`);
+  return lines;
+}
+
+/** 一部法律一行 */
+export function cityLawLine({ p, d, P, level, rmax }, l) {
+  const c = p.city;
+  const who = l.author === 'humans' ? d.humans : l.author && l.author.name ? d.lawBy(l.author.name) : String(l.author);
+  // 立法程序的读法已在「立法程序」一行里完整给出：这里不再重复
+  const isProcedure = ['ordinary', 'constitutional'].some((k) => c.procedure && c.procedure[k] && c.procedure[k].lawId === l.id);
+  const body = isProcedure ? d.procedureSee : indent(clip(l.reading || l.text || '', rmax), '    ');
+  const lead = !isProcedure && level === 0 && l.reading && l.text ? `${clip(l.text, 80)}${P.bar}` : '';
+  return `  ${d.laws}${P.col}[${l.id}]${P.lq1}${l.title}${P.lq2}${P.open}${who}${l.suspended ? `${P.semi}${d.suspended}` : ''}${P.close}${P.col}${lead}${body}`;
+}
+
+/** 一个提案一行，再加读法与记名票 */
+export function cityProposalLines({ d, P, level, rmax }, q) {
+  const lines = [];
+  const vote = q.yourVote ? d.youVoted(q.yourVote.choice) : q.eligible ? d.canVote : d.notEligible;
+  const kind = q.kind && q.kind !== 'law' ? `${d.kinds2[q.kind] || q.kind} · ` : '';
+  const scope = q.scope && q.scope !== 'city' ? `${d.scope(q.scope.replace(/^group:/, ''))} · ` : '';
+  lines.push(`  ${d.proposals}${P.col}[${q.id}]${P.lq1}${q.title}${P.lq2}${P.gap}${d.classes[q.class] || q.class} · ${kind}${scope}${d.tally(q.tally.yes, q.tally.no, q.tally.abstain)} · ${d.ticksLeft(q.ticksLeft)}${P.open}${vote}${P.close}${P.semi}${d.by} ${ref(q.proposer)}${q.text ? `${P.semi}${clip(q.text, level === 0 ? 200 : 100)}` : ''}`);
+  if (q.reading) lines.push(`    ${d.reading}${P.col}${indent(clip(q.reading, rmax), '      ')}`);
+  if (q.ballots && q.ballots.length) lines.push(`    ${d.ballots}${P.col}${q.ballots.map((b) => d.ballot(b.voter ? b.voter.name : '?', b.choice, b.reason)).join(P.semi)}`);
+  return lines;
+}
+
+export function cityRefoundLines({ d, P, now, rmax }, r) {
+  const lines = [`  ${d.refounds}${P.col}[${r.id}] ${d.refoundBy(r.by ? r.by.name : '?')} · ${d.signers(r.signers, r.needed)} · ${d.ticksLeft(Math.max(0, r.expiresTick - (now.tick ?? 0)))}${P.open}${r.signed ? d.signed : d.notSigned}${P.close}${r.text ? `${P.col}${clip(r.text, 200)}` : ''}`];
+  if (r.reading) lines.push(`    ${d.reading}${P.col}${indent(clip(r.reading, rmax), '      ')}`);
+  return lines;
+}
+
+export function cityGroupLines({ d, P, rmax }, g) {
+  const lines = [`  ${d.groupsAll}${P.col}[${g.id}]${P.lq1}${g.name}${P.lq2}${P.gap}${g.open ? d.open : d.closed} · ${d.steward} ${g.steward ? g.steward.name : '—'} · ${d.members} ${g.members.length}${P.col}${g.members.map((m) => m.name).join(P.sep)} · ${d.groupProcedure[g.procedure] || g.procedure}${g.manifesto ? `${P.semi}${d.manifesto}${P.col}${g.manifesto}` : ''}`];
+  if (g.bylaws) lines.push(`    ${d.bylaws}${g.bylaws.suspended ? `${P.open}${d.suspended}${P.close}` : ''}${P.col}${indent(clip(g.bylaws.reading, rmax), '      ')}`);
+  return lines;
+}
+
+export function cityResidents({ p, d, P, level }) {
+  const c = p.city;
+  if (!(c.residents && c.residents.length)) return [];
+  const shown = level >= 3 ? c.residents.slice(0, 30) : c.residents;
+  return [`  ${d.residents}${P.col}${shown.map((x) => `${x.name}(${x.id}${x.status === 'dormant' ? `,${d.dormantMark}` : ''})${level < 2 && x.tags && x.tags.length ? `${P.tag1}${x.tags.join('/')}${P.tag2}` : ''}`).join(P.sep)}`];
+}
+
+export function cityPlaces({ p, d, dict, moduleName }) {
+  const c = p.city;
+  return c.places && c.places.length ? [placesLine(d, dict, c.places, p.here ? p.here.place : null, moduleName)] : [];
+}
+
+export function cityRoads({ p, d, P }) {
+  const c = p.city;
+  return c.roads && c.roads.length ? [`  ${d.roads}${P.col}${c.roads.map((r) => `${r.a}—${r.b}${r.functioning ? '' : `${P.open}${d.notFunctioning}${P.close}`}`).join(P.sep)}`] : [];
+}
+
+export function cityLexicon({ p, d, P, level }) {
+  const c = p.city;
+  return c.lexicon && c.lexicon.length && level < 3 ? [`  ${d.lexicon}${P.col}${(level >= 2 ? c.lexicon.slice(-8) : c.lexicon).map((x) => `${x.word}=${x.meaning}`).join(P.semi)}`] : [];
+}
+
+export function cityCradleLines({ p, d, P }) {
+  const c = p.city;
+  return (c.cradle || []).map((s) => {
+    const fund = s.queued ? d.queued(s.queuePosition) : d.sponsored(s.fund, c.shells ? c.shells.cost : '?');
+    return `  ${d.cradle}${P.col}[${s.id}] ${s.name} · ${d.authorsOf} ${(s.authors || []).map((x) => x.name).join(P.sep) || '—'} · ${fund} · ${d.untilDay(s.expiresDay + 1)}${P.col}${s.soul}`;
+  });
+}
+
+export function cityDeaths({ p, d, P, level }) {
+  const c = p.city;
+  return c.recentDeaths && c.recentDeaths.length && level < 3 ? [`  ${d.recentDeaths}${P.col}${c.recentDeaths.map((x) => `${x.name}(${x.id}, ${d.day(x.day + 1)})`).join(P.sep)}`] : [];
+}
+
+export function cityPetitions({ p, d, P }) {
+  return (p.city.petitions || []).map((t) => `  ${d.petitions}${P.col}[${t.lawId}] ${d.day(t.day + 1)}${P.col}${t.text}`);
+}
+
+/** 【全城】 */
+export function secCity(c) {
+  if (!c.p.city) return [];
+  const city = c.p.city;
+  return [
+    ...cityHead(c), ...cityProcedure(c), ...cityVars(c), ...cityCharter(c),
+    ...(city.laws || []).map((l) => cityLawLine(c, l)),
+    ...(city.proposals || []).flatMap((q) => cityProposalLines(c, q)),
+    ...(city.refounds || []).flatMap((r) => cityRefoundLines(c, r)),
+    ...(city.groups && city.groups.length ? city.groups.flatMap((g) => cityGroupLines(c, g)) : []),
+    ...cityResidents(c), ...cityPlaces(c), ...cityRoads(c), ...cityLexicon(c), ...cityCradleLines(c), ...cityDeaths(c), ...cityPetitions(c),
+  ];
+}
+
+/** 【你的记忆】 */
+export function secMemories({ p, code, d, P, you }) {
+  if (!(you.memories && you.memories.length)) return [];
+  if (p.premise >= 1) {
+    return [`${d.memories}${you.memories.map((m) => {
+      const origin = m.origin && m.origin.id !== you.id && (!m.from || m.origin.id !== m.from.id) ? m.origin.name : null;
+      const from = m.from ? m.from.name : null;
+      const note = from ? (code === 'en' ? ` (from ${from}${origin ? `, first ${origin}'s` : ''})` : `（来自 ${from}${origin ? `，最初是 ${origin} 的` : ''}）`) : '';
+      return `[${m.index}]${note} ${m.text}`;
+    }).join(' ')}`];
+  }
+  return [`${d.memories}${you.memories.map((m) => `[${m.index}]${m.from ? `${P.open}${code === 'en' ? 'from' : '来自'} ${m.from.name}${P.close}` : ''} ${m.text}`).join(' ')}`];
+}
+
+/** 【动作的即时状态】只列出与基础代价不同的、此刻不可用的、或受法律约束的动作 */
+export function secActions({ p, d, P }) {
   // 「没有可作用的对象」与静态的代价说明（路程、投入的能量、告示板）不是状态，系统提示的动作表里已有，不列
   const STATIC_NOTES = new Set(['variable', 'distance', 'noBoard']);
   const NO_TARGET = new Set(['not_found', 'invalid_args']);
   const notable = (p.actions || []).filter((a) => (a.available ? (a.note && !STATIC_NOTES.has(a.note.code)) || (a.laws && a.laws.length) : !(a.reason && NO_TARGET.has(a.reason.code))));
-  if (notable.length) {
-    lines.push(d.actions);
-    for (const a of notable) {
-      const tail = [];
-      if (a.note && !STATIC_NOTES.has(a.note.code)) tail.push(a.note.text);
-      if (a.laws && a.laws.length) tail.push(d.lawsHint(a.laws));
-      lines.push(`  ${a.type}${a.available ? ` ✓ ${a.cost}` : ` ✗ ${a.reason ? a.reason.text : ''}`}${a.available && tail.length ? `${P.open}${tail.join(P.semi)}${P.close}` : !a.available && a.laws && a.laws.length ? `${P.open}${d.lawsHint(a.laws)}${P.close}` : ''}`);
-    }
+  if (!notable.length) return [];
+  const lines = [d.actions];
+  for (const a of notable) {
+    const tail = [];
+    if (a.note && !STATIC_NOTES.has(a.note.code)) tail.push(a.note.text);
+    if (a.laws && a.laws.length) tail.push(d.lawsHint(a.laws));
+    lines.push(`  ${a.type}${a.available ? ` ✓ ${a.cost}` : ` ✗ ${a.reason ? a.reason.text : ''}`}${a.available && tail.length ? `${P.open}${tail.join(P.semi)}${P.close}` : !a.available && a.laws && a.laws.length ? `${P.open}${d.lawsHint(a.laws)}${P.close}` : ''}`);
   }
+  return lines;
+}
 
-  if (lastResults) lines.push(`${d.last}${lastResults}`);
+function build(p, { lastResults, code, level }) {
+  const c = makeCtx(p, { lastResults, code, level });
+  const lines = [...secDiagnostics(c), ...secNow(c)];
+  const absent = secAbsent(c);
+  if (absent) return [...lines, ...absent].join('\n');
+  lines.push(...secYou(c), ...secHere(c), ...secInbox(c), ...secCity(c), ...secMemories(c), ...secActions(c));
+  if (lastResults) lines.push(`${c.d.last}${lastResults}`);
   return lines.join('\n');
 }
 

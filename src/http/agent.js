@@ -3,6 +3,8 @@
 import { errorMessage } from '../lore/index.js';
 import { actionFeedback } from '../action-feedback.js';
 import { LIMITS } from '../params.js';
+import { agentic } from '../e2/facade.js';
+import { DEFAULT_AGENT_LOOP } from '../../runner/loop.js';
 import { bearer, errorBody, httpStatusFor, langOf, readJson, sendError, sendJson } from './util.js';
 
 /** 验证 agent 令牌；失败时发 401 并返回 null */
@@ -30,6 +32,8 @@ export function meCore({ rt, cursors }, id, { lang, after }) {
   const floor = cursors.get(id) || 0;
   const p = rt.engine.buildPerception(rt.w, id, { lang, after, floor, ack: false, nextTickAt: rt.nextTickAt });
   if (rt.engine.physics === 2 && p.city && rt.events?.fiscal) p.city.ruleDiagnostics = rt.events.fiscal.diagnostics(rt.w);
+  // 第二前提：平台的运行器每刻执行的上限（运行时的配置，不是世界状态；SPEC-P2 §4.4）。躯壳的进程内客户端走同一个 meCore，所以三种客户端看到同一组数
+  if (agentic(rt.w) && p.you && p.you.status === 'awake') p.attention = { ...(rt.agentLoop || DEFAULT_AGENT_LOOP) };
   if (after === undefined && p.inboxCursor !== undefined && p.inboxCursor > floor) cursors.set(id, p.inboxCursor);
   return p;
 }
