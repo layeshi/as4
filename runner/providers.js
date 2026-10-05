@@ -480,9 +480,11 @@ function createMockProvider(cfg) {
       return { text, stop: 'end' };
     },
     /** 原生工具调用：按脚本，或用 mockDecide 生成一次 act（偶尔先 look）。raw 只给 mock 自己的记录用 */
-    async step({ perception, transcript, signal, timeoutMs }) {
+    async step({ perception, transcript, tools, signal, timeoutMs }) {
       n++;
-      const item = script ? await scripted(signal, timeoutMs) : { calls: perception ? decide2(perception, (transcript || []).length <= 1) : [], text: '' };
+      // 没有感知（连接测试）：有 act 工具就调用它一次，让托管运行器的原生工具测试能用 mock 通过
+      const idle = tools && tools.some((t) => t.name === 'act') ? [{ name: 'act', args: { actions: [] } }] : [];
+      const item = script ? await scripted(signal, timeoutMs) : { calls: perception ? decide2(perception, (transcript || []).length <= 1) : idle, text: '' };
       const calls = (item.calls || []).map((c, i) => ({ id: c.id ?? `m${n}_${i + 1}`, name: c.name, args: c.args === undefined ? {} : c.args }));
       return { calls, text: item.text ?? '', stop: item.stop ?? (calls.length ? 'tool_calls' : 'stop'), raw: { mock: true, calls, text: item.text ?? '' }, ...(item.usage ? { usage: item.usage } : {}) };
     },

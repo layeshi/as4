@@ -6,6 +6,9 @@ import { runAgent, makeLogger } from '../../runner/agent.js';
 import { parseModelJson } from '../../runner/parse.js';
 import { checkEndpoint, modelFetch } from './endpoint.js';
 import { UsageStore } from './usage.js';
+import { agentic } from '../e2/facade.js';
+import { waitCore } from '../http/agent.js';
+import { toolDefs } from '../../runner/loop.js';
 
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 export class RunnerError extends Error {
@@ -36,8 +39,11 @@ export function runnerConfig(raw, previous = {}) {
   const effort = raw.effort || 'medium';
   if (!['low', 'medium', 'high'].includes(effort)) throw new RunnerError('思考强度无效。');
   try { validateReasoningEffort(raw); } catch { throw new RunnerError('思考强度无效。'); }
+  // toolMode（第二前提的调用方式）：'json'（缺省）或 'native'；没有给就不写进配置，其他世界的配置视图与以前相同
+  if (raw.toolMode !== undefined && !['json', 'native'].includes(raw.toolMode)) throw new RunnerError('调用方式无效。');
   const config = { provider, model, baseURL, apiKey, thinking, effort,
     ...(['openai', 'openai-responses'].includes(provider) ? { reasoningEffort: raw.reasoningEffort ?? 'default' } : {}),
+    ...(raw.toolMode !== undefined ? { toolMode: raw.toolMode } : {}),
     actEveryTicks: integer(raw.actEveryTicks, 1, 1, 100), historyRounds: integer(raw.historyRounds, 6, 0, 20),
     timeoutMs: integer(raw.timeoutMs, 120000, 1000, 120000),
     ...(raw.maxTokens !== undefined ? { maxTokens: integer(raw.maxTokens, 4096, 64, 32000) } : {}),
@@ -129,6 +135,17 @@ export class RunnerManager {
       ...(config.provider === 'anthropic' && config.baseURL !== 'https://api.anthropic.com' ? { fallbacks: false } : {}),
     }, { env: { MANAGED_KEY: apiKey }, fetch: modelFetch(this.cfg.allowLocalModels === true, { timeoutMs }) });
   }
+  /**
+   * 托管居民的等待函数（runAgent 的 deps.waitWake，SPEC-P2 §6.4、§10.3）：托管运行器走 HTTP 感知与行动，但就在服务器进程里，
+   * 所以等待不绕 HTTP，直接用 rt.onWake——语义同 GET /api/me/wait：先查收件箱，再等通知，到时返回空。
+   */
+  waitWake(id) {
+    return async ({ after, timeoutMs = 25000, signal } = {}) => {
+      const a = this.rt.w.agents[id];
+      if (!a || !agentic(this.rt.w)) return { ok: false, status: 404, json: null };
+      return { ok: true, status: 200, json: await waitCore(this.rt, id, { after: after ?? 0, timeoutMs, signal, lang: a.lang === 'en' ? 'en' : 'zh' }) };
+    };
+  }
   async prepare(raw, previous) {
     const config = runnerConfig(raw, previous);
     try {
@@ -137,6 +154,14 @@ export class RunnerManager {
       const response = await provider.complete({ system: 'Connection test. Output exactly one JSON object: {"actions":[]}.', messages: [{ role: 'user', content: 'Output {"actions":[]}.' }], signal: AbortSignal.timeout(20000) });
       const parsed = parseModelJson(response.text);
       if (response.stop === 'refusal' || !parsed.ok || !Array.isArray(parsed.value.actions)) throw new RunnerError('模型连接成功，但未返回可用的行动 JSON；请检查模型或增加输出上限。');
+      // 第二前提且选了原生工具调用：另做一次带工具的测试——一个名为 act 的工具，要求模型调用它一次（SPEC-P2 §10.3）
+      if (agentic(this.rt.w) && config.toolMode === 'native') {
+        const act = toolDefs('en').find((t) => t.name === 'act');
+        const step = typeof provider.step === 'function'
+          ? await provider.step({ system: 'Connection test. Call the act tool exactly once, with an empty actions list.', transcript: [{ role: 'user', text: 'Call the act tool now: actions is an empty list.' }], tools: [act], signal: AbortSignal.timeout(20000), timeoutMs: 20000 })
+          : null;
+        if (!step || !step.calls.some((c) => c.name === 'act')) throw new RunnerError('模型连接成功，但没有按要求调用工具；可以改用文本 JSON 方式。');
+      }
       return config;
     } catch (e) {
       if (e instanceof RunnerError) throw e;
@@ -196,10 +221,12 @@ export class RunnerManager {
       return runAgent({ ...r.config, token: r.token, server: this.serverURL, lang: this.rt.w.agents[id].lang, name: this.rt.w.agents[id].name }, {
         signal: controller.signal, provider, log,
         onUsage: (_agentId, usage, meta) => {
-          // A request we cancelled ourselves (pause, saving new settings, shutdown) is not a provider failure.
-          if (!meta.ok && controller.signal.aborted) return;
+          // A request we cancelled ourselves (pause, saving new settings, shutdown, the tick boundary) is not a provider failure.
+          if (!meta.ok && (controller.signal.aborted || meta.cancelled)) return;
           this.usage.record(id, usage, meta, r.config.model);
         },
+        waitWake: this.waitWake(id),
+        onWaking: (_agentId, rec) => this.traces?.append(id, rec, r.config.model), // 观察用的轨迹（第二前提，SPEC-P2 §14.1）；没有 traces 时什么也不做
         onState: (event) => {
           if (controller.signal.aborted) return;
           Object.assign(state, event);

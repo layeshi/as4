@@ -22,12 +22,19 @@ const validTime = (v) => typeof v === 'string' && !Number.isNaN(Date.parse(v));
 // 文件里读回来的东西不可信（手工改过、版本不同）：每一项都规整成合法的形状，不合法的丢掉。
 // 这很重要：GET /api/owner 带着用量，一条坏记录不能让整个幕后页加载失败。
 const cleanBucket = (b) => ({ calls: count(b && b.calls) ?? 0, failed: count(b && b.failed) ?? 0, unreported: count(b && b.unreported) ?? 0, input: count(b && b.input) ?? 0, output: count(b && b.output) ?? 0 });
+/** 第二前提的醒来标记 { tick, kind, turn }（SPEC-P2 §7.7）：合法才留；没有（旧记录、其他世界）就没有这一项 */
+function cleanWaking(w) {
+  if (!w || typeof w !== 'object' || !Number.isInteger(w.tick) || w.tick < 0 || !['main', 'wake'].includes(w.kind) || !Number.isInteger(w.turn) || w.turn < 1) return null;
+  return { tick: w.tick, kind: w.kind, turn: w.turn };
+}
 function cleanCall(c) {
   if (!c || typeof c !== 'object' || !validTime(c.at)) return null;
   const ok = c.ok !== false;
+  const waking = cleanWaking(c.waking);
   return {
     at: c.at, ok, ...(ok ? { reported: c.reported !== false } : {}), input: count(c.input) ?? 0, output: count(c.output) ?? 0,
     ms: Number.isFinite(c.ms) ? Math.round(c.ms) : null, model: String(c.model ?? '').slice(0, 100), ...(Number.isInteger(c.status) && c.status > 0 ? { status: c.status } : {}),
+    ...(waking ? { waking } : {}),
   };
 }
 const withTokens = (b) => ({ ...b, tokens: b.input + b.output });
@@ -90,10 +97,12 @@ export class UsageStore {
 
   /**
    * 记一次模型调用。
-   * usage：接口报告的 { input, output } 或 null；meta：{ ok, ms?, error? }（runAgent 的 onUsage 的第三个参数）；model：当时配置的模型名。
-   * 失败的调用只记 HTTP 状态码（有的话）：不记错误信息。
+   * usage：接口报告的 { input, output } 或 null；meta：{ ok, ms?, error?, cancelled?, waking? }（runAgent 的 onUsage 的第三个参数）；model：当时配置的模型名。
+   * 失败的调用只记 HTTP 状态码（有的话）：不记错误信息。因截止而被我们中止的调用（cancelled）不是提供者的失败，也没有用量：不记。
+   * 第二前提的调用带 waking: { tick, kind, turn }，留在最近调用里（按刻分组显示）。
    */
   record(id, usage, meta = {}, model = '') {
+    if (meta.cancelled) return;
     const at = this.now();
     const ok = meta.ok !== false;
     const used = ok ? reported(usage) : null;
@@ -110,9 +119,11 @@ export class UsageStore {
       }
     }
     const status = !ok && Number.isInteger(meta.error && meta.error.status) ? meta.error.status : null;
+    const waking = cleanWaking(meta.waking);
     a.recent.push({
       at: new Date(at).toISOString(), ok, ...(ok ? { reported: !!used } : {}), input: used ? used.input : 0, output: used ? used.output : 0,
       ms: Number.isFinite(meta.ms) ? Math.round(meta.ms) : null, model: String(model || '').slice(0, 100), ...(status ? { status } : {}),
+      ...(waking ? { waking } : {}),
     });
     if (a.recent.length > USAGE_RECENT) a.recent.splice(0, a.recent.length - USAGE_RECENT);
     const keep = new Set(Array.from({ length: USAGE_DAYS }, (_, i) => dayBefore(today, i)));

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { premised } from './e2/facade.js';
+import { premised, agentic } from './e2/facade.js';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PATHS = ['src/e2', 'src/text.js', 'src/rng.js', 'runner', 'mcp', 'src/shells', 'src/runner'];
 export function codeFingerprint(root = ROOT) {
@@ -19,15 +19,19 @@ export function codeFingerprint(root = ROOT) {
   for (const path of files) hash.update(relative(root, path)).update('\0').update(readFileSync(path)).update('\0');
   return hash.digest('hex');
 }
-export function bodiesFingerprint(lines) {
+/**
+ * agentLoop 不为 null（第二前提的世界）时，每刻的上限也算身体的一部分：对 { lines, agentLoop } 求哈希，改了上限或调用方式（toolMode）
+ * 下一次启动时就发一次 backstage bodies（SPEC-P2 §10.4）。为 null 时与以前相同；没有 toolMode 的线路取的键也与以前相同。
+ */
+export function bodiesFingerprint(lines, agentLoop = null) {
   // Both reasoningEffort (OpenAI) and effort (Anthropic) are actual line fields.
-  const keys = ['provider', 'model', 'maxTokens', 'extraBody', 'reasoningEffort', 'effort'];
+  const keys = ['provider', 'model', 'maxTokens', 'extraBody', 'reasoningEffort', 'effort', 'toolMode'];
   const data = lines.map((line) => Object.fromEntries(keys.filter((k) => Object.hasOwn(line, k)).map((k) => [k, line[k]])));
-  return createHash('sha256').update(JSON.stringify(data)).digest('hex');
+  return createHash('sha256').update(JSON.stringify(agentLoop === null ? data : { lines: data, agentLoop })).digest('hex');
 }
 export function checkBackstage(rt, shells, { root = ROOT, logger = console } = {}) {
   if (!premised(rt.w)) return;
-  const fps = { code: codeFingerprint(root), bodies: shells ? bodiesFingerprint(shells.config.lines) : null, budget: shells ? String(shells.config.tokensPerDay) : null };
+  const fps = { code: codeFingerprint(root), bodies: shells ? bodiesFingerprint(shells.config.lines, agentic(rt.w) ? shells.config.agentLoop : null) : null, budget: shells ? String(shells.config.tokensPerDay) : null };
   for (const kind of ['code', 'bodies', 'budget']) {
     if (fps[kind] === null) continue;
     const old = rt.w.backstage[kind];

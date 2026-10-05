@@ -24,10 +24,11 @@ export class ShellManager {
   /**
    * @param rt   Runtime（第二纪的世界）
    * @param cfg  服务器配置（shellsFile、shellTokensPerDay、shellTz、tickMs、allowLocalModels）
-   * @param o    { config, logger, env, now, wait, fetch, providerFactory, usageFile }——多为测试用：
-   *             config 直接给解析好的配置；wait(ms, signal, p) 替换运行器的等待；now 是假时钟；fetch 替换模型请求的 fetch
+   * @param o    { config, logger, env, now, wait, waitWake, fetch, providerFactory, usageFile }——多为测试用：
+   *             config 直接给解析好的配置；wait(ms, signal, p) 替换运行器的等待；waitWake 替换（或，为 false 时关掉）第二前提的被叫醒的等待；
+   *             now 是假时钟；fetch 替换模型请求的 fetch
    */
-  constructor(rt, cfg, { config, logger = console, env = process.env, now = Date.now, wait, fetch, providerFactory = createProvider, usageFile } = {}) {
+  constructor(rt, cfg, { config, logger = console, env = process.env, now = Date.now, wait, waitWake, fetch, providerFactory = createProvider, usageFile } = {}) {
     this.rt = rt;
     this.cfg = cfg;
     this.config = config || loadShellsConfig(cfg.shellsFile, cfg);
@@ -35,6 +36,7 @@ export class ShellManager {
     this.env = env;
     this.now = now;
     this.wait = wait;
+    this.waitWake = waitWake;
     this.fetch = fetch;
     this.providerFactory = providerFactory;
     this.warnings = [];
@@ -153,7 +155,8 @@ export class ShellManager {
     const controller = new AbortController();
     const state = { status: 'starting' };
     this.states.set(a.id, state);
-    const cfg = { name: a.name, lang: normLang(a.lang), historyRounds: this.config.historyRounds, actEveryTicks: 1, token: 'in-process', server: 'in-process' };
+    // toolMode 与 timeoutMs 只有第二前提的工具循环用（调用方式；单次调用的超时不超过线路的超时，SPEC-P2 §7.2）；其余的世界一字不差
+    const cfg = { name: a.name, lang: normLang(a.lang), historyRounds: this.config.historyRounds, actEveryTicks: 1, token: 'in-process', server: 'in-process', ...(line.cfg.toolMode ? { toolMode: line.cfg.toolMode } : {}), timeoutMs: line.cfg.timeoutMs };
     const deps = {
       client: createShellClient(this.rt, a.id, { cursors: this.cursors }),
       signal: controller.signal,
@@ -161,7 +164,9 @@ export class ShellManager {
       beforeModel: (id, meta) => this.beforeModel(a.id, line, state, meta),
       onUsage: (id, usage, meta) => this.onUsage(a.id, line, usage, meta),
       onState: (event) => { if (!controller.signal.aborted) Object.assign(state, event); },
+      onWaking: (id, rec) => this.traces?.append(id, rec, line.cfg.model), // 观察用的轨迹（第二前提，SPEC-P2 §14.1）；没有 traces 时什么也不做
       ...(this.wait ? { wait: this.wait } : {}),
+      ...(this.waitWake !== undefined ? { waitWake: this.waitWake } : {}),
     };
     const promise = (async () => {
       try {

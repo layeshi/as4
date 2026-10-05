@@ -55,11 +55,32 @@ export function dayChart(days) {
   return svg;
 }
 
-/** 一次调用的一行：时间、用量（或失败原因）、用时、模型 */
+/** 一次调用的一行：时间、用量（或失败原因）、用时、模型；第二前提的调用还有第几轮、是不是被叫醒的 */
 function callLine(c) {
   const what = !c.ok ? (c.status ? t('usageCallFailedHttp', { status: c.status }) : t('usageCallFailed')) : c.reported ? inOut(c) : t('usageCallUnreported');
+  const w = c.waking;
   return h('li', null, h('span', { class: 'muted' }, `${new Date(c.at).toLocaleTimeString(locale())} · `), what,
-    Number.isFinite(c.ms) ? h('span', { class: 'muted' }, ` · ${(c.ms / 1000).toFixed(1)} s`) : null, c.model ? h('span', { class: 'muted' }, ` · ${c.model}`) : null);
+    Number.isFinite(c.ms) ? h('span', { class: 'muted' }, ` · ${(c.ms / 1000).toFixed(1)} s`) : null, c.model ? h('span', { class: 'muted' }, ` · ${c.model}`) : null,
+    w ? h('span', { class: 'muted' }, ` · ${t('usageTurn', { n: w.turn })}${w.kind === 'wake' ? ` · ${t('usageWoken')}` : ''}`) : null);
+}
+
+/**
+ * 最近的调用，新的在前。第二前提的调用带 waking.tick：同一刻的几次调用归在一起（一次醒来是好几轮调用），
+ * 其他世界的调用没有，仍是平的列表。
+ */
+export function recentList(recent) {
+  const items = recent.slice().reverse();
+  if (!items.some((c) => c.waking)) return h('ul', { class: 'plain usage-recent' }, items.map(callLine));
+  const groups = [];
+  for (const c of items) {
+    const tick = c.waking ? c.waking.tick : null;
+    const last = groups[groups.length - 1];
+    if (last && last.tick === tick) last.calls.push(c);
+    else groups.push({ tick, calls: [c] });
+  }
+  return h('ul', { class: 'plain usage-recent' }, groups.map((g) => (g.tick === null
+    ? g.calls.map(callLine)
+    : h('li', { class: 'usage-tick' }, h('span', { class: 'muted' }, t('usageTick', { n: g.tick })), h('ul', { class: 'plain' }, g.calls.map(callLine))))));
 }
 
 function usageBody(u) {
@@ -76,7 +97,7 @@ function usageBody(u) {
     root.append(h('h5', { class: 'usage-chart-title' }, t('usageChartTitle', { n: u.days.length })), dayChart(u.days),
       h('p', { class: 'usage-legend muted' }, h('span', { class: 'swatch in' }), t('usageInput'), ' ', h('span', { class: 'swatch out' }), t('usageOutput')));
   }
-  if (u.recent.length) root.append(h('details', null, h('summary', null, `${t('usageRecent')} (${u.recent.length})`), h('ul', { class: 'plain usage-recent' }, u.recent.slice().reverse().map(callLine))));
+  if (u.recent.length) root.append(h('details', null, h('summary', null, `${t('usageRecent')} (${u.recent.length})`), recentList(u.recent)));
   root.append(h('p', { class: 'muted usage-note' }, t('usageSince', { date: new Date(u.since).toLocaleDateString(locale()), tz: u.timezone }), ' ', t('usageNote')));
   return [root];
 }

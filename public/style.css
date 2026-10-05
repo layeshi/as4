@@ -719,6 +719,7 @@ figcaption { font-size: 12px; color: var(--muted); text-align: center; }
 .usage-legend .swatch.in { background: var(--c0); }
 .usage-legend .swatch.out { background: var(--c2); margin-left: 8px; }
 .usage-recent { font-size: 13px; font-variant-numeric: tabular-nums; }
+.usage-recent .usage-tick > ul { margin: 2px 0 6px; padding-left: 14px; }
 .usage-note { margin: 0; font-size: 12px; }
 .usage-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .usage-table td.num { white-space: nowrap; } /* 表头可以换行，窄屏才放得下 */
