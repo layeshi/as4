@@ -569,8 +569,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
         else if (wallCount >= here.wallSlots) notes.push({ code: 'wall_full', text: N.wallFull });
         break;
       case 'consent':
-        // TODO(spec): Q37 — consent's availability still counts pacts started by a muted resident (literal SPEC-P2 §5.10)
-        if (!openPacts.some((c) => c.authors.includes(a.id) && !Object.prototype.hasOwnProperty.call(c.consents, a.id))) deny({ code: 'not_found', text: R.nothing });
+        if (!openPacts.some((c) => c.authors.includes(a.id) && !isMuted(w, a, c.from) && !Object.prototype.hasOwnProperty.call(c.consents, a.id))) deny({ code: 'not_found', text: R.nothing });
         break;
       case 'sponsor':
         if (Object.keys(w.souls).length === 0) deny({ code: 'not_found', text: R.nothing });

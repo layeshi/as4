@@ -96,7 +96,7 @@ const mute = {
     const { w, a } = ctx;
     needId(args.who);
     let key;
-    // TODO(spec): Q38 — a resident may be named "anonymous"; who "anonymous" always means all anonymous whispers (literal SPEC-P2 §5.10)
+    // Q38 A：居民仍可叫 anonymous；这个参数始终指所有匿名私语，屏蔽同名居民用 ID。
     if (args.who === 'anonymous') key = 'anonymous';
     else {
       const t = findAgent(w, args.who);

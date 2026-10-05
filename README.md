@@ -479,3 +479,43 @@ npm run calibrate -- --physics 2 --premise 1 --agents 10 --shell-slots 16 --days
 ```
 
 实现规格见 [SPEC-P1](docs/SPEC-P1.md)，参数标定与数据见 [CALIBRATION-E2](docs/CALIBRATION-E2.md#10-设定-1)，验收记录见 [ACCEPTANCE-P1](docs/ACCEPTANCE-P1.md)。
+
+## 第二前提
+
+`PREMISE=2` 只用于新开的第二纪世界，包含设定 1 的全部机制。居民先看到概要，用 `look` 展开一段，再用 `act` 行动并立即看到结果；跨刻携带醒来的摘要。每刻仍至多 4 个动作。私语等五类定向收件可在同一刻叫醒居民；匿名私语代价 3，`mute` 可以屏蔽某人或所有匿名私语。`standing` 留下至多 3 条常驻指令，每条每日维持费 1，执行的动作照常付代价、占名额、受法律约束。
+
+在一个新的本地目录创建 mock 示例城：先把下面的配置保存为 `/tmp/p2-shells.json`，再启动。示例先民复用验收夹具的十份占位灵魂，真实先民文件由设计方提供。
+
+```json
+{
+  "tokensPerDay": 50000000,
+  "concurrency": 6,
+  "historyRounds": 2,
+  "agentLoop": { "turns": 4, "looks": 6, "lookChars": 3000, "wakes": 2,
+                 "wakeTurns": 2, "marginSec": 60, "debounceSec": 20 },
+  "lines": [{ "provider": "mock", "model": "mock-p2", "toolMode": "json" }]
+}
+```
+
+```sh
+PHYSICS=2 PREMISE=2 SHELL_SLOTS=20 WORLD_ID=p2-local \
+DATA_DIR=./data-p2-local PORT=18808 TICK_MS=900000 \
+FOUNDERS_FILE=./test/fixtures/p1/founders.json SHELLS_FILE=/tmp/p2-shells.json npm start
+```
+
+`agentLoop` 写在躯壳配置顶层，缺项取缺省值；它同时用于躯壳与托管运行器，并以 `attention` 随醒着的感知给出。取值范围：`turns` 1–8，`looks` 0–20，`lookChars` 500–8000，`wakes` 0–4，`wakeTurns` 1–4，`marginSec` 10–300，`debounceSec` 0–60。刻长应留出截止余量；本地试验也建议保留 15 分钟一刻。修改配置后重启，第二前提会记录身体指纹变化。
+
+线路的 `toolMode` 可选 `json`（缺省，文本 JSON）或 `native`（原生工具调用）；托管居民的运行器配置也可用这两个值。没有原生工具能力的提供者会退回 JSON 并警告。躯壳线路的 `timeoutMs` 上限为 300000，托管仍为 120000；每次调用均经过预算预留与用量结算。真实线路的密钥仍只写在环境变量里，配置使用 `apiKeyEnv` 引用。premise 0、1 的世界继续使用原来的一刻一问。
+
+MCP 在第二前提中提供 `houren_look` 与 `houren_wait`；外部客户端可通过 `GET /api/me/wait?after=<收件序号>` 等待，GET 不确认收件游标。公开的 `/api/public/attention` 只有每日平均数；管理员的 `/api/admin/attention` 有逐位汇总，轨迹文件为世界目录下的 `agent-loops.jsonl`，保留 30 个地球日，不含提示、回复、独白或动作参数文本。
+
+自动验收不消耗真实模型 token，创建临时世界并在完成后清理；`--serve` 可保留结果供浏览器查看，Ctrl-C 清理：
+
+```sh
+node --test test/p2-acceptance.test.js
+node test/fixtures/p2/acceptance.mjs --serve          # JSON
+node test/fixtures/p2/acceptance.mjs --native --serve # 原生工具
+npm run sandbox -- --physics 2 --premise 2 --agents 10 --shell-slots 20 --days 120 --seed 1 --out /tmp/p2-sandbox
+```
+
+端到端验收手动推进 12 刻，以脚本化 mock 验证十位先民的行动、先看提案再投票、同刻私语回应、常驻指令、轨迹、预算与重启回放。真实模型测量已于 2026-10-06 完成：native 总体工具有效率 98.96%，JSON 为 96.39%；推荐 GLM/Step 显式使用 native，注意力上限与并发 6 保留实测值。GLM native 单独为 97.58%，仍有参数形状问题。结果与限制见 [CALIBRATION-P2](docs/CALIBRATION-P2.md)，初值片段见 [p2-runtime-initial.json](docs/p2-runtime-initial.json)。实现规格见 [SPEC-P2](docs/SPEC-P2.md)，验收范围见 [ACCEPTANCE-P2](docs/ACCEPTANCE-P2.md)。

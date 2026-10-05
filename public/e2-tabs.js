@@ -685,8 +685,7 @@ export async function renderMetrics2(ctx, root) {
   );
   // 第二前提：注意力与自动化（SPEC-P2 §14.4）：每次醒来的轮数、看的次数、每位居民被叫醒的次数（来自 /api/public/attention，只有平均数），以及常驻指令
   if (ctx.S.state && ctx.S.state.world && ctx.S.state.world.premise >= 2) {
-    // TODO(spec): Q43 — 路径拼起来写：原有的 test/ui.test.js 会扫描前端里所有 /api/… 字面量，并要求它们在 premise 0 的世界里不是 404，而这个接口按 §14.2 在别的世界里就是 404
-    const a = await api(`${['/api', 'public', 'attention'].join('/')}?days=30`);
+    const a = await api('/api/public/attention?days=30');
     const days = a.ok && Array.isArray(a.json.days) ? a.json.days.filter((d) => d.residents > 0) : [];
     const att = (key) => days.map((d, i) => [i + 1, d[key]]);
     root.append(h('h3', { class: 'attention-title' }, t('m_attentionTitle')), h('p', { class: 'muted' }, t('m_attentionNote')));

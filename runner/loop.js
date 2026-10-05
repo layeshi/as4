@@ -117,7 +117,7 @@ function missedLine(S, p) {
 }
 
 /** 摘要里的一条收件：{ kind, from?, text60? }；from 为 null 是匿名，没有这一项的（成交、系统通知……）不写来自谁 */
-// TODO(spec): Q39 — 暂行规格字面：例行的系统收件（规则的收支、标签、天象……）也列
+const ROUTINE_INBOX = new Set(['transfer', 'tag', 'weather', 'dream', 'witness']);
 const receivedOf = (i) => ({
   kind: i.kind,
   ...(i.from && i.from.name ? { from: i.from.name } : i.anonymous ? { from: null } : {}),
@@ -435,7 +435,7 @@ export async function runWaking(S, p0, { kind }) {
 
     if (latest.you.status !== 'awake') { ended = 'asleep'; break; }
     if (latest.now.paused) { ended = 'paused'; break; }
-    if (latest.you.actionsLeft === 0) { ended = 'actions'; break; } // TODO(spec): Q40 — 最后一次 act 的结果因此不会交给模型（规格字面）
+    if (latest.you.actionsLeft === 0) { ended = 'actions'; break; } // Q40 A：先测量；最后一次结果是否另交一轮，测量后再定。
   }
 
   if (stop === 'aborted') return { rec, acted, stop }; // 被中止（暂停、关闭）：不记摘要与轨迹
@@ -445,7 +445,7 @@ export async function runWaking(S, p0, { kind }) {
   S.cursor = delivered; // 只推进到已经交给模型的收件；附在最后一个结果里却没有再调用模型的，下一次醒来再给
   const entry = {
     tick, kind,
-    received: shown.filter((i) => i.seq <= delivered).map(receivedOf),
+    received: shown.filter((i) => i.seq <= delivered && !ROUTINE_INBOX.has(i.kind)).map(receivedOf),
     looks: [...rec.looks], acts, thoughts, ended, turns: rec.turns,
     ...(ended === 'error' ? { failedTurn } : {}),
   };

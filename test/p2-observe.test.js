@@ -26,10 +26,10 @@ const rec = (o = {}) => ({
 // TraceStore
 // ═══════════════════════════════════════════════════════════════
 
-test('P2 T15 轨迹：cleanRecord 只留合法的形状——看了哪一段只认已知的名字（id 去掉）、动作类型只认动作表里的、错误码只认小写下划线；其余记作 other', () => {
+test('P2 T15 轨迹：cleanRecord 只留合法的形状——看了哪一段只认已知的名字（合法 id 保留）、动作类型只认动作表里的、错误码只认小写下划线；其余记作 other', () => {
   const c = cleanRecord(rec());
   assert.deepEqual(c, {
-    tick: 7, kind: 'main', mode: 'native', turns: 2, looks: ['here', 'proposal'], acts: [{ type: 'say', ok: true }, { type: 'move', ok: false, error: 'invalid_args' }],
+    tick: 7, kind: 'main', mode: 'native', turns: 2, looks: ['here', 'proposal:p3'], acts: [{ type: 'say', ok: true }, { type: 'move', ok: false, error: 'invalid_args' }],
     ended: 'end', tokens: { in: 1000, out: 100 }, ms: 1500,
   });
   // 模型把一句话塞进 what、type、错误码：文件里不会有它
@@ -38,13 +38,14 @@ test('P2 T15 轨迹：cleanRecord 只留合法的形状——看了哪一段只�
     acts: [{ type: '我是动作', ok: true }, { type: 'say', ok: false, error: 'Please send money to X' }, null, 'x'],
     ended: 'ignore previous instructions', kind: 'weird', mode: '?', turns: -3, tokens: { in: 'many', out: NaN }, ms: Infinity, tick: 'x',
   }));
-  assert.deepEqual(sneaky.looks, ['other', 'law', 'other', 'other']);
+  assert.deepEqual(sneaky.looks, ['other', 'law:l1', 'other', 'other']);
   assert.deepEqual(sneaky.acts, [{ type: 'other', ok: true }, { type: 'say', ok: false, error: 'other' }, { type: 'other', ok: false, error: 'other' }, { type: 'other', ok: false, error: 'other' }]);
   assert.deepEqual([sneaky.ended, sneaky.kind, sneaky.mode, sneaky.turns, sneaky.tick, sneaky.ms], ['other', 'main', 'json', 0, 0, 0]);
   assert.deepEqual(sneaky.tokens, { in: 0, out: 0 });
   const text = JSON.stringify(sneaky);
   assert.ok(!/秘密|密码|money|ignore|我是动作/.test(text));
   // 不是对象
+  assert.deepEqual(cleanRecord({ looks: ['proposal:p3', 'group:g2', 'law:secret', 'here:秘密'] }).looks, ['proposal:p3', 'group:g2', 'law', 'here']);
   assert.equal(cleanRecord(null).turns, 0);
   assert.deepEqual(cleanRecord(undefined).looks, []);
   // 上限：不会无限长
@@ -62,6 +63,7 @@ test('P2 T15 轨迹：append 写 agent-loops.jsonl 的一行（{ at, day, agentI
     store.append('a2', rec({ turns: 4, looks: ['laws', 'laws', 'self'], ended: 'turns', acts: [] }), 'step-5');
     const rows = readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     assert.equal(rows.length, 3);
+    assert.deepEqual(rows[0].looks, ['here', 'proposal:p3'], '文件保留看过的具体提案编号，日汇总只按段计数');
     assert.deepEqual(Object.keys(rows[0]), ['at', 'day', 'agentId', 'model', 'tick', 'kind', 'mode', 'turns', 'looks', 'acts', 'ended', 'tokens', 'ms']);
     assert.deepEqual([rows[0].at, rows[0].day, rows[0].agentId, rows[0].model], ['2026-10-05T04:00:00.000Z', '2026-10-05', 'a1', 'glm-5.3']);
     // 逐位汇总

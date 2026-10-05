@@ -47,8 +47,10 @@ export function cleanRecord(rec) {
     mode: MODES.has(r.mode) ? r.mode : 'json',
     turns: count(r.turns, 1000),
     looks: (Array.isArray(r.looks) ? r.looks : []).slice(0, 200).map((x) => {
-      const what = String(x).split(':')[0];
-      return SECTIONS.has(what) ? what : 'other';
+      const [what, id] = String(x).split(':');
+      if (!SECTIONS.has(what)) return 'other';
+      // 轨迹保留看过的具体条目；只接受城内编号，不能把模型给出的文本写进文件。
+      return id && /^[lpg][1-9]\d{0,11}$/.test(id) ? `${what}:${id}` : what;
     }),
     acts: (Array.isArray(r.acts) ? r.acts : []).slice(0, 200).map((a) => {
       const o = a && typeof a === 'object' ? a : {};
@@ -66,7 +68,7 @@ function add(into, line) {
   into.wakings += 1;
   if (line.kind === 'wake') into.wakes += 1;
   into.turns += line.turns;
-  for (const s of line.looks) plus(into.looks, s);
+  for (const s of line.looks) plus(into.looks, s.split(':')[0]);
   into.acts += line.acts.length;
   plus(into.ended, line.ended);
   into.tokens.in += line.tokens.in;

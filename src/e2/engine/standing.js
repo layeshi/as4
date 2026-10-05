@@ -61,8 +61,9 @@ function report(w, a, i, trigger, { results, skipped = 0, error }) {
 /** 触发一次：条件为假既不计次也不发收件；求值出错记录、指令保留；本刻的名额用完时跳过并记录 */
 function fireOrder(w, a, i, o, it) {
   const trigger = { when: o.when, ...(it ? { seq: it.seq } : {}) };
-  // TODO(spec): Q36 — it is the inbox item as a plain record; a named whisper has no `anonymous` key, so `it.anonymous` reads null
-  const env = { me: agentRef(a.id), left: actionsLeft(a), here: hereOf(w, a.place), ...(it ? { it: plainRecord(it) } : {}) };
+  // Q36 B：只在求值环境里补真假字段，不改署名私语的收件或事件格式。
+  const item = it?.kind === 'whisper' ? { ...it, anonymous: it.anonymous === true } : it;
+  const env = { me: agentRef(a.id), left: actionsLeft(a), here: hereOf(w, a.place), ...(item ? { it: plainRecord(item) } : {}) };
   const host = makeHost(w);
   const budget = newBudget(); // 条件与各个参数共用一份步数（同规则的 ruleFuel）
   let actions;

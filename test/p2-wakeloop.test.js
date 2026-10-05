@@ -99,7 +99,7 @@ test('P2 T8 每刻至多 wakes 次、每次至多 wakeTurns 轮；超过的收�
     assert.ok(!inbox.includes('第一句') && inbox.includes('第二句') && inbox.includes('第三句'), inbox);
     // 摘要：上一次醒来是被叫醒（带标记），再上一次是主醒来
     const brief = out.requests[2].transcript[0].text;
-    assert.match(brief, /【上一次醒来】第 1 月第 1 日第 1 刻（被叫醒）\n[\s\S]*【再上一次】第 1 月第 1 日第 1 刻\n/);
+    assert.match(brief, /【上一次醒来】第 1 月第 1 日第 1 刻（被叫醒）\n[\s\S]*【再上一次】第 1 月第 1 日第 1 刻(?:\n|$)/); // Q39 B：主醒来只有例行标签时，摘要只有标题。
     assert.match(brief, /【上一次醒来】[^\n]*\n {2}收到：私语 来自 乙：第一句\n {2}看了：here\n {2}（轮数用完）/);
   } finally {
     city.close();

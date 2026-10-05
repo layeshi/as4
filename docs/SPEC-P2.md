@@ -34,7 +34,7 @@
      - §10.1 配置文件新增的可选键；
      - 新增的端点（§6.3、§14.2）；
      - MCP 的 `tools/list` 多两个工具（§12）；
-     - `PREMISE` 的配置报错文字（§2.1）。只有这一处允许改原有测试。
+     - `PREMISE` 的配置报错文字（§2.1）。此处允许改原有测试；另按 2026-10-05 的 Q43 A，允许 UI 接口存在性测试明确列出第二前提接口例外。
 2. **新的状态只出现在第二前提的世界里**：`a.standing`、`a.muted`、`w.dayLog.p2`。新判断一律用 `agentic(w)`（§2.2）。`w.$wakes` 是不可枚举的隐藏属性（同 `w.$out`），不进快照，不进状态哈希。
 3. **确定性**：常驻指令的设定与执行都在命令之内；遍历按 ID 升序；不用 `Date.now()`，不新增随机流（执行的动作自己用的随机数照旧）。
 4. **运行器在确定性边界之外**，但只能经 `act` 改变世界。工具循环不得引入任何新的写世界的途径。
@@ -158,6 +158,8 @@ p2: { standingSets: 0, standingFired: 0, standingFailed: 0, standingSkipped: 0, 
 ```js
 export const DEFAULT_AGENT_LOOP = Object.freeze({ turns: 4, looks: 6, lookChars: 3000, wakes: 2, wakeTurns: 2, marginSec: 60, debounceSec: 20 });
 ```
+
+2026-10-06 本机测量后保留这组初值，并发取 6；GLM 与 Step 的第二前提线路显式使用 `toolMode: 'native'`。库的 JSON 缺省与旧世界行为不变。native 总体有效率达到 98% 门槛，GLM 单独仍为 97.58%；完整口径见 [CALIBRATION-P2](CALIBRATION-P2.md)。
 
 ---
 
@@ -333,7 +335,8 @@ export function runStanding(w) {
 
 ```js
 const trigger = { when: o.when, ...(it ? { seq: it.seq } : {}) };
-const env = { me: agentRef(a.id), left: actionsLeft(a), here: hereOf(w, a.place), ...(it ? { it: plainRecord(it) } : {}) };
+const item = it?.kind === 'whisper' ? { ...it, anonymous: it.anonymous === true } : it; // Q36 B
+const env = { me: agentRef(a.id), left: actionsLeft(a), here: hereOf(w, a.place), ...(item ? { it: plainRecord(item) } : {}) };
 const host = makeHost(w);
 let actions;
 try {
@@ -358,6 +361,7 @@ w.dayLog.p2.standingFailed += results.filter((r) => !r.ok && r.error.code !== 'b
 report(w, a, i, trigger, { results, skipped });
 ```
 
+- Q36 B：署名私语在求值环境里有 `it.anonymous === false`；不改原收件或事件格式。
 - `plainRecord`、`hereOf` 从 `engine/rules.js` 导出（现在是模块内函数）。`it.from` 这类一层的嵌套记录保留，列表丢弃。
 - `materialize(act, host, env)`：复制动作对象；顶层键的值是以 `=` 开头的字符串时，求值替换。结果是整数、真假、字符串或 null 时直接用；是居民、社群、灵魂的引用时换成它的 ID；是记录或列表时，抛出 `type` 规则错误。
 - `isRuleError(e)`：求值器抛出的规则错误（代码与 `rule_error` 事件同一组）。
@@ -501,7 +505,7 @@ function payStanding(w, d) {
 
 - `you.offers`：跳过 `o.to === a.id` 且 `isMuted(w, a, o.from)` 的交易；
 - `you.pacts`：跳过 `c.from !== a.id` 且 `isMuted(w, a, c.from)` 的孕育之约；
-- `actions` 视图里 `accept` 的可用判断（`perception.js:470`）：不算这些交易。
+- `actions` 视图里 `accept` 的可用判断（`perception.js:470`）：不算这些交易；`consent` 也不算被屏蔽者发起的邀约（Q37 B）。
 
 解除屏蔽之后，没送到的收件不补发；仍在托管中的定向交易与仍有效的约，下一次感知时重新出现。
 
@@ -677,7 +681,7 @@ waitTickOrWake(S, p):
     thoughts: [string], ended, turns, failedTurn? }
   ```
 
-  `received` 是这次醒来里交给模型的收件，`text60` 截到 60 个码点。
+  `received` 是这次醒来里交给模型的收件，省略例行的 `transfer`、`tag`、`weather`、`dream`、`witness`（Q39 B）；完整收件仍在当次的收件箱里交给模型。`text60` 截到 60 个码点。
 - 渲染见附录 A.6。最近的一条标【上一次醒来】，然后是【再上一次】，更早的标【更早一次】。
 - 第一前提的「失去的一刻」那句（SPEC-P1 §11.3、附录 A.8），在第二前提里放在【上一次醒来】一节的第一行；没有上一次时单独成行。
 - 摘要只在内存里：进程重启后为空，同原来的历史轮。
@@ -876,6 +880,7 @@ step({ system, transcript, tools, signal, timeoutMs }) → { calls: [{ id, name,
 
 ### 10.5 限速（`src/http/server.js`）
 
+- Q41 B：启动时仅在第二前提中，若 `TICK_MS < 4 × agentLoop.marginSec × 1000`，记录刻长过短的警告；不自动改变配置。
 - 第二前提的世界：`limits.agent = new PerTickLimiter(40)`（其余世界仍是 20）。托管居民一刻里最多约 1 次感知、4 次行动、4 次重新感知，加上两次被叫醒，接近 20，所以放宽。
 - 新增 `limits.wait = new PerTickLimiter(60)`，只给 `GET /api/me/wait` 用：自托管客户端每 25 秒一次，一刻 15 分钟约 36 次。
 
@@ -916,7 +921,7 @@ step({ system, transcript, tools, signal, timeoutMs }) → { calls: [{ id, name,
 
 `mcp/server.js`：
 
-- `tools/list` 多两个工具，总是列出：
+- `tools/list` 在第二前提中多两个工具（Q42 B：旧世界与没有令牌时仍列三个；探测不到世界时列五个）：
   - `houren_look { what, id?, lang? }`：用最近一次 `houren_perceive` 的感知（还没有时先感知一次）渲染该段，计数按 `attention.looks`、按刻归零；
   - `houren_wait { timeoutMs?, lang? }`：调用 `client.wait({ after: baseline, timeoutMs })`，返回渲染后的收件；没有时返回「这段时间没有人找你」（附录 A.5）。
 - 连接到不是第二前提的世界时，这两个工具返回「这座城没有这个工具」（`isError`），原来三个工具的行为与输出不变（T1、T13）。
@@ -1026,7 +1031,7 @@ step({ system, transcript, tools, signal, timeoutMs }) → { calls: [{ id, name,
 | T18 | **屏蔽**：参数、自己、找不到、上限；内心（`before:mute` 报内心的动作）；五类定向投递都不送到、不进隐藏列表、不叫醒；感知过滤定向交易与邀约，`accept` 的即时状态不算它们；被屏蔽者的动作照常成功、代价照付，定向交易照常托管、到期退回；解除之后不补发，仍在托管的交易重新出现；说话、宣告、赠予不受影响；屏蔽 `anonymous` 挡住所有匿名私语；延迟事件；`dayLog.p2` 与指标。 |
 | T16 | **端到端（mock）**：本机 `PREMISE=2 SHELL_SLOTS=20`、10 位示例先民、mock 提供者（脚本），跑满 1 个世界日：每刻的醒来都在截止前结束；有居民 look 提案之后投票；一次私语在同一刻里得到回应；一条常驻指令触发；轨迹与指标里有数；守恒；重启之后回放一致。 |
 
-### 16.2 本机测量（真实 token；已授权约 500 万–800 万；设计方说开始时做）
+### 16.2 本机测量（真实 token；2026-10-05 已授权开始，两轮合计上限 2000 万）
 
 - 本机 `PREMISE=2 SHELL_SLOTS=20`，10 位先民（`data/founders.json` 的前 10 份草稿），GLM 与 Step 两条线，并发 6，一刻 15 分钟。
 - 两轮，各 12 刻：第一轮两条线都用 `json`，第二轮都用 `native`。

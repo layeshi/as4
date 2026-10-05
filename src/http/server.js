@@ -130,6 +130,9 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
 
   // 第二前提的注意力上限（SPEC-P2 §4.4）：来自躯壳配置，没有躯壳配置时用缺省值；meCore 把它写进感知的 attention
   rt.agentLoop = (ctx.shells && ctx.shells.config.agentLoop) || DEFAULT_AGENT_LOOP;
+  if (agentic(rt.w) && cfg.tickMs < 4 * rt.agentLoop.marginSec * 1000) {
+    logger.warn?.(`第二前提：TICK_MS=${cfg.tickMs} 小于 4 × marginSec=${rt.agentLoop.marginSec} 秒，醒来的可用窗口很短；请检查刻长与截止余量。`);
+  }
 
   // 注意力轨迹（SPEC-P2 §14.1）：只在第二前提的世界；躯壳管理器与托管运行器共用，两个接口从 ctx.traces 读
   ctx.traces = agentic(rt.w) ? new TraceStore({ file: join(rt.dir, 'agent-loops.jsonl'), timezone: cfg.shellTz }) : null;

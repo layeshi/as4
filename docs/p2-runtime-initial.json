@@ -1,0 +1,17 @@
+{
+  "concurrency": 6,
+  "historyRounds": 2,
+  "agentLoop": {
+    "turns": 4,
+    "looks": 6,
+    "lookChars": 3000,
+    "wakes": 2,
+    "wakeTurns": 2,
+    "marginSec": 60,
+    "debounceSec": 20
+  },
+  "lines": [
+    { "model": "glm-5.3", "toolMode": "native" },
+    { "model": "step-5-preview", "toolMode": "native" }
+  ]
+}

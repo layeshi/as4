@@ -59,7 +59,7 @@ export const TOOLS = [
  * tools/list：连到第二前提的城时列出五个；连到别的世界（或没有令牌）时仍是原来的三个；探测不到世界时（服务器不通）也列出五个。
  * 不论列没列出，连到不是第二前提的城时调用它们得到「这座城没有这个工具」。
  */
-// TODO(spec): Q42 — §12 说 tools/list「总是列出」，但原有的 test/mcp.test.js 断言（连着 premise 0 的世界）只有三个工具，而 §0.3 不许改原有测试：暂行为按世界的设定版本决定
+// Q42 B：tools/list 按世界版本决定；旧世界或没有令牌仍列三个，第二前提或探测失败列五个。
 export const TOOLS_P2 = [
   {
     name: 'houren_look',

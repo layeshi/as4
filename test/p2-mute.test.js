@@ -102,7 +102,7 @@ test('P2 T17: 常驻指令的 inbox:whisper 也被匿名私语触发：it.from �
   assert.deepEqual(items[0].results.map((r) => [r.type, r.ok]), [['diary', true]]);
   assert.equal(items[1].error, 'type', 'it.from 是 null：取字段出错');
   assert.deepEqual(a.standing.map((o) => o.fired), [1, 1]);
-  // 署名的私语：it.anonymous 读到 null（不是 true），第一条条件为假；第二条按 ID 判断
+  // 署名的私语：求值环境里的 it.anonymous 为 false，第一条条件为假；第二条按 ID 判断
   one(w, b, { type: 'whisper', to: a.id, text: '署名' });
   tick(w, 1);
   assert.equal(a.standing[0].fired, 1);

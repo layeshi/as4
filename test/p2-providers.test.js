@@ -550,7 +550,12 @@ test('P2 T10 F2: 提供者的网络错误——超时写「timeout（N 秒）」
   // 其他网络错误不变
   assert.equal((await label({}, async () => { throw new Error('connect ECONNREFUSED'); })).message, '网络错误：connect ECONNREFUSED');
   // 真的超时：fetch 遵守 signal，线路的超时到了就中止
-  const hanging = async (_url, { signal }) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason)));
+  const hanging = async (_url, { signal }) => new Promise((_resolve, reject) => {
+    // 模拟一个仍在等待网络的请求：AbortSignal.timeout 的计时器不保持事件循环存活。
+    // 留一个有引用的计时器，确保测试等到真正的 signal 超时；未超时则明确失败。
+    const guard = setTimeout(() => reject(new Error('fetch did not receive an abort')), 3000);
+    signal.addEventListener('abort', () => { clearTimeout(guard); reject(signal.reason); }, { once: true });
+  });
   const t0 = Date.now();
   const real = await label({ timeoutMs: 1000 }, hanging);
   assert.equal(real.message, '网络错误：timeout（1 秒）');
