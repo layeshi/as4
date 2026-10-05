@@ -13,7 +13,7 @@
 
 import { P } from '../params.js';
 import { clockDay, isAlive, findAgent } from '../world.js';
-import { ACTIONS, EVENT_FIELDS } from '../lore/actions.js';
+import { ACTIONS, EVENT_FIELDS, actionTable } from '../lore/actions.js';
 import { parseWhen, OP_FIELDS } from '../rules/check.js';
 import { collectRule } from '../rules/ops.js';
 import { parseCached } from '../rules/parser.js';
@@ -88,8 +88,10 @@ const TIMING = new WeakMap(); // rule 对象 → 解析后的时机（不进快�
 function timingOf(rule) {
   let t = TIMING.get(rule);
   if (!t) {
-    t = parseWhen(rule.when, { kind: 'city' });
-    if (t.error) t = parseWhen(rule.when, { kind: 'place' }); // before:enter 只有地点规则才有
+    // 存下来的规则在存入时已按它所在世界的设定版本校验过；这里用最全的动作表（设定 2）解析，设定 0、1 里存下的规则解析的结果不变，
+    // 第二前提里的 before:standing、after:standing 才解析得出来（SPEC-P2 §5.3）
+    t = parseWhen(rule.when, { kind: 'city', premise: 2 });
+    if (t.error) t = parseWhen(rule.when, { kind: 'place', premise: 2 }); // before:enter 只有地点规则才有
     if (t.error) throw new Error(`stored rule has an invalid timing: ${rule.when}`);
     TIMING.set(rule, t);
   }
@@ -157,12 +159,14 @@ function plainRecord(v, depth = 0, hidden = []) {
 
 /** args.<参数>：没给的数字参数为 0，其余为 null；居民的引用统一成 ID */
 export function argsRecord(w, type, raw) {
-  const spec = ACTIONS[type];
+  const spec = actionTable(w.premise || 0).ACTIONS[type];
   const hidden = HIDDEN_ARGS[type] || [];
   const out = {};
   for (const [name, kind] of spec.args) {
     const v = raw ? raw[name] : undefined;
-    if (hidden.includes(name)) out[name] = kind === 'int' ? 0 : null;
+    // standing：orders 是列表，规则读到 null；count 是指令的条数（SPEC-P2 §5.3）
+    if (type === 'standing' && name === 'count') out.count = Array.isArray(raw && raw.orders) ? raw.orders.length : 0;
+    else if (hidden.includes(name)) out[name] = kind === 'int' ? 0 : null;
     else if (kind === 'int') out[name] = Number.isSafeInteger(v) ? v : 0;
     else if (kind === 'bool') out[name] = typeof v === 'boolean' ? v : null;
     else if (kind === 'str') {

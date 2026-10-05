@@ -184,10 +184,14 @@ export const NO_AFTER_ACTIONS = INNER_ACTIONS;
 export const isKnownAction = (type) => typeof type === 'string' && Object.prototype.hasOwnProperty.call(ACTIONS, type);
 
 /** 一个动作在规则里可读的参数名（`args.<参数>`） */
-export const actionArgNames = (type) => (isKnownAction(type) ? ACTIONS[type].args.map(([n]) => n) : []);
+export const actionArgNames = (type, premise = 0) => {
+  const t = actionTable(premise);
+  return t.isKnown(type) ? t.ACTIONS[type].args.map(([n]) => n) : [];
+};
 /** 参数的类型：int 参数没给时读到 0，其余读到 null */
-export const actionArgKind = (type, name) => {
-  const hit = isKnownAction(type) ? ACTIONS[type].args.find(([n]) => n === name) : null;
+export const actionArgKind = (type, name, premise = 0) => {
+  const t = actionTable(premise);
+  const hit = t.isKnown(type) ? t.ACTIONS[type].args.find(([n]) => n === name) : null;
   return hit ? hit[1] : null;
 };
 
@@ -230,6 +234,29 @@ export const ACTIONS_P1 = Object.freeze({
 export const INNER_ACTIONS_P1 = Object.freeze(ACTION_ORDER_P1.filter((t) => ACTIONS_P1[t].inner));
 export const NO_BEFORE_ACTIONS_P1 = Object.freeze(ACTION_ORDER_P1.filter((t) => ACTIONS_P1[t].inner || ACTIONS_P1[t].noBefore));
 export const NO_AFTER_ACTIONS_P1 = INNER_ACTIONS_P1;
+
+// SPEC-P2：第二前提的动作表。设定 0、设定 1 的表一字不改。
+// standing（常驻指令，§5.2）排在 declare 之后，不是内心的动作，有 before 与 after；
+// mute（屏蔽，§5.10）排在 internalize 之后，是内心的动作；whisper 多一个可选参数 anonymous（§5.9），仍是内心的动作。
+export const ACTION_ORDER_P2 = Object.freeze(ACTION_ORDER_P1.flatMap((t) => (t === 'internalize' ? [t, 'mute'] : t === 'declare' ? [t, 'standing'] : [t])));
+export const ACTIONS_P2 = Object.freeze({
+  ...ACTIONS_P1,
+  whisper: { ...ACTIONS.whisper, params: 'to, text, anonymous?', args: [['to', 'str'], ['text', 'str'], ['anonymous', 'bool']],
+    desc: W('私下对任意一位在世的居民说话（对方若在沉睡，醒来后收到）；规则读不到私语。anonymous 为真时匿名：对方只知道「有人」，代价 3。',
+      'Speak privately to any living resident (if they are dormant, they receive it once they wake); no rule can read a whisper. With anonymous set to true the whisper is unsigned: they learn only that "someone" said it, and it costs 3.') },
+  mute: { base: 0, place: null, module: null, where: null, inner: true, params: 'who, on?', args: [['who', 'str'], ['on', 'bool']],
+    verb: W('屏蔽', 'mutes'),
+    desc: W('屏蔽一位居民（who 为 ID 或名字），或用 "anonymous" 屏蔽所有匿名私语；on 为 false 时解除。被屏蔽者的私语、定向交易、孕育之约的邀请、交给你的记忆、入社申请都不再送到你这里，也不会叫醒你；对方不会知道。公开的话照样听得见。至多屏蔽 20 个。内心：任何规则都不能拒绝、收费或读取。',
+      'Mute a resident (who is an ID or a name), or use "anonymous" to mute every anonymous whisper; set on to false to undo it. Whispers, directed offers, pact invitations, memories handed to you and requests to join from a muted resident no longer reach you or wake you, and they will not know. Public speech still reaches you. You can mute at most 20. Inner life: no rule can refuse, charge or read it.') },
+  standing: { base: 1, place: null, module: null, where: null, params: 'orders', args: [['orders', 'list'], ['count', 'int']],
+    verb: W('留下常驻指令', 'sets standing orders'),
+    desc: W('整体替换你的常驻指令（至多 3 条，写法见【常驻指令】）；空列表表示全部撤销。指令的内容只有你看得见，规则只读得到条数。',
+      'Replace all your standing orders (at most 3; see [Standing orders] for how to write them); an empty list withdraws them all. Only you can see what they say; rules can read only how many there are.') },
+});
+export const INNER_ACTIONS_P2 = Object.freeze(ACTION_ORDER_P2.filter((t) => ACTIONS_P2[t].inner));
+export const NO_BEFORE_ACTIONS_P2 = Object.freeze(ACTION_ORDER_P2.filter((t) => ACTIONS_P2[t].inner || ACTIONS_P2[t].noBefore));
+export const NO_AFTER_ACTIONS_P2 = INNER_ACTIONS_P2;
 const TABLE0 = Object.freeze({ ACTIONS, ORDER: ACTION_ORDER, INNER: INNER_ACTIONS, NO_BEFORE: NO_BEFORE_ACTIONS, NO_AFTER: NO_AFTER_ACTIONS, isKnown: isKnownAction });
 const TABLE1 = Object.freeze({ ACTIONS: ACTIONS_P1, ORDER: ACTION_ORDER_P1, INNER: INNER_ACTIONS_P1, NO_BEFORE: NO_BEFORE_ACTIONS_P1, NO_AFTER: NO_AFTER_ACTIONS_P1, isKnown: (t) => typeof t === 'string' && Object.hasOwn(ACTIONS_P1, t) });
-export const actionTable = (premise = 0) => premise >= 1 ? TABLE1 : TABLE0;
+const TABLE2 = Object.freeze({ ACTIONS: ACTIONS_P2, ORDER: ACTION_ORDER_P2, INNER: INNER_ACTIONS_P2, NO_BEFORE: NO_BEFORE_ACTIONS_P2, NO_AFTER: NO_AFTER_ACTIONS_P2, isKnown: (t) => typeof t === 'string' && Object.hasOwn(ACTIONS_P2, t) });
+export const actionTable = (premise = 0) => premise >= 2 ? TABLE2 : premise >= 1 ? TABLE1 : TABLE0;

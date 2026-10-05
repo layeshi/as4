@@ -18,6 +18,7 @@ import { socialHandlers } from './actions/social.js';
 import { politicsHandlers } from './actions/politics.js';
 import { cityHandlers } from './actions/city.js';
 import { descentHandlers } from './actions/descent.js';
+import { standingHandlers } from './actions/standing.js';
 
 export { actionCost } from './actions/util.js';
 
@@ -29,12 +30,13 @@ export const HANDLERS = {
   ...politicsHandlers,
   ...cityHandlers,
   ...descentHandlers,
+  ...standingHandlers,
 };
 
 /** 注册更多的处理函数（供按领域分文件的模块在加载时使用） */
 export function registerHandlers(more) {
   for (const [type, h] of Object.entries(more)) {
-    if (!actionTable(1).isKnown(type)) throw new Error(`registerHandlers: unknown action ${type}`);
+    if (!actionTable(2).isKnown(type)) throw new Error(`registerHandlers: unknown action ${type}`);
     if (typeof h.validate !== 'function' || typeof h.apply !== 'function') throw new Error(`registerHandlers: ${type} needs validate and apply`);
     HANDLERS[type] = h;
   }

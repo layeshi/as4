@@ -23,7 +23,7 @@ const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const given = (v) => v !== undefined && v !== null;
 
 /** 校验失败 → 动作级错误 rule_invalid（hint 说明哪一条规则、哪个字段、为什么） */
-function ruleInvalid(issues) {
+export function ruleInvalid(issues) {
   return fail('rule_invalid', issuesHint(issues), { issues: issues.map((i) => ({ path: i.path, code: i.code, zh: i.zh, en: i.en, hint: i.hint })) });
 }
 

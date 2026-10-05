@@ -21,7 +21,7 @@ import { RuleSyntaxError } from './errors.js';
 import { parseExpr, countNodes } from './parser.js';
 import { syntaxMessage, list as listOf, q } from './messages.js';
 import {
-  T, FIELDS, TYPE_NAMES, FUNCTION_SIGS, FUNCTION_NAMES, ALL_NAMES, namesFor, elementType, isListType, accepts,
+  T, FIELDS, TYPE_NAMES, FUNCTION_SIGS, FUNCTION_NAMES, ALL_NAMES, ALL_NAMES_P2, namesFor, elementType, isListType, accepts,
 } from './types.js';
 import {
   ACTION_ORDER, ACTIONS, EVENTS, EVENT_NAMES, EVENT_FIELDS, NO_BEFORE_ACTIONS, NO_AFTER_ACTIONS, isKnownAction, actionArgNames,
@@ -120,9 +120,9 @@ export function parseWhen(when, scope) {
  *   refs    收集字面的引用 [{ kind, id, pos }]，供校验层核对存在
  *   strs    收集字面的字符串 [{ text, pos }]，供校验层审核
  */
-export function makeCtx(kind, { action = null, event = null } = {}) {
-  // weight 里的 it 是投票者（PROTOCOL-2 §6.8）
-  return { kind, names: namesFor(kind), it: kind === 'weight' ? T.AGENT : null, action, event, refs: [], strs: [] };
+export function makeCtx(kind, { action = null, event = null, premise = 0 } = {}) {
+  // weight 里的 it 是投票者（PROTOCOL-2 §6.8）；premise 决定动作的参数名（actionArgNames）与哪些名字算「这里不可用」（nameError）
+  return { kind, names: namesFor(kind), it: kind === 'weight' ? T.AGENT : null, action, event, premise, refs: [], strs: [] };
 }
 
 const kindHere = {
@@ -135,11 +135,14 @@ const kindHere = {
   yes: { zh: '「yes no abstain voted total turnout」只在程序的 decide 里可用', en: '"yes no abstain voted total turnout" are only available in a procedure\'s decide' },
 };
 for (const n of ['no', 'abstain', 'voted', 'total', 'turnout']) kindHere[n] = kindHere.yes;
+// 第二前提（SPEC-P2 附录 A.9）：只在 ctx.premise >= 2 时会用到
+kindHere.me = { zh: '「me」「left」只在常驻指令里可用', en: '"me" and "left" are only available in standing orders' };
+kindHere.left = kindHere.me;
 
 function nameError(n, ctx) {
   const avail = [...Object.keys(ctx.names), ...(ctx.it ? ['it'] : [])];
   const hint = { zh: `这里可用的名字：${listOf(avail, 'zh')}`, en: `Names available here: ${listOf(avail, 'en')}` };
-  if (ALL_NAMES.includes(n.n)) abort('name_unavailable', n.p, kindHere[n.n].zh, kindHere[n.n].en, hint);
+  if ((ctx.premise >= 2 ? ALL_NAMES_P2 : ALL_NAMES).includes(n.n)) abort('name_unavailable', n.p, kindHere[n.n].zh, kindHere[n.n].en, hint);
   const near = avail.find((a) => a.toLowerCase() === n.n.toLowerCase());
   abort('unknown_name', n.p, `不认识的名字「${n.n}」${near ? `（是不是想写 ${near}？名字区分大小写）` : ''}`, `unknown name "${n.n}"${near ? ` (did you mean ${near}? names are case-sensitive)` : ''}`, hint);
 }
@@ -156,7 +159,7 @@ function fieldType(ot, f, node, ctx) {
   }
   if (ot === T.ARGS) {
     if (ctx.action) {
-      const names = actionArgNames(ctx.action);
+      const names = actionArgNames(ctx.action, ctx.premise);
       if (!names.includes(f)) {
         const near = names.find((x) => x.toLowerCase() === f.toLowerCase());
         abort('unknown_arg', node.p, `动作 ${ctx.action} 没有参数「${f}」${near ? `（是不是想写 ${near}？）` : ''}`, `action ${ctx.action} has no argument "${f}"${near ? ` (did you mean ${near}?)` : ''}`,
@@ -994,7 +997,7 @@ function checkRule(rule, env, path, issues) {
     return null;
   }
   const kind = timing.kind;
-  const ctx = makeCtx(kind, { action: timing.action || null, event: timing.event || null });
+  const ctx = makeCtx(kind, { action: timing.action || null, event: timing.event || null, premise: env.scope.premise || 0 });
   const rc = { scope: env.scope, timing, human: env.human, ctx, refs: env.refs, inEach: false };
   const out = { when: normalizeText(rule.when) };
   if (rule.if !== undefined && rule.if !== null) {

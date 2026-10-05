@@ -91,6 +91,8 @@ export function namesFor(kind) {
     case 'on': return { ...base, event: T.EVENT };
     case 'proposers': return { ...base, actor: T.AGENT };
     case 'decide': return { ...base, yes: T.INT, no: T.INT, abstain: T.INT, voted: T.INT, total: T.INT, turnout: T.INT };
+    // 常驻指令的条件与参数（SPEC-P2 §5.3）：只是检查用的类别，不是规则的时机。me 的字段就是规则里居民的字段；it（触发的收件）另由检查的选项给出
+    case 'standing': return { ...base, me: T.AGENT, left: T.INT, here: T.AGENTS };
     default: return base; // enact daily monthly voters weight
   }
 }
@@ -100,3 +102,5 @@ export const ALL_NAMES = Object.freeze([
   'city', 'var', 'treasury', 'agents', 'cradle', 'actor', 'args', 'result', 'here', 'event', 'it',
   'yes', 'no', 'abstain', 'voted', 'total', 'turnout',
 ]);
+/** 第二前提另有 me 与 left（只在常驻指令里可用）；premise 0、1 的报错文字用 ALL_NAMES，不变（SPEC-P2 §5.3） */
+export const ALL_NAMES_P2 = Object.freeze([...ALL_NAMES, 'me', 'left']);

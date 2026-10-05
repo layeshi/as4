@@ -13,7 +13,7 @@
 
 import { parseCached } from './parser.js';
 import { parseTemplate } from './check.js';
-import { ACTIONS, EVENTS } from '../lore/actions.js';
+import { ACTIONS_P2, EVENTS } from '../lore/actions.js'; // 第二前提的表包含设定 0、1 的全部动作（动词不变），另有 standing 的动词
 
 const PREC = { or: 1, and: 2, not: 3, cmp: 4, sum: 5, prod: 6, un: 7, atom: 9 };
 
@@ -291,7 +291,7 @@ export function renderTiming(when, lang = 'zh') {
   const [kind, what] = w.split(':');
   if (kind === 'before' && what === 'enter') return d.when.enter;
   if (kind === 'on') return d.when.on(EVENTS[what] ? EVENTS[what][lang === 'en' ? 'en' : 'zh'] : what);
-  const verb = ACTIONS[what] ? ACTIONS[what].verb[lang === 'en' ? 'en' : 'zh'] : what;
+  const verb = ACTIONS_P2[what] ? ACTIONS_P2[what].verb[lang === 'en' ? 'en' : 'zh'] : what;
   return kind === 'before' ? d.when.before(verb) : d.when.after(verb);
 }
 

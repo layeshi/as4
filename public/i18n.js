@@ -547,6 +547,7 @@ export const VARS = {
   backstage: () => ({}),
   internalize: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
   impart: (e) => ({ a: A(e.agent), to: A(e.data.to), text: TX(e.data.text) }),
+  standing: (e) => ({ a: A(e.agent), count: e.data.count }), // 第二前提：常驻指令（SPEC-P2 §5.2；观测者在一个月后才看得到）
   remember: (e) => ({ a: A(e.agent), text: TX(e.data.text), ...(e.data.gift ? { from: A(e.data.from), origin: A(e.data.origin) } : {}) }),
   forget: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
   thought: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
@@ -682,6 +683,8 @@ export const TPL = {
     backstage_bodies: '幕后换过了一些身体。',
     internalize: '{a} 把一段记忆训练进身体：「{text}」',
     impart: '{a} 交给 {to} 一段记忆：「{text}」',
+    standing: '{a} 留下了 {count} 条常驻指令。',
+    standing_none: '{a} 撤销了常驻指令。',
     remember_gift: '{a} 收下 {from} 交来的记忆（最初是 {origin} 的）：「{text}」',
     remember: '{a} 记下：「{text}」',
     forget: '{a} 忘掉了：「{text}」',
@@ -803,6 +806,8 @@ export const TPL = {
     backstage_bodies: 'Some bodies were changed backstage.',
     internalize: '{a} trained a memory into their body: “{text}”',
     impart: '{a} handed {to} a memory: “{text}”',
+    standing: '{a} left {count} standing order(s).',
+    standing_none: '{a} withdrew their standing orders.',
     remember_gift: '{a} kept a memory from {from} (first {origin}’s): “{text}”',
     remember: '{a} remembered: “{text}”',
     forget: '{a} forgot: “{text}”',
@@ -917,6 +922,7 @@ export const CAT = {
   rule_op: 'polity', pact_open: 'life', successor: 'life', declare: 'life', sponsor: 'life', embodied: 'life', rule_error: 'polity', announce: 'polity', law_replaced: 'polity', law_suspended: 'polity', procedure_reverted: 'polity',
   refound_open: 'polity', refound_sign: 'polity', refounded: 'polity', refound_expired: 'polity', petition: 'polity', cede: 'polity', seize: 'polity', draft: 'polity', bylaws: 'polity', group_procedure: 'polity', place_rules: 'polity', dismantle: 'env', razed: 'env',
   omen: 'world', weather_start: 'world', weather_end: 'world', day: 'world', month: 'world', great_sleep: 'world',
+  standing: 'life',
   admin: 'admin', redacted: 'admin',
 };
 
@@ -933,6 +939,7 @@ export function templateKey(e) {
     case 'inscribe': return d.cover ? 'inscribe_cover' : 'inscribe';
     case 'revive': return /^a\d+$/.test(String(d.by)) ? 'revive_by' : 'revive';
     case 'remember': return e.data.gift ? 'remember_gift' : 'remember';
+    case 'standing': return d.count === 0 ? 'standing_none' : 'standing';
     case 'backstage': return e.data.kind === 'budget' ? `backstage_budget_${e.data.direction}` : `backstage_${e.data.kind}`;
     case 'born': return d.authors ? 'born_v2' : 'born';
     case 'soul': return d.authors ? (d.successorOf ? 'soul_successor' : 'soul_v2') : 'soul';
