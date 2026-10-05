@@ -135,7 +135,7 @@ export class ShellManager {
       await checkEndpoint(base, allowLocal);
     }
     const { apiKeyEnv, ...rest } = l;
-    line.provider = await this.providerFactory({ ...rest, ...(apiKeyEnv ? { apiKeyEnv } : {}) }, { env: this.env, fetch: this.fetch || modelFetch(allowLocal) });
+    line.provider = await this.providerFactory({ ...rest, ...(apiKeyEnv ? { apiKeyEnv } : {}) }, { env: this.env, fetch: this.fetch || modelFetch(allowLocal, { timeoutMs: l.timeoutMs }) });
     return line.provider;
   }
 

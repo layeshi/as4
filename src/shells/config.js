@@ -58,7 +58,7 @@ export function parseShellsConfig(raw, overrides = {}) {
     if (l.apiKeyEnv !== undefined && (typeof l.apiKeyEnv !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(l.apiKeyEnv))) throw new Error(`${where}.apiKeyEnv 必须是环境变量名。`);
     if (l.baseURL !== undefined && typeof l.baseURL !== 'string') throw new Error(`${where}.baseURL 必须是字符串。`);
     if (l.extraBody !== undefined && (l.extraBody === null || typeof l.extraBody !== 'object' || Array.isArray(l.extraBody))) throw new Error(`${where}.extraBody 必须是一个 JSON 对象。`);
-    return { ...l, model: l.model.trim(), maxTokens: int(l.maxTokens, DEFAULTS.maxTokens, 64, 32000, `${where}.maxTokens`), timeoutMs: int(l.timeoutMs, DEFAULTS.timeoutMs, 1000, 120000, `${where}.timeoutMs`) };
+    return { ...l, model: l.model.trim(), maxTokens: int(l.maxTokens, DEFAULTS.maxTokens, 64, 32000, `${where}.maxTokens`), timeoutMs: int(l.timeoutMs, DEFAULTS.timeoutMs, 1000, 300000, `${where}.timeoutMs`) }; // 上限 300 秒（SPEC-P2 §9.4；托管运行器的上限仍是 120 秒）
   });
   return { tokensPerDay, timezone, reserve, concurrency, historyRounds, lines };
 }

@@ -31,7 +31,8 @@ export async function checkEndpoint(raw, allowLocal = false, requestURL = false)
   return { url, address: addresses[0] };
 }
 
-export function modelFetch(allowLocal = false) {
+/** timeoutMs：这一路线的超时（缺省 120000）；超时的错误带 name = 'TimeoutError'，提供者据此写「timeout（N 秒）」（SPEC-P2 §9.4） */
+export function modelFetch(allowLocal = false, { timeoutMs } = {}) {
   return async (input, init = {}) => {
     const incoming = input instanceof Request ? input : null;
     const raw = incoming ? incoming.url : String(input);
@@ -60,7 +61,7 @@ export function modelFetch(allowLocal = false) {
           resolve(new Response([204, 205, 304].includes(res.statusCode) ? null : Buffer.concat(chunks), { status: res.statusCode, headers: responseHeaders }));
         });
       });
-      req.setTimeout(120000, () => req.destroy(new Error('模型请求超时。')));
+      req.setTimeout(timeoutMs ?? 120000, () => req.destroy(Object.assign(new Error('模型请求超时。'), { name: 'TimeoutError' })));
       req.on('error', reject);
       if (body) req.write(body);
       req.end();

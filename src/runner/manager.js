@@ -127,7 +127,7 @@ export class RunnerManager {
     return createProvider({ ...safe, timeoutMs, apiKeyEnv: apiKey ? 'MANAGED_KEY' : undefined,
       ...(config.provider === 'openai' && thinking !== 'default' ? { extraBody: { thinking: { type: thinking } } } : {}),
       ...(config.provider === 'anthropic' && config.baseURL !== 'https://api.anthropic.com' ? { fallbacks: false } : {}),
-    }, { env: { MANAGED_KEY: apiKey }, fetch: modelFetch(this.cfg.allowLocalModels === true) });
+    }, { env: { MANAGED_KEY: apiKey }, fetch: modelFetch(this.cfg.allowLocalModels === true, { timeoutMs }) });
   }
   async prepare(raw, previous) {
     const config = runnerConfig(raw, previous);
