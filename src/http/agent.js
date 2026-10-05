@@ -80,11 +80,13 @@ export function actCore({ rt, cursors }, id, body, lang) {
     const { code, ...extra } = result.error;
     return fail(code, extra);
   }
+  // 第二前提的反馈（F4、F5b，SPEC-P2 §13）要知道设定版本与原来的动作；其余的世界两者都不看，结果逐字节不变
+  const feedback = (r) => actionFeedback(r, lang, { premise: w.premise || 0, act: body.actions[r.index] });
   const results = result.results.map((r) => {
-    if (r.ok) return protocol === 2 ? actionFeedback(r, lang) : r;
+    if (r.ok) return protocol === 2 ? feedback(r) : r;
     const { hint, ...err } = r.error;
     // 第二纪的错误带结构化的附加字段（forbidden 的 law / reason，no_module 的 module，gated 的 place，cooldown 的 untilDay，rule_invalid 的 issues）
-    if (protocol === 2) return { ...r, error: { ...errorBody(lang, err.code, { hint, ...err }, 2).error } };
+    if (protocol === 2) return feedback({ ...r, error: { ...errorBody(lang, err.code, { hint, ...err }, 2).error } });
     return { ...r, error: { code: err.code, message: hint?.[lang] ?? errorMessage(lang, err.code) } };
   });
   return { status: 200, json: { ok: true, results, you: result.you } };
