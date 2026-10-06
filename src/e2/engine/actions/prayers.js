@@ -7,7 +7,7 @@ const pray = {
   validate({ w, a }, args) {
     enabled(w);
     const place = w.places[a.place];
-    if (a.place !== 'temple' || place.razed || place.condition === null || place.condition <= 0) fail('wrong_place');
+    if (a.place !== 'temple' || place.origin !== 'human' || place.razed || place.ruined || place.condition === null || place.condition <= 0) fail('wrong_place');
     const text = needText(args.text, { max: 600 });
     if (w.prayers.accounts[a.id]?.lastPrayerDay === clockDay(w)) fail('cooldown', null, { untilDay: clockDay(w) + 1 });
     return { text, cost: 1 };

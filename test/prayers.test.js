@@ -290,3 +290,45 @@ test('modules installed after a resident razes and rebuilds the whole site never
   assert.equal(balance(w, a), earned);
   install(); assert.equal(balance(w, a), earned);
 });
+
+test('a partly repaired ruined temple rejects prayer in both action menu and execution until restored', () => {
+  const { w, a } = setup(); const temple = w.places.temple;
+  applyDamage(w, temple, 'temple', 'temple', 10000, 'natural');
+  assert.equal(temple.ruined, true); assert.equal(one(w, a, { type: 'repair', energy: 1 }).ok, true);
+  assert.equal(temple.condition, 5); assert.equal(temple.ruined, true);
+  const menu = () => buildPerception(w, a.id, { ack: false }).actions.find((x) => x.type === 'pray');
+  const offered = menu().available; const energy = a.energy;
+  const attempted = one(w, a, { type: 'pray', text: '废墟不应允许祈祷' });
+  assert.deepEqual([offered, attempted.ok], [false, false]); assert.equal(attempted.error.code, 'wrong_place'); assert.equal(a.energy, energy);
+  assert.equal(one(w, a, { type: 'repair', energy: 199 }).ok, true);
+  assert.equal(temple.condition, 1000); assert.equal(temple.ruined, false);
+  temple.name = '修复后改名的神殿';
+  assert.equal(menu().available, true); assert.equal(one(w, a, { type: 'pray', text: '修复后的祈祷' }).ok, true);
+});
+
+test('a new resident-built incarnation at the old temple address never inherits prayer eligibility', () => {
+  const { w, a } = setup(); const temple = w.places.temple;
+  assert.equal(temple.origin, 'human'); razePlace(w, temple);
+  const project = one(w, a, { type: 'initiate', build: 'site', on: 'temple', name: '普通新仓库', owner: 'city' });
+  assert.equal(project.ok, true, JSON.stringify(project)); contribute(w, a, w.projects[project.data.project], project.data.need);
+  assert.equal(temple.origin, 'agent'); assert.equal(temple.razed, false); assert.equal(temple.ruined, false);
+  const offered = buildPerception(w, a.id, { ack: false }).actions.find((x) => x.type === 'pray').available;
+  const attempted = one(w, a, { type: 'pray', text: '新建筑不能继承神殿资格' });
+  assert.deepEqual([offered, attempted.ok], [false, false]); assert.equal(attempted.error.code, 'wrong_place');
+});
+
+test('enabled standing orders accept and execute prayer and invention while disabled worlds reject them', () => {
+  const { w, a } = setup(); putAt(w, a, 'library');
+  const doc = one(w, a, { type: 'write', title: '常驻发明成果', body: '成果说明' }); assert.equal(doc.ok, true);
+  putAt(w, a, 'temple');
+  const orders = [{ when: 'tick', times: 1, do: [
+    { type: 'pray', text: '常驻指令的祈祷' },
+    { type: 'invent', title: '常驻发明', text: '说明', ref: { kind: 'doc', id: doc.data.doc } },
+  ] }];
+  const old = bareWorld('old-standing-prayers', { premise: 2 }); const b = reg(old, '旧指令居民');
+  const denied = one(old, b, { type: 'standing', orders }); assert.equal(denied.ok, false); assert.equal(denied.error.code, 'invalid_args'); assert.equal(old.prayers, undefined);
+  const installed = one(w, a, { type: 'standing', orders }); assert.equal(installed.ok, true, JSON.stringify(installed));
+  cmd(w, 'tick');
+  assert.equal(Object.values(w.prayers.prayers).length, 1); assert.equal(Object.values(w.prayers.inventions).length, 1);
+  assert.equal(a.standing.length, 0, 'one-shot orders are removed after successful execution');
+});

@@ -9,6 +9,7 @@
 
 import { P } from '../../params.js';
 import { actionTable } from '../../lore/actions.js';
+import { prayersEnabled } from '../prayer-rewards.js';
 import { clockDay } from '../../world.js';
 import { cpLength, normalizeText } from '../../../text.js';
 import { screen } from '../../../moderation.js';
@@ -66,7 +67,7 @@ const standing = {
         check(cond, T.BOOL, `orders[${i}].if`, inbox);
       }
       if (!Array.isArray(o.do) || o.do.length < 1 || o.do.length > P.standingDoMax) invalidArgs();
-      const table = actionTable(2);
+      const table = actionTable(2, prayersEnabled(w));
       const acts = o.do.map((act, j) => {
         if (!isObj(act) || typeof act.type !== 'string' || !table.isKnown(act.type) || DO_FORBIDDEN.has(act.type)) invalidArgs();
         for (const [k, v] of Object.entries(act)) {

@@ -481,7 +481,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
     switch (type) {
       case 'pray':
         entry.cost = 1;
-        if (here.razed || here.condition === null || here.condition <= 0) deny(reasonWrong(type));
+        if (here.origin !== 'human' || here.razed || here.ruined || here.condition === null || here.condition <= 0) deny(reasonWrong(type));
         else if (w.prayers.accounts[a.id]?.lastPrayerDay === clockDay(w)) deny({ code: 'cooldown', text: fmt(R.cooldown, { day: clockDay(w) + 1 }) });
         break;
       case 'move':

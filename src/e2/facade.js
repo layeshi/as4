@@ -1,5 +1,3 @@
-import { prayerView } from './engine/prayers.js';
-export { prayerView } from './engine/prayers.js';
 import { premised as isPremised } from './world.js';
 import { weatherCodesFor } from './engine/weather.js';
 // TODO(spec): Q32 — preserve premise 0 calm votes; premise 1 HTTP uses public types.
@@ -49,7 +47,6 @@ export default Object.freeze({
   drainEvents,
   buildPerception,
   inboxView,
-  prayerView,
   publicState,
   publicAgent,
   publicMemories,
