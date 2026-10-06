@@ -8,6 +8,7 @@
 // 动作（propose vote refound sign）本身在 actions/politics.js。
 
 import { P } from '../params.js';
+import { budgetForExpression } from './law-execution.js';
 import { nextId, clockDay, isAlive } from '../world.js';
 import { onGenesis } from '../genesis.js';
 import { HUMAN_LAWS, HUMAN_PROCEDURE, SYSTEM_LAW_TEXT } from '../lore/humanlaws.js';
@@ -97,7 +98,8 @@ export function issuesHint(issues) {
  * env：名字（actor、it、yes…）；rng：sample 用的随机数流（缺省 w.rng.world；校验与健康检查传副本）。
  */
 export function evalProc(w, expr, env, { rng } = {}) {
-  return evaluate(parseCached(expr), makeHost(w, { rng: rng || w.rng.world }), env);
+  const tree = parseCached(expr);
+  return evaluate(tree, makeHost(w, { rng: rng || w.rng.world }), env, budgetForExpression(w, tree));
 }
 
 /** 提案者资格：以 actor 求 proposers；为假或出错 → false */

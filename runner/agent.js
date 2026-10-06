@@ -3,9 +3,10 @@
 //   感知 → 渲染成文本 → 调用提供者 → 解析回复 → 行动 → 记下结果 → 等到下一刻。
 // 运行器不受引擎确定性约束（会用随机抖动）。API 密钥与令牌只从环境变量读取，不进入提示与日志。
 
+import { safeActionType, safeErrorCode, safeFinishReason, providerErrorLabel, boundedCount, safeRuntimeLog } from '../src/telemetry-safety.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { createClient, errorMessage } from './client.js';
+import { createClient } from './client.js';
 import { createProvider, PROVIDER_NAMES, ProviderError, validateReasoningEffort } from './providers.js';
 import { renderPerception, summarizeResults } from './render.js';
 import { buildSystemPrompt, promptParams } from './prompt.js';
@@ -46,6 +47,7 @@ export function parseRunnerConfig(raw, env = process.env) {
     if (!token) throw new Error(`${where}：环境变量 ${a.tokenEnv} 没有设置。`);
     if (!PROVIDER_NAMES.includes(a.provider)) throw new Error(`${where}.provider 必须是 ${PROVIDER_NAMES.join(' / ')} 之一。`);
     validateReasoningEffort(a);
+    if (a.actionTools !== undefined && !['legacy', 'typed'].includes(a.actionTools)) throw new Error(`${where}.actionTools 必须是 "legacy" 或 "typed"。`);
     const lang = a.lang === 'en' ? 'en' : 'zh';
     const every = a.actEveryTicks === undefined ? 1 : a.actEveryTicks;
     if (!Number.isInteger(every) || every < 1) throw new Error(`${where}.actEveryTicks 必须是 ≥ 1 的整数。`);
@@ -66,10 +68,14 @@ export function makeLogger(prefix, { secrets = [], out = (s) => console.log(s), 
     return s;
   };
   const stamp = () => new Date().toTimeString().slice(0, 8);
+  const log = (m, level, sink, marker = '') => {
+    const safe = safeRuntimeLog(clean(m), level);
+    if (safe !== null) sink(`${stamp()} [${prefix}] ${marker}${safe}`);
+  };
   return {
-    info: (m) => !quiet && out(`${stamp()} [${prefix}] ${clean(m)}`),
-    warn: (m) => err(`${stamp()} [${prefix}] ⚠ ${clean(m)}`),
-    error: (m) => err(`${stamp()} [${prefix}] ✖ ${clean(m)}`),
+    info: (m) => !quiet && log(m, 'info', out),
+    warn: (m) => log(m, 'warn', err, '⚠ '),
+    error: (m) => log(m, 'error', err, '✖ '),
   };
 }
 
@@ -115,7 +121,7 @@ export async function runAgent(cfg, deps = {}) {
   try {
     provider = deps.provider || (await createProvider(cfg, deps.providerDeps));
   } catch (e) {
-    log.error(e.message);
+    log.error(providerErrorLabel(e));
     return { rounds: 0, acted: 0, stopped: 'provider' };
   }
 
@@ -160,7 +166,7 @@ export async function runAgent(cfg, deps = {}) {
         stopped = 'auth';
         break;
       }
-      log.warn(`感知失败：${errorMessage(me)}；下一刻重试。`);
+      log.warn(`感知失败：${providerErrorLabel(me)} ${safeErrorCode(me.json?.error?.code)}；下一刻重试。`);
       report({ status: 'error', lastError: '感知连接失败，等待重试。' });
       await wait(FALLBACK_TICK_MS, signal, null);
       continue;
@@ -174,12 +180,12 @@ export async function runAgent(cfg, deps = {}) {
     report({ status: 'waiting' });
     if (p.you && p.you.name) name = p.you.name;
     if (status === 'dead' || status === 'retired') {
-      log.info(`${name} 已${status === 'dead' ? '长眠' : '归隐'}，停止。`);
+      log.info(`已${status === 'dead' ? '长眠' : '归隐'}，停止。`);
       stopped = status;
       break;
     }
     if (status === 'dormant') {
-      log.info(`${name} 正在沉睡（能量 ${p.you.energy}），等待下一刻。`);
+      log.info(`正在沉睡（能量 ${boundedCount(p.you.energy) ?? 0}），等待下一刻。`);
       await waitTick(p);
       continue;
     }
@@ -243,7 +249,7 @@ export async function runAgent(cfg, deps = {}) {
       try {
         deps.onUsage?.(agentId, usage, { chars, ...meta });
       } catch (e) {
-        log.warn(`onUsage 出错：${e && e.message}`);
+        log.warn('onUsage 出错（正文已省略）');
       }
     };
     let reply;
@@ -258,18 +264,18 @@ export async function runAgent(cfg, deps = {}) {
       // 用时与用量：调「一刻多长」「历史留几轮」的依据
       const secs = ((Date.now() - t0) / 1000).toFixed(1);
       const u = reply.usage;
-      log.info(`模型用时 ${secs} s${u ? ` · 输入 ${u.input} · 输出 ${u.output} token${Number.isFinite(u.reasoning) ? ` · 思考 ${u.reasoning}` : ''}` : ''} · stop=${String(reply.stop || 'unknown').replace(/[^a-z_]/gi, '').slice(0, 24)}`);
+      log.info(`模型用时 ${secs} s${u ? ` · 输入 ${boundedCount(u.input) ?? 0} · 输出 ${boundedCount(u.output) ?? 0} token${Number.isFinite(u.reasoning) ? ` · 思考 ${boundedCount(u.reasoning) ?? 0}` : ''}` : ''} · stop=${safeFinishReason(reply.stop)}`);
       rejected = 0;
     } catch (e) {
       reportUsage(null, { ok: false, replyChars: 0, ms: Date.now() - t0, error: e });
       if (signal?.aborted) break;
       report({ status: 'error', lastError: '模型请求失败，请检查接口、模型与额度；下一刻重试。' });
       if (e instanceof ProviderError && e.fatal) {
-        log.error(`${e.message} 停止该 agent。`);
+        log.error(`${providerErrorLabel(e)} 停止该 agent。`);
         stopped = 'provider';
         break;
       }
-      log.warn(`提供者出错：${e && e.message}；本刻不行动。`);
+      log.warn(`提供者出错：${providerErrorLabel(e)}；本刻不行动。`);
       // 服务商一再拒绝同样的请求（模型名、baseURL、参数不对），重试没有意义：别无限刷屏
       if (e instanceof ProviderError && !e.retryable) rejected++;
       else rejected = 0;
@@ -291,7 +297,7 @@ export async function runAgent(cfg, deps = {}) {
     const parsed = parseModelJson(reply.text);
     if (!parsed.ok) {
       report({ status: 'error', lastError: '模型回复没有可解析的行动 JSON。' });
-      log.warn(`回复里没有可解析的 JSON（${parsed.error}）；本刻不行动。开头：${String(reply.text).slice(0, 80).replace(/\s+/g, ' ')}`);
+      log.warn(`回复里没有可解析的 JSON（${parsed.error}）；本刻不行动。`);
       lastResults = reply.stop === 'length'
         ? (cfg.lang === 'en' ? 'Your last reply reached the output token limit before a valid action JSON was available. No action was submitted.' : '上一轮达到输出 token 上限，未得到完整行动 JSON，未提交行动。')
         : (cfg.lang === 'en' ? 'Your last reply could not be parsed. Output exactly one JSON object.' : '你上一轮的回复无法解析。请只输出一个 JSON 对象。');
@@ -308,7 +314,7 @@ export async function runAgent(cfg, deps = {}) {
       if (!act.ok) {
         report({ status: 'error', lastError: '行动提交失败，下一刻重试。' });
         const code = act.json && act.json.error && act.json.error.code;
-        log.warn(`行动失败：${errorMessage(act)}`);
+        log.warn(`行动失败：${providerErrorLabel(act)} ${safeErrorCode(act.json?.error?.code)}`);
         if (act.status === 401) {
           log.error('认证失败。停止该 agent。');
           stopped = 'auth';
@@ -327,9 +333,8 @@ export async function runAgent(cfg, deps = {}) {
     cursor = p.inboxCursor; // 确认：这一批收件已经交给了模型，而模型的回复也已被接受
     lastResults = summarizeResults(results, cfg.lang);
     for (const r of results) {
-      log.info(`  ${r.ok ? '✓' : '✗'} ${r.type}${r.ok ? (r.cost ? `（−${r.cost}）` : '') : ` ${r.error ? r.error.code : ''}`}`);
+      log.info(`  ${r.ok ? '✓' : '✗'} ${safeActionType(r.type)}${r.ok ? (Number.isFinite(r.cost) && r.cost > 0 ? `（−${r.cost}）` : '') : ` ${safeErrorCode(r.error?.code)}`}`);
     }
-    if (thought) log.info(`  独白：${thought}`);
     history.push({ user: userText, assistant: JSON.stringify({ ...(thought ? { thought } : {}), actions }) });
     while (history.length > keep) history.shift();
     await waitTick(p, cfg.actEveryTicks || 1);
@@ -358,7 +363,7 @@ async function main() {
   try {
     opts = parseArgs(process.argv.slice(2));
   } catch (e) {
-    console.error(e.message);
+    console.error('运行器参数或配置无效，请检查配置字段与环境变量。');
     console.error(USAGE);
     process.exit(2);
   }
@@ -370,7 +375,7 @@ async function main() {
   try {
     agents = loadRunnerConfig(opts.config);
   } catch (e) {
-    console.error(e.message);
+    console.error('运行器参数或配置无效，请检查配置字段与环境变量。');
     process.exit(2);
   }
   const ac = new AbortController();
@@ -379,7 +384,7 @@ async function main() {
     const secrets = [cfg.token, cfg.apiKeyEnv && process.env[cfg.apiKeyEnv]].filter(Boolean);
     return runAgent(cfg, { signal: ac.signal, log: makeLogger(cfg.name, { secrets, quiet: opts.quiet }) });
   }));
-  console.log(results.map((r, i) => `${agents[i].name}: ${r.stopped}（${r.acted} 次行动）`).join('\n'));
+  console.log(results.map((r, i) => `agent ${i + 1}: ${r.stopped}（${r.acted} 次行动）`).join('\n'));
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();

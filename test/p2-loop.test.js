@@ -595,8 +595,10 @@ test('P2 T7 回报：onUsage 每轮一次（含失败与截断），回报函数
     } });
     assert.equal(usageCalls, 3);
     assert.equal(out.result.rounds, 2);
-    assert.ok(out.logs.some((l) => l.startsWith('WARN onUsage 出错：回报出错也不能影响运行')));
-    assert.ok(out.logs.some((l) => l.startsWith('WARN onWaking 出错：轨迹出错也不能影响运行')));
+    assert.ok(out.logs.some((l) => l === 'WARN onUsage 出错（正文已省略）'));
+    assert.ok(out.logs.every(l => !l.includes('回报出错也不能影响运行')));
+    assert.ok(out.logs.some((l) => l === 'WARN onWaking 出错（正文已省略）'));
+    assert.ok(out.logs.every(l => !l.includes('轨迹出错也不能影响运行')));
     // 轨迹：用量累加
     const out2 = await drive(city, a, { cfg: NATIVE, inner: await scripted([
       { calls: [call('look', { what: 'here' })], usage: { input: 1000, output: 100 } },
@@ -619,7 +621,7 @@ test('P2 T7 失败：致命的提供者错误停掉这位居民；被拒绝（�
     let out = await drive(city, a, { rounds: 5, script: [new ProviderError('认证失败', { fatal: true, status: 401 }), J({ done: true })] });
     assert.deepEqual(out.result, { rounds: 1, acted: 0, stopped: 'provider' });
     assert.deepEqual(out.wakings.map((w) => w.rec.ended), ['error']);
-    assert.ok(out.logs.some((l) => l.startsWith('ERR 认证失败 停止该 agent')));
+    assert.ok(out.logs.some((l) => l.startsWith('ERR auth HTTP 401 停止该 agent')));
     // 被拒绝 5 次（每次醒来一次调用）
     const rejected = () => new ProviderError('请求被拒绝（HTTP 400）', { retryable: false, status: 400 });
     out = await drive(city, a, { rounds: 20, after: () => city.rt.tickNow(), script: Array.from({ length: 20 }, rejected) });

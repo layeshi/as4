@@ -11,6 +11,7 @@ import { earthDay } from '../shells/budget.js';
 import { validTimeZone } from '../shells/config.js';
 import { LOOK_WHATS } from '../../runner/render-p2.js';
 import { ACTION_ORDER_P2 } from '../e2/lore/actions.js';
+import { safeErrorCode } from '../telemetry-safety.js';
 
 export const TRACE_TZ = 'Asia/Shanghai';
 export const TRACE_KEEP_DAYS = 30;
@@ -23,7 +24,7 @@ const ACTIONS = new Set(ACTION_ORDER_P2);
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 const count = (v, max = 1e9) => (Number.isFinite(v) && v >= 0 ? Math.min(Math.round(v), max) : 0);
-const errorCode = (s) => (typeof s === 'string' && /^[a-z][a-z0-9_]{0,39}$/.test(s) ? s : 'other');
+const errorCode = safeErrorCode;
 const plus = (o, k, n = 1) => { o[k] = (o[k] || 0) + n; };
 const round2 = (x) => Math.round(x * 100) / 100;
 const agentOrder = (a, b) => {

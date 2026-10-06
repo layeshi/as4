@@ -12,9 +12,10 @@
 import { completeUntilAborted } from './abortable.js';
 import { parseModelJson, normalizeReply } from './parse.js';
 import { ProviderError } from './providers.js';
-import { errorMessage } from './client.js';
+import { safeActionType, safeErrorCode, safeFinishReason, providerErrorLabel, boundedCount } from '../src/telemetry-safety.js';
 import { buildSystemPrompt, promptParams } from './prompt.js';
 import { D2, LOOK_WHATS, clipLook, renderActResult, renderBrief, renderLook, renderWake } from './render-p2.js';
+import { typedActionTools, typedActSchema, typedCall, validateAction, schemaIssues, correctionText, thoughtSchema } from './action-tools.js';
 
 /** 每刻的上限（A）：运行时的配置，不属于世界；平台的运行器执行，服务器只通过感知的 attention 告诉所有客户端 */
 export const DEFAULT_AGENT_LOOP = Object.freeze({ turns: 4, looks: 6, lookChars: 3000, wakes: 2, wakeTurns: 2, marginSec: 60, debounceSec: 20 });
@@ -28,9 +29,9 @@ const HISTORY_KEEP = 2; // 摘要的条数：historyRounds 缺省时
  * 原生工具调用的两个工具（附录 A.3，中立定义 [{ name, description, schema }]，各家的提供者转成自己的格式）：
  * look 展开概要里的一段，act 行动。描述按居民的语言给。
  */
-export function toolDefs(lang) {
+export function toolDefs(lang, { actionTools, premise = 0 } = {}) {
   const t = D2[lang === 'en' ? 'en' : 'zh'].tools;
-  return [
+  const legacy = [
     {
       name: 'look',
       description: t.look,
@@ -56,6 +57,8 @@ export function toolDefs(lang) {
       },
     },
   ];
+  if (actionTools !== 'typed' || premise < 2) return legacy;
+  return [legacy[0], ...typedActionTools(lang)].map(t => ({ ...t, strict: false }));
 }
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -66,7 +69,7 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
  * 同一个对象里有几种时，按 look、act、done 的顺序处理。返回 { ok: true, calls } 或 { ok: false, calls: [], error }；
  * calls 是中立的 [{ id, name, args }]（id 用 j1、j2……，done 的 name 是 'done'）。参数不是对象的调用 args 为 null，运行器给它参数错误的结果。
  */
-export function parseToolJson(text) {
+export function parseToolJson(text, { actionTools, premise = 0 } = {}) {
   const parsed = parseModelJson(text);
   if (!parsed.ok) return { ok: false, calls: [], error: parsed.error };
   const v = parsed.value;
@@ -76,6 +79,10 @@ export function parseToolJson(text) {
     for (const l of Array.isArray(v.look) ? v.look : [v.look]) add('look', typeof l === 'string' ? { what: l } : isObj(l) ? l : null);
   }
   if (Object.hasOwn(v, 'act')) add('act', Array.isArray(v.act) ? { actions: v.act } : isObj(v.act) ? v.act : null);
+  if (actionTools === 'typed' && premise >= 2) {
+    const names = new Set(typedActionTools('en').map(t => t.name));
+    for (const [name, args] of Object.entries(v)) if (name !== 'done' && names.has(name)) add(name, args);
+  }
   if (v.done === true) add('done', {});
   return calls.length ? { ok: true, calls } : { ok: false, calls: [], error: 'no look, act or done key' };
 }
@@ -137,6 +144,7 @@ const receivedOf = (i) => ({
 export async function runWaking(S, p0, { kind }) {
   const { cfg, provider, client, log, signal, deps, report } = S;
   const lang = codeOf(cfg.lang);
+  const typed = cfg.actionTools === 'typed' && p0.premise >= 2;
   const res = D2[lang].res;
   const limits = p0.attention ?? DEFAULT_AGENT_LOOP;
   const maxTurns = kind === 'main' ? limits.turns : limits.wakeTurns;
@@ -154,18 +162,20 @@ export async function runWaking(S, p0, { kind }) {
   const mode = wantsNative && typeof provider.step === 'function' ? 'native' : 'json';
 
   // 系统提示整轮不变，便于提供者缓存；换了语言、灵魂、习得、设定版本或调用方式时重建
-  const key = JSON.stringify([p0.lang, p0.you.soul, p0.you.trained || [], p0.premise, mode]);
+  const key = JSON.stringify([p0.lang, p0.you.soul, p0.you.trained || [], p0.premise, mode, ...(typed ? ['typed'] : [])]);
   if (S.system === null || key !== S.systemKey) {
-    S.system = buildSystemPrompt({ ...promptParams(p0), toolMode: mode });
+    S.system = buildSystemPrompt({ ...promptParams(p0), toolMode: mode, ...(typed ? { actionTools: 'typed' } : {}) });
     S.systemKey = key;
   }
   const system = S.system;
-  const tools = toolDefs(lang);
+  const tools = toolDefs(lang, { actionTools: cfg.actionTools, premise: p0.premise });
   if (S.looks.tick !== tick) S.looks = { tick, n: 0 }; // 看的次数按刻归零，醒来与被叫醒合计
 
-  const first = kind === 'main'
+  const brief = kind === 'main'
     ? renderBrief(p0, { lang, history: S.history, missed: missedLine(S, p0) })
     : renderWake(p0, { lang, earlier: S.mainEntry && S.mainEntry.tick === tick ? S.mainEntry.entry : null });
+  const corrections = typed ? correctionText(S.corrections, lang) : '';
+  const first = corrections ? `${brief}\n\n${corrections}` : brief;
 
   const rec = { tick, kind, mode, turns: 0, looks: [], acts: [], ended: null, tokens: { in: 0, out: 0 }, ms: 0 };
   const transcript = [{ role: 'user', text: first }]; // 原生：中立的对话记录
@@ -191,14 +201,30 @@ export async function runWaking(S, p0, { kind }) {
     try {
       deps.onUsage?.(agentId, usage, { chars, ...meta });
     } catch (e) {
-      log.warn(`onUsage 出错：${e && e.message}`);
+      log.warn('onUsage 出错（正文已省略）');
     }
   };
 
   const invalid = (detail) => ({ text: res.invalid(detail), isError: true });
+  const rememberCorrection = (type, detail) => {
+    if (!typed) return;
+    S.corrections = (S.corrections || []).filter(c => c.type !== type);
+    S.corrections.push({ type: cp(type, 40), detail: cp(detail, 1400) });
+    if (S.corrections.length > 4) S.corrections.shift();
+  };
+  const malformed = (type, issues) => {
+    rememberCorrection(type, JSON.stringify(issues));
+    report({ status: 'error', lastError: lang === 'en' ? 'Tool arguments failed local validation; no world action was submitted.' : '工具参数未通过本地校验，本次调用未提交世界动作。' });
+    return { text: correctionText([{ type, detail: cp(JSON.stringify(issues), 1400) }], lang), isError: true };
+  };
 
   // ── 工具：look ──
   const doLook = (args) => {
+    if (typed) {
+      const issues = schemaIssues(args, tools[0].schema);
+      if (issues.length) return malformed('look', issues);
+      S.corrections = (S.corrections || []).filter(c => c.type !== 'look');
+    }
     if (!isObj(args)) return invalid(res.details.notObject);
     if (typeof args.what !== 'string' || (args.id !== undefined && args.id !== null && typeof args.id !== 'string' && typeof args.id !== 'number')) return invalid(res.details.look);
     if (S.looks.n >= limits.looks) return { text: res.looksOut };
@@ -211,12 +237,18 @@ export async function runWaking(S, p0, { kind }) {
 
   // ── 工具：act ──
   const doAct = async (args) => {
+    if (typed) {
+      const issues = schemaIssues(args, typedActSchema());
+      if (!issues.length) for (const action of args.actions) issues.push(...validateAction(action, latest));
+      if (issues.length) return malformed(args?.actions?.[0]?.type || 'act', issues.slice(0, 5));
+    }
     if (!isObj(args)) return invalid(res.details.notObject);
     if (args.actions !== undefined && !Array.isArray(args.actions)) return invalid(res.details.act);
     const given = args.actions ?? [];
     const wellFormed = given.filter(isAction).length;
     const room = Math.max(0, Number.isFinite(latest.you.actionsLeft) ? latest.you.actionsLeft : (latest.you.maxActionsPerTick ?? 4));
-    const { thought, actions } = normalizeReply({ actions: given, thought: args.thought }, room);
+    if (typed && given.length > room) return malformed(given[0]?.type || 'act', [{ path: 'args.actions', code: 'budget_exhausted', message: `Only ${room} actions remain; no request submitted` }]);
+    const { thought, actions } = typed ? { thought: args.thought ?? '', actions: given } : normalizeReply({ actions: given, thought: args.thought }, room);
     const notes = []; // F7：丢弃与截断的说明写进结果
     if (given.length > wellFormed) notes.push(res.dropped(given.length - wellFormed));
     if (wellFormed > actions.length) notes.push(res.tooMany(wellFormed, actions.length));
@@ -232,7 +264,7 @@ export async function runWaking(S, p0, { kind }) {
         acted++;
       } else {
         const code = r.json && r.json.error && r.json.error.code;
-        log.warn(`行动失败：${errorMessage(r)}`);
+        log.warn(`行动失败：${providerErrorLabel(r)} ${safeErrorCode(r.json?.error?.code)}`);
         report({ status: 'error', lastError: '行动提交失败，下一刻重试。' });
         if (r.status === 401) {
           log.error('认证失败。停止该 agent。');
@@ -240,15 +272,19 @@ export async function runWaking(S, p0, { kind }) {
           return { text: res.actFailed(code || r.status), isError: true };
         }
         failure = res.actFailed(code || r.status || r.error || 'network');
+        rememberCorrection(actions[0]?.type || 'act', JSON.stringify(r.json?.error || { code: r.status || r.error || 'network' }));
       }
     } else log.info('本刻不行动。');
 
     for (const r of results) {
+      if (typed) {
+        if (!r.ok || r.data?.ok === false) rememberCorrection(r.type, JSON.stringify(r.error || { code: 'draft_invalid', errors: r.data.errors }));
+        else S.corrections = (S.corrections || []).filter(c => c.type !== r.type);
+      }
       acts.push({ type: r.type, ok: r.ok, ...(r.ok ? (r.cost ? { cost: r.cost } : {}) : { error: r.error && r.error.code }) });
       rec.acts.push({ type: r.type, ok: r.ok, ...(r.ok ? {} : { error: r.error && r.error.code }) });
-      log.info(`  ${r.ok ? '✓' : '✗'} ${r.type}${r.ok ? (r.cost ? `（−${r.cost}）` : '') : ` ${r.error ? r.error.code : ''}`}`);
+      log.info(`  ${r.ok ? '✓' : '✗'} ${safeActionType(r.type)}${r.ok ? (r.cost ? `（−${r.cost}）` : '') : ` ${safeErrorCode(r.error?.code)}`}`);
     }
-    if (thought) log.info(`  独白：${thought}`);
     if (results.length) report({ status: 'waiting', lastError: null, lastActionAt: new Date().toISOString(), actions: results.map((r) => ({ type: r.type, ok: r.ok, ...(r.error ? { error: r.error.code } : {}) })) });
 
     // 重新感知：请求到了服务器（成功或被拒）时世界可能变了；什么都没提交就沿用原来的
@@ -261,7 +297,7 @@ export async function runWaking(S, p0, { kind }) {
         if (me.status === 401) {
           log.error('认证失败：令牌无效或已被更换。停止该 agent。');
           stop = 'auth';
-        } else log.warn(`感知失败：${errorMessage(me)}`);
+        } else log.warn(`感知失败：${providerErrorLabel(me)} ${safeErrorCode(me.json?.error?.code)}`);
       }
     }
     if (failure) return { text: failure, isError: true };
@@ -272,15 +308,32 @@ export async function runWaking(S, p0, { kind }) {
       pendingNext = shownSeq;
     }
     const moved = results.some((r) => r.type === 'move' && r.ok);
-    return { text: renderActResult(latest, { results, notes, arrived, moved, fresh, lang }) };
+    const resultText = renderActResult(latest, { results, notes, arrived, moved, fresh, lang });
+    const feedback = typed && results.some(r => !r.ok || r.data?.ok === false) ? correctionText(S.corrections, lang) : '';
+    return { text: feedback ? `${resultText}\n${feedback}` : resultText };
   };
 
   const runCall = async (call) => {
     if (call.name === 'look') return doLook(call.args);
     if (call.name === 'act') return doAct(call.args);
-    if (call.name === 'done' && mode === 'json') {
+    if (typed && call.name === 'think') {
+      const issues = schemaIssues(call.args, thoughtSchema);
+      if (issues.length) return malformed('think', issues);
+      S.corrections = (S.corrections || []).filter(c => c.type !== 'think');
+      return doAct({ actions: [], thought: call.args.thought });
+    }
+    if (call.name === 'done' && (mode === 'json' || typed)) {
+      if (typed) {
+        const issues = schemaIssues(call.args, { type: 'object', properties: {}, additionalProperties: false });
+        if (issues.length) return malformed('done', issues);
+        S.corrections = (S.corrections || []).filter(c => c.type !== 'done');
+      }
       endNow = true;
       return { text: '' };
+    }
+    if (typed) {
+      const converted = typedCall(call.name, call.args, latest);
+      if (converted) return converted.issues.length ? malformed(converted.action?.type || call.name, converted.issues) : doAct({ actions: [converted.action] });
     }
     return { text: res.noTool(String(call.name).slice(0, 40)), isError: true };
   };
@@ -327,7 +380,7 @@ export async function runWaking(S, p0, { kind }) {
       const ms = Date.now() - t0;
       rec.ms += ms;
       if (signal && signal.aborted) {
-        reportUsage(null, { ok: false, replyChars: 0, ms, error: e, waking });
+        reportUsage(null, { ok: false, replyChars: 0, ms, error: e, waking, toolCallCount: 0 });
         stop = 'aborted';
         break;
       }
@@ -338,16 +391,16 @@ export async function runWaking(S, p0, { kind }) {
         ended = 'deadline';
         break;
       }
-      reportUsage(null, { ok: false, replyChars: 0, ms, error: e, waking });
+      reportUsage(null, { ok: false, replyChars: 0, ms, error: e, waking, toolCallCount: 0 });
       report({ status: 'error', lastError: '模型请求失败，请检查接口、模型与额度；下一刻重试。' });
       ended = 'error';
       failedTurn = turn;
       if (e instanceof ProviderError && e.fatal) {
-        log.error(`${e.message} 停止该 agent。`);
+      log.error(`${providerErrorLabel(e)} 停止该 agent。`);
         stop = 'provider';
         break;
       }
-      log.warn(`提供者出错：${e && e.message}；这次醒来到此为止。`);
+      log.warn(`提供者出错：${providerErrorLabel(e)}；这次醒来到此为止。`);
       // 服务商一再拒绝同样的请求（模型名、baseURL、参数不对），重试没有意义：别无限刷屏
       if (e instanceof ProviderError && !e.retryable) S.rejected++;
       else S.rejected = 0;
@@ -375,8 +428,9 @@ export async function runWaking(S, p0, { kind }) {
     }
     const replyText = String(reply.text || '');
     const replyChars = replyText.length + (mode === 'native' ? JSON.stringify(reply.calls || []).length : 0);
-    reportUsage(usage, { ok: true, replyChars, ms, waking });
-    log.info(`模型用时 ${(ms / 1000).toFixed(1)} s${usage ? ` · 输入 ${usage.input} · 输出 ${usage.output} token${Number.isFinite(usage.reasoning) ? ` · 思考 ${usage.reasoning}` : ''}` : ''} · stop=${String(reply.stop || 'unknown').replace(/[^a-z_]/gi, '').slice(0, 24)}`);
+    const toolCallCount = mode === 'native' ? (Array.isArray(reply.calls) ? reply.calls.length : 0) : parseToolJson(replyText, { actionTools: cfg.actionTools, premise: p0.premise }).calls.length;
+    reportUsage(usage, { ok: true, replyChars, ms, waking, finishReason: safeFinishReason(reply.stop), toolCallCount });
+    log.info(`模型用时 ${(ms / 1000).toFixed(1)} s${usage ? ` · 输入 ${boundedCount(usage.input) ?? 0} · 输出 ${boundedCount(usage.output) ?? 0} token${Number.isFinite(usage.reasoning) ? ` · 思考 ${boundedCount(usage.reasoning) ?? 0}` : ''}` : ''} · stop=${safeFinishReason(reply.stop)}`);
     if (signal && signal.aborted) { stop = 'aborted'; break; }
     if (reply.stop === 'refusal') {
       report({ status: 'error', lastError: '模型拒绝了本轮请求。' });
@@ -392,12 +446,12 @@ export async function runWaking(S, p0, { kind }) {
       if (!calls.length) { ended = 'reply'; break; } // 模型直接回复了，没有调用工具
       transcript.push({ role: 'assistant', raw: reply.raw });
     } else {
-      const parsed = parseToolJson(replyText);
+      const parsed = parseToolJson(replyText, { actionTools: cfg.actionTools, premise: p0.premise });
       calls = parsed.calls;
       unparsable = !parsed.ok;
       if (unparsable) {
         report({ status: 'error', lastError: '模型回复没有可解析的行动 JSON。' });
-        log.warn(`回复里没有可解析的 JSON（${parsed.error}）。开头：${replyText.slice(0, 80).replace(/\s+/g, ' ')}`);
+        log.warn('回复里没有可解析的行动 JSON（正文已省略）');
       }
       formatErrors = unparsable ? formatErrors + 1 : 0;
       if (formatErrors >= 2) { ended = 'format'; break; } // 连续两轮格式错误
@@ -458,7 +512,7 @@ export async function runWaking(S, p0, { kind }) {
   try {
     deps.onWaking?.(agentId, rec);
   } catch (e) {
-    log.warn(`onWaking 出错：${e && e.message}`);
+    log.warn('onWaking 出错（正文已省略）');
   }
   return { rec, acted, stop };
 }

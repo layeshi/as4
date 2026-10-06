@@ -18,9 +18,21 @@ import {
 import { previewRules, citySet, groupSet, placeSet } from '../rules.js';
 import { emit } from '../core.js';
 import { renderRules, renderProcedure } from '../../rules/render.js';
+import { usesLawVM2, lawDiagnostics, capacityCheck } from '../law-execution.js';
 
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const given = (v) => v !== undefined && v !== null;
+
+function admit(w, rules, procedure = null, replacePath = null, ballotSpec = null) {
+  if (!usesLawVM2(w)) return;
+  const proof = lawDiagnostics(w, rules, procedure);
+  const prospective = [{ path: 'candidate', rules, procedure }];
+  if (ballotSpec) prospective.push({ path: 'candidate.ballot', rules: [], procedure: { ballot: ballotSpec } });
+  const aggregate = capacityCheck(w, w.ruleExecution.capacity, prospective, replacePath);
+  proof.issues.push(...aggregate.issues);
+  proof.ok &&= aggregate.ok;
+  if (!proof.ok) ruleInvalid(proof.issues.map(i => ({ ...i, zh: '无法证明此规则在支持规模内满足计算预算。', en: 'The rule cannot be certified within the supported computation capacity.', hint: { zh: '先用 draft 查看成本诊断。', en: 'Use draft to inspect the cost diagnostics first.' } })));
+}
 
 /** 校验失败 → 动作级错误 rule_invalid（hint 说明哪一条规则、哪个字段、为什么） */
 export function ruleInvalid(issues) {
@@ -62,6 +74,7 @@ const propose = {
     const cls = classify(rules, procedure);
     const spec = procSpec(w, cls);
     if (!spec || spec.none) fail('not_allowed', { zh: '这一类已不再立法，只能重订。', en: 'This class no longer makes laws; only a refounding can change that.' });
+    admit(w, rules, procedure, null, spec);
     const rng = rngCopy(w); // 校验用副本：失败的动作不推进真正的随机数；成功时 apply 一并提交
     if (!mayPropose(w, spec, a, rng)) fail('not_eligible');
     const open = openCityProposals(w);
@@ -149,18 +162,23 @@ const draft = {
       const v = validateRules(plan.rules, { scope: { ...plan.scope, premise: w.premise || 0 }, lookup });
       if (!v.ok) data = { ok: false, errors: v.issues.map(pick), reading: null, preview: [] };
       else {
+        const budget = usesLawVM2(w) ? lawDiagnostics(w, v.rules) : null;
         const scopeOpts = plan.scope.kind === 'group' ? { scope: { premise: w.premise || 0, kind: 'group', id: plan.scope.id } } : {};
         data = {
-          ok: true,
+          ok: budget ? budget.ok : true,
+          ...(budget ? { staticOk: true, budget } : {}),
           errors: [],
           reading: { rules: renderRules(v.rules, lang, scopeOpts) },
-          preview: previewRules(w, tempSet(w, plan.scope, v.rules), { rng: rngCopy(w) }),
+          preview: budget && !budget.ok ? [] : previewRules(w, tempSet(w, plan.scope, v.rules), { rng: rngCopy(w) }),
         };
       }
     } else {
       const v = validateProcedure(plan.procedure, { lookup });
       if (!v.ok) data = { ok: false, errors: v.issues.map(pick), reading: null, preview: [] };
-      else data = { ok: true, errors: [], reading: { procedure: renderProcedure(v.procedure, lang) }, preview: [] };
+      else {
+        const budget = usesLawVM2(w) ? lawDiagnostics(w, [], v.procedure) : null;
+        data = { ok: budget ? budget.ok : true, ...(budget ? { staticOk: true, budget } : {}), errors: [], reading: { procedure: renderProcedure(v.procedure, lang) }, preview: [] };
+      }
     }
     emit(w, 'draft', { vis: 'internal', agent: a.id, place: a.place, data: { ok: data.ok, scope: plan.scope.kind === 'city' ? 'city' : `${plan.scope.kind}:${plan.scope.id}` } });
     return data;
@@ -183,6 +201,7 @@ const refound = {
       if (!v.ok) ruleInvalid(v.issues);
       procedure = v.procedure;
     }
+    admit(w, [], procedure);
     const today = clockDay(w);
     if (w.refoundCooldownUntil !== null && today < w.refoundCooldownUntil) {
       fail('cooldown', { zh: `重订之后的冷却期，到第 ${w.refoundCooldownUntil} 日。`, en: `Refounding is on cooldown until day ${w.refoundCooldownUntil}.` }, { untilDay: w.refoundCooldownUntil });
@@ -256,6 +275,7 @@ const rules = {
       } else {
         const v = validateRules(args.rules, { scope: { premise: w.premise || 0, kind: 'group', id: g.id }, lookup });
         if (!v.ok) ruleInvalid(v.issues);
+        admit(w, v.rules, null, g.procedure === 'steward' ? g.id : null);
         kind = 'bylaws';
         rs = v.rules;
       }
@@ -281,6 +301,7 @@ const rules = {
     }
     const v = validateRules(args.rules, { scope: { premise: w.premise || 0, kind: 'place', id: place.id }, lookup });
     if (!v.ok) ruleInvalid(v.issues);
+    admit(w, v.rules, null, direct ? place.id : null);
     if (!direct && openGroupProposals(w, g.id).length >= LIMITS.openProposalsPerGroup) fail('limit_reached');
     return { target: 'place', place, g, kind: 'place_rules', rules: v.rules, procedure: null, direct, title, text, cost };
   },

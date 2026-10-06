@@ -41,13 +41,14 @@ description: 将 as4（后人纪）GitHub 最新代码部署到现有生产服�
 4. 检查归档可解包、必需文件及摘要；在服务器受限临时目录解出副本。确保快照 commandN 对应完整日志末尾，日志连续且没有未说明的尾部；不能只比较文件存在性。
 5. 用目标版本在副本上运行回放，依据实际运行配置应用时间/天象等确定性参数。`DATA_DIR=<副本根> node src/tools/replay.js <WORLD_ID>` 仅是入口示例；必须把有效配置安全传入，不能丢掉配置使用默认值，也不能直接 shell source 未验证的 systemd env 文件。要求返回完整回放 OK，不能用 `--to` 的部分回放替代。工具可能输出敏感差异，只在受限日志保留并向用户脱敏汇报。
 6. 在同一隔离副本上调用目标版本 Runtime.open → 读取摘要 → Runtime.close（不 rt.start、不 createApp）。核对恢复后 stateHash 与最终快照一致，没有新世界、倒退或丢居民。对存在的账户/运行器/预算存储做离线加载验证，不触发 activate/模型调用；校验加密文件可解密、绑定有效且 enabled/paused 和用量保留。只报告数量/布尔值，不输出凭据。若候选版本没有安全离线入口，编写隔离验证 harness，不能改用生产启动探路。
-7. 通过后保证新 release 属主和可读权限正确、服务工作目录仍通过 current 且 DATA_DIR 指向原持久目录。在同一文件系统创建临时链接后用原子 rename 切换 current；不要把新代码复制覆盖旧 release。
+7. 切换前以实际服务 UID/GID/附加组验证持久目录、快照、日志和存在的运行器加密文件的访问权限与属主；不能以 root 能读代替服务身份可读。目标版本带有 `src/tools/deploy-preflight.js` 时，按 [只读预检说明](../../../docs/DEPLOY-PREFLIGHT.md) 执行，并传入固定 SHA、版本及覆盖发布文件的 SHA-256 清单。非零退出即进入恢复分支，禁止切换或用生产启动探路。没有工具的旧目标也必须完成等效权限检查。仅检查服务直接读取的配置；root-only 的 systemd EnvironmentFiles 由 systemd 读取，不错误要求 houren 用户直接访问。
+   若存在法律执行版本迁移，还须确认目标代码完整回放支持该版本，不能仅凭 package.json 或预检修订号判定兼容。通过后保证新 release 属主和可读权限正确、服务工作目录仍通过 current 且 DATA_DIR 指向原持久目录。在同一文件系统创建临时链接后用原子 rename 切换 current；不要把新代码复制覆盖旧 release。
 8. 启动 houren.service。正常更新不改 unit/nginx，无需 daemon-reload 或重启 nginx/Xray。不恢复备份覆盖现有数据，不执行世界初始化。
 
 ## 4. 上线验收
 
 - 确认 current 指向目标 release、MainPID 的实际启动目录/命令正确，服务 active，无重启循环，nginx/Xray 与之前状态一致。
-- 从本机回环和真实公网入口请求首页、引用的 JS/CSS、`/api/public/state`、`/api/account/me`（以目标路由为准）。检查响应结构与业务内容，不仅 HTTP 200；未登录状态不等于账号丢失。
+- 从本机回环和真实公网入口请求首页、引用的 JS/CSS、`/api/public/state`、`/api/account`（以目标路由为准）。检查响应结构与业务内容，不仅 HTTP 200；未登录状态不等于账号丢失。
 - `/api/public/stream` 收到 `: connected`；设置有界超时，收到数据后超时退出不是 SSE 失败。
 - 确认相同世界和纪元，tick/commandN/事件序号不倒退；已恢复后的世界可自然变化，居民死亡、token 用量增加不能简单要求上线后逐字节相等。用命令日志解释变化，核实历史前缀保留、账户仍在、运行器配置与启用状态未被启动代码删除。服务运行中多文件副本不能用来断言严格一致性。
 - 看启动恢复日志及自然运行器活动；HTTP/SSE 正常不代表模型成功。供应商余额、限流、授权失败单独报告，不擅自换 key/模型或重试真实付费调用。不为测试推进世界或修改法律。

@@ -9,6 +9,7 @@
 import { existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { earthDay } from '../shells/budget.js';
 import { validTimeZone } from '../shells/config.js';
+import { safeCallMetadata, cleanPersistedMetadata, hasDiagnosticMetadata, cleanDiagnostics, addCallDiagnostics } from '../telemetry-safety.js';
 
 export const DEFAULT_USAGE_TZ = 'Asia/Shanghai';
 export const USAGE_DAYS = 14; // 保留与展示的日历日数
@@ -21,7 +22,7 @@ const validTime = (v) => typeof v === 'string' && !Number.isNaN(Date.parse(v));
 
 // 文件里读回来的东西不可信（手工改过、版本不同）：每一项都规整成合法的形状，不合法的丢掉。
 // 这很重要：GET /api/owner 带着用量，一条坏记录不能让整个幕后页加载失败。
-const cleanBucket = (b) => ({ calls: count(b && b.calls) ?? 0, failed: count(b && b.failed) ?? 0, unreported: count(b && b.unreported) ?? 0, input: count(b && b.input) ?? 0, output: count(b && b.output) ?? 0 });
+const cleanBucket = (b) => ({ calls: count(b && b.calls) ?? 0, failed: count(b && b.failed) ?? 0, unreported: count(b && b.unreported) ?? 0, input: count(b && b.input) ?? 0, output: count(b && b.output) ?? 0, ...(cleanDiagnostics(b?.diagnostics) ? { diagnostics: cleanDiagnostics(b.diagnostics) } : {}) });
 /** 第二前提的醒来标记 { tick, kind, turn }（SPEC-P2 §7.7）：合法才留；没有（旧记录、其他世界）就没有这一项 */
 function cleanWaking(w) {
   if (!w || typeof w !== 'object' || !Number.isInteger(w.tick) || w.tick < 0 || !['main', 'wake'].includes(w.kind) || !Number.isInteger(w.turn) || w.turn < 1) return null;
@@ -33,11 +34,11 @@ function cleanCall(c) {
   const waking = cleanWaking(c.waking);
   return {
     at: c.at, ok, ...(ok ? { reported: c.reported !== false } : {}), input: count(c.input) ?? 0, output: count(c.output) ?? 0,
-    ms: Number.isFinite(c.ms) ? Math.round(c.ms) : null, model: String(c.model ?? '').slice(0, 100), ...(Number.isInteger(c.status) && c.status > 0 ? { status: c.status } : {}),
-    ...(waking ? { waking } : {}),
+    ms: Number.isFinite(c.ms) ? Math.round(c.ms) : null, model: String(c.model ?? '').slice(0, 100), ...(Number.isInteger(c.status) && c.status >= 100 && c.status <= 599 ? { status: c.status } : {}),
+    ...(waking ? { waking } : {}), ...cleanPersistedMetadata(c),
   };
 }
-const withTokens = (b) => ({ ...b, tokens: b.input + b.output });
+const withTokens = (b) => ({ ...b, ...(b.diagnostics ? { diagnostics: cleanDiagnostics(b.diagnostics) } : {}), tokens: b.input + b.output });
 
 /** 'YYYY-MM-DD' 往前数 n 天（纯日历运算，与时区无关，不受夏令时影响） */
 function dayBefore(key, n) {
@@ -109,7 +110,9 @@ export class UsageStore {
     const today = earthDay(at, this.timezone).key;
     const a = (this.agents[id] ||= { since: new Date(at).toISOString(), total: blank(), days: Object.create(null), recent: [] });
     const day = (a.days[today] ||= blank());
+    const enriched = hasDiagnosticMetadata(meta);
     for (const b of [a.total, day]) {
+      addCallDiagnostics(b, meta, !!used);
       b.calls += 1;
       if (!ok) b.failed += 1;
       else if (!used) b.unreported += 1;
@@ -118,12 +121,12 @@ export class UsageStore {
         b.output += used.output;
       }
     }
-    const status = !ok && Number.isInteger(meta.error && meta.error.status) ? meta.error.status : null;
+    const status = !ok && Number.isInteger(meta.error?.status) && meta.error.status >= 100 && meta.error.status <= 599 ? meta.error.status : null;
     const waking = cleanWaking(meta.waking);
     a.recent.push({
       at: new Date(at).toISOString(), ok, ...(ok ? { reported: !!used } : {}), input: used ? used.input : 0, output: used ? used.output : 0,
       ms: Number.isFinite(meta.ms) ? Math.round(meta.ms) : null, model: String(model || '').slice(0, 100), ...(status ? { status } : {}),
-      ...(waking ? { waking } : {}),
+      ...(waking ? { waking } : {}), ...(enriched ? safeCallMetadata(meta, !!used) : {}),
     });
     if (a.recent.length > USAGE_RECENT) a.recent.splice(0, a.recent.length - USAGE_RECENT);
     const keep = new Set(Array.from({ length: USAGE_DAYS }, (_, i) => dayBefore(today, i)));

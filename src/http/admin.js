@@ -5,6 +5,8 @@ import { premised, agentic } from '../e2/facade.js';
 import { bodyList } from '../e2/engine/shells.js';
 import { upkeepOf, weightOf } from '../e2/engine/lifecycle.js';
 import { randomBytes } from 'node:crypto';
+import { capacityCheck, usesLawVM2 } from '../e2/engine/law-execution.js';
+import { DEFAULT_CAPACITY } from '../e2/rules/plan.js';
 import { accountFor, mutationGate } from './accounts.js';
 import { AccountError } from '../accounts/store.js';
 import { readJson, sendError, sendEngineError, sendJson, sha256hex, timingEqual } from './util.js';
@@ -208,6 +210,13 @@ async function resetOwnerCredential(req, res, ctx, url, params) {
 }
 
 export const adminRoutes = [
+  ['GET', '/api/admin/law-execution', async (req, res, ctx) => {
+    if (!authOperator(ctx, req, res)) return;
+    if (!agentic(ctx.rt.w)) return sendError(res, 'zh', 'not_found');
+    const capacity = ctx.rt.w.ruleExecution?.capacity || DEFAULT_CAPACITY;
+    sendJson(res, 200, { enabled: usesLawVM2(ctx.rt.w), capacity, preflight: capacityCheck(ctx.rt.w, capacity), protection: ctx.rt.w.ruleExecution?.protection || null });
+  }],
+  ['POST', '/api/admin/law-execution', op('law_execution')],
   ['POST', /^\/api\/admin\/agents\/([^/]+)\/owner-key$/, resetOwnerCredential],
   ['POST', '/api/admin/backstage', op('backstage')],
   ['POST', '/api/admin/rebody', op('rebody')],

@@ -1,0 +1,167 @@
+{
+  "capacity": {
+    "maxAgents": 512,
+    "maxSouls": 512,
+    "maxGroups": 512,
+    "maxPlaces": 512,
+    "maxRoads": 512,
+    "maxProjects": 512,
+    "maxOffers": 1024,
+    "maxPacts": 512,
+    "maxBodies": 512,
+    "maxWeather": 512,
+    "maxActionsPerTick": 4,
+    "maxRules": 1024,
+    "maxRuleFuel": 200000,
+    "maxCommandFuel": 2000000,
+    "maxIntents": 8192,
+    "maxCommandIntents": 32768,
+    "maxWorldBytes": 67108864
+  },
+  "certificate": {
+    "version": 2,
+    "ruleHash": "a185146b07e774d40d436e70f673f17515d3a0b5a3518d240334ade54ce96ad1",
+    "ok": true,
+    "path": "rule",
+    "fuel": 14353,
+    "intents": 512,
+    "limit": 200000,
+    "bottlenecks": [
+      {
+        "path": "rule.do[0].in",
+        "firstEvaluationFuel": 4610,
+        "supportedIterations": 512
+      },
+      {
+        "path": "rule.do[0].do[0].from",
+        "firstEvaluationFuel": 1,
+        "repeatedEvaluationFuel": 1
+      },
+      {
+        "path": "rule.do[0].do[0].to",
+        "firstEvaluationFuel": 1,
+        "repeatedEvaluationFuel": 1
+      },
+      {
+        "path": "rule.do[0].do[0].energy",
+        "firstEvaluationFuel": 5131,
+        "repeatedEvaluationFuel": 1
+      }
+    ],
+    "code": null
+  },
+  "synthetic": [
+    {
+      "residents": 0,
+      "activated": true,
+      "settled": true,
+      "paused": false,
+      "ruleErrors": 0,
+      "l7Transfers": 0,
+      "ms": 4.17,
+      "worldBytes": 69029,
+      "ledgerMismatches": 0
+    },
+    {
+      "residents": 1,
+      "activated": true,
+      "settled": true,
+      "paused": false,
+      "ruleErrors": 0,
+      "l7Transfers": 1,
+      "ms": 2.43,
+      "worldBytes": 70297,
+      "ledgerMismatches": 0
+    },
+    {
+      "residents": 14,
+      "activated": true,
+      "settled": true,
+      "paused": false,
+      "ruleErrors": 0,
+      "l7Transfers": 14,
+      "ms": 2.17,
+      "worldBytes": 85863,
+      "ledgerMismatches": 0
+    },
+    {
+      "residents": 32,
+      "activated": true,
+      "settled": true,
+      "paused": false,
+      "ruleErrors": 0,
+      "l7Transfers": 32,
+      "ms": 3.07,
+      "worldBytes": 107455,
+      "ledgerMismatches": 0
+    },
+    {
+      "residents": 128,
+      "activated": true,
+      "settled": true,
+      "paused": false,
+      "ruleErrors": 0,
+      "l7Transfers": 128,
+      "ms": 6.32,
+      "worldBytes": 222754,
+      "ledgerMismatches": 0
+    },
+    {
+      "residents": 512,
+      "activated": true,
+      "settled": true,
+      "paused": false,
+      "ruleErrors": 0,
+      "l7Transfers": 0,
+      "ms": 15.5,
+      "worldBytes": 614177,
+      "ledgerMismatches": 0
+    }
+  ],
+  "legacy": [
+    {
+      "world": "baihua",
+      "commands": 1267,
+      "ok": true,
+      "hash": "2622b7f59d4e50a81c709f4bfd3620c4cb502c392a69615ed4a5c1d3cc2b4022"
+    },
+    {
+      "world": "p1-20261003",
+      "commands": 1189,
+      "ok": true,
+      "hash": "aec73962dc215aef0879c4bde71b6815c6dd81186bcd53d8bc42d873d8560e63"
+    },
+    {
+      "world": "p2-20261006",
+      "commands": 255,
+      "ok": true,
+      "hash": "26ffad245786fb4aad6bf98b171f13443f3d4a0b2b56e0aeaf8734dee1d14409"
+    }
+  ],
+  "isolatedAudit": {
+    "cutCommand": 420,
+    "migrationCommand": 421,
+    "migrated": true,
+    "tick": 24,
+    "ruleErrors": 0,
+    "l7Transfers": 14,
+    "l7Unchanged": true,
+    "paused": false,
+    "awake": 14,
+    "ledgerMismatches": 0,
+    "assumption": "读取固定审计副本，在内存启用VM2后无居民行动推进至tick24，非生产未来事实"
+  },
+  "typedSchemaChars": {
+    "zh": 55168,
+    "en": 56350
+  },
+  "baseCommit": "8098f32bf213dd9eb2b47913d5aa81aff61d61e2",
+  "suite": {
+    "tests": 1196,
+    "pass": 1195,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 1
+  },
+  "syntaxFiles": 300
+}

@@ -16,6 +16,7 @@ import { source } from './ledger.js';
 import { emit, bad, creditEnergy, pushInbox } from './core.js';
 import { forceWeather } from './weather.js';
 import { resetOwnerKey } from '../../owner-key.js';
+import { usesLawVM2, migrateLawExecution, capacityCheck } from './law-execution.js';
 
 const isInt = (v) => typeof v === 'number' && Number.isSafeInteger(v);
 
@@ -25,6 +26,11 @@ export const EXTRA_ADMIN_OPS = {};
 export function adminCommand(w, p) {
   const args = p.args && typeof p.args === 'object' ? p.args : {};
   switch (p.op) {
+    case 'law_execution': {
+      const r = migrateLawExecution(w, args);
+      if (r.ok) emit(w, 'admin', { data: { op: 'law_execution', version: 2, capacity: r.capacity } });
+      return r;
+    }
     case 'reset_owner_key':
       return resetOwnerKey(w, args, { emit, bad });
     case 'pause':
@@ -35,6 +41,7 @@ export function adminCommand(w, p) {
       emit(w, 'admin', { data: { op: 'pause' } });
       return { ok: true, paused: true };
     case 'resume':
+      if (usesLawVM2(w) && (w.ruleExecution.protection || !capacityCheck(w).ok)) return bad('paused', { reason: 'law_execution_capacity', diagnostics: capacityCheck(w).issues });
       if (w.experimentControl) w.experimentControl.active = false;
       w.paused = false;
       emit(w, 'admin', { data: { op: 'resume' } });

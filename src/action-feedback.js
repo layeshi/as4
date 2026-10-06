@@ -59,10 +59,11 @@ export function actionFeedback(r, lang = 'zh', { premise = 0, act } = {}) {
     path: `rules[${p.rule}]`, code: p.error, message: p.detail,
   }));
   const staticOk = data.staticOk ?? data.ok;
+  const costErrors = data.budget?.ok === false ? (data.budget.issues || []).map(i => ({ path: i.path, code: i.code, message: lang === 'en' ? 'The cost proof did not fit the supported capacity.' : '成本证明未满足平台支持的计算容量。' })) : [];
   const note = premise >= 2 && data.reading ? costNote(act, lang) : null;
   return { ...r, data: { ...data, staticOk, previewOk: staticOk && runtimeErrors.length === 0,
-    ok: staticOk && runtimeErrors.length === 0,
-    errors: [...(data.errors || []), ...runtimeErrors],
+    ok: staticOk && runtimeErrors.length === 0 && costErrors.length === 0,
+    errors: [...(data.errors || []), ...runtimeErrors, ...costErrors],
     ...(runtimeErrors.length ? { diagnostic: lang === 'en'
       ? 'Preview failed. Operations in one rule read the state before that rule: set is not visible to later expressions in the same do. Split dependent calculations into separate rules or inline expressions.'
       : '试算失败。同一条规则的所有表达式读取该规则执行前的状态：同一 do 中前面的 set 对后面的表达式不可见。请拆成独立规则或直接展开表达式。' } : {}),
