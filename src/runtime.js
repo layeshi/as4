@@ -81,6 +81,11 @@ export class Runtime {
       logger.log?.(`已从崩溃中恢复：回放了 ${tail.length} 条命令`);
       rt.snapshot();
     }
+    // Replay historical commands with the feature disabled, then log the migration.
+    if (w.physics === 2 && w.premise === 2 && !w.prayers?.enabled) {
+      rt.exec('prayer_enable');
+      rt.snapshot();
+    }
     if (created && onCreate) onCreate(rt); // 例如创建沙盘脑（走命令日志，回放才能重建）
     return rt;
   }

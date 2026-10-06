@@ -848,3 +848,17 @@ ul.reading { list-style: none; padding-left: 0; }
 @media (max-width: 540px) { .account-toolbar { align-items: stretch; flex-direction: column; } }
 .account-search .btn { flex-shrink: 0; white-space: nowrap; }
 .account-search input { padding: .55rem .65rem; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-2); color: var(--text); font: inherit; }
+/* Public prayers, shared point balances and independent invention review. */
+.prayer-panel { margin-top: 1.25rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.prayer-panel .card { margin: .8rem 0; }
+.prayer-card h4, .invention-card h4 { margin: 0 0 .4rem; }
+.prayer-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.prayer-balance { padding: .65rem 0; }
+.prayer-balance p { margin: .3rem 0; }
+.prayer-history { margin: .75rem 0; }
+.prayer-history > summary { cursor: pointer; font-weight: 600; }
+.prayer-history > ol, .prayer-history > ul { padding-left: 1.25rem; }
+.prayer-history li, .prayer-audit li { margin: .6rem 0; }
+.prayer-response { border-left: 3px solid var(--line); padding-left: .8rem; }
+.prayer-cost { font-weight: 600; }
+.prayer-reply, .invention-review { margin-top: .75rem; }

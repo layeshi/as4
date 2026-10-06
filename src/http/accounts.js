@@ -1,4 +1,5 @@
 import { AccountError, fail, publicUser } from '../accounts/store.js';
+import { prayerView } from '../e2/engine/prayers.js';
 import { clientIp, parseCookies, readJson, sendJson, SlidingLimiter, timingEqual } from './util.js';
 
 const COOKIE = 'houren_session';
@@ -24,14 +25,14 @@ export function mutationGate(req) {
   if (req.headers['sec-fetch-site'] === 'cross-site') fail(403, 'csrf', '不允许跨站请求。');
   if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) fail(415, 'content_type', '请使用 JSON 请求。');
 }
-const wrap = (handler, { admin = false, signedIn = false } = {}) => async (req, res, ctx, url, params) => {
+export const accountWrap = (handler, { admin = false, signedIn = false } = {}) => async (req, res, ctx, url, params) => {
   try {
     if (req.method !== 'GET') mutationGate(req);
     const actor = signedIn || admin ? requireUser(ctx, req, admin) : null;
     const authorize = () => {
       if (!actor) return;
       const current = requireUser(ctx, req, admin);
-      if (current.revision !== actor.revision) fail(401, 'unauthorized', '账号已更新，请重新登录。');
+      if (current.id !== actor.id || current.revision !== actor.revision) fail(401, 'unauthorized', '账号已更新，请重新登录。');
     };
     let body = {};
     if (req.method !== 'GET') {
@@ -46,6 +47,7 @@ const wrap = (handler, { admin = false, signedIn = false } = {}) => async (req, 
     sendJson(res, e.status, { error: { code: e.code, message: e.message } });
   }
 };
+const wrap = accountWrap;
 export function accountLimits() {
   return { ip: new SlidingLimiter(30, 15 * 60000), username: new SlidingLimiter(15, 15 * 60000), register: new SlidingLimiter(5, 60 * 60000), claim: new SlidingLimiter(20, 15 * 60000) };
 }
@@ -59,7 +61,8 @@ export function linkedAgents(ctx, user) {
   for (const link of ctx.accounts.linksOf(user.id, w.id)) {
     const a = Object.prototype.hasOwnProperty.call(w.agents, link.agentId) ? w.agents[link.agentId] : null;
     if (!a || !a.owner || a.tokenHash !== link.token) { stale.push(link.agentId); continue; }
-    rows.push({ agentId: a.id, name: a.name, status: a.status, runnerStatus: ctx.runners.view(a.id).status, linkedAt: link.at, usage: ctx.runners.usageView(a.id) });
+    const prayers = prayerView(w, a.id);
+    rows.push({ agentId: a.id, name: a.name, status: a.status, runnerStatus: ctx.runners.view(a.id).status, linkedAt: link.at, usage: ctx.runners.usageView(a.id), ...(prayers.enabled ? { prayerPoints: prayers.accounts[0].balance, prayers } : {}) });
   }
   if (stale.length) {
     try { ctx.accounts.unlinkAgents(user.id, w.id, stale); } catch { /* tidying only; the next listing tries again */ }
@@ -107,7 +110,8 @@ export const accountRoutes = [
     if (body.password !== undefined) setSession(req, res, ctx, user.id);
     sendJson(res, 200, { user });
   }, { signedIn: true })],
-  // Residents linked to the signed-in account: read-only. The owner key stays the only credential that controls a resident.
+  // Linked-resident listing is read-only. Accounts may send scoped prayer replies;
+  // ordinary resident controls still require the owner key.
   ['GET', '/api/account/agents', wrap(({ res, ctx, actor }) => {
     sendJson(res, 200, { agents: linkedAgents(ctx, actor) });
   }, { signedIn: true })],

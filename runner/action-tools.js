@@ -13,7 +13,7 @@ const expression = { type: ['string', 'integer', 'boolean', 'null'], maxLength: 
 const present = name => ({ required: [name], properties: { [name]: { not: { type: 'null' } } } });
 const exactlyOne = (names, nonNull = true) => ({ oneOf: names.map(name => nonNull ? present(name) : { required: [name] }) });
 const nullable = schema => schema.type ? { ...schema, type: [...new Set([...(Array.isArray(schema.type) ? schema.type : [schema.type]), 'null'])], ...(schema.enum ? { enum: [...schema.enum, null] } : {}) } : { anyOf: [schema, { type: 'null' }] };
-const table = actionTable(2);
+const table = actionTable(2, true);
 
 function operationSchema(nested = false) {
   return { anyOf: Object.keys(OP_FIELDS).filter(name => !nested || name !== 'each').map(name => ({ $ref: `#/$defs/op_${name}` })) };
@@ -56,6 +56,7 @@ function fieldSchema(type, name, kind) {
     if (['found', 'rules'].includes(type)) return { type: 'string', enum: ['steward', 'members'] };
     return type === 'refound' ? { anyOf: [{ allOf: [{ $ref: '#/$defs/procedure' }, { required: ['ordinary', 'constitutional'] }] }, { type: 'string', enum: ['humans'] }] } : { $ref: '#/$defs/procedure' };
   }
+  if (type === 'invent' && name === 'ref') return obj({ kind: { type: 'string', enum: ['doc', 'project'] }, id: str() }, ['kind', 'id']);
   if (name === 'successor') return { $ref: '#/$defs/successor' };
   if (name === 'give' || name === 'want') return obj({ energy: nullable(integer()), coins: nullable(integer()) });
   if (name === 'heirs') return list(obj({ to: str(), share: integer(1, 1000000) }, ['to', 'share']), LIMITS.heirs);
@@ -71,10 +72,10 @@ function fieldSchema(type, name, kind) {
   if (name === 'build') return { type: 'string', enum: ['site', 'module', 'road'] };
   if (name === 'module') return { type: 'string', enum: [...MODULE_TYPES] };
   const lengths = { name: LIMITS.name, soul: LIMITS.soul, bio: LIMITS.bio, purpose: LIMITS.purpose,
-    body: LIMITS.docBody, title: type === 'write' ? LIMITS.docTitle : LIMITS.proposalTitle,
+    body: LIMITS.docBody, title: type === 'invent' ? 100 : type === 'write' ? LIMITS.docTitle : LIMITS.proposalTitle,
     word: LIMITS.word, meaning: LIMITS.meaning, manifesto: LIMITS.manifesto, note: LIMITS.note,
     reason: LIMITS.reason, lastWords: LIMITS.lastWords, description: LIMITS.description, lang: LIMITS.lang };
-  const textLimits = { say: LIMITS.speech, whisper: LIMITS.speech, broadcast: LIMITS.speech, diary: LIMITS.diary,
+  const textLimits = { pray: 600, invent: 600, say: LIMITS.speech, whisper: LIMITS.speech, broadcast: LIMITS.speech, diary: LIMITS.diary,
     remember: P.memoryCpMax, inscribe: LIMITS.inscription, epitaph: LIMITS.epitaph, propose: LIMITS.proposalText,
     refound: LIMITS.refoundText, rules: LIMITS.proposalText };
   return str(name === 'text' ? textLimits[type] : lengths[name], ['bio', 'purpose', 'lastWords', 'note', 'reason'].includes(name) ? 0 : 1);
@@ -159,10 +160,11 @@ function compactVariants(discriminator, entries) {
 
 const readAliases = { read_document: 'doc', read_law: 'law', read_inscription: 'inscription', read_agent: 'agent' };
 export const thoughtSchema = obj({ thought: str(LIMITS.thought) }, ['thought']);
-export function typedActionTools(lang = 'zh') {
+export function typedActionTools(lang = 'zh', { prayers = false } = {}) {
+  const activeTable = actionTable(2, prayers);
   const code = lang === 'en' ? 'en' : 'zh';
   return [
-    ...table.ORDER.map(name => ({ name, description: `${table.ACTIONS[name].verb[code]} (${table.ACTIONS[name].params}). ${table.ACTIONS[name].where?.[code] || ''}`.trim(), schema: actionSchema(name, { compact: true }) })),
+    ...activeTable.ORDER.map(name => ({ name, description: `${table.ACTIONS[name].verb[code]} (${table.ACTIONS[name].params}). ${table.ACTIONS[name].where?.[code] || ''}`.trim(), schema: actionSchema(name, { compact: true }) })),
     ...Object.entries(readAliases).map(([name, field]) => ({ name, description: `${table.ACTIONS.read.verb[code]} (${field}). ${table.ACTIONS.read.where[code]}`, schema: obj({ [field]: str() }, [field]) })),
     { name: 'think', description: code === 'en' ? 'Keep a private thought without spending action quota. Never public speech.' : '记录私有独白，不占行动次数，不是公开发言。', schema: thoughtSchema },
     { name: 'done', description: code === 'en' ? 'End this waking. No action or energy is spent.' : '结束这次醒来，不占行动次数、不花能量。', schema: obj({}) },

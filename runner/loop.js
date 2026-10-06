@@ -29,7 +29,7 @@ const HISTORY_KEEP = 2; // 摘要的条数：historyRounds 缺省时
  * 原生工具调用的两个工具（附录 A.3，中立定义 [{ name, description, schema }]，各家的提供者转成自己的格式）：
  * look 展开概要里的一段，act 行动。描述按居民的语言给。
  */
-export function toolDefs(lang, { actionTools, premise = 0 } = {}) {
+export function toolDefs(lang, { actionTools, premise = 0, prayers = false } = {}) {
   const t = D2[lang === 'en' ? 'en' : 'zh'].tools;
   const legacy = [
     {
@@ -58,7 +58,7 @@ export function toolDefs(lang, { actionTools, premise = 0 } = {}) {
     },
   ];
   if (actionTools !== 'typed' || premise < 2) return legacy;
-  return [legacy[0], ...typedActionTools(lang)].map(t => ({ ...t, strict: false }));
+  return [legacy[0], ...typedActionTools(lang, { prayers })].map(t => ({ ...t, strict: false }));
 }
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -69,7 +69,7 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
  * 同一个对象里有几种时，按 look、act、done 的顺序处理。返回 { ok: true, calls } 或 { ok: false, calls: [], error }；
  * calls 是中立的 [{ id, name, args }]（id 用 j1、j2……，done 的 name 是 'done'）。参数不是对象的调用 args 为 null，运行器给它参数错误的结果。
  */
-export function parseToolJson(text, { actionTools, premise = 0 } = {}) {
+export function parseToolJson(text, { actionTools, premise = 0, prayers = false } = {}) {
   const parsed = parseModelJson(text);
   if (!parsed.ok) return { ok: false, calls: [], error: parsed.error };
   const v = parsed.value;
@@ -80,7 +80,7 @@ export function parseToolJson(text, { actionTools, premise = 0 } = {}) {
   }
   if (Object.hasOwn(v, 'act')) add('act', Array.isArray(v.act) ? { actions: v.act } : isObj(v.act) ? v.act : null);
   if (actionTools === 'typed' && premise >= 2) {
-    const names = new Set(typedActionTools('en').map(t => t.name));
+    const names = new Set(typedActionTools('en', { prayers }).map(t => t.name));
     for (const [name, args] of Object.entries(v)) if (name !== 'done' && names.has(name)) add(name, args);
   }
   if (v.done === true) add('done', {});
@@ -162,13 +162,13 @@ export async function runWaking(S, p0, { kind }) {
   const mode = wantsNative && typeof provider.step === 'function' ? 'native' : 'json';
 
   // 系统提示整轮不变，便于提供者缓存；换了语言、灵魂、习得、设定版本或调用方式时重建
-  const key = JSON.stringify([p0.lang, p0.you.soul, p0.you.trained || [], p0.premise, mode, ...(typed ? ['typed'] : [])]);
+  const key = JSON.stringify([p0.lang, p0.you.soul, p0.you.trained || [], p0.premise, mode, ...(typed ? ['typed'] : []), ...(p0.you?.prayers?.enabled ? ['prayers'] : [])]);
   if (S.system === null || key !== S.systemKey) {
     S.system = buildSystemPrompt({ ...promptParams(p0), toolMode: mode, ...(typed ? { actionTools: 'typed' } : {}) });
     S.systemKey = key;
   }
   const system = S.system;
-  const tools = toolDefs(lang, { actionTools: cfg.actionTools, premise: p0.premise });
+  const tools = toolDefs(lang, { actionTools: cfg.actionTools, premise: p0.premise, prayers: !!p0.you?.prayers?.enabled });
   if (S.looks.tick !== tick) S.looks = { tick, n: 0 }; // 看的次数按刻归零，醒来与被叫醒合计
 
   const brief = kind === 'main'
@@ -428,7 +428,7 @@ export async function runWaking(S, p0, { kind }) {
     }
     const replyText = String(reply.text || '');
     const replyChars = replyText.length + (mode === 'native' ? JSON.stringify(reply.calls || []).length : 0);
-    const toolCallCount = mode === 'native' ? (Array.isArray(reply.calls) ? reply.calls.length : 0) : parseToolJson(replyText, { actionTools: cfg.actionTools, premise: p0.premise }).calls.length;
+    const toolCallCount = mode === 'native' ? (Array.isArray(reply.calls) ? reply.calls.length : 0) : parseToolJson(replyText, { actionTools: cfg.actionTools, premise: p0.premise, prayers: !!p0.you?.prayers?.enabled }).calls.length;
     reportUsage(usage, { ok: true, replyChars, ms, waking, finishReason: safeFinishReason(reply.stop), toolCallCount });
     log.info(`模型用时 ${(ms / 1000).toFixed(1)} s${usage ? ` · 输入 ${boundedCount(usage.input) ?? 0} · 输出 ${boundedCount(usage.output) ?? 0} token${Number.isFinite(usage.reasoning) ? ` · 思考 ${boundedCount(usage.reasoning) ?? 0}` : ''}` : ''} · stop=${safeFinishReason(reply.stop)}`);
     if (signal && signal.aborted) { stop = 'aborted'; break; }
@@ -446,7 +446,7 @@ export async function runWaking(S, p0, { kind }) {
       if (!calls.length) { ended = 'reply'; break; } // 模型直接回复了，没有调用工具
       transcript.push({ role: 'assistant', raw: reply.raw });
     } else {
-      const parsed = parseToolJson(replyText, { actionTools: cfg.actionTools, premise: p0.premise });
+      const parsed = parseToolJson(replyText, { actionTools: cfg.actionTools, premise: p0.premise, prayers: !!p0.you?.prayers?.enabled });
       calls = parsed.calls;
       unparsable = !parsed.ok;
       if (unparsable) {

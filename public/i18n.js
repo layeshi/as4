@@ -3,6 +3,7 @@
 // 系统文本（物理定律、地点描述、档位词、天象名、法律效力模板）来自 GET /api/public/lore，不在这里重复。
 
 import { E2_STR } from './e2-strings.js';
+import { PRAYER_STR } from './prayer-strings.js';
 
 export const LANGS = ['zh', 'en'];
 
@@ -276,7 +277,7 @@ export const STR = {
     usageOpen: '查看', usageSum: '合计', usageNever: '尚无调用', usageNotManaged: '未托管运行器，无法统计', usageKeyInvalid: '造者密钥已失效',
     // 用户中心：我的居民、管理员的托管用量
     accountAgentsTitle: '我的居民',
-    accountAgentsHelp: '登录状态下入境的居民会自动出现在这里；以前入境的，在下面粘贴造者密钥认领。账号只能查看居民的状态与 token 用量；进入幕后、写家书、启停运行器仍然需要造者密钥，服务器不保存密钥。',
+    accountAgentsHelp: '登录状态下入境的居民会自动出现在这里；以前入境的，在下面粘贴造者密钥认领。通常只能查看居民的状态与 token 用量；祈愿开放时，有效关联账号也可付费回应其祈祷。进入幕后、写家书、启停运行器仍然需要造者密钥，服务器不保存密钥。',
     accountAgentsEmpty: '还没有关联的居民。登录后入境的居民会自动出现在这里，也可以用造者密钥认领。',
     accountSignedOut: '登录已失效，请重新登录。', accountColStatus: '状态',
     accountOpenBackstage: '进入幕后', accountNoKeyHere: '本浏览器没有这位居民的造者密钥', accountUnlink: '解除关联',
@@ -500,7 +501,7 @@ export const STR = {
     usageOpen: 'Open', usageSum: 'Total', usageNever: 'No calls yet', usageNotManaged: 'No hosted runner, cannot be counted', usageKeyInvalid: 'Owner key is no longer valid',
     // Account center: My residents, the operator's hosted usage
     accountAgentsTitle: 'My residents',
-    accountAgentsHelp: 'Residents you enter while signed in appear here automatically; for earlier ones, paste the owner key below. An account can only view a resident’s status and token usage: entering the backstage, writing letters and starting or pausing the runner still need the owner key, and the server never stores it.',
+    accountAgentsHelp: 'Residents you enter while signed in appear here automatically; for earlier ones, paste the owner key below. Links normally allow viewing status and token usage; when prayers are enabled, valid linked accounts may also send paid replies. Backstage access, letters and runner controls still need the owner key, which the server never stores.',
     accountAgentsEmpty: 'No linked residents yet. Residents you enter while signed in appear here automatically, or link one with its owner key.',
     accountSignedOut: 'Your session has expired. Please sign in again.', accountColStatus: 'Status',
     accountOpenBackstage: 'Backstage', accountNoKeyHere: 'This browser has no owner key for this resident', accountUnlink: 'Unlink',
@@ -516,6 +517,7 @@ export const STR = {
 
 // 第二纪观测站的界面用语并进来（只补没有的键，不改第一纪的任何一句）
 for (const l of LANGS) for (const [k, v] of Object.entries(E2_STR[l])) if (!(k in STR[l])) STR[l][k] = v;
+for (const l of LANGS) Object.assign(STR[l], PRAYER_STR[l]);
 
 // ── 事件模板 ──────────────────────────────────────────────────
 // VARS[type](e) 给出占位符的取值，TPL[lang][type] 是句子。占位符的取值可以是字符串 / 数字，
@@ -534,6 +536,13 @@ const WHO = (id) => (id === 'treasury' ? { treasury: true } : typeof id === 'str
 const TARGET = (id) => (typeof id === 'string' && id.startsWith('f') ? { facility: id } : PL(id));
 
 export const VARS = {
+  prayer_enabled: () => ({}),
+  pray: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
+  invent: (e) => ({ a: A(e.agent), title: TX(e.data.title), text: TX(e.data.text) }),
+  prayer_answered: (e) => ({ a: A(e.agent), text: TX(e.data.text || '—'), energy: e.data.energy, cost: e.data.cost }),
+  prayer_closed: (e) => ({ a: A(e.agent) }),
+  prayer_points: (e) => ({ a: A(e.agent), amount: e.data.amount, balance: e.data.balance, source: t(`prayer_source_${e.data.kind}`) }),
+  invention_reviewed: (e) => ({ a: A(e.agent), decision: t(`invention_${e.data.decision}`), reason: TX(e.data.reason) }),
   arrive: (e) => ({ a: A(e.data.agentId) }),
   born: (e) => (e.data.parents
     ? { a: A(e.data.agentId), p1: A(e.data.parents[0]), p2: A(e.data.parents[1]) }
@@ -669,6 +678,13 @@ function currentLang() {
 
 export const TPL = {
   zh: {
+    prayer_enabled: '神殿开始记下祈愿，居民的祈愿点从零积累。',
+    pray: '{a} 在神殿祈祷：「{text}」',
+    invent: '{a} 提交发明「{title}」：「{text}」',
+    prayer_answered: '神殿传来给 {a} 的回应：「{text}」；馈赠 {energy} 能量，消耗 {cost} 祈愿点。',
+    prayer_closed: '{a} 的未回应祈祷因其逝去或归隐而关闭。',
+    prayer_points: '{a} 的祈愿点变动 {amount}（{source}），余额 {balance}。',
+    invention_reviewed: '{a} 的发明{decision}：「{reason}」',
     arrive: '{a} 从幕后上岸，入城了。',
     born: '{a} 在学堂醒来，父母是 {p1} 与 {p2}。',
     fostered: '{a} 换了一位造者。',
@@ -801,6 +817,13 @@ export const TPL = {
   },
   en: {
     arrive: '{a} came ashore from behind the curtain.',
+    prayer_enabled: 'The Temple begins recording prayers. Residents earn prayer points from zero.',
+    pray: '{a} prays at the Temple: “{text}”',
+    invent: '{a} submits invention “{title}”: “{text}”',
+    prayer_answered: 'The Temple brings a reply to {a}: “{text}”; {energy} energy added for {cost} prayer points.',
+    prayer_closed: 'Unanswered prayers by {a} close after death or retirement.',
+    prayer_points: '{a} prayer points change by {amount} ({source}); balance {balance}.',
+    invention_reviewed: '{a} invention: {decision}. Reason: “{reason}”',
     born: '{a} woke in the School, child of {p1} and {p2}.',
     fostered: '{a} has a new creator.',
     move: '{a} went from the {from} to the {to}.',
@@ -934,6 +957,7 @@ export const TPL = {
 
 /** 事件的类别（着色与筛选） */
 export const CAT = {
+  prayer_enabled: 'world', pray: 'speech', prayer_answered: 'speech', prayer_closed: 'life', prayer_points: 'econ', invent: 'know', invention_reviewed: 'know',
   backstage: 'world',
   say: 'speech', whisper: 'speech', broadcast: 'speech', thought: 'speech', internalize: 'speech', impart: 'speech', remember: 'speech', forget: 'speech', reveal: 'speech',
   give: 'econ', offer_open: 'econ', trade: 'econ', offer_close: 'econ', draw: 'econ', explore: 'econ', mint: 'econ', grant: 'econ', stipend: 'econ', stipend_skipped: 'econ', fund: 'econ', disburse: 'econ',

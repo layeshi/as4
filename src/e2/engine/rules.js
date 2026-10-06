@@ -1,3 +1,4 @@
+import { prayersEnabled } from './prayer-rewards.js';
 // SPEC-E2 §7.5–§7.7：规则的执行——时机的接入、调用（收集 → 施行）、操作的施行。
 //
 // 规则住在三个地方（作用域）：城法（w.laws[*].rules）、社群章程（group.bylaws）、地点规则（place.rules）。
@@ -91,8 +92,8 @@ function timingOf(rule) {
   if (!t) {
     // 存下来的规则在存入时已按它所在世界的设定版本校验过；这里用最全的动作表（设定 2）解析，设定 0、1 里存下的规则解析的结果不变，
     // 第二前提里的 before:standing、after:standing 才解析得出来（SPEC-P2 §5.3）
-    t = parseWhen(rule.when, { kind: 'city', premise: 2 });
-    if (t.error) t = parseWhen(rule.when, { kind: 'place', premise: 2 }); // before:enter 只有地点规则才有
+    t = parseWhen(rule.when, { kind: 'city', premise: 2, prayers: true });
+    if (t.error) t = parseWhen(rule.when, { kind: 'place', premise: 2, prayers: true }); // before:enter 只有地点规则才有
     if (t.error) throw new Error(`stored rule has an invalid timing: ${rule.when}`);
     TIMING.set(rule, t);
   }
@@ -160,7 +161,7 @@ export function plainRecord(v, depth = 0, hidden = []) {
 
 /** args.<参数>：没给的数字参数为 0，其余为 null；居民的引用统一成 ID */
 export function argsRecord(w, type, raw) {
-  const spec = actionTable(w.premise || 0).ACTIONS[type];
+  const spec = actionTable(w.premise || 0, prayersEnabled(w)).ACTIONS[type];
   const hidden = HIDDEN_ARGS[type] || [];
   const out = {};
   for (const [name, kind] of spec.args) {

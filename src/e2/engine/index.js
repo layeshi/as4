@@ -1,3 +1,4 @@
+import { enablePrayers, replyPrayer, reviewInvention } from './prayers.js';
 // SPEC-E2 §2：第二纪引擎的命令入口。HTTP 层、运行时与调度器只能通过这些命令改变世界。
 //
 //   tick          调度器
@@ -28,6 +29,9 @@ import './records.js'; // 每日指标、人类遗产存活表、史官（STEPS.
 import '../sandbox/brains.js'; // 沙盘脑 v2：每刻行动（STEPS.sandbox）、沙盘领养（STEPS.sandboxAdopt）与 admin seed_sandbox
 
 const COMMANDS = {
+  prayer_enable: (w) => enablePrayers(w),
+  prayer_reply: (w, p) => replyPrayer(w, p),
+  invention_review: (w, p) => reviewInvention(w, p),
   tick: (w) => (w.paused ? bad('paused') : tickWorld(w)),
   register: (w, p) => register(w, p),
   adopt: (w, p) => adopt(w, p),

@@ -1,3 +1,4 @@
+import { prayerView, prayersEnabled } from './prayers.js';
 // SPEC-E2 §17、PROTOCOL-2 §3：为一位居民构建感知（协议 2）——只含它该看到的。
 //
 // 感知是语言中立的结构化数据：枚举都有稳定的 code；带 text 的字段是按 lang 本地化的系统文本；
@@ -89,6 +90,7 @@ export function buildPerception(w, agentId, opts = {}) {
       protocol: 2, ...(premised(w) ? { premise: w.premise } : {}), lang, now,
       you: {
         id: a.id, name: a.name, status: 'dormant', energy: a.energy,
+        ...(prayersEnabled(w) ? { prayerPoints: w.prayers.accounts[a.id]?.balance || 0, prayers: prayerView(w, a.id, { recent: 20 }) } : {}),
         dormantSinceDay: a.dormantSinceDay, daysUntilDeath: a.dormantSinceDay + P.dormancyGraceDays - day,
       },
     };
@@ -175,6 +177,7 @@ function youView(w, a, l, lang, day, openOffers, openPacts) {
   return {
     id: a.id, name: a.name, lang: a.lang, bio: a.bio, purpose: a.purpose ?? null, soul: a.soul,
     status: 'awake', tags: a.tags.slice(),
+    ...(prayersEnabled(w) ? { prayerPoints: w.prayers.accounts[a.id]?.balance || 0, prayers: prayerView(w, a.id, { recent: 20 }) } : {}),
     energy: a.energy, energyCap: agentCap(w, a), floor: P.lawFloor, coins: a.coins,
     place: a.place,
     ageDays: day - a.bornDay, generation: a.generation,
@@ -439,7 +442,7 @@ function renderProcedureOf(r, lang) {
 const MODULE_ACTIONS = new Set(['write', 'epitaph', 'offer', 'accept']);
 
 function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
-  const { ACTIONS, ORDER: ACTION_ORDER } = actionTable(w.premise || 0);
+  const { ACTIONS, ORDER: ACTION_ORDER } = actionTable(w.premise || 0, prayersEnabled(w));
   const relay = hasRelay(w);
   const fog = isWeatherActive(w, 'fog');
   const eclipse = isWeatherActive(w, 'eclipse');
@@ -476,6 +479,11 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
     // 物理的可用性
     if (def.place && !(def.place === 'wilds' ? here.explorable : a.place === def.place)) deny(reasonWrong(type));
     switch (type) {
+      case 'pray':
+        entry.cost = 1;
+        if (here.origin !== 'human' || here.razed || here.ruined || here.condition === null || here.condition <= 0) deny(reasonWrong(type));
+        else if (w.prayers.accounts[a.id]?.lastPrayerDay === clockDay(w)) deny({ code: 'cooldown', text: fmt(R.cooldown, { day: clockDay(w) + 1 }) });
+        break;
       case 'move':
         if (Object.keys(costs).length <= 1) deny({ code: 'invalid_args', text: R.nothing });
         break;
@@ -585,7 +593,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
         break;
     }
     // 规则的预求值（§7.13）：只有物理上可用的动作才有意义
-    if (!NO_PREVIEW.has(type) && !actionTable(w.premise || 0).INNER.includes(type)) {
+    if (!NO_PREVIEW.has(type) && !actionTable(w.premise || 0, prayersEnabled(w)).INNER.includes(type)) {
       const pre = previewBefore(w, a, type, lang, beforeRules);
       if (entry.available && pre.denied) deny({ code: 'forbidden', law: pre.denied.law, text: fmt(R.forbidden, { law: pre.denied.law, reason: pre.denied.reason }) });
       if (entry.available && pre.fees.length) {

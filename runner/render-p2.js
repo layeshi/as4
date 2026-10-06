@@ -7,7 +7,7 @@
 
 import {
   makeCtx, secDiagnostics, secNow, secAbsent, secInbox, secMemories, secActions, secHere,
-  youHead, youBio, youLetters, youOffers, youPacts, youWill, youTraining, youMemoryOffers,
+  youHead, youBio, youLetters, youOffers, youPacts, youWill, youTraining, youMemoryOffers, youPrayers,
   hereLine, herePresent, hereOmens, hereWell, hereWilds,
   cityHead, cityProcedure, cityVars, cityCharter, cityLawLine, cityProposalLines, cityRefoundLines, cityGroupLines,
   cityResidents, cityPlaces, cityRoads, cityLexicon, cityCradleLines, cityDeaths, cityPetitions,
@@ -325,7 +325,7 @@ function withUpkeep(line, entry, code, who) {
 
 function lookSelf(c) {
   const { code, you } = c;
-  const lines = [...youBio(c), ...youLetters(c), ...youOffers(c), ...youPacts(c), ...youWill(c), ...youTraining(c), ...youMemoryOffers(c, { full: true })];
+  const lines = [...youBio(c), ...youLetters(c), ...youOffers(c), ...youPacts(c), ...youWill(c), ...youTraining(c), ...youMemoryOffers(c, { full: true }), ...youPrayers(c)];
   for (const o of you.standing || []) lines.push(D2[code].look.standing(o));
   const muted = you.muted || [];
   if (muted.length) {

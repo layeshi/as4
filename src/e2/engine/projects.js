@@ -1,3 +1,4 @@
+import { rewardProject } from './prayer-rewards.js';
 // SPEC-E2 §10.5：工程——开辟新地点（site）、加装模块（module）、修路（road）。
 //
 // 发起（initiate）建一个工程：池子（have）从 0 开始，居民出工（contribute）或公库出资（规则的 fund）往里投能量，
@@ -180,6 +181,7 @@ export function buildProject(w, j) {
   sink(w, 'energy', 'project_built', j.have);
   const result = j.build === 'site' ? buildSite(w, j) : j.build === 'module' ? buildModule(w, j) : buildRoad(w, j);
   j.result = result;
+  rewardProject(w, j);
   const where = j.build === 'site' ? result : j.place;
   const k = Object.keys(j.contributors).length;
   w.dayLog.built.push({ projectId: j.id, build: j.build, module: j.module ?? null, place: where, name: projectLabel(j), k });

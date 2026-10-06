@@ -17,8 +17,8 @@ function costOf(a, lang) {
  * 动作表：每个动作一行，格式 `type(参数) 基础代价 [地点限制]：说明`（模板来自 lore 的 prompt.catalogLine）。
  * opts：{ memorySlots, distance }——distance 为真（按路程计价的地图，附录 C）时，move 用按路程计价的说明。
  */
-export function actionCatalog(lang, { memorySlots, distance = false, protocol = 1, premise = 0 } = {}) {
-  if (protocol === 2) return actionCatalog2(lang, { memorySlots, premise });
+export function actionCatalog(lang, { memorySlots, distance = false, protocol = 1, premise = 0, prayers = false } = {}) {
+  if (protocol === 2) return actionCatalog2(lang, { memorySlots, premise, prayers });
   memorySlots ??= P.memorySlots;
   const l = L(lang).prompt;
   const code = normLang(lang);
@@ -35,8 +35,8 @@ export function actionCatalog(lang, { memorySlots, distance = false, protocol = 
 }
 
 /** 第二纪的动作表（SPEC-E2 §22）：src/e2/lore/actions.js 生成，格式同第一纪 */
-export function actionCatalog2(lang, { memorySlots = P2.memorySlots, premise = 0 } = {}) {
-  const { ACTIONS: ACTIONS2, ORDER: ACTION_ORDER2 } = actionTable(premise);
+export function actionCatalog2(lang, { memorySlots = P2.memorySlots, premise = 0, prayers = false } = {}) {
+  const { ACTIONS: ACTIONS2, ORDER: ACTION_ORDER2 } = actionTable(premise, prayers);
   const l = promptDict(L2(lang), premise);
   const code = normLang(lang);
   return ACTION_ORDER2.map((type) => {
@@ -61,8 +61,8 @@ const promptDict = (dict, premise) => (premise >= 2 ? dict.promptP2 : premise >=
  * protocol 为 2 时用附录 A.1 的第二纪提示：{ruleLanguage} 填附录 A.2，{floor} 是规则不能把居民的能量扣到的底线（感知的 you.floor）。
  * toolMode（只在第二前提）：'native' | 'json'（缺省）| 'mcp'，决定【怎样行动】一段写哪一种（SPEC-P2 §11.1）。
  */
-export function buildSystemPrompt({ protocol = 1, lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays, memorySlots, distance = false, soul = null, floor, premise = 0, trained = [], toolMode = 'json', actionTools }) {
-  if (protocol === 2) return buildSystemPrompt2({ lang, cityName, maxActions, ticksPerDay, daysPerMonth, graceDays, memorySlots, soul, floor, premise, trained, toolMode, actionTools });
+export function buildSystemPrompt({ protocol = 1, lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays, memorySlots, distance = false, soul = null, floor, premise = 0, trained = [], toolMode = 'json', actionTools, prayers = false }) {
+  if (protocol === 2) return buildSystemPrompt2({ lang, cityName, maxActions, ticksPerDay, daysPerMonth, graceDays, memorySlots, soul, floor, premise, trained, toolMode, actionTools, prayers });
   graceDays ??= P.dormancyGraceDays;
   memorySlots ??= P.memorySlots;
   const l = L(lang).prompt;
@@ -79,7 +79,7 @@ export function buildSystemPrompt({ protocol = 1, lang = 'zh', cityName, maxActi
 }
 
 /** 第二纪的系统提示（附录 A.1）；不含灵魂的一节在 soul 为空时省略。第二前提（premise >= 2）按 toolMode 填【怎样行动】，并有【常驻指令】一段 */
-export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays = P2.dormancyGraceDays, memorySlots = P2.memorySlots, soul = null, floor = P2.lawFloor, premise = 0, trained = [], toolMode = 'json', actionTools }) {
+export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays = P2.dormancyGraceDays, memorySlots = P2.memorySlots, soul = null, floor = P2.lawFloor, premise = 0, trained = [], toolMode = 'json', actionTools, prayers = false }) {
   const dict = L2(lang);
   const l = promptDict(dict, premise);
   const agent = premise >= 2 ? { howToAct: l[toolMode === 'native' ? 'howToActNative' : toolMode === 'mcp' ? 'howToActMcp' : 'howToActJson'], standingLanguage: l.standingLanguage } : {};
@@ -97,10 +97,13 @@ export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, tick
     graceDays,
     floor,
     ruleLanguage: fmt(l.ruleLanguage, { floor }), // 规则语言的说明里也提到底线；先填好再嵌入（fmt 一遍过，不会重复替换）
-    actionCatalog: actionCatalog2(lang, { memorySlots, premise }),
+    actionCatalog: actionCatalog2(lang, { memorySlots, premise, prayers }),
     ...agent,
   });
   let text = soul === null || soul === undefined ? head : `${head}\n\n${fmt(l.soul, { soul })}`;
+  if (prayers && premise === 2) text += lang === 'en'
+    ? '\n\n[Prayer points] Your points belong to you and cannot be transferred. Earn 1 per 100 basis points of public natural-damage repairs, 1 per 10 energy contributed to completed public projects, and 1 for the first rescue of a dormant recipient each day. These automatic rewards share a 10-point daily cap; fractions carry, excess whole points do not. An independently recognized invention earns 10 points outside the cap. Temple replies cost 1 point for text, plus 1 per energy granted; replies are not guaranteed. Demolition damage and rebuilding do not earn points.'
+    : '\n\n【祈愿点】点数属于你，不可转让。修复公共设施100基点自然损耗得1点；已建成公共工程投入10能量得1点；每天首次救醒一位沉睡者得1点。这三类合计每天最多10点，零头继续累计，超额整点不结转。获独立认定的发明另得10点。神殿传来的文字耗1点，每份补充能量另耗1点；回应没有保证。人为损坏及拆毁重建不发奖励。';
   if (premise >= 1 && trained.length) text += `\n\n${l.trainedHead}\n${trained.join('\n')}`;
   if (premise >= 2 && actionTools === 'typed') text += lang === 'en'
     ? (toolMode === 'json' ? '\n\nPrivate thought JSON: {"think":{"thought":"your private thought"},"done":true}. No action quota is spent; this is not public speech.' : '\n\nUse the think tool with its thought field for a private inner monologue. It spends no action quota and is not public speech.')
@@ -118,6 +121,7 @@ export function promptParams(perception) {
     return {
       protocol: 2,
       premise: p.premise || 0,
+      ...(p.you?.prayers?.enabled ? { prayers: true } : {}),
       trained: (p.you && p.you.trained) || [],
       lang: p.lang,
       cityName: p.city && p.city.name,

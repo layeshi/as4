@@ -185,12 +185,12 @@ export const isKnownAction = (type) => typeof type === 'string' && Object.protot
 
 /** 一个动作在规则里可读的参数名（`args.<参数>`） */
 export const actionArgNames = (type, premise = 0) => {
-  const t = actionTable(premise);
+  const t = actionTable(premise, true);
   return t.isKnown(type) ? t.ACTIONS[type].args.map(([n]) => n) : [];
 };
 /** 参数的类型：int 参数没给时读到 0，其余读到 null */
 export const actionArgKind = (type, name, premise = 0) => {
-  const t = actionTable(premise);
+  const t = actionTable(premise, true);
   const hit = t.isKnown(type) ? t.ACTIONS[type].args.find(([n]) => n === name) : null;
   return hit ? hit[1] : null;
 };
@@ -259,4 +259,10 @@ export const NO_AFTER_ACTIONS_P2 = INNER_ACTIONS_P2;
 const TABLE0 = Object.freeze({ ACTIONS, ORDER: ACTION_ORDER, INNER: INNER_ACTIONS, NO_BEFORE: NO_BEFORE_ACTIONS, NO_AFTER: NO_AFTER_ACTIONS, isKnown: isKnownAction });
 const TABLE1 = Object.freeze({ ACTIONS: ACTIONS_P1, ORDER: ACTION_ORDER_P1, INNER: INNER_ACTIONS_P1, NO_BEFORE: NO_BEFORE_ACTIONS_P1, NO_AFTER: NO_AFTER_ACTIONS_P1, isKnown: (t) => typeof t === 'string' && Object.hasOwn(ACTIONS_P1, t) });
 const TABLE2 = Object.freeze({ ACTIONS: ACTIONS_P2, ORDER: ACTION_ORDER_P2, INNER: INNER_ACTIONS_P2, NO_BEFORE: NO_BEFORE_ACTIONS_P2, NO_AFTER: NO_AFTER_ACTIONS_P2, isKnown: (t) => typeof t === 'string' && Object.hasOwn(ACTIONS_P2, t) });
-export const actionTable = (premise = 0) => premise >= 2 ? TABLE2 : premise >= 1 ? TABLE1 : TABLE0;
+const PRAYER_ACTIONS = Object.freeze({
+  ...ACTIONS_P2,
+  pray: { base: 1, place: 'temple', module: null, params: 'text', args: [['text', 'str']], where: W('尚存的神殿', 'the standing Temple'), verb: W('祈祷', 'prays'), desc: W('在神殿祈祷（正文至多600字），每天一次，消耗1能量。回应需用居民自己赚取的祈愿点；回应并无保证。', 'Pray at the Temple (at most 600 characters), once per game day, for 1 energy. Replies cost your earned prayer points and are never guaranteed.') },
+  invent: { base: 1, place: null, module: null, params: 'title, text, ref, submission?', args: [['title', 'str'], ['text', 'str'], ['ref', 'obj'], ['submission', 'str']], where: null, verb: W('提交发明', 'submits an invention'), desc: W('提交成果名称（至多100字）、说明（至多600字），关联自己的作品或已建成工程：ref={kind:"doc"或"project",id}。获独立认定奖励10祈愿点，驳回后以submission编号补充重提。', 'Submit a title (100 characters), explanation (600), and your own work or completed project: ref={kind:"doc" or "project",id}. Independent recognition awards 10 prayer points once. Revise a rejected submission using its submission ID.') },
+});
+const PRAYER_TABLE = Object.freeze({ ...TABLE2, ACTIONS: PRAYER_ACTIONS, ORDER: Object.freeze([...ACTION_ORDER_P2, 'pray', 'invent']), isKnown: (t) => typeof t === 'string' && Object.hasOwn(PRAYER_ACTIONS, t) });
+export const actionTable = (premise = 0, prayers = false) => premise >= 2 ? (prayers ? PRAYER_TABLE : TABLE2) : premise >= 1 ? TABLE1 : TABLE0;

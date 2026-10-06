@@ -359,3 +359,26 @@ test('visible resident names use engine NFC/lowercase comparison while original 
     assert.ok(city.agent(b).inbox.some(i => i.text === text.text));
   } finally { city.close(); }
 });
+
+test('prayer tools are advertised only after activation and preserve structured invention references', async () => {
+  assert.ok(!toolDefs('en', { actionTools: 'typed', premise: 2 }).some(t => t.name === 'pray'));
+  const tools = toolDefs('en', { actionTools: 'typed', premise: 2, prayers: true });
+  assert.ok(tools.some(t => t.name === 'pray'));
+  assert.ok(tools.some(t => t.name === 'invent'));
+  const args = { title: '发明', text: '说明', ref: { kind: 'doc', id: 'd1' } };
+  assert.deepEqual(typedCall('invent', args).action, { type: 'invent', ...args });
+  assert.equal(typedCall('invent', args).issues.length, 0);
+  assert.ok(typedCall('invent', { ...args, ref: { kind: 'agent', id: 'a1' } }).issues.length);
+  assert.ok(typedCall('pray', { text: '字'.repeat(601) }).issues.length);
+  for (const toolMode of ['native', 'json']) {
+    const city = openCity({ seed: `prayer-tools-${toolMode}` });
+    try {
+      const id = city.ids[0]; city.agent(id).place = 'temple';
+      const text = '愿城市安宁';
+      const script = toolMode === 'native' ? [{ calls: [call('pray', { text }), call('done')] }] : [{ text: JSON.stringify({ pray: { text }, done: true }) }];
+      const out = await drive(city, id, { cfg: { actionTools: 'typed', toolMode }, script });
+      assert.equal(Object.values(city.rt.w.prayers.prayers)[0]?.text, text);
+      assert.ok(out.requests[0].system.includes('祈愿点'));
+    } finally { city.close(); }
+  }
+});

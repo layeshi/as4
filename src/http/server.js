@@ -6,6 +6,7 @@ import http from 'node:http';
 import { ExperimentControl } from '../experiment-control.js';
 import { AccountStore } from '../accounts/store.js';
 import { accountRoutes, accountLimits } from './accounts.js';
+import { prayerRoutes } from './prayers.js';
 import { RunnerManager } from '../runner/manager.js';
 import { ShellManager } from '../shells/manager.js';
 import { runnerRoutes } from './runner.js';
@@ -43,7 +44,7 @@ const MIME = {
 /** index.html 的内容安全策略：界面脚本只能通过 CSSOM / classList / SVG 属性设置样式（SPEC §13） */
 export const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'";
 
-const ROUTES = [...accountRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
+const ROUTES = [...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
 
 function match(method, pathname) {
   for (const [m, pattern, handler] of ROUTES) {
@@ -52,7 +53,13 @@ function match(method, pathname) {
       if (pattern === pathname) return { handler, params: [] };
     } else {
       const r = pattern.exec(pathname);
-      if (r) return { handler, params: r.slice(1).map(decodeURIComponent) };
+      if (r) {
+        try { return { handler, params: r.slice(1).map(decodeURIComponent) }; }
+        catch (e) {
+          if (!(e instanceof URIError)) throw e;
+          return { handler: (req, res) => sendError(res, 'zh', 'invalid_request'), params: [] };
+        }
+      }
     }
   }
   return null;

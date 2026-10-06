@@ -1,3 +1,4 @@
+import { prayerView, prayersEnabled } from './prayers.js';
 // SPEC-E2 §18.1：观众视角的唯一出口（第二纪）。公共接口与 SSE 都经过这里。
 //
 // 谢幕之前（world.revealed 为 false），任何输出里都不得出现：居民的模型（含换身记录）、身体的种类、
@@ -45,6 +46,7 @@ export function publicAgent(w, a) {
     bornDay: a.bornDay, ageDays: ageOf(w, a), diedDay: a.diedDay, dormantSinceDay: a.dormantSinceDay,
     place: alive ? a.place : null,
     energy: a.energy, coins: a.coins,
+    ...(prayersEnabled(w) ? { prayerPoints: w.prayers.accounts[a.id]?.balance || 0, prayers: prayerView(w, a.id) } : {}),
     groups: a.groups.slice(), script: a.script, lastActTick: a.lastActTick,
     stats: { ...a.stats },
   };
@@ -251,6 +253,7 @@ export function publicState(w, extra = {}) {
       cityName: w.cityName, humanCityName: { zh: zh.cityName, en: L('en').cityName },
       nextTickAt: extra.nextTickAt ?? null, tickMs: P.tickMs,
     },
+    ...(prayersEnabled(w) ? { prayers: prayerView(w) } : {}),
     vars: { ...w.vars },
     procedure: {
       ordinary: { lawId: w.procedure.ordinary, reading: both((lang) => procReading(w, 'ordinary', lang)) },
