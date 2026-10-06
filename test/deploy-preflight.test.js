@@ -102,3 +102,23 @@ test('explicit content manifest verifies release bytes and rejects traversal', a
     assert.equal(api.deployPreflight({ ...options, contentManifest: { [invalid]: digest } }).checks.some(c => c.code === 'invalid_manifest_path'), true);
   }
 });
+
+test('content manifest accepts tracked dotfiles and hidden directories while rejecting dot segments', async t => {
+  const { options } = fixture(t);
+  const { createHash } = await import('node:crypto');
+  mkdirSync(join(options.releaseDir, '.agents', 'skills'), { recursive: true });
+  const manifest = {};
+  for (const relative of ['.gitignore', '.agents/skills/SKILL.md']) {
+    const path = join(options.releaseDir, relative);
+    writeFileSync(path, 'tracked release content\n');
+    manifest[relative] = createHash('sha256').update(readFileSync(path)).digest('hex');
+  }
+  const result = api.deployPreflight({ ...options, contentManifest: manifest });
+  assert.equal(result.ok, true);
+  assert.equal(result.contentVerified, true);
+  for (const invalid of ['.', '..', '.agents/../private', './server.js', '.agents//skills/SKILL.md', '/.gitignore']) {
+    const rejected = api.deployPreflight({ ...options, contentManifest: { [invalid]: manifest['.gitignore'] } });
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.checks.some(c => c.code === 'invalid_manifest_path'), true);
+  }
+});

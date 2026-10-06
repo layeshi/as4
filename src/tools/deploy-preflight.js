@@ -97,7 +97,7 @@ export function deployPreflight({ releaseDir, dataDir, worldId, configFiles = []
       try { root = realpathSync(resolve(releaseDir)); } catch { fail('content_manifest', 'invalid_release'); }
       for (const [i, [relative, sha]] of Object.entries(manifest).entries()) {
         const target = `content_${i}`;
-        if (!/^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(relative) || relative.split('/').some(p => ['', '.', '..'].includes(p))) { fail(target, 'invalid_manifest_path'); continue; }
+        if (!/^[a-zA-Z0-9._/-]+$/.test(relative) || relative.split('/').some(p => ['', '.', '..'].includes(p))) { fail(target, 'invalid_manifest_path'); continue; }
         if (typeof sha !== 'string' || !/^[a-f0-9]{64}$/.test(sha)) { fail(target, 'invalid_manifest_hash'); continue; }
         const path = join(resolve(releaseDir), relative);
         if (!readable(path, target)) continue;
