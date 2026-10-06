@@ -54,7 +54,7 @@ export function recordDismantledModule(w, place, type) {
 export function rewardProject(w, j) {
   if (!prayersEnabled(w) || w.prayers.completedProjects[j.id]) return;
   w.prayers.completedProjects[j.id] = true;
-  if (j.owner?.kind !== 'city' || (j.on && w.prayers.razedSites[j.on]) || (j.build === 'module' && (w.places[j.place]?.owner?.kind !== 'city' || w.prayers.destroyedModules[`${j.place}:${j.module}`]))) return;
+  if (j.owner?.kind !== 'city' || (j.on && w.prayers.razedSites[j.on]) || (j.build === 'module' && (w.prayers.razedSites[j.place] || w.places[j.place]?.owner?.kind !== 'city' || w.prayers.destroyedModules[`${j.place}:${j.module}`]))) return;
   const baseline = w.prayers.projectBaseline[j.id] || {};
   for (const [id, contribution] of Object.entries(j.contributors)) {
     const a = w.agents[id];

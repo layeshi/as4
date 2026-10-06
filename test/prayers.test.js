@@ -272,3 +272,21 @@ test('draft validates law hooks for enabled prayer actions', () => {
   const r = one(w, a, { type: 'draft', rules: [{ when: 'before:pray', do: [{ op: 'deny', reason: '安静' }] }] });
   assert.equal(r.ok, true); assert.equal(r.data.ok, true, JSON.stringify(r));
 });
+
+test('modules installed after a resident razes and rebuilds the whole site never earn project rewards', () => {
+  const { w, a } = setup(); grant(w, a, 2000);
+  const original = site(w, a, 'commons-4', '拆毁原址'); contribute(w, a, original, original.need);
+  const placeId = original.result; putAt(w, a, placeId);
+  const install = () => {
+    const r = one(w, a, { type: 'initiate', build: 'module', module: 'archive' });
+    assert.equal(r.ok, true, JSON.stringify(r)); contribute(w, a, w.projects[r.data.project], r.data.need);
+  };
+  install(); const earned = balance(w, a); assert.ok(earned > 0);
+  while (!w.places[placeId].razed) assert.equal(one(w, a, { type: 'dismantle' }).ok, true);
+  assert.equal(w.prayers.razedSites[placeId], true);
+  w.clock.tick += P.ticksPerDay;
+  const rebuild = one(w, a, { type: 'initiate', build: 'site', on: placeId, name: '重建原址', owner: 'city' });
+  assert.equal(rebuild.ok, true, JSON.stringify(rebuild)); contribute(w, a, w.projects[rebuild.data.project], rebuild.data.need);
+  assert.equal(balance(w, a), earned);
+  install(); assert.equal(balance(w, a), earned);
+});
