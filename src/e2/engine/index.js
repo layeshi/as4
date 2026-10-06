@@ -11,7 +11,8 @@
 //
 // 令牌与密钥由 HTTP 层用 crypto 生成，只把哈希放进命令载荷，所以回放时状态完全一致。
 
-import { bad, drainEvents, drainWakes } from './core.js';
+import { bad, drainEvents, drainWakes, emit } from './core.js';
+import { usesLawVM2, capacityCheck, CapacityError, commandMeter } from './law-execution.js';
 import { tickWorld } from './tick.js';
 import { register, adopt, release, foster, changeModel, letter } from './lifecycle.js';
 import { actCommand } from './actions.js';
@@ -56,8 +57,53 @@ export function applyCommand(w, cmd) {
   const handler = COMMANDS[cmd.type];
   w.commandN = cmd.n !== undefined ? cmd.n : w.commandN + 1;
   if (!handler) return { result: bad('invalid_request', { field: 'type' }), events: drainEvents(w), wakes: drainWakes(w) };
+  if (usesLawVM2(w) && !(cmd.type === 'admin' && ['law_execution', 'pause'].includes(cmd.payload?.op))) return applyProtected(w, cmd, handler);
   const result = handler(w, cmd.payload || {});
   return { result, events: drainEvents(w), wakes: drainWakes(w) };
+}
+
+// Keep identity of world/agent records used by in-process clients, but commit only
+// a fully completed deterministic command. Temporary intent/event buffers stay private.
+function commit(target, source) {
+  for (const key of Object.keys(target)) if (!Object.hasOwn(source, key)) delete target[key];
+  for (const [key, value] of Object.entries(source)) {
+    if (Array.isArray(value)) target[key] = value;
+    else if (value && typeof value === 'object' && target[key] && typeof target[key] === 'object' && !Array.isArray(target[key])) commit(target[key], value);
+    else target[key] = value;
+  }
+}
+
+function protect(w, detail) {
+  w.ruleExecution.protection = detail;
+  w.paused = true;
+  w.experimentControl = { active: true, generation: w.commandN, remainingMs: 0 };
+  emit(w, 'law_capacity', { data: detail });
+  return { result: bad('paused', { reason: 'law_execution_capacity', diagnostics: detail }), events: drainEvents(w), wakes: [] };
+}
+
+function applyProtected(w, cmd, handler) {
+  if (w.ruleExecution.protection) return { result: bad('paused', { reason: 'law_execution_capacity' }), events: drainEvents(w), wakes: drainWakes(w) };
+  const before = capacityCheck(w);
+  if (!before.ok) return protect(w, { code: 'capacity', required: before.required, issues: before.issues });
+  const shadow = structuredClone(w);
+  for (const key of ['$out', '$wakes', '$sandboxStats']) if (w[key]) Object.defineProperty(shadow, key, { value: structuredClone(w[key]), configurable: true, writable: true });
+  commandMeter(shadow);
+  let result;
+  try {
+    result = handler(shadow, cmd.payload || {});
+    const after = capacityCheck(shadow);
+    if (!after.ok) throw new CapacityError({ code: 'capacity', required: after.required, issues: after.issues });
+  } catch (e) {
+    if (!(e instanceof CapacityError)) throw e;
+    const failed = capacityCheck(shadow);
+    return protect(w, { ...e.detail, code: failed.ok ? e.detail.code : 'capacity', required: { ...failed.required, ...e.detail.required }, issues: failed.issues });
+  }
+  const events = drainEvents(shadow), wakes = drainWakes(shadow);
+  commit(w, shadow);
+  if (shadow.$sandboxStats && w.$sandboxStats) commit(w.$sandboxStats, shadow.$sandboxStats);
+  // Reset buffers on the original too, so old pending events are not duplicated.
+  drainEvents(w); drainWakes(w);
+  return { result, events, wakes };
 }
 
 export { tickWorld } from './tick.js';

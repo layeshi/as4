@@ -19,6 +19,7 @@ import { collectRule } from '../rules/ops.js';
 import { parseCached } from '../rules/parser.js';
 import { newBudget, agentRef } from '../rules/eval.js';
 import { RuleError } from '../rules/errors.js';
+import { budgetForRule, usesLawVM2, CapacityError, meterIntents } from './law-execution.js';
 import { screen } from '../../moderation.js';
 import { emit, pushInbox } from './core.js';
 import { source, sink } from './ledger.js';
@@ -234,9 +235,12 @@ function reportError(w, set, idx, e, run) {
 function collect(w, set, idx, rule, run) {
   const host = makeHost(w, { vars: varsFor(w, set), rng: run.rng || w.rng.world });
   try {
-    return collectRule(rule, { host, env: run.env, budget: newBudget() });
+    const intents = collectRule(rule, { host, env: run.env, budget: budgetForRule(w, rule) });
+    meterIntents(w, intents);
+    return intents;
   } catch (e) {
     if (!(e instanceof RuleError)) throw e;
+    if (usesLawVM2(w) && e.code === 'fuel') throw new CapacityError({ code: 'proof_breach', path: `${set.key}.rules[${idx}]` });
     reportError(w, set, idx, e, run);
     return null;
   }
@@ -508,7 +512,7 @@ export function previewBefore(w, a, type, lang = 'zh', index = beforeIndex(w, a)
     }
     let intents;
     try {
-      intents = collectRule(rule, { host: makeHost(w, { vars: varsFor(w, set), rng }), env, budget: newBudget() });
+      intents = collectRule(rule, { host: makeHost(w, { vars: varsFor(w, set), rng }), env, budget: budgetForRule(w, rule) });
     } catch (e) {
       if (!(e instanceof RuleError)) throw e;
       continue;
@@ -538,7 +542,7 @@ export function previewRules(w, set, { rng, kinds = ['enact', 'daily', 'monthly'
     if (!kinds.includes(t.kind)) continue;
     const h = makeHost(w, { vars: varsFor(w, set), rng });
     try {
-      const intents = collectRule(rule, { host: h, env: {}, budget: newBudget() });
+      const intents = collectRule(rule, { host: h, env: {}, budget: budgetForRule(w, rule) });
       for (const it of intents) out.push({ rule: idx, ...intentSummary(it) });
     } catch (e) {
       if (!(e instanceof RuleError)) throw e;

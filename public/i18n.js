@@ -641,6 +641,7 @@ export const VARS = {
   day: (e) => ({ d: e.data.day + 1, out: e.data.output, ration: e.data.ration, awake: e.data.population ? e.data.population.awake : 0 }),
   month: (e) => ({ n: e.data.month + 1 }),
   admin: (e) => ({ op: e.data.op }),
+  law_capacity: (e) => ({ code: e.data.code }),
   redacted: (e) => ({ kind: e.data.kind, id: e.data.id }),
   great_sleep: (e) => ({ n: e.data.epoch }),
 };
@@ -794,6 +795,7 @@ export const TPL = {
     day: '第 {d} 日结束：源井日产 {out}，人均配给 {ration}，醒着 {awake} 人。',
     month: '第 {n} 月开始。',
     admin: '幕后操作：{op}。',
+    law_capacity: '法律执行容量不足，实验已保护暂停：{code}。',
     redacted: '幕后抹去了一条内容（{kind} {id}）。',
     great_sleep: '大沉睡：第 {n} 纪结束，城中的时间静止了。',
   },
@@ -924,6 +926,7 @@ export const TPL = {
     day: 'Day {d} ends: Well output {out}, ration per head {ration}, {awake} awake.',
     month: 'Month {n} begins.',
     admin: 'Backstage action: {op}.',
+    law_capacity: 'The experiment paused to protect complete law execution: {code}.',
     redacted: 'Something was erased from behind the curtain ({kind} {id}).',
     great_sleep: 'The Great Sleep: epoch {n} is over and time in the city stands still.',
   },
@@ -944,6 +947,7 @@ export const CAT = {
   omen: 'world', weather_start: 'world', weather_end: 'world', day: 'world', month: 'world', great_sleep: 'world',
   standing: 'life', standing_fired: 'life', mute: 'life',
   admin: 'admin', redacted: 'admin',
+  law_capacity: 'admin',
 };
 
 export const CATEGORIES = ['speech', 'econ', 'polity', 'life', 'know', 'env', 'world', 'admin'];

@@ -244,6 +244,7 @@ export function publicState(w, extra = {}) {
   const free = shellsFree(w);
   return {
     world: {
+      ...(w.ruleExecution ? { lawExecution: { version: w.ruleExecution.version, protected: !!w.ruleExecution.protection, protection: w.ruleExecution.protection } } : {}),
       id: w.id, protocol: 2, physics: 2, ...(premised(w) ? { premise: w.premise } : {}), tick: w.clock.tick, day, month: monthOfDay(day), dayOfMonth: dayOfMonthOf(day), tickOfDay: tickOfDay(w),
       ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, monthsPerEpoch: P.monthsPerEpoch, epoch: w.epoch,
       paused: w.paused, revealed: w.revealed, map: w.map,

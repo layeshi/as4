@@ -89,6 +89,7 @@ export class Runtime {
   exec(type, payload = {}) {
     const wasPaused = this.w.paused;
     const wasExperimentPaused = this.w.experimentControl?.active === true;
+    const wasCapacityProtected = !!this.w.ruleExecution?.protection;
     if (type === 'admin' && payload.op === 'pause' && payload.args?.experiment === true && (!wasPaused || !wasExperimentPaused)) {
       payload = { ...payload, args: { ...payload.args, remainingMs: this.nextTickAt === null ? this.remainingMs : Math.max(0, this.nextTickAt - Date.now()) } };
     }
@@ -100,7 +101,7 @@ export class Runtime {
       this.logger.error?.(`命令 #${cmd.n}（${type}）执行出错：`, e);
       out = { result: { ok: false, error: { code: 'internal' } }, events: this.engine.drainEvents(this.w) };
     }
-    const controlChanged = out.result.ok && (wasPaused !== this.w.paused || (!wasExperimentPaused && this.w.experimentControl?.active));
+    const controlChanged = wasPaused !== this.w.paused || (!wasExperimentPaused && this.w.experimentControl?.active) || (!wasCapacityProtected && !!this.w.ruleExecution?.protection);
     if (controlChanged) {
       if (this.w.paused) {
         this.remainingMs = this.w.experimentControl?.active ? this.w.experimentControl.remainingMs : (this.nextTickAt === null ? this.cfg.tickMs : Math.max(0, this.nextTickAt - Date.now()));

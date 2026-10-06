@@ -5,6 +5,7 @@ import { actionFeedback } from '../action-feedback.js';
 import { LIMITS } from '../params.js';
 import { agentic, wakeItems } from '../e2/facade.js';
 import { DEFAULT_AGENT_LOOP } from '../../runner/loop.js';
+import { validateAction } from '../../runner/action-tools.js';
 import { bearer, errorBody, httpStatusFor, langOf, readJson, sendError, sendJson } from './util.js';
 
 /** 验证 agent 令牌；失败时发 401 并返回 null。limiter：限速器（缺省每刻 20 个请求，第二前提 40；GET /api/me/wait 用自己的，SPEC-P2 §10.5） */
@@ -75,6 +76,15 @@ export function actCore({ rt, cursors }, id, body, lang) {
     return { status: 409, json: { error: { code: 'stale_perception', message: lang === 'en' ? 'The experiment was paused. Read a fresh perception before acting.' : '实验曾被暂停，请重新感知后行动。' } } };
   }
   if (a.status !== 'awake') return fail('not_awake', { status: a.status });
+  if (body.actionTools !== undefined && !['legacy', 'typed'].includes(body.actionTools)) return fail('invalid_request', { field: 'actionTools' });
+  if (body.actionTools === 'typed') {
+    if (!agentic(w)) return fail('invalid_request', { field: 'actionTools' });
+    const p = rt.engine.buildPerception(w, id, { lang, ack: false });
+    for (let i = 0; i < body.actions.length; i++) {
+      const issues = validateAction(body.actions[i], p);
+      if (issues.length) return fail('invalid_request', { field: `actions[${i}]`, issues });
+    }
+  }
   // ackSeq：这位 agent 到此刻为止已经被送达的最大收件序号（由内存游标而来）
   const payload = { agentId: id, thought: body.thought ?? undefined, actions: body.actions, ackSeq: cursors.get(id) || 0 };
   // 第二纪：请求的语言进入命令（draft 的说明、read { law } 的读法按它取），所以回放一致；第一纪的命令载荷不变

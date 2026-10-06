@@ -13,6 +13,7 @@
 //
 // 这个文件不碰世界状态，时钟与文件都可以注入（测试用假时钟）。
 
+import { safeCallMetadata, cleanPersistedMetadata, boundedCount, cleanDiagnostics, addCallDiagnostics } from '../telemetry-safety.js';
 import { existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 
 export const DAY_MS = 86400000;
@@ -64,6 +65,19 @@ export class Budget {
     try {
       const raw = JSON.parse(readFileSync(this.file, 'utf8'));
       if (raw && typeof raw === 'object' && raw.days && typeof raw.days === 'object') this.days = raw.days;
+      const cleanAggregate = bucket => {
+        if (!bucket || typeof bucket !== 'object' || !Object.hasOwn(bucket, 'diagnostics')) return;
+        const diagnostics = cleanDiagnostics(bucket.diagnostics);
+        if (diagnostics) bucket.diagnostics = diagnostics;
+        else delete bucket.diagnostics;
+      };
+      for (const d of Object.values(this.days)) {
+        cleanAggregate(d);
+        for (const a of Object.values(d?.agents || {})) {
+          cleanAggregate(a);
+          if (Array.isArray(a?.recent)) a.recent = a.recent.slice(-20).map(c => ({ at: Number.isFinite(c?.at) ? c.at : 0, ok: c?.ok !== false, ms: boundedCount(c?.ms), ...cleanPersistedMetadata(c), ...(Number.isInteger(c?.status) && c.status >= 100 && c.status <= 599 ? { status: c.status } : {}) }));
+        }
+      }
       this.paused = raw.paused === true;
     } catch {
       this.days = {}; // 文件损坏：从零累计（宁可多花，不要停摆）；硬上限仍然按今日的新累计算
@@ -104,7 +118,7 @@ export class Budget {
   /** 某位居民今日的累计：{ tokens, calls, lastCallAt } */
   agentUsage(id) {
     const a = this.day().agents[id];
-    return a ? { tokens: a.tokens, calls: a.calls, lastCallAt: a.lastCallAt } : { tokens: 0, calls: 0, lastCallAt: null };
+    return a ? { tokens: a.tokens, calls: a.calls, lastCallAt: a.lastCallAt, ...(a.diagnostics ? { diagnostics: cleanDiagnostics(a.diagnostics) } : {}) } : { tokens: 0, calls: 0, lastCallAt: null };
   }
 
   /** 全天是否已达到硬上限（已用 ≥ tokensPerDay） */
@@ -163,6 +177,20 @@ export class Budget {
     this.warn(today.key, d);
   }
 
+  /** Observation only; failed/unknown calls do not alter budget settlement. */
+  recordCall(agentId, usage, meta = {}) {
+    if (meta.cancelled) return;
+    const d = this.day();
+    const a = (d.agents[agentId] ||= { tokens: 0, calls: 0, lastCallAt: null, lines: {} });
+    const recent = (a.recent ||= []);
+    const reported = meta.ok !== false && !!usage && (boundedCount(usage.input) !== null || boundedCount(usage.output) !== null);
+    addCallDiagnostics(d, meta, reported);
+    addCallDiagnostics(a, meta, reported);
+    recent.push({ at: this.now(), ok: meta.ok !== false, ms: boundedCount(meta.ms), ...safeCallMetadata(meta, reported) });
+    if (recent.length > 20) recent.splice(0, recent.length - 20);
+    this.save();
+  }
+
   /** 达到 80% 与 100% 时各告警一次（每个地球日） */
   warn(key, d) {
     if (!this.onWarn) return;
@@ -187,7 +215,7 @@ export class Budget {
     const d = this.day(today.key);
     return {
       day: today.key, timezone: this.timezone, budget: this.tokensPerDay, usable: Math.floor(this.tokensPerDay * (1 - this.reserve)),
-      used: d.total, reserved: this.reservedTotal, capped: d.total >= this.tokensPerDay, lines: { ...d.lines },
+      used: d.total, reserved: this.reservedTotal, capped: d.total >= this.tokensPerDay, lines: { ...d.lines }, ...(d.diagnostics ? { diagnostics: cleanDiagnostics(d.diagnostics) } : {}),
     };
   }
 }

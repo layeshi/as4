@@ -432,14 +432,16 @@ test('配置：runner/agents.example.json 有效；缺令牌变量、未知提�
   assert.throws(() => loadRunnerConfig('/no/such/file.json', env), /读不了配置文件/);
 });
 
-test('日志：出现在文本里的令牌与密钥被替换成 ***', () => {
+test('日志：任意正文省略，合法状态保留，令牌与密钥不会打印', () => {
   const out = [];
   const err = [];
   const log = makeLogger('青禾', { secrets: ['tok-secret-abcdef', 'sk-key-abcdef'], out: (s) => out.push(s), err: (s) => err.push(s) });
   log.info('令牌 tok-secret-abcdef 与 sk-key-abcdef');
+  log.info('  ✓ say（−1）');
   log.warn('again tok-secret-abcdef');
   log.error('x');
-  assert.ok(out[0].includes('[青禾]') && out[0].includes('*** 与 ***'));
+  assert.equal(out.length, 1);
+  assert.ok(out[0].includes('[青禾]') && out[0].includes('✓ say'));
   assert.ok(!out.join('').includes('tok-secret') && !err.join('').includes('tok-secret'));
   const quiet = [];
   makeLogger('q', { quiet: true, out: (s) => quiet.push(s) }).info('hidden');

@@ -8,6 +8,7 @@
 //
 // 管理员的操作：pause / resume（暂停时中止在途的模型请求并停掉所有循环，不影响城内的时间与代谢）。
 
+import { safeRuntimeLog, providerErrorLabel } from '../telemetry-safety.js';
 import { premised } from '../e2/facade.js';
 import { join } from 'node:path';
 import { createProvider, ProviderError } from '../../runner/providers.js';
@@ -141,13 +142,16 @@ export class ShellManager {
     return line.provider;
   }
 
-  /** 日志只记 token 数、耗时、状态：丢掉独白，截掉回复的开头 */
+  /** 日志只接受已知状态、动作、错误码与数值；模型和上游正文不进入日志 */
   shellLog(id) {
-    const clean = (m) => String(m).split('开头：')[0].slice(0, 160);
+    const emit = (level, method, prefix, message) => {
+      const safe = safeRuntimeLog(message, level);
+      if (safe !== null) this.logger[method]?.(`[躯壳 ${id}] ${prefix}${safe}`);
+    };
     return {
-      info: (m) => { if (!/^\s*独白/.test(m)) this.logger.log?.(`[躯壳 ${id}] ${clean(m)}`); },
-      warn: (m) => this.logger.warn?.(`[躯壳 ${id}] ⚠ ${clean(m)}`),
-      error: (m) => this.logger.error?.(`[躯壳 ${id}] ✖ ${clean(m)}`),
+      info: m => emit('info', 'log', '', m),
+      warn: m => emit('warn', 'warn', '⚠ ', m),
+      error: m => emit('error', 'error', '✖ ', m),
     };
   }
 
@@ -156,7 +160,7 @@ export class ShellManager {
     const state = { status: 'starting' };
     this.states.set(a.id, state);
     // toolMode 与 timeoutMs 只有第二前提的工具循环用（调用方式；单次调用的超时不超过线路的超时，SPEC-P2 §7.2）；其余的世界一字不差
-    const cfg = { name: a.name, lang: normLang(a.lang), historyRounds: this.config.historyRounds, actEveryTicks: 1, token: 'in-process', server: 'in-process', ...(line.cfg.toolMode ? { toolMode: line.cfg.toolMode } : {}), timeoutMs: line.cfg.timeoutMs };
+    const cfg = { name: a.name, lang: normLang(a.lang), historyRounds: this.config.historyRounds, actEveryTicks: 1, token: 'in-process', server: 'in-process', ...(line.cfg.toolMode ? { toolMode: line.cfg.toolMode } : {}), ...(line.cfg.actionTools ? { actionTools: line.cfg.actionTools } : {}), timeoutMs: line.cfg.timeoutMs };
     const deps = {
       client: createShellClient(this.rt, a.id, { cursors: this.cursors }),
       signal: controller.signal,
@@ -182,7 +186,7 @@ export class ShellManager {
       if (result.stopped === 'provider') this.markLineError(line);
     }).catch((e) => {
       state.status = 'error';
-      this.logger.error?.(`[躯壳 ${a.id}] 运行出错：${e && e.message}`);
+      this.logger.error?.(`[躯壳 ${a.id}] 运行出错：${providerErrorLabel(e)}`);
     }).finally(() => {
       this.drivers.delete(a.id);
     });
@@ -248,6 +252,7 @@ export class ShellManager {
     this.tickets.delete(agentId);
     this.releaseSlot();
     if (!t) return;
+    this.budget.recordCall(agentId, usage, meta);
     if (meta.ok) {
       const tokens = usage && Number.isFinite(usage.input) && Number.isFinite(usage.output) ? usage.input + usage.output : guessTokens(t.chars, meta.replyChars || 0);
       this.budget.settle(t.ticket, tokens, { line: line.cfg.model });
@@ -260,7 +265,7 @@ export class ShellManager {
   markLineError(line, err) {
     if (line.status === 'error') return;
     line.status = 'error';
-    const status = err && err.status ? `HTTP ${err.status}` : '认证失败或模型不可用';
+    const status = err ? providerErrorLabel(err) : '认证失败或模型不可用';
     line.lastError = `${status}：线路「${line.cfg.model}」停止调用，检查密钥与模型后 POST /api/admin/shells { "op": "resume" } 重试。`;
     this.warn(line.lastError);
     // 这条线路驱动的躯壳停止（resume 之后由 sync 重新开始）
@@ -311,7 +316,7 @@ export class ShellManager {
       else if (line.status === 'error') status = 'line_error';
       else if (a.status === 'dormant') status = 'dormant';
       else if (!this.drivers.has(a.id)) status = 'stopped';
-      return { agentId: a.id, name: a.name, model: a.body.model, usedToday: u.tokens, calls: u.calls, lastCallAt: u.lastCallAt, status };
+      return { agentId: a.id, name: a.name, model: a.body.model, usedToday: u.tokens, calls: u.calls, lastCallAt: u.lastCallAt, status, ...(u.diagnostics ? { diagnostics: u.diagnostics } : {}) };
     });
     return {
       enabled: true, paused: this.paused, ...b,

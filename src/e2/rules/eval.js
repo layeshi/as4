@@ -22,6 +22,7 @@
 
 import { P } from '../params.js';
 import { RuleError } from './errors.js';
+import { expressionDependencies, sortWork } from './plan.js';
 
 // ── 值 ─────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ export function newBudget(fuel = P.ruleFuel) {
 
 export function tick(budget, n = 1) {
   budget.steps += n;
+  budget.onSteps?.(n);
   if (budget.steps > budget.fuel) throw new RuleError('fuel', `${budget.steps} > ${budget.fuel}`);
 }
 
@@ -95,6 +97,19 @@ export function floorMod(a, b) {
  */
 export function evalNode(n, ctx) {
   tick(ctx.budget);
+  if (!ctx.budget.memo) return evalUncached(n, ctx);
+  const d = expressionDependencies(n);
+  if (!d.pure) return evalUncached(n, ctx);
+  const key = d.freeIt ? JSON.stringify(ctx.env.it ?? null) : '';
+  let values = ctx.budget.memo.get(n);
+  if (values?.has(key)) return values.get(key);
+  const value = evalUncached(n, ctx); // Lazy: errors and unselected branches are never cached/eagerly evaluated.
+  if (!values) { values = new Map(); ctx.budget.memo.set(n, values); }
+  values.set(key, value);
+  return value;
+}
+
+function evalUncached(n, ctx) {
   switch (n.t) {
     case 'int':
     case 'str':
@@ -285,12 +300,14 @@ function callValue(n, ctx) {
       const keyed = [];
       eachElement(l, ctx, (el) => keyed.push({ el, key: numeric(evalNode(a[1], ctx), 'top 的式子') }));
       const k = numeric(ev(2), 'top 的 n');
+      if (ctx.budget.memo) tick(ctx.budget, sortWork(l.length));
       keyed.sort((x, y) => y.key - x.key || byId(x.el, y.el));
       return keyed.slice(0, Math.max(0, k)).map((x) => x.el);
     }
     case 'sample': {
       const l = listOf(ev(0), 'sample');
       const k = numeric(ev(1), 'sample 的 n');
+      if (ctx.budget.memo) tick(ctx.budget, l.length + sortWork(l.length));
       return sampleList(l, k, host);
     }
     case 'contains': {
@@ -319,6 +336,7 @@ function callValue(n, ctx) {
     case 'names': {
       const l = listOf(ev(0), 'names');
       const sep = a.length > 1 ? strOf(ev(1), 'names 的分隔符') : ', ';
+      if (ctx.budget.memo) tick(ctx.budget, l.length);
       return l.map((el) => nameOf(el, host)).join(sep);
     }
     case 'weather': return host.weather(strOf(ev(0), 'weather'));

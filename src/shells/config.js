@@ -14,7 +14,7 @@ import { DEFAULT_AGENT_LOOP } from '../../runner/loop.js';
 
 export const DEFAULTS = Object.freeze({ tokensPerDay: 50000000, timezone: 'Asia/Shanghai', reserve: 0.05, concurrency: 4, historyRounds: 2, maxTokens: 1200, timeoutMs: 120000 });
 
-const LINE_KEYS = new Set(['model', 'provider', 'baseURL', 'apiKeyEnv', 'extraBody', 'maxTokens', 'timeoutMs', 'effort', 'reasoningEffort', 'fallbacks', 'seed', 'chatty', 'toolMode']);
+const LINE_KEYS = new Set(['model', 'provider', 'baseURL', 'apiKeyEnv', 'extraBody', 'maxTokens', 'timeoutMs', 'effort', 'reasoningEffort', 'fallbacks', 'seed', 'chatty', 'toolMode', 'actionTools']);
 const PROVIDERS = PROVIDER_NAMES;
 export const TOOL_MODES = Object.freeze(['json', 'native']);
 /** agentLoop 各键的取值范围（SPEC-P2 §10.1）；缺省取 runner/loop.js 的 DEFAULT_AGENT_LOOP（缺省值只在那里定义一次，§3） */
@@ -74,6 +74,7 @@ export function parseShellsConfig(raw, overrides = {}) {
     if (l.baseURL !== undefined && typeof l.baseURL !== 'string') throw new Error(`${where}.baseURL 必须是字符串。`);
     if (l.extraBody !== undefined && (l.extraBody === null || typeof l.extraBody !== 'object' || Array.isArray(l.extraBody))) throw new Error(`${where}.extraBody 必须是一个 JSON 对象。`);
     if (l.toolMode !== undefined && !TOOL_MODES.includes(l.toolMode)) throw new Error(`${where}.toolMode 必须是 ${TOOL_MODES.map((m) => `"${m}"`).join(' 或 ')}。`);
+    if (l.actionTools !== undefined && !['legacy', 'typed'].includes(l.actionTools)) throw new Error(`${where}.actionTools 必须是 "legacy" 或 "typed"。`);
     return { ...l, model: l.model.trim(), maxTokens: int(l.maxTokens, DEFAULTS.maxTokens, 64, 32000, `${where}.maxTokens`), timeoutMs: int(l.timeoutMs, DEFAULTS.timeoutMs, 1000, 300000, `${where}.timeoutMs`) }; // 上限 300 秒（SPEC-P2 §9.4；托管运行器的上限仍是 120 秒）
   });
   return { tokensPerDay, timezone, reserve, concurrency, historyRounds, agentLoop, lines };

@@ -33,7 +33,11 @@ const typeErr = (msg) => new RuleError('type', msg);
 function evalExpr(src, ctx) {
   let tree;
   try {
-    tree = parseCached(src);
+    if (ctx.budget.memo) {
+      ctx.budget.trees ||= new Map();
+      tree = ctx.budget.trees.get(src);
+      if (!tree) { tree = parseCached(src); ctx.budget.trees.set(src, tree); }
+    } else tree = parseCached(src);
   } catch (e) {
     throw typeErr(`表达式无法解析：${src}`);
   }
