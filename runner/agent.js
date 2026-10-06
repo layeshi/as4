@@ -10,6 +10,7 @@ import { createProvider, PROVIDER_NAMES, ProviderError, validateReasoningEffort 
 import { renderPerception, summarizeResults } from './render.js';
 import { buildSystemPrompt, promptParams } from './prompt.js';
 import { parseModelJson, normalizeReply } from './parse.js';
+import { completeUntilAborted } from './abortable.js';
 import { runWaking, waitTickOrWake } from './loop.js';
 
 const KEEP_ROUNDS = 6; // 短期记忆：默认只保留最近 6 轮（配置项 historyRounds 可以调小以省 token）
@@ -249,7 +250,7 @@ export async function runAgent(cfg, deps = {}) {
     const t0 = Date.now();
     try {
       report({ status: 'thinking' });
-      reply = await provider.complete({ system, messages, perception: p, signal });
+      reply = await completeUntilAborted(provider, { system, messages, perception: p, signal });
       // TODO(spec): Q28 — confirmed: only successful calls count as waking.
       if (p.premise >= 1) lastWoke = p.now.tick;
       reportUsage(reply.usage || null, { ok: true, replyChars: String(reply.text || '').length, ms: Date.now() - t0 });
@@ -303,7 +304,7 @@ export async function runAgent(cfg, deps = {}) {
     let results = [];
     if (thought || actions.length > 0) {
       if (signal?.aborted) break;
-      const act = await client.act({ thought, actions, lang: cfg.lang });
+      const act = await client.act({ thought, actions, lang: cfg.lang, experimentGeneration: p.now?.experimentGeneration ?? 0 });
       if (!act.ok) {
         report({ status: 'error', lastError: '行动提交失败，下一刻重试。' });
         const code = act.json && act.json.error && act.json.error.code;

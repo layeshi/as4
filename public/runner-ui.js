@@ -181,7 +181,7 @@ export function runnerPanel(initial, key) {
   let view = initial, busy = false;
   const show = (v) => {
     view = v; clear(state); state.append(statusContent(v));
-    start.disabled = busy || !v.config || ['starting', 'thinking', 'waiting'].includes(v.status);
+    start.disabled = busy || !v.config || ['starting', 'thinking', 'waiting', 'experiment_paused'].includes(v.status);
     // Error may represent a running retry loop, so start remains idempotent on the server.
     pause.disabled = busy || !v.config || ['paused', 'stopped'].includes(v.status);
     testBtn.disabled = busy; saveBtn.disabled = busy; refresh.disabled = busy;

@@ -35,6 +35,7 @@ export function meCore({ rt, cursors }, id, { lang, after }) {
   // 第二前提：平台的运行器每刻执行的上限（运行时的配置，不是世界状态；SPEC-P2 §4.4）。躯壳的进程内客户端走同一个 meCore，所以三种客户端看到同一组数
   if (agentic(rt.w) && p.you && p.you.status === 'awake') p.attention = { ...(rt.agentLoop || DEFAULT_AGENT_LOOP) };
   if (after === undefined && p.inboxCursor !== undefined && p.inboxCursor > floor) cursors.set(id, p.inboxCursor);
+  if (rt.w.experimentControl && p.now) p.now.experimentGeneration = rt.w.experimentControl.generation;
   return p;
 }
 
@@ -70,6 +71,9 @@ export function actCore({ rt, cursors }, id, body, lang) {
   const w = rt.w;
   const a = w.agents[id];
   if (w.paused) return fail('paused');
+  if ((w.experimentControl || body.experimentGeneration !== undefined) && (!Number.isSafeInteger(body.experimentGeneration) || body.experimentGeneration !== (w.experimentControl?.generation ?? 0))) {
+    return { status: 409, json: { error: { code: 'stale_perception', message: lang === 'en' ? 'The experiment was paused. Read a fresh perception before acting.' : '实验曾被暂停，请重新感知后行动。' } } };
+  }
   if (a.status !== 'awake') return fail('not_awake', { status: a.status });
   // ackSeq：这位 agent 到此刻为止已经被送达的最大收件序号（由内存游标而来）
   const payload = { agentId: id, thought: body.thought ?? undefined, actions: body.actions, ackSeq: cursors.get(id) || 0 };

@@ -557,7 +557,7 @@ test('运行器：解析失败的回复本刻不行动；收件在成功行动�
     const res = await runAgent(cfg, { client, provider, wait, maxRounds: 4, log: { info: (m) => logs.push(m), warn: (m) => logs.push(`WARN ${m}`), error: (m) => logs.push(`ERR ${m}`) } });
     assert.equal(res.rounds, 4);
     assert.equal(res.acted, 1, '只有第 3 轮有动作（第 2 轮 actions 为空、没有独白：不发 act 请求）');
-    assert.deepEqual(acts, [{ actions: [{ type: 'say', text: '回声' }], thought: '好' }]);
+    assert.deepEqual(acts, [{ actions: [{ type: 'say', text: '回声' }], experimentGeneration: 0, thought: '好' }]);
     assert.ok(logs.some((l) => l.startsWith('WARN 回复里没有可解析的 JSON')));
     assert.ok(seen[0].includes('SECRET-PING-一'), '第 1 轮看到收件');
     assert.ok(seen[1].includes('SECRET-PING-一'), '第 1 轮解析失败，游标没动，第 2 轮仍然看到');

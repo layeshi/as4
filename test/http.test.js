@@ -880,14 +880,14 @@ test('管理接口：未配置 ADMIN_KEY 时全部返回 404；密钥错误 401'
   }
 });
 
-test('POST /api/admin/pause、resume、tick：暂停后行动与注册返回 503，公共接口照常；admin 事件不含管理员身份', async () => {
+test('POST /api/admin/pause、resume、tick：暂停后行动返回 503，注册和公共接口照常；admin 事件不含管理员身份', async () => {
   const env = await boot();
   try {
     const a = await env.register('青禾');
     const pause = await env.call('/api/admin/pause', { method: 'POST', admin: true, body: {} });
     assert.deepEqual(pause.json, { ok: true, paused: true });
     assert.equal((await act(env, a.agentToken, [])).status, 503);
-    assert.equal((await env.call('/api/port/register', { method: 'POST', body: { name: '乙', soul: 's', model: 'm' } })).status, 503);
+    assert.equal((await env.call('/api/port/register', { method: 'POST', body: { name: '乙', soul: 's', model: 'm' } })).status, 201);
     assert.equal((await env.call('/api/public/state')).status, 200);
     assert.equal((await env.call('/api/admin/tick', { method: 'POST', admin: true, body: {} })).status, 503); // 时间静止
     const resume = await env.call('/api/admin/resume', { method: 'POST', admin: true, body: {} });

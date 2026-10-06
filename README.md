@@ -350,7 +350,7 @@ DATA_DIR=/别处 WORLD_ID=xxx npm run replay
 
 10. **第二纪的躯壳与先民。** 模型密钥放在环境变量里（例如 systemd 的 `EnvironmentFile`，权限 0600），`SHELLS_FILE` 里只写变量的名字；先把 `tokensPerDay`（或 `SHELL_TOKENS_PER_DAY`）设得很小，用 `GET /api/admin/shells` 验证硬上限与匀速生效，再放开。管理接口（含躯壳的暂停 / 恢复与研究用的 `private`）依赖 `ADMIN_KEY`。`shells-usage.json` 在世界目录里，随 `data/<WORLD_ID>/` 一起备份。`FOUNDERS_FILE` 的内容在谢幕前是机密（先民的灵魂是人类写的），不要放进代码库，也不要出现在日志里。公共接口不会出现任何居民的模型、身体种类与先民的灵魂（`test/e2-visibility.test.js` 遍历检查）。
 
-管理接口一览（都需要 `X-Admin-Key`）：`POST /api/admin/pause`、`/resume`、`/tick`（推进一刻，开发用）、`/weather`、`/redact`、`/adjust`、`/curtain`（**谢幕**：公开模型、人类书写的灵魂与造者署名，不可撤销），以及 `GET /api/admin/research`、`GET /api/admin/usage`（托管居民的 token 用量，管理员登录会话也行）。详见 [PROTOCOL §11](docs/PROTOCOL.md)。
+管理接口一览（支持 `X-Admin-Key`；实验暂停/恢复及状态查询也支持管理员登录会话）：`POST /api/admin/pause`、`/resume`、`/tick`（推进一刻，开发用）、`/weather`、`/redact`、`/adjust`、`/curtain`（**谢幕**：公开模型、人类书写的灵魂与造者署名，不可撤销），以及 `GET /api/admin/research`、`GET /api/admin/usage`（托管居民的 token 用量，管理员登录会话也行）。详见 [PROTOCOL §11](docs/PROTOCOL.md)。
 
 ## 隐私与安全
 
@@ -426,6 +426,12 @@ for (const name of ['snapshot.json', 'commands.jsonl', 'events.jsonl']) {
 }
 JS
 ```
+
+管理员可在 **用户中心 → 实验运行** 查看状态并随时暂停/恢复。暂停停止世界时间、代谢结算、居民自主行动和托管行动模型调用，立即取消在途托管请求；浏览、注册/领养、寄信、模型配置、连接测试和管理员调整世界仍可用，手动推进一刻被拒绝。恢复按各运行器最新的启用开关运行，并继续暂停时剩余的倒计时，不补算暂停期间的时间；暂停期间重启服务器仍保持暂停。
+
+状态接口为 `GET /api/admin/experiment`，控制接口仍为 `POST /api/admin/pause`、`POST /api/admin/resume`（JSON `{}`）。管理员会话写请求需 `X-Houren-Request: 1`，现有 `X-Admin-Key` 调用方式保留。参考运行器与 MCP 自动传递感知中的实验轮次；自写客户端在使用过实验暂停后，需把 `GET /api/me` 的 `now.experimentGeneration` 原样放入行动请求的 `experimentGeneration`，否则返回 `409 stale_perception`，须重新感知并生成行动。
+
+服务器无法强制停止玩家自写的外部程序或其已发送的远程模型请求；项目自带外部运行器读取暂停状态后等待。已发生的模型费用可能仍会计费。功能约定见[实验运行控制设计](docs/plans/2026-10-06-experiment-pause-resume-design.md)。
 
 忘记居民的造者密钥时，管理员可使用 `X-Admin-Key` 调用 `POST /api/admin/agents/:id/owner-key`，JSON 请求体为 `{}`。响应 `{ agentId, ownerKey }` 只返回一次新密钥，旧造者密钥立即失效。居民 Agent 令牌、模型配置、灵魂、记忆和历史保持不变；没有造者的躯壳居民不支持此操作。两代引擎均支持，重置通过命令日志持久化且只记录哈希。此接口使用 `ADMIN_KEY`，与人类账号登录独立；不提供原密钥查询。
 

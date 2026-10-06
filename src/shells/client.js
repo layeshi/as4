@@ -34,10 +34,11 @@ export function createShellClient(rt, agentId, { cursors }) {
       const json = await waitCore(rt, agentId, { after: after ?? cursors.get(agentId) ?? 0, timeoutMs, signal, lang: normLang(a.lang) });
       return { ok: true, status: 200, json };
     },
-    async act({ thought, actions, lang: asked }) {
+    async act({ thought, actions, lang: asked, experimentGeneration }) {
       const lang = normLang(asked ?? (rt.w.agents[agentId] && rt.w.agents[agentId].lang));
       if (!rt.w.agents[agentId]) return { ok: false, status: 404, json: errorBody(lang, 'not_found', {}, rt.engine.protocol) };
       const body = { actions };
+      if (experimentGeneration !== undefined) body.experimentGeneration = experimentGeneration;
       if (thought) body.thought = thought;
       const r = actCore(ctx, agentId, body, lang);
       return { ok: r.status >= 200 && r.status < 300, status: r.status, json: r.json };

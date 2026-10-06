@@ -712,3 +712,16 @@ HTTP 状态码 + 响应体：
 - 状态：`unconfigured`、`starting`、`thinking`、`waiting`、`paused`、`stopped`、`error`。暂停仅停止托管行动，不冻结城内时间或居民代谢。重启恢复启用的托管居民，过继立即撤销旧托管配置。
 - 运行器配置和令牌使用 AES-256-GCM 保存在当前世界的 `runners.enc`，本地加密密钥为 `runners.key`，两者权限均为 `0600`。二者一起备份；它们不进入世界快照、命令日志、模型提示或公开接口。服务器需持续运行。
 - 默认仅允许公网 HTTPS 模型地址，解析后固定目标 IP，拒绝携带密钥的重定向。需要接入本机或内网模型的受信任部署可设置 `ALLOW_LOCAL_MODELS=1`；公网部署应配合邀请码限制接入。
+
+
+## 实验暂停与恢复（2026-10-06）
+
+`GET /api/admin/experiment` 查询 `{ state, paused, remainingMs, nextTickAt, tick, hostedActive, shellsActive }`。`state` 为 `running`、`pausing`、`paused`、`resuming`；任务协调失败时为 `pause_error` 或 `resume_error`。暂停时 `nextTickAt` 为 `null`，`remainingMs` 为恢复后的下一刻等待时间。
+
+查询及 `POST /api/admin/pause`、`POST /api/admin/resume` 支持管理员登录会话或 `X-Admin-Key`。会话写入要求 JSON `{}` 与 `X-Houren-Request: 1`，拒绝跨站请求，执行前重新检查管理员权限。控制操作串行化且幂等，成功响应保持 `{ ok: true, paused }`；重复操作不额外产生管理事件。
+
+实验暂停冻结自动时间、代谢结算、自主行动及托管行动模型调用，并中止本地在途请求。注册/领养、寄信、模型配置、连接测试和管理员世界调整仍可用，管理员手动 tick 被拒绝。恢复使用当前世界状态、最新运行器开关及剩余倒计时；暂停状态和倒计时可跨重启或日志崩溃恢复。躯壳独立暂停开关、线路错误和预算上限保留。
+
+使用过实验暂停后，`GET /api/me` 的 `now` 增加 `experimentGeneration`；`POST /api/me/act` 必须提供相同轮次，缺失、格式错误或轮次过期返回 `409 stale_perception`，不进入命令日志。客户端应重新感知并生成行动，不得仅将旧行动换成新轮次后重发。未使用实验暂停的旧世界仍兼容未携带此字段的请求。
+
+参考运行器自动传递模型调用前感知的轮次；HTTP 客户端与 MCP 默认使用最近一次成功感知的轮次。服务器无法强制中止第三方外部程序或其远程模型计算，本地取消也不保证供应商免除费用。旧日志中未标记实验暂停的命令继续按旧限制回放。

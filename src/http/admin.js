@@ -5,7 +5,8 @@ import { premised, agentic } from '../e2/facade.js';
 import { bodyList } from '../e2/engine/shells.js';
 import { upkeepOf, weightOf } from '../e2/engine/lifecycle.js';
 import { randomBytes } from 'node:crypto';
-import { accountFor } from './accounts.js';
+import { accountFor, mutationGate } from './accounts.js';
+import { AccountError } from '../accounts/store.js';
 import { readJson, sendError, sendEngineError, sendJson, sha256hex, timingEqual } from './util.js';
 
 /** 鉴权；失败时发 404（未启用）或 401，并返回 false */
@@ -63,6 +64,42 @@ const op = (name) => async (req, res, ctx) => {
   if (!result.ok) return sendEngineError(res, 'zh', result.error);
   sendJson(res, 200, result);
 };
+
+/** Experiment controls accept either an admin session or the existing explicit key. */
+function experimentAuth(ctx, req, res, writing = false) {
+  if (req.headers['x-admin-key'] !== undefined) return auth(ctx, req, res) ? () => {} : null;
+  const user = accountFor(ctx, req);
+  if (!user) { auth(ctx, req, res); return null; }
+  if (user.role !== 'admin') {
+    sendJson(res, 403, { error: { code: 'forbidden', message: '此操作需要管理员权限。' } });
+    return null;
+  }
+  if (writing) mutationGate(req);
+  return () => {
+    const current = accountFor(ctx, req);
+    if (!current || current.role !== 'admin' || current.revision !== user.revision) {
+      throw new AccountError(401, 'unauthorized', '账号已更新，请重新登录。');
+    }
+  };
+}
+
+const experimentOp = (paused) => async (req, res, ctx) => {
+  try {
+    const authorize = experimentAuth(ctx, req, res, true);
+    if (!authorize) return;
+    const parsed = await readJson(req);
+    if (!parsed.ok) return sendError(res, 'zh', parsed.code);
+    sendJson(res, 200, await ctx.experiment.setPaused(paused, authorize));
+  } catch (e) {
+    if (!(e instanceof AccountError)) throw e;
+    sendJson(res, e.status, { error: { code: e.code, message: e.message } });
+  }
+};
+
+async function experimentView(req, res, ctx) {
+  if (!experimentAuth(ctx, req, res)) return;
+  sendJson(res, 200, ctx.experiment.view());
+}
 
 /** POST /api/admin/tick：立即推进一刻（开发与测试用） */
 async function tickNow(req, res, ctx) {
@@ -174,8 +211,9 @@ export const adminRoutes = [
   ['POST', /^\/api\/admin\/agents\/([^/]+)\/owner-key$/, resetOwnerCredential],
   ['POST', '/api/admin/backstage', op('backstage')],
   ['POST', '/api/admin/rebody', op('rebody')],
-  ['POST', '/api/admin/pause', op('pause')],
-  ['POST', '/api/admin/resume', op('resume')],
+  ['GET', '/api/admin/experiment', experimentView],
+  ['POST', '/api/admin/pause', experimentOp(true)],
+  ['POST', '/api/admin/resume', experimentOp(false)],
   ['POST', '/api/admin/tick', tickNow],
   ['POST', '/api/admin/weather', op('weather')],
   ['POST', '/api/admin/redact', op('redact')],

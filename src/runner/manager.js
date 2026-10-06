@@ -95,7 +95,7 @@ export class RunnerManager {
     const r = this.valid(id) && this.records[id];
     if (!r) return { status: 'unconfigured', config: null, logs: [] };
     const { apiKey, ...config } = r.config;
-    return { status: r.enabled ? 'starting' : 'paused', ...this.states.get(id), config: { ...config, hasApiKey: !!apiKey } };
+    return { status: r.enabled ? 'starting' : 'paused', ...this.states.get(id), ...(r.enabled && this.rt.w.paused ? { status: 'experiment_paused' } : {}), config: { ...config, hasApiKey: !!apiKey } };
   }
   /** Token usage of a hosted resident. `tracked: false` when the server does not drive it: a self-hosted runner is invisible to us. */
   usageView(id) {
@@ -211,7 +211,7 @@ export class RunnerManager {
     if (['dead', 'retired'].includes(this.rt.w.agents[id].status)) throw new RunnerError('已长眠或归隐的居民不能启动。');
     if (this.jobs.has(id)) return this.view(id);
     const r = this.records[id]; r.enabled = true; this.persist();
-    if (!this.serverURL) return this.view(id);
+    if (!this.serverURL || this.rt.w.paused) return this.view(id);
     const controller = new AbortController();
     const state = { ...this.states.get(id), status: 'starting', lastError: null, logs: [] };
     this.states.set(id, state);
@@ -257,6 +257,17 @@ export class RunnerManager {
     if (this.valid(id)) { this.records[id].enabled = false; this.persist(); }
     this.states.set(id, { ...this.states.get(id), status: 'paused' });
     return this.view(id);
+  }
+  async suspendExperiment() {
+    const all = [...this.jobs.values()];
+    for (const job of all) job.controller.abort();
+    await Promise.all(all.map((job) => job.promise));
+  }
+  resumeExperiment() {
+    if (this.closing || this.rt.w.paused) return;
+    for (const id of Object.keys(this.records)) {
+      if (this.records[id].enabled && this.valid(id) && ['awake', 'dormant'].includes(this.rt.w.agents[id].status)) this.start(id);
+    }
   }
   async remove(id) { await this.stop(id); delete this.records[id]; this.usage.drop(id); this.states.delete(id); if (this.key) this.persist(); }
   async close() { this.closing = true; await Promise.all([...this.jobs.keys()].map((id) => this.stop(id))); }

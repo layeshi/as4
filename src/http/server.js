@@ -3,6 +3,7 @@
 
 import { checkBackstage } from '../backstage.js';
 import http from 'node:http';
+import { ExperimentControl } from '../experiment-control.js';
 import { AccountStore } from '../accounts/store.js';
 import { accountRoutes, accountLimits } from './accounts.js';
 import { RunnerManager } from '../runner/manager.js';
@@ -143,6 +144,8 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
 
   checkBackstage(rt, ctx.shells, { logger, ...(backstageRoot ? { root: backstageRoot } : {}) });
 
+  ctx.experiment = new ExperimentControl(rt, ctx.runners, ctx.shells);
+
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
@@ -198,6 +201,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     server,
     ctx,
     async close() {
+      ctx.experiment.close();
       if (ctx.shells) await ctx.shells.close();
       await ctx.runners.close();
       clearInterval(heartbeat);

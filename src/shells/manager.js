@@ -114,7 +114,7 @@ export class ShellManager {
         }
         continue;
       }
-      if (this.paused || driver) continue;
+      if (this.paused || this.rt.w.paused || driver) continue;
       const line = this.lines.get(a.body.model);
       if (!line) {
         if (!this.noLine.has(a.id)) {
@@ -223,11 +223,11 @@ export class ShellManager {
 
   /** runAgent 的 beforeModel：为假则本刻不调用模型 */
   async beforeModel(agentId, line, state, meta) {
-    if (this.closing || this.paused || line.status === 'error' || (premised(this.rt.w) && this.rt.w.agents[agentId]?.body.model !== line.cfg.model)) return false;
+    if (this.closing || this.paused || this.rt.w.paused || line.status === 'error' || (premised(this.rt.w) && this.rt.w.agents[agentId]?.body.model !== line.cfg.model)) return false;
     const est = estimateTokens(meta.chars, line.cfg.maxTokens);
     const slot = await this.acquireSlot();
     if (!slot) return false;
-    if (this.closing || this.paused || line.status === 'error' || (premised(this.rt.w) && this.rt.w.agents[agentId]?.body.model !== line.cfg.model)) {
+    if (this.closing || this.paused || this.rt.w.paused || line.status === 'error' || (premised(this.rt.w) && this.rt.w.agents[agentId]?.body.model !== line.cfg.model)) {
       this.releaseSlot();
       return false;
     }
@@ -269,6 +269,14 @@ export class ShellManager {
 
   // ── 管理员的操作 ─────────────────────────────────────────
 
+  async suspendExperiment() {
+    // Experiment pause must not change the independently persisted shell switch.
+    for (const resolve of this.slots.waiters.splice(0)) resolve(false);
+    await this.stopAll();
+  }
+
+  resumeExperiment() { this.sync(); }
+
   async pause() {
     this.paused = true;
     this.budget.setPaused(true);
@@ -298,6 +306,7 @@ export class ShellManager {
       let status = state.skip ? (state.skip === 'hard_cap' ? 'capped' : 'paced') : state.status || 'waiting';
       if (a.status === 'dead' || a.status === 'retired') status = a.status;
       else if (this.paused) status = 'paused';
+      else if (this.rt.w.paused) status = 'experiment_paused';
       else if (!line) status = 'no_line';
       else if (line.status === 'error') status = 'line_error';
       else if (a.status === 'dormant') status = 'dormant';

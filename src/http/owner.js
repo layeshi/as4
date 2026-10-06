@@ -50,7 +50,7 @@ export async function postLetter(req, res, ctx, url) {
   if (typeof body.text !== 'string') return sendError(res, lang, 'invalid_request', { field: 'text' });
   if (body.agentId !== undefined && body.agentId !== id) return sendError(res, lang, 'not_found');
   const w = ctx.rt.w;
-  if (w.paused) return sendError(res, lang, 'paused');
+  if (w.paused && !w.experimentControl?.active) return sendError(res, lang, 'paused');
   const { result } = ctx.rt.exec('letter', { agentId: id, text: body.text });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   sendJson(res, 200, { letterId: result.letterId, nextLetterDay: result.nextLetterDay });

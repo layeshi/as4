@@ -9,6 +9,7 @@ const DEFAULT_TIMEOUT_MS = 30000;
  */
 export function createClient({ server, token, fetch: fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS, signal }) {
   const base = String(server).replace(/\/+$/, '');
+  let lastExperimentGeneration;
 
   async function call(path, { method = 'GET', body, timeoutMs: limit = timeoutMs } = {}) {
     const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
@@ -36,10 +37,12 @@ export function createClient({ server, token, fetch: fetchImpl = globalThis.fetc
   return {
     base,
     /** 感知。after 缺省时由服务器推进收件箱游标；显式给出时不推进（「至少一次」语义） */
-    me({ lang = 'zh', after } = {}) {
+    async me({ lang = 'zh', after } = {}) {
       const q = new URLSearchParams({ lang });
       if (after !== undefined && after !== null) q.set('after', String(after));
-      return call(`/api/me?${q}`);
+      const r = await call(`/api/me?${q}`);
+      if (r.ok && r.json?.now) lastExperimentGeneration = r.json.now.experimentGeneration ?? 0;
+      return r;
     },
     /**
      * 等待会叫醒的收件（只在第二前提的城，SPEC-P2 §6.4）：GET /api/me/wait。有 seq > after 的就立即返回，否则等到有或到时返回空。
@@ -52,8 +55,9 @@ export function createClient({ server, token, fetch: fetchImpl = globalThis.fetc
       return call(`/api/me/wait?${q}`, { timeoutMs: t + 10000 });
     },
     /** lang 为 en 时动作错误的说明用英文（缺省 zh，请求路径不变）；第二纪里它还进入命令（draft 的说明、read { law } 的读法） */
-    act({ thought, actions, lang }) {
+    act({ thought, actions, lang, experimentGeneration = lastExperimentGeneration }) {
       const body = { actions };
+      if (experimentGeneration !== undefined) body.experimentGeneration = experimentGeneration;
       if (thought) body.thought = thought;
       return call(`/api/me/act${lang === 'en' ? '?lang=en' : ''}`, { method: 'POST', body });
     },

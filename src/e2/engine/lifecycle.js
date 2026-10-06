@@ -111,7 +111,7 @@ export function admitFromPort(w, o) {
  * 载荷：name, bio, soul, lang, model, creatorName, tokenHash, ownerKeyHash
  */
 export function register(w, p) {
-  if (w.paused) return bad('paused');
+  if (w.paused && !w.experimentControl?.active) return bad('paused');
   try {
     const name = reqText(p.name, { max: LIMITS.name, field: 'name', oneLine: true });
     checkNameShape(name);
@@ -315,7 +315,7 @@ function reqOwnerFields(p) {
  * 载荷：soulId, model, creatorName, tokenHash, ownerKeyHash
  */
 export function adopt(w, p) {
-  if (w.paused) return bad('paused');
+  if (w.paused && !w.experimentControl?.active) return bad('paused');
   try {
     const f = reqOwnerFields(p);
     const soul = typeof p.soulId === 'string' && Object.prototype.hasOwnProperty.call(w.souls, p.soulId) ? w.souls[p.soulId] : null;
@@ -346,7 +346,7 @@ export function release(w, p) {
  * 载荷：agentId, model, creatorName, tokenHash, ownerKeyHash
  */
 export function foster(w, p) {
-  if (w.paused) return bad('paused');
+  if (w.paused && !w.experimentControl?.active) return bad('paused');
   try {
     const f = reqOwnerFields(p);
     const a = typeof p.agentId === 'string' ? w.agents[p.agentId] : null;
@@ -393,7 +393,7 @@ export function changeModel(w, p) {
  * 沙盘脑（body.kind = sandbox）例外——沙盘命令行扮演造者，好让「出示家书」这个动作有机会发生（同 v1）。（Q24，已接受）
  */
 export function letter(w, p) {
-  if (w.paused) return bad('paused');
+  if (w.paused && !w.experimentControl?.active) return bad('paused');
   const a = typeof p.agentId === 'string' ? w.agents[p.agentId] : null;
   if (!a || (!a.owner && a.body.kind !== 'sandbox')) return bad('not_found');
   if (a.status !== 'awake' && a.status !== 'dormant') return bad('not_awake', { status: a.status });

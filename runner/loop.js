@@ -9,6 +9,7 @@
 // S 是 runAgent 为这位 agent 建的状态对象：配置与依赖（cfg、deps、client、provider、log、signal、report、waitTick）和可变的部分
 // （cursor、lastWoke、system、history、rejected、looks、wakes、wakeSeen……）。工具循环只通过它与 runAgent 交换状态。
 
+import { completeUntilAborted } from './abortable.js';
 import { parseModelJson, normalizeReply } from './parse.js';
 import { ProviderError } from './providers.js';
 import { errorMessage } from './client.js';
@@ -225,7 +226,7 @@ export async function runWaking(S, p0, { kind }) {
     let results = [];
     let failure = null;
     if (thought || actions.length > 0) {
-      const r = await client.act({ thought, actions, lang });
+      const r = await client.act({ thought, actions, lang, experimentGeneration: p0.now.experimentGeneration ?? 0 });
       if (r.ok) {
         results = r.json.results || [];
         acted++;
@@ -320,8 +321,8 @@ export async function runWaking(S, p0, { kind }) {
     report({ status: 'thinking' });
     try {
       reply = mode === 'native'
-        ? await provider.step({ system, transcript, tools, perception: latest, signal: guard.signal, timeoutMs: limit })
-        : await provider.complete({ system, messages, perception: latest, signal: guard.signal, timeoutMs: limit });
+        ? await completeUntilAborted(provider, { system, transcript, tools, perception: latest, signal: guard.signal, timeoutMs: limit }, 'step')
+        : await completeUntilAborted(provider, { system, messages, perception: latest, signal: guard.signal, timeoutMs: limit });
     } catch (e) {
       const ms = Date.now() - t0;
       rec.ms += ms;

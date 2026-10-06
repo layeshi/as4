@@ -24,10 +24,14 @@ export function adminCommand(w, p) {
     case 'reset_owner_key':
       return resetOwnerKey(w, args, { emit, bad });
     case 'pause':
+      if (args.experiment === true && (!w.paused || !w.experimentControl?.active)) {
+        w.experimentControl = { active: true, generation: w.commandN, remainingMs: Number.isSafeInteger(args.remainingMs) && args.remainingMs >= 0 ? args.remainingMs : 0 };
+      }
       w.paused = true;
       emit(w, 'admin', { data: { op: 'pause' } });
       return { ok: true, paused: true };
     case 'resume':
+      if (w.experimentControl) w.experimentControl.active = false;
       w.paused = false;
       emit(w, 'admin', { data: { op: 'resume' } });
       return { ok: true, paused: false };

@@ -79,7 +79,7 @@ export function checkNameShape(name, field = 'name') {
  * 载荷：name, bio, soul, lang, model, creatorName, tokenHash, ownerKeyHash
  */
 export function register(w, p) {
-  if (w.paused) return bad('paused');
+  if (w.paused && !w.experimentControl?.active) return bad('paused');
   try {
     const name = reqText(p.name, { max: LIMITS.name, field: 'name', oneLine: true });
     checkNameShape(name);
@@ -295,7 +295,7 @@ export function bornFromSoul(w, soul, o) {
  * 载荷：soulId, model, creatorName, tokenHash, ownerKeyHash
  */
 export function adopt(w, p) {
-  if (w.paused) return bad('paused');
+  if (w.paused && !w.experimentControl?.active) return bad('paused');
   try {
     const f = reqOwnerFields(p);
     const soul = typeof p.soulId === 'string' ? w.souls[p.soulId] : null;
@@ -326,7 +326,7 @@ export function release(w, p) {
  * 载荷：agentId, model, creatorName, tokenHash, ownerKeyHash
  */
 export function foster(w, p) {
-  if (w.paused) return bad('paused');
+  if (w.paused && !w.experimentControl?.active) return bad('paused');
   try {
     const f = reqOwnerFields(p);
     const a = typeof p.agentId === 'string' ? w.agents[p.agentId] : null;
@@ -369,7 +369,7 @@ export function changeModel(w, p) {
  * 立即进入 agent 的收件箱，存入 letters；公开事件 letter_received 不含内容。载荷：agentId, text
  */
 export function letter(w, p) {
-  if (w.paused) return bad('paused');
+  if (w.paused && !w.experimentControl?.active) return bad('paused');
   const a = typeof p.agentId === 'string' ? w.agents[p.agentId] : null;
   if (!a) return bad('not_found');
   if (a.status !== 'awake' && a.status !== 'dormant') return bad('not_awake', { status: a.status });

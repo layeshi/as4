@@ -26,6 +26,8 @@ export class Runtime {
     this.nextTickAt = null;
     this.timer = null;
     this.stopped = false;
+    this.schedulerStarted = false;
+    this.remainingMs = w.paused && w.experimentControl?.active ? w.experimentControl.remainingMs : cfg.tickMs;
     this.wakeSubs = new Set(); // 第二前提：运行器订阅「有人找上门」的通知（SPEC-P2 §6.2）；不落盘、不经 SSE、不进事件流
   }
 
@@ -74,6 +76,7 @@ export class Runtime {
       events.append(evs, { silent: true, tick: w.clock.tick });
       if (cmd.type === 'tick') events.release(w.clock.tick, { silent: true });
     }
+    rt.remainingMs = w.paused && w.experimentControl?.active ? w.experimentControl.remainingMs : cfg.tickMs;
     if (tail.length) {
       logger.log?.(`已从崩溃中恢复：回放了 ${tail.length} 条命令`);
       rt.snapshot();
@@ -84,6 +87,11 @@ export class Runtime {
 
   /** 执行一条命令：先写日志，再执行；返回 { result, events, cmd } */
   exec(type, payload = {}) {
+    const wasPaused = this.w.paused;
+    const wasExperimentPaused = this.w.experimentControl?.active === true;
+    if (type === 'admin' && payload.op === 'pause' && payload.args?.experiment === true && (!wasPaused || !wasExperimentPaused)) {
+      payload = { ...payload, args: { ...payload.args, remainingMs: this.nextTickAt === null ? this.remainingMs : Math.max(0, this.nextTickAt - Date.now()) } };
+    }
     const cmd = this.log.append(type, payload, this.w.clock.tick);
     let out;
     try {
@@ -91,6 +99,19 @@ export class Runtime {
     } catch (e) {
       this.logger.error?.(`命令 #${cmd.n}（${type}）执行出错：`, e);
       out = { result: { ok: false, error: { code: 'internal' } }, events: this.engine.drainEvents(this.w) };
+    }
+    const controlChanged = out.result.ok && (wasPaused !== this.w.paused || (!wasExperimentPaused && this.w.experimentControl?.active));
+    if (controlChanged) {
+      if (this.w.paused) {
+        this.remainingMs = this.w.experimentControl?.active ? this.w.experimentControl.remainingMs : (this.nextTickAt === null ? this.cfg.tickMs : Math.max(0, this.nextTickAt - Date.now()));
+        if (this.timer) clearTimeout(this.timer);
+        this.timer = null;
+        this.nextTickAt = null;
+      } else if (this.schedulerStarted && !this.stopped) {
+        this.nextTickAt = Date.now() + this.remainingMs;
+        this.scheduleTick();
+      }
+      this.events.emit('control', { paused: this.w.paused });
     }
     this.events.append(out.events, { tick: this.w.clock.tick });
     for (const wake of out.wakes || []) {
@@ -101,6 +122,10 @@ export class Runtime {
           this.logger.warn?.(`唤醒通知的订阅者出错：${e && e.message}`);
         }
       }
+    }
+    if (controlChanged) {
+      this.snapshot();
+      this.events.emit('tick', this.tickSummary());
     }
     if (type === 'tick' && out.result.ok) {
       this.events.release(this.w.clock.tick);
@@ -124,21 +149,26 @@ export class Runtime {
     return this.exec('tick');
   }
 
-  /** 启动刻调度器：setTimeout 链，按 TICK_MS 推进，不累积漂移 */
+  /** 暂停时不挂定时器；恢复后继续剩余时间，不补刻。 */
   start() {
-    if (this.timer || this.stopped) return;
-    this.nextTickAt = Date.now() + this.cfg.tickMs;
-    const loop = () => {
-      const delay = Math.max(0, this.nextTickAt - Date.now());
-      this.timer = setTimeout(() => {
-        if (this.stopped) return;
-        if (!this.w.paused) this.tickNow();
-        this.nextTickAt += this.cfg.tickMs;
-        if (this.nextTickAt < Date.now()) this.nextTickAt = Date.now() + this.cfg.tickMs; // 进程被挂起过：不补刻
-        loop();
-      }, delay);
-    };
-    loop();
+    if (this.schedulerStarted || this.stopped) return;
+    this.schedulerStarted = true;
+    if (this.w.paused) return;
+    this.nextTickAt = Date.now() + this.remainingMs;
+    this.scheduleTick();
+  }
+
+  scheduleTick() {
+    if (this.timer || this.stopped || this.w.paused) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      if (this.stopped || this.w.paused) return;
+      this.tickNow();
+      if (this.w.paused || this.stopped) return;
+      this.nextTickAt += this.cfg.tickMs;
+      if (this.nextTickAt < Date.now()) this.nextTickAt = Date.now() + this.cfg.tickMs;
+      this.scheduleTick();
+    }, Math.max(0, this.nextTickAt - Date.now()));
   }
 
   /** 正常退出：停调度器并写快照 */

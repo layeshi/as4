@@ -4,6 +4,7 @@ import { api, errorText } from './api.js';
 import { openModal, openBackstage, savedOwners } from './modals.js';
 import { accountAgentsPanel, adminUsageView } from './account-usage-ui.js';
 import { openSnapshots } from './snapshots-ui.js';
+import { experimentPanel } from './experiment-ui.js';
 const tr = (zh, en) => getLang() === 'en' ? en : zh;
 let current = null;
 let accountButton;
@@ -94,6 +95,7 @@ function profile(modal) {
   const actions = h('div', { class: 'form-actions' });
   if (u.role === 'admin') actions.append(button(tr('用户管理', 'Manage users'), openUsers, true), button(tr('世界快照', 'World snapshots'), openSnapshots));
   if (u.role === 'admin') actions.append(button(tr('托管用量', 'Hosted usage'), openAdminUsage));
+  if (u.role === 'admin') actions.append(button(tr('实验运行', 'Experiment'), openExperiment));
   const logoutMessage = h('p', { role: 'status', class: 'error' });
   actions.append(button(tr('退出登录', 'Sign out'), async () => {
     const r = await request('/api/account/logout', {});
@@ -114,6 +116,10 @@ function profile(modal) {
     return r;
   });
   modal.body.append(change);
+}
+function openExperiment() {
+  const modal = openModal(tr('实验运行', 'Experiment'));
+  modal.body.append(experimentPanel({ onChanged: () => appCtx?.refresh() }));
 }
 function openAdminUsage() {
   adminUsageView(openModal(tr('托管用量', 'Hosted usage'), 'wide').body);
