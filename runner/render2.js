@@ -264,6 +264,7 @@ export function youHead({ p, d, P, you }) {
   const head = [you.name, d.status[you.status] || you.status, d.energy(you.energy, you.energyCap, you.floor), d.coins(you.coins), d.age(you.ageDays), p.premise >= 1 ? d.metabW(you.metabolism, you.weight.soul, you.weight.memories) : d.metab(you.metabolism)];
   if (you.tags && you.tags.length) head.push(`${d.tags}${P.col}${you.tags.join(P.sep)}`);
   if (you.purpose) head.push(`${d.purpose}${P.col}${you.purpose}`);
+  if (you.prayers?.enabled) head.push(`${p.lang === 'en' ? 'prayer points' : '祈愿点'} ${you.prayerPoints}`);
   head.push(d.left(you.actionsLeft));
   lines.push(`${d.you}${head.join(' · ')}`);
   const meta = [d.generation(you.generation)];
@@ -322,8 +323,18 @@ export function youMemoryOffers({ p, code, you }, { full = false } = {}) {
 }
 
 /** 【你】 */
+export function youPrayers({ you, code }) {
+  if (!you.prayers?.enabled) return [];
+  const en = code === 'en'; const lines = [];
+  for (const p of you.prayers.prayers) {
+    lines.push(`  [${en ? 'prayer' : '祈祷'} ${p.id}] ${p.status}: ${p.text}`);
+    if (p.reply) lines.push(`    ${en ? 'From the Temple' : '神殿传来'}: ${p.reply.text || ''}${p.reply.energy ? ` · ${p.reply.energy} ${en ? 'energy' : '能量'}` : ''}`);
+  }
+  for (const i of you.prayers.inventions) lines.push(`  [${en ? 'invention' : '发明'} ${i.id}] ${i.title} · ${i.status}: ${i.text}`);
+  return lines;
+}
 export function secYou(c) {
-  return [...youHead(c), ...youBio(c), ...youLetters(c), ...youOffers(c), ...youPacts(c), ...youWill(c), ...youTraining(c), ...youMemoryOffers(c)];
+  return [...youHead(c), ...youBio(c), ...youLetters(c), ...youOffers(c), ...youPacts(c), ...youWill(c), ...youTraining(c), ...youMemoryOffers(c), ...youPrayers(c)];
 }
 
 /** 【你在】的地点一行 */
@@ -412,6 +423,14 @@ export function secInbox({ p, code, d, f }) {
     if (p.premise >= 1 && i.kind === 'memory_offer') {
       const originNote = i.origin && i.origin.id !== i.from.id ? (code === 'en' ? ` (first ${i.origin.name}'s)` : `（最初是 ${i.origin.name} 的）`) : '';
       lines.push(code === 'en' ? `  [memory ${i.giftId}] ${i.from.name} hands you a memory${originNote}: ${i.text} (keep it with remember, gift "${i.giftId}")` : `  [记忆 ${i.giftId}] ${i.from.name} 交给你一段记忆${originNote}：${i.text}（用 remember 的 gift "${i.giftId}" 收下）`);
+      continue;
+    }
+    if (i.kind === 'prayer') {
+      lines.push(`  ${code === 'en' ? '[From the Temple]' : '[神殿传来]'} ${i.text || ''}${i.energy ? ` · ${i.energy} ${code === 'en' ? 'energy' : '能量'}` : ''}`);
+      continue;
+    }
+    if (i.kind === 'invention') {
+      lines.push(`  [${i.inventionId}] ${i.text} ${i.reason}`);
       continue;
     }
     const fn = d.kinds[i.kind];

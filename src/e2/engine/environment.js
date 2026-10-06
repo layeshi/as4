@@ -1,3 +1,4 @@
+import { prayersEnabled, recordNaturalDamage, consumeNaturalRepair } from './prayer-rewards.js';
 // SPEC-E2 §6、§10.3：环境——完好度、修缮、衰败与受损、源井产出、汲取、荒野。
 // （工程、模块的加装、拆解与遗址见 projects.js、dismantle.js。）
 
@@ -73,13 +74,15 @@ export function applyRepair(w, obj, target, place, energy) {
     emit(w, 'restored', { place, data: { target } });
     w.dayLog.restored.push({ target, place });
   }
-  return { from, to: cond, spent };
+  const eligible = consumeNaturalRepair(w, target, cond - from);
+  return { from, to: cond, spent, ...(prayersEnabled(w) ? { eligible } : {}) };
 }
 
 /** 受损（汲取、震）：完好度减去 bp，不低于 0；降到 0 时标记废墟。返回实际减少的基点 */
-export function applyDamage(w, obj, target, place, bp) {
+export function applyDamage(w, obj, target, place, bp, cause = 'resident') {
   const before = obj.condition;
   obj.condition = Math.max(0, before - bp);
+  if (cause === 'natural') recordNaturalDamage(w, target, before - obj.condition);
   if (before > 0 && obj.condition === 0) markRuin(w, obj, target, place);
   return before - obj.condition;
 }
@@ -95,9 +98,9 @@ export function decayOfPlace(place) {
 export function decayAll(w) {
   for (const p of Object.values(w.places)) {
     if (p.open || p.condition === null) continue;
-    applyDamage(w, p, p.id, p.id, decayOfPlace(p));
+    applyDamage(w, p, p.id, p.id, decayOfPlace(p), 'natural');
   }
-  for (const r of Object.values(w.roads)) applyDamage(w, r, r.id, r.a, r.decayPerDay);
+  for (const r of Object.values(w.roads)) applyDamage(w, r, r.id, r.a, r.decayPerDay, 'natural');
 }
 
 /** 汲取：每汲取 1 能量，源井完好度下降 drawDamageBp 基点 */

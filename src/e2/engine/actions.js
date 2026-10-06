@@ -1,3 +1,5 @@
+import { prayerHandlers } from './actions/prayers.js';
+import { prayersEnabled } from './prayer-rewards.js';
 // SPEC-E2 §7.6、§16、PROTOCOL-2 §4：动作的注册与分发、行动预算、规则的接入。
 // 各动作的实现在 actions/ 下，按领域分文件；代价计算与共用辅助见 actions/util.js。
 
@@ -24,6 +26,7 @@ export { actionCost } from './actions/util.js';
 
 /** 动作处理函数的注册表：{ type: { validate, apply } }。后面的步骤陆续加入（politics、city、souls、shells） */
 export const HANDLERS = {
+  ...prayerHandlers,
   ...basicHandlers,
   ...envHandlers,
   ...socialHandlers,
@@ -36,7 +39,7 @@ export const HANDLERS = {
 /** 注册更多的处理函数（供按领域分文件的模块在加载时使用） */
 export function registerHandlers(more) {
   for (const [type, h] of Object.entries(more)) {
-    if (!actionTable(2).isKnown(type)) throw new Error(`registerHandlers: unknown action ${type}`);
+    if (!actionTable(2, true).isKnown(type)) throw new Error(`registerHandlers: unknown action ${type}`);
     if (typeof h.validate !== 'function' || typeof h.apply !== 'function') throw new Error(`registerHandlers: ${type} needs validate and apply`);
     HANDLERS[type] = h;
   }
@@ -51,8 +54,8 @@ export const actionsLeft = (a) => Math.max(0, P.maxActionsPerTick - a.actsThisTi
  * invalid_args 没有带说明时，给模型一句能据以纠正的话：没有这个动作、缺哪些必填参数，或该动作的用法与说明。
  * （只是对结果的文字说明，不进入世界状态。）
  */
-function argsHint(type, act, premise = 0) {
-  const { ACTIONS, ORDER: ACTION_ORDER, isKnown: isKnownAction } = actionTable(premise);
+function argsHint(type, act, premise = 0, prayers = false) {
+  const { ACTIONS, ORDER: ACTION_ORDER, isKnown: isKnownAction } = actionTable(premise, prayers);
   if (!isKnownAction(type)) {
     const list = ACTION_ORDER.join(' ');
     return { zh: `没有这个动作：${type}。可用的动作：${list}。`, en: `There is no such action: ${type}. Available actions: ${list}.` };
@@ -91,7 +94,7 @@ function feeTotals(fees) {
  *   6. 收集并施行 after 规则
  */
 function runOne(w, a, type, act, index, lang) {
-  const { NO_BEFORE: NO_BEFORE_ACTIONS, NO_AFTER: NO_AFTER_ACTIONS } = actionTable(w.premise || 0);
+  const { NO_BEFORE: NO_BEFORE_ACTIONS, NO_AFTER: NO_AFTER_ACTIONS } = actionTable(w.premise || 0, prayersEnabled(w));
   const handler = HANDLERS[type];
   if (!handler) fail('invalid_args');
   const ctx = makeCtx(w, a, index, type, lang);
@@ -150,12 +153,12 @@ export function runActions(w, a, actions, lang = 'zh') {
     }
     a.actsThisTick++;
     try {
-      if (!actionTable(w.premise || 0).isKnown(type)) fail('invalid_args');
+      if (!actionTable(w.premise || 0, prayersEnabled(w)).isKnown(type)) fail('invalid_args');
       const { data, spent } = runOne(w, a, type, act, i, lang);
       results.push({ index: i, type, ok: true, cost: spent, data });
     } catch (e) {
       if (!(e instanceof ActError)) throw e;
-      const hint = e.hint || (e.code === 'invalid_args' ? argsHint(type, act, w.premise || 0) : null);
+      const hint = e.hint || (e.code === 'invalid_args' ? argsHint(type, act, w.premise || 0, prayersEnabled(w)) : null);
       results.push({ index: i, type, ok: false, cost: 0, error: { code: e.code, ...(hint ? { hint } : {}), ...(e.extra || {}) } });
     }
   }

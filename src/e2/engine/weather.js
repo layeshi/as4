@@ -138,10 +138,10 @@ function startEffects(w, type) {
     // 所有有完好度的地点与全部道路各受损 1000 + floor(2000 × (10000 − 完好度) / 10000) 基点（不低于 0）
     for (const p of Object.values(w.places)) {
       if (p.open || p.condition === null) continue;
-      applyDamage(w, p, p.id, p.id, 1000 + Math.floor((2000 * (10000 - p.condition)) / 10000));
+      applyDamage(w, p, p.id, p.id, 1000 + Math.floor((2000 * (10000 - p.condition)) / 10000), 'natural');
     }
     for (const r of Object.values(w.roads)) {
-      applyDamage(w, r, r.id, r.a, 1000 + Math.floor((2000 * (10000 - r.condition)) / 10000));
+      applyDamage(w, r, r.id, r.a, 1000 + Math.floor((2000 * (10000 - r.condition)) / 10000), 'natural');
     }
   } else if (type === 'amnesia') {
     // 每个醒着的居民随机遗忘一条记忆（若有）

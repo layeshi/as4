@@ -1,3 +1,4 @@
+import { rewardRepair } from '../prayer-rewards.js';
 // 环境层的动作（SPEC-E2 §25 第 3 步）：repair draw inscribe explore
 // （initiate contribute dismantle 在第 6 步）
 
@@ -42,6 +43,7 @@ const repair = {
   apply(ctx, plan) {
     const { w, a } = ctx;
     const r = applyRepair(w, plan.obj, plan.target, plan.placeId, plan.energy);
+    rewardRepair(w, a, plan.obj, plan.target, r.eligible || 0);
     // 只扣除实际用掉的部分（记入去处 repair），不收额外的动作代价
     a.energy -= r.spent;
     sink(w, 'energy', 'repair', r.spent);

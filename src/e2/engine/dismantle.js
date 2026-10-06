@@ -1,3 +1,4 @@
+import { recordRazed, recordDismantledModule } from './prayer-rewards.js';
 // SPEC-E2 §10.6–§10.7：拆解与遗址。
 //
 // 建筑与模块都有「残料」（salvage）：拆解回收残料，每次至多 salvagePerAction；建筑的残料拆尽就成为遗址。
@@ -34,6 +35,7 @@ export function razePlace(w, p) {
   for (const ins of Object.values(w.inscriptions)) {
     if (ins.place === p.id && !ins.coveredBy && !ins.redacted) ins.lost = true;
   }
+  recordRazed(w, p.id);
   p.razed = true;
   p.open = true;
   p.condition = null;
@@ -74,6 +76,7 @@ export function dismantleAt(w, a, { module = null, n }) {
     m.salvage -= n;
     salvageLeft = m.salvage;
     if (m.salvage <= 0) {
+      recordDismantledModule(w, p.id, module);
       p.modules = p.modules.filter((x) => x !== m);
       if (module === 'board') cancelBoardOffers(w, p.id);
     }

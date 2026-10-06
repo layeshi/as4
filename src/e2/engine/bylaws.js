@@ -1,3 +1,4 @@
+import { prayersEnabled } from './prayer-rewards.js';
 // SPEC-E2 §8.7、PROTOCOL-2 §6.11：社群章程、地点规则与社群的程序。
 //
 // 社群有两种程序（found 的 procedure 参数，缺省 steward）：
@@ -150,14 +151,14 @@ function applyGroupProposal(w, p, g) {
     return true;
   }
   if (p.kind === 'bylaws') {
-    const v = validateRules(p.rules, { scope: { premise: w.premise || 0, kind: 'group', id: g.id }, lookup: staticLookup(w) });
+    const v = validateRules(p.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'group', id: g.id }, lookup: staticLookup(w) });
     if (!v.ok) return false;
     setGroupBylaws(w, g, v.rules, by, meta);
     return true;
   }
   const place = w.places[p.place];
   if (!place || place.owner.kind !== 'group' || place.owner.id !== g.id) return false;
-  const v = validateRules(p.rules, { scope: { premise: w.premise || 0, kind: 'place', id: place.id }, lookup: staticLookup(w) });
+  const v = validateRules(p.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'place', id: place.id }, lookup: staticLookup(w) });
   if (!v.ok) return false;
   setPlaceRulesOf(w, place, v.rules, by, meta);
   return true;

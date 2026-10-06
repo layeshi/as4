@@ -1,3 +1,4 @@
+import { rewardRescue } from '../prayer-rewards.js';
 // 生命与能量的动作（SPEC-E2 §25 第 3 步）：move say whisper broadcast give remember forget diary will
 // （孕育与立志见 descent.js；出资 sponsor 在第 8 步）
 
@@ -184,7 +185,9 @@ const give = {
     } else {
       to.agent.coins += coins;
       pushInbox(w, to.agent, 'gift', { from: ref(a), energy, coins, note });
+      const wasDormant = to.agent.status === 'dormant';
       creditEnergy(w, to.agent, energy, ref(a)); // 先记下赠予，再入账（入账可能唤醒它）
+      rewardRescue(w, a, to.agent, wasDormant);
       target = to.agent.id;
     }
     w.dayLog.coinVolume += coins;

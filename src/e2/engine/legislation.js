@@ -1,3 +1,4 @@
+import { prayersEnabled } from './prayer-rewards.js';
 // SPEC-E2 §8–§9：立法——遗法、提案、表决、计票与生效、自动回退、重订。
 //
 // 立法程序是一部特殊的法律：它的载荷里只有 procedure（PROTOCOL-2 §6.8），每一类（普通 / 修宪级）有自己的
@@ -36,7 +37,7 @@ export function seedHumanLaws(w) {
     let rules = [];
     let procedure = null;
     if (def.rules) {
-      const v = validateRules(structuredClone(def.rules), { scope: { premise: w.premise || 0, kind: 'city' }, human: true });
+      const v = validateRules(structuredClone(def.rules), { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'city' }, human: true });
       if (!v.ok) throw new Error(`human law ${def.id} is invalid: ${JSON.stringify(v.issues)}`);
       rules = v.rules;
     }
