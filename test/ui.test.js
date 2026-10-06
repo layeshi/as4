@@ -301,6 +301,11 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
       const path = p.replace(/\/$/, '');
       if (path === '/api/public/agents' || path === '/api/public/docs') continue; // 带 id 的接口，下面单独试
       if (path === '/api/public/stream') continue; // SSE，长连接
+      if (path === '/api/account/prayers') { // 插值的祈祷编号：实际入口是带会话的 POST，而非集合 GET。
+        const reply = await env.call('/api/account/prayers/pr1/reply', { method: 'POST', body: { text: 'reply' }, headers: { 'X-Houren-Request': '1' } });
+        assert.equal(reply.status, 401, '回应路由存在且要求登录会话');
+        continue;
+      }
       if (path === '/api/public/attention') { assert.equal((await env.call(path)).status, 404); continue; } // Q43 A：只在第二前提存在，由 T15 验证。
       const method = ['/api/admin/pause', '/api/admin/resume', '/api/account/logout', '/api/port/register', '/api/port/adopt', '/api/port/foster', '/api/owner/letter', '/api/owner/release', '/api/public/weather/vote'].includes(path) ? 'POST' : 'GET';
       const r = await env.call(path, method === 'POST' ? { method, body: {} } : {});

@@ -8,6 +8,7 @@ import {
   agentLink, placeLink, groupChip, statusChip, section, emptyNote, eventRow, dayTag, conditionBar, progressBar, bandText, pct, table,
 } from './render.js';
 import { wallBlock } from './tabs2.js';
+import { prayerSection } from './prayers-ui.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const svgEl = (name, attrs = {}, text) => {
@@ -136,6 +137,7 @@ export function renderProfile2(ctx, data) {
       t('publicGoods'),
       h('p', null, `${t('repaired')} ${a.stats.repaired} · ${t('contributed')} ${a.stats.contributed} · ${t('drawn')} ${a.stats.drawn} · ${t('salvaged')} ${a.stats.salvaged || 0}`),
     ),
+    a.prayers?.enabled ? prayerSection({ agentId: a.id }) : null,
     section(
       `${t('writings')} / ${t('inscriptions')}`,
       writings.length
@@ -208,4 +210,5 @@ export function openPlace2(ctx, id) {
       : null,
   ];
   for (const k of kids) if (k) m.body.append(k);
+  if (id === 'temple' && S.prayers?.enabled) m.body.append(prayerSection());
 }

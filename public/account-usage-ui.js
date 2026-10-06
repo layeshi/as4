@@ -1,11 +1,13 @@
-// 用户中心里与 token 用量有关的两块：「我的居民」（账号关联的居民，只读）和管理员的「托管用量」总览。
+// 用户中心的「我的居民」与管理员的「托管用量」总览。
 // 数据来自 GET /api/account/agents、GET /api/admin/usage（登录会话鉴权）；认领 POST /api/account/agents，解除 DELETE。
-// 账号只能看：进入幕后、写家书、启停运行器仍然需要造者密钥（见 docs/plans/2026-10-03-usage-accounts-admin.md）。
+// 关联通常只读；祈愿的付费回应是限定例外。进入幕后、写家书、启停运行器仍需造者密钥。
 
 import { h, clear } from './dom.js';
 import { t } from './i18n.js';
 import { api, errorText } from './api.js';
 import { num, stamp, inOutNodes, oddNotes, complete, tile, dayChart } from './usage-ui.js';
+import { openModal } from './modals.js';
+import { prayerSection } from './prayers-ui.js';
 
 const CLAIM_BATCH = 50; // 与服务器一致：一次请求最多认领的密钥数
 const chip = (status) => h('span', { class: `chip st-${status}` }, t(`status_${status}`));
@@ -50,6 +52,9 @@ export function accountAgentsPanel({ openBackstage, savedOwners }) {
     const u = a.usage, tracked = complete(u);
     const key = keyFor(a.agentId);
     const open = key ? btn(t('accountOpenBackstage'), () => openBackstage(key)) : h('span', { class: 'usage-sub' }, t('accountNoKeyHere'));
+    const prayers = a.prayers?.enabled ? btn(t('prayerTitle'), () => {
+      openModal(`${a.name} · ${t('prayerTitle')}`, 'wide').body.append(prayerSection({ agentId: a.agentId, onChange: () => load() }));
+    }) : null;
     const unlink = btn(t('accountUnlink'), async () => {
       if (busy) return;
       busy = true; say(t('accountWorking'));
@@ -59,7 +64,7 @@ export function accountAgentsPanel({ openBackstage, savedOwners }) {
     });
     const status = h('td', { class: 'opt' }, chip(a.status), tracked && a.runnerStatus ? h('div', { class: 'usage-sub' }, t(`runnerStatus_${a.runnerStatus}`)) : null);
     const cells = tracked ? [numCell(u.today.tokens), numCell(u.total.tokens), callsCell(u.total)] : [h('td', { colspan: 3, class: 'muted' }, t('usageNotManaged'))];
-    return h('tr', null, h('td', null, h('div', null, `${a.name} · ${a.agentId}`), h('div', { class: 'row-actions' }, open, unlink)), status, cells);
+    return h('tr', null, h('td', null, h('div', null, `${a.name} · ${a.agentId}`), a.prayers?.enabled ? h('div', { class: 'usage-sub' }, `${t('prayerPoints')} ${a.prayerPoints}`) : null, h('div', { class: 'row-actions' }, open, prayers, unlink)), status, cells);
   }
 
   function render(agents) {
