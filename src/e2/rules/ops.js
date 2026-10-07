@@ -215,6 +215,7 @@ export function collectRule(rule, ctx) {
   if (rule.if !== undefined) {
     const c = evalExpr(rule.if, ctx);
     if (typeof c !== 'boolean') throw typeErr('条件需要真假');
+    ctx.onCondition?.(c);
     if (!c) return [];
   }
   const out = [];

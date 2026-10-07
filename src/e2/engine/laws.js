@@ -67,6 +67,7 @@ export function createLaw(w, { title, text, i18n = null, author, rules = [], pro
     paidThrough: ruleDay(w),
     suspendedDays: 0,
     results: [],
+    ...(usesLawSemantics2(w) && !rules.some(r => r.when.trim() === 'enact') ? { enact: { status: 'no_enact', diagnostics: [] } } : {}),
   };
   w.laws[id] = law;
   return law;
@@ -183,6 +184,7 @@ export function lawView(w, law, lang = 'zh') {
     procedure: law.procedure,
     reading: lawReading(law, lang),
     fingerprints: law.fingerprints,
+    ...(law.enact ? { enact: structuredClone(law.enact), results: law.results.map(r => ({ ...r })) } : {}),
     ...(law.repealedBy ? { repealedBy: law.repealedBy } : {}),
     ...(law.replacedBy ? { replacedBy: law.replacedBy } : {}),
   };

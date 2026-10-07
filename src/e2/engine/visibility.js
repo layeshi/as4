@@ -106,6 +106,7 @@ function holderView(w, holder, scope) {
   return {
     rules: holder.rules, reading: both((lang) => ({ rules: renderRules(holder.rules, lang, scope ? { scope } : {}) })), fingerprints: holder.fingerprints.slice(),
     setTick: holder.setTick, setBy: ref(w, holder.setBy), paidThrough: holder.paidThrough, suspendedDays: holder.suspendedDays, suspended: isSuspended(w, holder),
+    ...(holder.enact ? { enact: structuredClone(holder.enact), results: holder.results.map(r => ({ ...r })) } : {}),
   };
 }
 
@@ -178,6 +179,7 @@ function lawBrief(w, l) {
     rules: l.rules, procedure: l.procedure,
     reading: both((lang) => lawReading(l, lang)),
     fingerprints: l.fingerprints.slice(), results: l.results.map((r) => ({ ...r })),
+    ...(l.enact ? { enact: structuredClone(l.enact) } : {}),
   };
 }
 
@@ -190,6 +192,7 @@ function proposalView(w, p) {
     rules: p.rules, procedure: p.procedure, basedOn: p.basedOn, reading,
     ...(p.procedureSource ? { procedureSource: { ...p.procedureSource } } : {}),
     ...(p.voidReason ? { voidReason: p.voidReason, refoundId: p.refoundId } : {}),
+    ...(p.enact ? { enact: structuredClone(p.enact) } : {}),
     proposer: ref(w, p.proposer), openedTick: p.openedTick, closesTick: p.closesTick, status: p.status, secret: p.secret,
     voters: p.voters.length, tally: p.tally, lawId: p.lawId, ...(p.place ? { place: p.place } : {}),
     votes: Object.entries(p.votes).map(([id, v]) => ({ agent: ref(w, id), choice: v.choice, reason: v.reason, tick: v.tick })),

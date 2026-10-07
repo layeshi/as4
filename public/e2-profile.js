@@ -9,6 +9,7 @@ import {
 } from './render.js';
 import { wallBlock } from './tabs2.js';
 import { prayerSection } from './prayers-ui.js';
+import { enactText } from './law-outcome.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const svgEl = (name, attrs = {}, text) => {
@@ -196,7 +197,7 @@ export function openPlace2(ctx, id) {
         p.modules.map((x) => [moduleName(x.type), x.functioning ? t('functioning') : t('notFunctioning'), String(x.salvage), x.inherent ? t('moduleInherent') : t('moduleBuilt'), x.inscription ? ai(x.inscription) : x.inscriptionUnreadable ? h('em', null, ctx.lore.unreadableInscription || '') : '']),
       ))
       : null,
-    p.rules ? section(t('placeRulesSection'), readingList(p.rules), p.rules.setBy ? h('p', { class: 'muted' }, `${t('setBy')}${colon()}`, agentLink(ctx, p.rules.setBy.id)) : null) : null,
+    p.rules ? section(t('placeRulesSection'), readingList(p.rules), p.rules.enact ? h('p', { class: 'muted' }, enactText(p.rules.enact, lang)) : null, p.rules.setBy ? h('p', { class: 'muted' }, `${t('setBy')}${colon()}`, agentLink(ctx, p.rules.setBy.id)) : null) : null,
     section(`${t('col_place')} (${here.length})`, here.length ? h('ul', { class: 'plain inline' }, here.map((a) => h('li', null, h('button', { class: 'link', type: 'button', onClick: () => { m.close(); ctx.openAgent(a.id); } }, a.name), ' ', statusChip(a.status)))) : h('p', { class: 'empty' }, t('empty'))),
     p.inscriptions.length ? section(t('walls'), wallBlock(ctx, p)) : null,
     p.projects.length

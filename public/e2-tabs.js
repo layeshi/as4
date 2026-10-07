@@ -6,6 +6,7 @@ import { h, clear, ai } from './dom.js';
 import { t, getLang, colon } from './i18n.js';
 import { lineChart } from './charts.js';
 import { api } from './api.js';
+import { enactText } from './law-outcome.js';
 import {
   agentLink, placeLink, section, emptyNote, table, conditionBar, progressBar, bandText, pct, spark, statusChip, amountText, dayOfTick, dayTag,
 } from './render.js';
@@ -48,7 +49,7 @@ export const TABS2 = [
 /** 第二纪各页的内容签名：数据没变时不必重画（app.js 的 signature 在第二纪里调用它） */
 export function signature2(tab, s) {
   switch (tab) {
-    case 'laws': return JSON.stringify([s.vars, s.procedure, s.charter, s.laws.map((l) => [l.id, l.status, l.suspendedDays, l.suspended]), s.proposals.map((p) => [p.id, p.status, p.tally, p.votes.length]), s.refounds.map((r) => [r.id, r.status, r.signers.length]), s.groups.map((g) => g.bylaws && g.bylaws.setTick), s.petitions.length, s.world.tick]);
+    case 'laws': return JSON.stringify([s.vars, s.procedure, s.charter, s.laws.map((l) => [l.id, l.status, l.suspendedDays, l.suspended]), s.proposals.map((p) => [p.id, p.status, p.tally, p.votes.length]), s.refounds.map((r) => [r.id, r.status, r.signers.length]), s.groups.map((g) => g.bylaws && g.bylaws.setTick), s.petitions.length, s.world.tick, ...(s.world.lawSemanticsVersion === 2 ? [s.laws.map(l => l.enact), s.proposals.map(p => p.enact), s.groups.map(g => g.bylaws && [g.bylaws.fingerprints, g.bylaws.enact]), s.places.map(p => p.rules && [p.rules.fingerprints, p.rules.enact])] : [])]);
     case 'residents': return JSON.stringify(s.agents.map((a) => [a.id, a.status, a.energy, a.coins, a.place, a.groups.length, a.lastActTick, a.ageDays, a.tags.length, a.purpose]));
     case 'groups': return JSON.stringify(s.groups);
     case 'environment': return JSON.stringify([s.places.map((p) => [p.id, p.condition, p.salvage && p.salvage.left, p.modules.length, p.owner, p.razed, p.name]), s.lots, s.projects.map((j) => [j.id, j.have]), s.well, s.regions, s.weather.active, s.world.dayOfMonth]);
@@ -111,7 +112,7 @@ function lawCard2(ctx, l) {
       l.replacedBy ? ` · ${t('replacedBy', { id: l.replacedBy })}` : '',
     ),
     l.fingerprints && l.fingerprints.length ? h('p', { class: 'muted fp' }, `${t('fingerprints')}${colon()}`, l.fingerprints.map((f) => h('code', null, `${f.slice(0, 8)} `))) : null,
-    l.results && l.results.length ? h('p', { class: 'muted' }, `${t('enactResults')}${colon()}${l.results.map((r) => `${r.op}${r.ok ? '✓' : '✗'}`).join(' ')}`) : null,
+    l.enact ? h('p', { class: 'muted' }, enactText(l.enact, lang)) : l.results && l.results.length ? h('p', { class: 'muted' }, `${t('enactResults')}${colon()}${l.results.map((r) => `${r.op}${r.ok ? '✓' : '✗'}`).join(' ')}`) : null,
     jsonBlock(t('ruleJson'), l.procedure || l.rules),
   );
 }
@@ -148,6 +149,7 @@ function proposalCard2(ctx, p, past = false) {
       p.secret ? ` · ${t('secretBallot')}` : ` · ${t('openBallot')}`,
     ),
     p.voidReason === 'refounded' ? h('p', { class: 'muted' }, lang === 'en' ? `Voided by refounding ${p.refoundId}; this pending bill would change the procedure.` : `重订 ${p.refoundId} 已使这项进行中的程序修改案作废。`) : null,
+    p.enact ? h('p', { class: 'muted' }, enactText(p.enact, lang)) : null,
     tallyBar(tally),
     votes.length
       ? h(
@@ -284,6 +286,7 @@ export function renderLaws2(ctx, root) {
           { class: 'card' },
           h('h4', null, h('span', { class: 'chip group-chip' }, ai(g.name)), ' ', g.bylaws.suspended ? h('span', { class: 'chip warn' }, t('suspendedChip')) : null),
           readingBlock(g.bylaws.reading[lang] || g.bylaws.reading.zh),
+          g.bylaws.enact ? h('p', { class: 'muted' }, enactText(g.bylaws.enact, lang)) : null,
           h('p', { class: 'muted' }, `${t('setBy')}${colon()}`, g.bylaws.setBy ? agentLink(ctx, g.bylaws.setBy.id) : '—', ` · ${t('groupProcedure', { p: t(`gproc_${g.procedure}`) })}`),
           jsonBlock(t('ruleJson'), g.bylaws.rules),
         ))
@@ -300,6 +303,7 @@ export function renderLaws2(ctx, root) {
           { class: 'card' },
           h('h4', null, placeLink(ctx, p.id), ' ', h('span', { class: 'chip' }, ownerText(ctx, p.owner)), p.rules.suspended ? h('span', { class: 'chip warn' }, t('suspendedChip')) : null),
           readingBlock(p.rules.reading[lang] || p.rules.reading.zh),
+          p.rules.enact ? h('p', { class: 'muted' }, enactText(p.rules.enact, lang)) : null,
           h('p', { class: 'muted' }, `${t('setBy')}${colon()}`, p.rules.setBy ? agentLink(ctx, p.rules.setBy.id) : '—'),
           jsonBlock(t('ruleJson'), p.rules.rules),
         ))
@@ -408,7 +412,7 @@ export function renderGroups2(ctx, root) {
     h('p', { class: 'muted' }, `${t('steward')}${colon()}`, g.steward ? agentLink(ctx, g.steward.id) : t('none'), ' · ', `${t('groupTreasury')}${colon()}${amountText(g.treasury)}`),
     h('p', null, `${t('members')} (${g.members.length})${colon()}`, g.members.map((m) => [agentLink(ctx, m.id), ' '])),
     g.pending.length ? h('p', { class: 'muted' }, `${t('pending')} (${g.pending.length})${colon()}`, g.pending.map((m) => [agentLink(ctx, m.id), ' '])) : null,
-    g.bylaws ? h('div', null, h('h5', null, t('bylawsSection'), g.bylaws.suspended ? h('span', { class: 'chip warn' }, t('suspendedChip')) : null), readingBlock(g.bylaws.reading[lang] || g.bylaws.reading.zh)) : null,
+    g.bylaws ? h('div', null, h('h5', null, t('bylawsSection'), g.bylaws.suspended ? h('span', { class: 'chip warn' }, t('suspendedChip')) : null), readingBlock(g.bylaws.reading[lang] || g.bylaws.reading.zh), g.bylaws.enact ? h('p', { class: 'muted' }, enactText(g.bylaws.enact, lang)) : null) : null,
     Object.keys(g.vars || {}).length ? h('p', { class: 'muted' }, `${t('lawVars')}${colon()}${Object.entries(g.vars).map(([k, v]) => `${k} = ${v}`).join('；')}`) : null,
   );
   root.append(...groups.map(card), ...gone.map(card));

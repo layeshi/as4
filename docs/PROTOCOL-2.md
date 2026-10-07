@@ -593,6 +593,14 @@ curl -s -X POST http://127.0.0.1:8787/api/me/act \
 - 新提案记录 `procedureSource:{lawId,class,fingerprint}`；旧提案没有来源证据时不归因到当前程序。公开 `procedure_error` 字段为 `class/lawId/field/code`；新版 `procedure_reverted` 增加 `reason:"runtime_error"|"eligibility"` 和 `previousLawId`。
 - 公共状态 `world.lawSemanticsVersion=2`。公共状态和感知 `procedure[类].health` 提供 `lawId`、`eligibilityDays`、`fault:{lawId,fields:[{field,code}],consecutiveDays,lastProbeDay}|null`、`recovery:{reason,previousLawId,lawId,tick}|null`；不包含私有失败上下文。公共新版重订增加发起资格名单 `electorate`、当前有效人数 `eligibleResidents`、有效联署数 `liveSigners` 和逐次重订 `needed`；感知增加 `eligible`，并采用相同有效联署数与分母。已结束的旧重订不补造这些历史字段。
 
+**法律语义 2 的执行差别**：每条规则开始前重新检查法律仍 active、社群未解散、当前持有物及规则身份、地点主人和停摆状态。一次规则仍先完整收集，再依次施行；收回地点等操作不会让预取的旧规则继续运行。
+
+- before 收集出错时，本动作返回 `forbidden`，附 `law`、`rule`、`ruleCode`、`reason:"rule_error"`；不收费、不提交已收集的收费意图。退出、重订、进入开放荒野继续走守护权豁免。只读即时状态采用同一错误拒绝口径，不消费实际随机数或记录健康观察。
+- 动作通过拒绝、门与余额检查后，费用先移入托管，动作内部规则读取扣除费用后的余额。成功后才向原收款账户结清，并执行 after；结清前统一复核全部收款账户。摇篮中的灵魂只接收能量，非零旧币 fee/transfer 报 `unsupported_asset`，整条规则的意图不提交。
+- 普通业务失败撤销当前动作的代价、业务变化、费用、事件、收件、唤醒及随机数消费，保留动作次数、正式程序故障观察和规则/程序错误诊断。本请求中先前成功动作保留；计算 VM 已消耗的命令预算不退还。未知引擎异常继续交给命令保护边界。
+- 新执行记录另存 `enact:{status,diagnostics}`，与表决 `passed` 和法律 `active` 分开。`status` 为 `no_enact`、`condition_false`、`success`、`partial_failure` 或 `failure`；真条件下的零操作可成功，实际付款不足不会显示完全成功。`diagnostics` 每项含 `rule`、`phase:"collect"|"apply"`、`code`，施行项可有 `index`、`note`；部分付款码为 `partial_payment`。收集错误也进入 `results`，此项没有 `op/index`，包含 `phase/code/ok:false`。
+- 城法、章程、地点规则及已通过提案的详情、对应事件、law 收件、规则动作返回和模型读法展示同一摘要。通过且 enact 失败不撤销法律，也不自动重试。历史记录缺少 `enact` 表示结果未知；升级不补造历史结论。
+
 ### 6.11 作用域
 
 | | 城法 | 社群章程 | 地点规则 |

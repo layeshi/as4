@@ -3,6 +3,7 @@
 // 「第 N 日」一律按 日序号 + 1 显示（感知里的 day 从 0 起）。规则的「引擎读法」是城里直接执行的规则的真实含义，必须完整给出。
 
 import { L } from '../src/e2/lore/index.js';
+import { enactText } from '../public/law-outcome.js';
 
 export const D = {
   zh: {
@@ -159,7 +160,7 @@ const STANDING_WHEN = {
 };
 
 /** 一项动作结果的单行读法：type ✓（−cost）或 type ✗ code */
-export const resultText = (r) => (r.ok ? `${r.type} ✓${r.cost ? `（−${r.cost}）` : ''}` : `${r.type} ✗ ${r.error ? r.error.code : ''}`);
+export const resultText = (r) => (r.ok ? `${r.type} ✓${r.cost ? `（−${r.cost}）` : ''}` : `${r.type} ✗ ${r.error ? r.error.code : ''}${r.error?.ruleCode ? ` ${r.error.law} rules[${r.error.rule}] ${r.error.ruleCode}` : ''}`);
 
 /** 一项动作结果的单行读法，按语言：英文用半角括号 */
 export const resultLine = (r, code) => (code === 'en' ? resultText(r).replace('（−', ' (−').replace('）', ')') : resultText(r));
@@ -387,6 +388,7 @@ export function secHere(c) {
   if (h.modules && h.modules.length) lines.push(`  ${d.modules}${P.col}${h.modules.map((m) => `${moduleName(m.type)}${P.open}${m.functioning ? d.functioning : d.notFunctioning}${P.close}${m.inscription ? `${d.inscription}${P.col}${m.inscription}` : ''}`).join(P.sep)}`);
   if (h.gate) lines.push(`  ${d.gate}${P.col}${h.gate.functioning ? d.functioning : d.notFunctioning}${P.open}${h.gate.youMayEnter ? d.gateOk : d.gateNo}${P.close}`);
   for (const r of h.rules || []) lines.push(`  ${d.placeRules}${P.col}${indent(r.reading, '    ')}`);
+  if (h.enact) lines.push(`  ${enactText(h.enact, c.code)}`);
   lines.push(...herePresent(c));
   for (const s of h.heard || []) lines.push(`  ${d.heard}${P.col}[${d.ticksAgo(now.tick - s.tick)}] ${s.from ? s.from.name : '?'}${P.col}${s.text}`);
   for (const w of h.inscriptions || []) lines.push(`  ${d.wall}${P.col}[${w.id}] ${w.text}${w.truncated ? `${P.open}${d.truncated}${P.close}` : ''}${w.protected ? `${P.open}${d.protectedMark}${P.close}` : ''}`);
@@ -434,7 +436,7 @@ export function secInbox({ p, code, d, f }) {
       continue;
     }
     const fn = d.kinds[i.kind];
-    lines.push(`  ${fn ? fn(i, f) : `[${i.kind}] ${JSON.stringify(i)}`}`);
+    lines.push(`  ${fn ? fn(i, f) : `[${i.kind}] ${JSON.stringify(i)}`}${i.enact ? ` · ${enactText(i.enact, code)}` : ''}`);
   }
   return lines;
 }
@@ -484,14 +486,14 @@ export function cityCharter({ p, d, P, level }) {
 }
 
 /** 一部法律一行 */
-export function cityLawLine({ p, d, P, level, rmax }, l) {
+export function cityLawLine({ p, d, P, level, rmax, code }, l) {
   const c = p.city;
   const who = l.author === 'humans' ? d.humans : l.author && l.author.name ? d.lawBy(l.author.name) : String(l.author);
   // 立法程序的读法已在「立法程序」一行里完整给出：这里不再重复
   const isProcedure = ['ordinary', 'constitutional'].some((k) => c.procedure && c.procedure[k] && c.procedure[k].lawId === l.id);
   const body = isProcedure ? d.procedureSee : indent(clip(l.reading || l.text || '', rmax), '    ');
   const lead = !isProcedure && level === 0 && l.reading && l.text ? `${clip(l.text, 80)}${P.bar}` : '';
-  return `  ${d.laws}${P.col}[${l.id}]${P.lq1}${l.title}${P.lq2}${P.open}${who}${l.suspended ? `${P.semi}${d.suspended}` : ''}${P.close}${P.col}${lead}${body}`;
+  return `  ${d.laws}${P.col}[${l.id}]${P.lq1}${l.title}${P.lq2}${P.open}${who}${l.suspended ? `${P.semi}${d.suspended}` : ''}${P.close}${P.col}${lead}${body}${l.enact ? ` · ${enactText(l.enact, code)}` : ''}`;
 }
 
 /** 一个提案一行，再加读法与记名票 */
@@ -513,9 +515,10 @@ export function cityRefoundLines({ code, d, P, now, rmax }, r) {
   return lines;
 }
 
-export function cityGroupLines({ d, P, rmax }, g) {
+export function cityGroupLines({ d, P, rmax, code }, g) {
   const lines = [`  ${d.groupsAll}${P.col}[${g.id}]${P.lq1}${g.name}${P.lq2}${P.gap}${g.open ? d.open : d.closed} · ${d.steward} ${g.steward ? g.steward.name : '—'} · ${d.members} ${g.members.length}${P.col}${g.members.map((m) => m.name).join(P.sep)} · ${d.groupProcedure[g.procedure] || g.procedure}${g.manifesto ? `${P.semi}${d.manifesto}${P.col}${g.manifesto}` : ''}`];
   if (g.bylaws) lines.push(`    ${d.bylaws}${g.bylaws.suspended ? `${P.open}${d.suspended}${P.close}` : ''}${P.col}${indent(clip(g.bylaws.reading, rmax), '      ')}`);
+  if (g.bylaws?.enact) lines.push(`    ${enactText(g.bylaws.enact, code)}`);
   return lines;
 }
 

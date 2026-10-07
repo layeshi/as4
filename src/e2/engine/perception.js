@@ -273,6 +273,7 @@ function hereView(w, a, l, lang, wallList, openOffers) {
     modules,
     gate: gate ? { functioning: isFunctioning(place, gate), youMayEnter: !gatedFor(w, a, a.place) } : null,
     rules: place.rules && place.rules.rules.length ? renderRules(place.rules.rules, lang).map((reading) => ({ reading })) : [],
+    ...(place.rules?.enact ? { enact: structuredClone(place.rules.enact) } : {}),
     present, heard,
     inscriptions: wall,
     wallSlots: place.wallSlots,
@@ -326,6 +327,7 @@ function lawEntry(w, law, lang) {
     text: clipText(lawText(law, lang), P.lawTextInPerception), reading: clipText(text, P.readingInPerception),
     suspended: !isProcedureLaw(law) && persistentCount(law.rules) > 0 && isSuspended(w, law),
     ...(agentic(w) ? rulesNotes(law.rules) : {}),
+    ...(law.enact ? { enact: structuredClone(law.enact) } : {}),
   };
 }
 
@@ -398,7 +400,7 @@ function cityView(w, a, l, lang, day, costs) {
     .map((g) => ({
       id: g.id, name: g.name, open: g.open, steward: g.steward ? refId(w, g.steward) : null,
       members: g.members.map((id) => refId(w, id)).filter(Boolean), manifesto: g.manifesto, procedure: g.procedure,
-      bylaws: g.bylaws ? { reading: clipText(joinReading(renderRules(g.bylaws.rules, lang, { scope: { kind: 'group', id: g.id } })), P.readingInPerception), suspended: isSuspended(w, g.bylaws) } : null,
+      bylaws: g.bylaws ? { reading: clipText(joinReading(renderRules(g.bylaws.rules, lang, { scope: { kind: 'group', id: g.id } })), P.readingInPerception), suspended: isSuspended(w, g.bylaws), ...(g.bylaws.enact ? { enact: structuredClone(g.bylaws.enact) } : {}) } : null,
     }));
   const cradle = Object.values(w.souls).map((s) => ({
     id: s.id, name: s.name, authors: s.authors.map((id) => refId(w, id)).filter(Boolean), soul: s.soul, lang: s.lang, expiresDay: s.expiresDay,
@@ -598,7 +600,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
     // 规则的预求值（§7.13）：只有物理上可用的动作才有意义
     if (!NO_PREVIEW.has(type) && !actionTable(w.premise || 0, prayersEnabled(w)).INNER.includes(type)) {
       const pre = previewBefore(w, a, type, lang, beforeRules);
-      if (entry.available && pre.denied) deny({ code: 'forbidden', law: pre.denied.law, text: fmt(R.forbidden, { law: pre.denied.law, reason: pre.denied.reason }) });
+      if (entry.available && pre.denied) deny({ code: 'forbidden', law: pre.denied.law, ...(pre.denied.ruleCode ? { rule: pre.denied.rule, ruleCode: pre.denied.ruleCode } : {}), text: fmt(R.forbidden, { law: pre.denied.law, reason: pre.denied.ruleCode ? `rules[${pre.denied.rule}] ${pre.denied.ruleCode}` : pre.denied.reason }) });
       if (entry.available && pre.fees.length) {
         const en = lang === 'en';
         const fees = pre.fees.map((f) => `${f.law}${en ? ': ' : '：'}${[f.energy ? `${f.energy} ${en ? 'energy' : '能量'}` : '', f.coins ? `${f.coins} ${en ? 'coins' : '旧币'}` : ''].filter(Boolean).join(' ')}`).join(en ? '; ' : '；');

@@ -327,7 +327,8 @@ const rules = {
     if (plan.kind === 'group_procedure') setGroupProcedure(w, plan.g, plan.procedure, a.id);
     else if (plan.kind === 'bylaws') setGroupBylaws(w, plan.g, plan.rules, a.id, meta);
     else setPlaceRulesOf(w, plan.place, plan.rules, a.id, meta);
-    return { scope };
+    const holder = plan.kind === 'bylaws' ? plan.g.bylaws : plan.kind === 'place_rules' ? plan.place.rules : null;
+    return { scope, ...(usesLawSemantics2(w) ? { enact: structuredClone(holder?.enact || { status: 'no_enact', diagnostics: [] }), results: holder?.results || [] } : {}) };
   },
 };
 

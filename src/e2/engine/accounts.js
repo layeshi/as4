@@ -5,9 +5,18 @@
 // 记账（来源与去处）不在这里：账户之间的转移既不是来源也不是去处。
 
 import { P } from '../params.js';
-import { clockDay } from '../world.js';
+import { clockDay, isAlive } from '../world.js';
 import { pushInbox, creditEnergy, ref, emit } from './core.js';
 import { noteQueued } from './shells.js';
+
+/** Validate captured accounts again before moving assets; souls cannot hold coins. */
+export function accountProblem(w, acct, coins = 0) {
+  if (acct.k === 'treasury') return null;
+  if (acct.k === 'agent') return w.agents[acct.id] && isAlive(w.agents[acct.id]) ? null : 'invalid_account';
+  if (acct.k === 'group') return w.groups[acct.id] && !w.groups[acct.id].dissolved ? null : 'invalid_account';
+  if (acct.k === 'soul') return !w.souls[acct.id] ? 'invalid_account' : coins > 0 ? 'unsupported_asset' : null;
+  return 'invalid_account';
+}
 
 /** 账户的余额 { energy, coins }（灵魂只有 energy = fund，旧币为 0；居民可转的额度见 transferable） */
 export function balanceOf(w, acct) {

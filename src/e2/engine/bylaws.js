@@ -1,4 +1,5 @@
 import { prayersEnabled } from './prayer-rewards.js';
+import { usesLawSemantics2 } from './law-semantics.js';
 // SPEC-E2 §8.7、PROTOCOL-2 §6.11：社群章程、地点规则与社群的程序。
 //
 // 社群有两种程序（found 的 procedure 参数，缺省 steward）：
@@ -37,7 +38,8 @@ function newHolder(w, rules, setBy) {
 export function setGroupBylaws(w, g, rules, by, { title = null, text = null } = {}) {
   g.bylaws = rules.length === 0 ? null : newHolder(w, rules, by);
   const results = g.bylaws ? runEnact(w, groupSet(g)) : [];
-  emit(w, 'bylaws', { data: { groupId: g.id, rules, reading: readings(rules, { kind: 'group', id: g.id }), setBy: by, title, text, results } });
+  const enact = g.bylaws?.enact || (usesLawSemantics2(w) ? { status: 'no_enact', diagnostics: [] } : null);
+  emit(w, 'bylaws', { data: { groupId: g.id, rules, reading: readings(rules, { kind: 'group', id: g.id }), setBy: by, title, text, results, ...(enact ? { enact } : {}) } });
   return results;
 }
 
@@ -45,7 +47,8 @@ export function setGroupBylaws(w, g, rules, by, { title = null, text = null } = 
 export function setPlaceRulesOf(w, p, rules, by, { title = null, text = null } = {}) {
   p.rules = rules.length === 0 ? null : newHolder(w, rules, by);
   const results = p.rules ? runEnact(w, placeSet(p)) : [];
-  emit(w, 'place_rules', { place: p.id, data: { placeId: p.id, rules, reading: readings(rules), setBy: by, title, text, results } });
+  const enact = p.rules?.enact || (usesLawSemantics2(w) ? { status: 'no_enact', diagnostics: [] } : null);
+  emit(w, 'place_rules', { place: p.id, data: { placeId: p.id, rules, reading: readings(rules), setBy: by, title, text, results, ...(enact ? { enact } : {}) } });
   return results;
 }
 
@@ -124,7 +127,7 @@ function settleGroupProposal(w, p) {
   const notify = (result) => {
     for (const id of new Set([p.proposer, ...Object.keys(p.votes)])) {
       const a = w.agents[id];
-      if (a && isAlive(a)) pushInbox(w, a, 'law', { proposalId: p.id, lawId: null, result, title: p.title });
+      if (a && isAlive(a)) pushInbox(w, a, 'law', { proposalId: p.id, lawId: null, result, title: p.title, ...(p.enact ? { enact: p.enact } : {}) });
     }
   };
   if (!g || g.dissolved) {
@@ -148,12 +151,14 @@ function applyGroupProposal(w, p, g) {
   const meta = { title: p.title, text: p.text };
   if (p.kind === 'group_procedure') {
     setGroupProcedure(w, g, p.procedure, by);
+    if (usesLawSemantics2(w)) p.enact = { status: 'no_enact', diagnostics: [] };
     return true;
   }
   if (p.kind === 'bylaws') {
     const v = validateRules(p.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'group', id: g.id }, lookup: staticLookup(w) });
     if (!v.ok) return false;
     setGroupBylaws(w, g, v.rules, by, meta);
+    if (usesLawSemantics2(w)) p.enact = structuredClone(g.bylaws?.enact || { status: 'no_enact', diagnostics: [] });
     return true;
   }
   const place = w.places[p.place];
@@ -161,6 +166,7 @@ function applyGroupProposal(w, p, g) {
   const v = validateRules(p.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'place', id: place.id }, lookup: staticLookup(w) });
   if (!v.ok) return false;
   setPlaceRulesOf(w, place, v.rules, by, meta);
+  if (usesLawSemantics2(w)) p.enact = structuredClone(place.rules?.enact || { status: 'no_enact', diagnostics: [] });
   return true;
 }
 

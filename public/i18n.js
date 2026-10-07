@@ -4,6 +4,7 @@
 
 import { E2_STR } from './e2-strings.js';
 import { PRAYER_STR } from './prayer-strings.js';
+import { enactText } from './law-outcome.js';
 
 export const LANGS = ['zh', 'en'];
 
@@ -1023,7 +1024,7 @@ export function describeEvent(e) {
   }
   if (e.type === 'inscribe' && e.data && e.data.cover) vars.cover = e.data.cover;
   if (template === undefined) return { key, template: '{type}', vars: { type: e.type } };
-  return { key, template, vars };
+  return e.data?.enact ? { key, template: `${template} {enact}`, vars: { ...vars, enact: enactText(e.data.enact, lang) } } : { key, template, vars };
 }
 
 /** 设施类型与天象在句子里的名字来自 lore（app.js 提供）；这里只放引擎不提供的少数词 */

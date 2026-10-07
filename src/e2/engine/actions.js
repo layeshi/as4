@@ -13,7 +13,9 @@ import { ActError, fail, emit, bad } from './core.js';
 import { sink } from './ledger.js';
 import { makeCtx } from './actions/util.js';
 import { hooks } from './hooks.js';
-import { payFee } from './accounts.js';
+import { payFee, accountProblem } from './accounts.js';
+import { usesLawSemantics2 } from './law-semantics.js';
+import { actionCheckpoint, rollbackAction } from './action-transaction.js';
 import { basicHandlers } from './actions/basic.js';
 import { envHandlers } from './actions/env.js';
 import { socialHandlers } from './actions/social.js';
@@ -90,7 +92,7 @@ function feeTotals(fees) {
  *   2. 收集 before 规则（城法 → 社群章程 → 地点规则）：任一 deny → forbidden；其余是费用
  *   3. 门（move）：不被允许 → gated
  *   4. 付费：能量须 ≥ 代价 + 托管 + 费用中的能量，旧币同理；不足 → insufficient_*（什么都不扣）
- *   5. 扣动作代价（action_cost）→ apply → 把费用转给各自的去向
+ *   5. 法律语义 2 先托管费用 → 扣动作代价（action_cost）→ apply → 结清费用（历史路径在 apply 后扣费）
  *   6. 收集并施行 after 规则
  */
 function runOne(w, a, type, act, index, lang) {
@@ -103,7 +105,7 @@ function runOne(w, a, type, act, index, lang) {
   const skipBefore = NO_BEFORE_ACTIONS.includes(type) || !!plan.skipBefore;
   const skipAfter = NO_AFTER_ACTIONS.includes(type);
   const before = skipBefore ? { denied: null, fees: [] } : hooks.before(w, a, type, act, plan);
-  if (before.denied) fail('forbidden', null, { law: before.denied.law, reason: before.denied.reason });
+  if (before.denied) fail('forbidden', null, before.denied);
   if (plan.gate) plan.gate();
   const fees = before.fees;
   const feeSum = feeTotals(fees);
@@ -111,6 +113,13 @@ function runOne(w, a, type, act, index, lang) {
   const cost = plan.cost || 0;
   if (a.energy < cost + (reserve.energy || 0) + feeSum.energy) fail('insufficient_energy');
   if (a.coins < (reserve.coins || 0) + feeSum.coins) fail('insufficient_coins');
+  const escrow = usesLawSemantics2(w) && fees.length > 0;
+  if (escrow) {
+    validateFeeRecipients(w, fees);
+    a.energy -= feeSum.energy;
+    a.coins -= feeSum.coins;
+    Object.defineProperty(w, '$feeEscrow', { value: { ...feeSum }, writable: true, configurable: true });
+  }
   if (cost > 0) {
     a.energy -= cost;
     sink(w, 'energy', 'action_cost', cost);
@@ -121,16 +130,35 @@ function runOne(w, a, type, act, index, lang) {
   const data = handler.apply(ctx, plan) ?? {};
   if (fees.length) {
     ctx.fees = fees;
-    a.energy -= feeSum.energy;
-    a.coins -= feeSum.coins;
+    if (escrow) validateFeeRecipients(w, fees);
+    else {
+      a.energy -= feeSum.energy;
+      a.coins -= feeSum.coins;
+    }
     ctx.spent += feeSum.energy;
-    for (const f of fees) payFee(w, a, f);
+    for (const f of fees) {
+      if (escrow) { w.$feeEscrow.energy -= f.energy; w.$feeEscrow.coins -= f.coins; }
+      payFee(w, a, f);
+    }
+    if (escrow) delete w.$feeEscrow;
     data.fees = fees.map((f) => ({ law: f.law, energy: f.energy, coins: f.coins, to: f.to.k === 'treasury' ? 'treasury' : f.to.id }));
   }
   a.lastActTick = w.clock.tick;
   w.places[a.place].activity.lastActiveDay = clockDay(w);
   if (!skipAfter) hooks.after(w, a, type, act, data, plan, startPlace);
   return { data, spent: ctx.spent };
+}
+
+function validateFeeRecipients(w, fees) {
+  for (const fee of fees) {
+    const code = accountProblem(w, fee.to, fee.coins);
+    if (code) {
+      const scope = fee.law.startsWith('group:') || fee.law.startsWith('place:') ? fee.law : 'city';
+      w.dayLog.ruleErrors++;
+      emit(w, 'rule_error', { data: { scope, owner: scope === 'city' ? fee.law : fee.law.slice(fee.law.indexOf(':') + 1), rule: fee.rule, code, detail: '' } });
+      fail('forbidden', null, { law: fee.law, rule: fee.rule, ruleCode: code, reason: 'rule_error' });
+    }
+  }
 }
 
 /**
@@ -152,12 +180,14 @@ export function runActions(w, a, actions, lang = 'zh') {
       continue;
     }
     a.actsThisTick++;
+    const checkpoint = usesLawSemantics2(w) ? actionCheckpoint(w) : null;
     try {
       if (!actionTable(w.premise || 0, prayersEnabled(w)).isKnown(type)) fail('invalid_args');
       const { data, spent } = runOne(w, a, type, act, i, lang);
       results.push({ index: i, type, ok: true, cost: spent, data });
     } catch (e) {
       if (!(e instanceof ActError)) throw e;
+      if (checkpoint) rollbackAction(w, a, checkpoint);
       const hint = e.hint || (e.code === 'invalid_args' ? argsHint(type, act, w.premise || 0, prayersEnabled(w)) : null);
       results.push({ index: i, type, ok: false, cost: 0, error: { code: e.code, ...(hint ? { hint } : {}), ...(e.extra || {}) } });
     }

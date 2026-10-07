@@ -1,4 +1,5 @@
 import { prayersEnabled } from './prayer-rewards.js';
+import { usesLawSemantics2 } from './law-semantics.js';
 // SPEC-E2 §7.5–§7.7：规则的执行——时机的接入、调用（收集 → 施行）、操作的施行。
 //
 // 规则住在三个地方（作用域）：城法（w.laws[*].rules）、社群章程（group.bylaws）、地点规则（place.rules）。
@@ -9,7 +10,7 @@ import { prayersEnabled } from './prayer-rewards.js';
 // 另有 enact（法律生效 / 章程或地点规则被设定）与 daily / monthly（每日结算第 3 步）。
 //
 // 一次调用（§7.5）：求条件 → 收集（只读，求出每个操作所有字段的值，得到意图）→ 任何一步出错则丢弃全部意图、记 rule_error
-//   → 施行（§7.7）：按顺序施行每个意图，每个意图记一条 rule_op。before 规则出错视为「没有拒绝、没有费用」。
+//   → 施行（§7.7）：按顺序施行每个意图，每个意图记一条 rule_op。历史 before 出错放行；法律语义 2 拒绝本动作。
 // 不级联（§7.6）：规则施行期间 w.$ruling 为真，fire 什么都不做；施行引起的事件照常产生，只是不触发任何规则。
 
 import { P } from '../params.js';
@@ -26,7 +27,7 @@ import { emit, pushInbox } from './core.js';
 import { source, sink } from './ledger.js';
 import { installHooks } from './hooks.js';
 import { makeHost } from './rulehost.js';
-import { balanceOf, credit, debit, notifyTransfer, acctRef } from './accounts.js';
+import { balanceOf, credit, debit, notifyTransfer, acctRef, accountProblem } from './accounts.js';
 import { actionCost } from './actions/util.js';
 import { isWeatherActive } from './environment.js';
 import { hasRelay, placeNameTaken } from './places.js';
@@ -45,7 +46,18 @@ const idNum = (id) => Number(String(id).slice(1)) || 0;
 /** 一个「规则集」描述一组规则住在哪里：scope（作用域）、owner（所属）、key（收件与费用里的 law 字段） */
 const citySet = (law) => ({ kind: 'city', owner: law.id, key: law.id, scopeStr: 'city', rules: law.rules, holder: law, law });
 const groupSet = (g) => ({ kind: 'group', owner: g.id, key: `group:${g.id}`, scopeStr: `group:${g.id}`, rules: g.bylaws.rules, holder: g.bylaws, group: g });
-const placeSet = (p) => ({ kind: 'place', owner: p.id, key: `place:${p.id}`, scopeStr: `place:${p.id}`, rules: p.rules.rules, holder: p.rules, place: p });
+const placeSet = (p) => ({ kind: 'place', owner: p.id, key: `place:${p.id}`, scopeStr: `place:${p.id}`, rules: p.rules.rules, holder: p.rules, place: p, placeOwner: { ...p.owner } });
+
+/** Prefetched sets must still belong to the current live holder before each rule. */
+function currentRule(w, set, idx, rule) {
+  if (!usesLawSemantics2(w)) return true;
+  if (isSuspended(w, set.holder) || set.holder.rules !== set.rules || set.rules[idx] !== rule) return false;
+  if (set.kind === 'city') return w.laws[set.owner] === set.holder && set.holder.status === 'active';
+  if (set.kind === 'group') return w.groups[set.owner] === set.group && !set.group.dissolved && set.group.bylaws === set.holder;
+  const p = w.places[set.owner];
+  return p === set.place && p.rules === set.holder && p.owner.kind !== 'city' && p.owner.kind === set.placeOwner.kind && p.owner.id === set.placeOwner.id
+    && !accountProblem(w, { k: p.owner.kind, id: p.owner.id });
+}
 
 /** 在效的、带规则的城法（程序法律没有规则），按 ID 升序 */
 export function cityRuleSets(w, { includeSuspended = false } = {}) {
@@ -229,6 +241,15 @@ function reportError(w, set, idx, e, run) {
   emit(w, 'rule_error', { data: { scope: set.scopeStr, owner: set.owner, rule: idx, code: e.code, detail: e.detail || '' } });
 }
 
+function validateIntentAccounts(w, intents) {
+  if (!usesLawSemantics2(w)) return;
+  for (const it of intents) {
+    if (it.op !== 'fee' && it.op !== 'transfer') continue;
+    const code = accountProblem(w, it.to, it.coins) || (it.op === 'transfer' && accountProblem(w, it.from));
+    if (code) throw new RuleError(code);
+  }
+}
+
 /**
  * 收集一条规则的意图（只读）。出错返回 null（已记 rule_error）。
  * run：{ env, rng?, quiet? }——env 是该时机的名字（actor args result here event），rng 是 sample 用的随机数流（缺省 w.rng.world）
@@ -236,13 +257,17 @@ function reportError(w, set, idx, e, run) {
 function collect(w, set, idx, rule, run) {
   const host = makeHost(w, { vars: varsFor(w, set), rng: run.rng || w.rng.world });
   try {
-    const intents = collectRule(rule, { host, env: run.env, budget: budgetForRule(w, rule) });
+    run.collectError = null;
+    run.conditionMatched = true;
+    const intents = collectRule(rule, { host, env: run.env, budget: budgetForRule(w, rule), ...(run.trackOutcome ? { onCondition: c => { run.conditionMatched = c; } } : {}) });
     meterIntents(w, intents);
+    validateIntentAccounts(w, intents);
     return intents;
   } catch (e) {
     if (!(e instanceof RuleError)) throw e;
     if (usesLawVM2(w) && e.code === 'fuel') throw new CapacityError({ code: 'proof_breach', path: `${set.key}.rules[${idx}]` });
     reportError(w, set, idx, e, run);
+    run.collectError = e.code;
     return null;
   }
 }
@@ -316,10 +341,14 @@ export function collectBefore(w, a, type, args, plan) {
 function runBeforeRules(w, a, set, match, run, getEnv, fees) {
   for (let idx = 0; idx < set.rules.length; idx++) {
     const rule = set.rules[idx];
+    if (!currentRule(w, set, idx, rule)) continue;
     if (!match(timingOf(rule))) continue;
     run.env = getEnv();
     const intents = collect(w, set, idx, rule, run);
-    if (!intents) continue; // 出错：没有拒绝、没有费用
+    if (!intents) {
+      if (usesLawSemantics2(w)) return { law: set.key, rule: idx, ruleCode: run.collectError, reason: 'rule_error' };
+      continue;
+    }
     for (const it of intents) {
       if (it.op === 'deny') return { law: set.key, reason: pickReason(it.reason, a.lang) };
       if (it.op === 'fee') {
@@ -348,13 +377,30 @@ function runApply(w, set, match, run) {
   const results = [];
   for (let idx = 0; idx < set.rules.length; idx++) {
     const rule = set.rules[idx];
+    if (!currentRule(w, set, idx, rule)) continue;
     if (!match(timingOf(rule))) continue;
+    if (run.outcome) run.outcome.matched++;
     const intents = collect(w, set, idx, rule, run);
-    if (!intents) continue;
+    if (!intents) {
+      if (run.outcome) {
+        run.outcome.failed++;
+        run.outcome.diagnostics.push({ rule: idx, phase: 'collect', code: run.collectError });
+        results.push({ rule: idx, phase: 'collect', ok: false, code: run.collectError, note: run.collectError });
+      }
+      continue;
+    }
+    if (run.outcome && run.conditionMatched) run.outcome.ran++;
     withRuling(w, () => {
       intents.forEach((it, k) => {
         const r = applyIntent(w, set, idx, it, run);
         results.push({ rule: idx, index: k, op: it.op, ok: r.ok, note: r.note || '' });
+        if (run.outcome) {
+          if (!r.ok || r.note?.startsWith('partial:')) {
+            run.outcome.failed++;
+            run.outcome.diagnostics.push({ rule: idx, index: k, phase: 'apply', code: !r.ok ? r.note : 'partial_payment', ...(r.ok ? { note: r.note } : {}) });
+            if (r.ok && r.delivered > 0) run.outcome.succeeded++;
+          } else run.outcome.succeeded++;
+        }
       });
     });
   }
@@ -403,7 +449,18 @@ export function fireEvent(w, type, data) {
  */
 export function runEnact(w, set, { quiet = false } = {}) {
   const run = { env: {}, actor: null, here: set.kind === 'place' ? set.place.id : null, quiet };
-  return runApply(w, set, (t) => t.kind === 'enact', run);
+  if (usesLawSemantics2(w)) {
+    run.trackOutcome = true;
+    run.outcome = { matched: 0, ran: 0, failed: 0, succeeded: 0, diagnostics: [] };
+  }
+  const results = runApply(w, set, (t) => t.kind === 'enact', run);
+  if (run.outcome) {
+    const o = run.outcome;
+    const status = o.failed ? (o.succeeded ? 'partial_failure' : 'failure') : !o.matched ? 'no_enact' : !o.ran ? 'condition_false' : 'success';
+    set.holder.enact = { status, diagnostics: o.diagnostics };
+    set.holder.results = results;
+  }
+  return results;
 }
 
 /**
@@ -495,7 +552,7 @@ export function beforeIndex(w, a) {
 /**
  * 感知里的预求值（SPEC-E2 §7.13）：对某个动作，收集会对它生效的 before 规则（城法、执行者所在社群的章程、所在之处的地点规则）；
  * 不引用 args 的规则以当前的执行者求值（只收集，不施行，随机数用副本）：得到 deny 则 denied；fee 汇总；
- * 引用 args 的规则只把它所属的法律放进 laws，提醒执行者行动时可能被拒绝。预求值出错的规则被忽略。
+ * 引用 args 的规则只把它所属的法律放进 laws，提醒执行者行动时可能被拒绝。历史预求值错误忽略；法律语义 2 返回错误拒绝。
  * 返回 { denied: { law, reason } | null, fees: [{ law, energy, coins, to }], laws: [key…] }
  * index：beforeIndex(w, a) 的结果（逐个动作调用时由调用者建好传入，缺省现建）。
  */
@@ -506,7 +563,7 @@ export function previewBefore(w, a, type, lang = 'zh', index = beforeIndex(w, a)
   const rng = w.rng.world.slice();
   const env = { actor: agentRef(a.id) };
   Object.defineProperty(env, 'here', { enumerable: true, get: () => hereOf(w, a.place) });
-  for (const { set, rule } of entries) {
+  for (const { set, rule, idx } of entries) {
     if (referencesArgs(rule)) {
       if (!out.laws.includes(set.key)) out.laws.push(set.key);
       continue;
@@ -514,8 +571,14 @@ export function previewBefore(w, a, type, lang = 'zh', index = beforeIndex(w, a)
     let intents;
     try {
       intents = collectRule(rule, { host: makeHost(w, { vars: varsFor(w, set), rng }), env, budget: budgetForRule(w, rule) });
+      validateIntentAccounts(w, intents);
     } catch (e) {
       if (!(e instanceof RuleError)) throw e;
+      if (usesLawSemantics2(w)) {
+        out.denied = { law: set.key, rule: idx, ruleCode: e.code, reason: 'rule_error' };
+        out.fees = [];
+        return out;
+      }
       continue;
     }
     for (const it of intents) {
@@ -544,6 +607,7 @@ export function previewRules(w, set, { rng, kinds = ['enact', 'daily', 'monthly'
     const h = makeHost(w, { vars: varsFor(w, set), rng });
     try {
       const intents = collectRule(rule, { host: h, env: {}, budget: budgetForRule(w, rule) });
+      validateIntentAccounts(w, intents);
       for (const it of intents) out.push({ rule: idx, ...intentSummary(it) });
     } catch (e) {
       if (!(e instanceof RuleError)) throw e;
@@ -641,7 +705,9 @@ function applyIntent(w, set, idx, it, run) {
 function opTransfer(w, set, idx, it, run) {
   let res;
   let moved = { energy: 0, coins: 0 };
-  if (!inScope(w, set, it.from, 'from', run) || !inScope(w, set, it.to, 'to', run)) res = fail('not_in_scope');
+  const problem = usesLawSemantics2(w) && (accountProblem(w, it.from) || accountProblem(w, it.to, it.coins));
+  if (problem) res = fail(problem);
+  else if (!inScope(w, set, it.from, 'from', run) || !inScope(w, set, it.to, 'to', run)) res = fail('not_in_scope');
   else if (sameAcct(it.from, it.to)) res = { ok: true, note: 'same_account' };
   else {
     const avail = transferable(w, it.from);
@@ -654,6 +720,7 @@ function opTransfer(w, set, idx, it, run) {
       notifyTransfer(w, it.to, { law: set.key, energy: moved.energy, coins: moved.coins, direction: 'in', counterparty: by(it.from) });
     }
     res = partial(moved.energy + moved.coins, it.energy + it.coins);
+    if (usesLawSemantics2(w)) res = { ...res, delivered: moved.energy + moved.coins };
   }
   opEvent(w, set, idx, it, res, run, { from: acctKey(it.from), to: acctKey(it.to), energy: moved.energy, coins: moved.coins });
   return res;
@@ -679,6 +746,7 @@ function opShare(w, set, idx, it, run) {
       }
     }
     res = partial(got.energy + got.coins, it.energy + it.coins);
+    if (usesLawSemantics2(w)) res = { ...partial(total.energy + total.coins, it.energy + it.coins), delivered: total.energy + total.coins };
     // 史官与指标要的「配给」：每日结算里城法从公库平分给居民的第一笔
     if (set.kind === 'city' && it.from.k === 'treasury' && w.$settling !== undefined && w.dayLog.rationed === 0 && each.energy > 0) {
       w.dayLog.ration = each.energy;
@@ -938,6 +1006,7 @@ function opFund(w, set, idx, it, run) {
     }
     emit(w, 'fund', { place: j.place, data: { lawId: set.key, scope: set.scopeStr, projectId: j.id, energy: amount } });
     res = partial(amount, it.energy);
+    if (usesLawSemantics2(w)) res = { ...res, delivered: amount };
   }
   opEvent(w, set, idx, it, res, run, { project: it.project, energy: amount });
   return res;

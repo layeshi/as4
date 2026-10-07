@@ -354,9 +354,10 @@ function enactProposal(w, p) {
   w.dayLog.laws.push({ proposalId: p.id, title: p.title, passed: true, yes: p.tally.yes, no: p.tally.no, lawId: law.id });
   if (law.procedure) installProcedure(w, law, 'enacted');
   else if (law.rules.length > 0) law.results = runEnact(w, citySet(law));
-  emit(w, 'law_passed', { data: { proposalId: p.id, lawId: law.id, class: law.class, tally: p.tally, results: law.results } });
+  if (law.enact) p.enact = structuredClone(law.enact);
+  emit(w, 'law_passed', { data: { proposalId: p.id, lawId: law.id, class: law.class, tally: p.tally, results: law.results, ...(law.enact ? { enact: law.enact } : {}) } });
   hooks.fire(w, 'law_passed', { law: law.id });
-  notifyResult(w, p, 'passed');
+  notifyResult(w, p, 'passed', law.enact ? { enact: law.enact } : {});
 }
 
 /** 每刻第 3 步：按 ID 升序处理 closesTick ≤ 当前刻的提案（城的与社群的） */

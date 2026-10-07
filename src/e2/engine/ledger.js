@@ -8,6 +8,7 @@
 // 城内的转移（赠予、规则的转移与配给、遗产、交易托管、为躯壳出资……）不是来源也不是去处。
 
 import { agentList } from '../world.js';
+import { usesLawSemantics2 } from './law-semantics.js';
 
 export const ENERGY_SOURCES = ['well_output', 'draw', 'wilds', 'salvage', 'immigrant', 'admin', 'prayer_aid'];
 export const ENERGY_SINKS = [
@@ -36,6 +37,10 @@ const total = (bag) => Object.values(bag).reduce((s, x) => s + x, 0);
 export function holdings(w) {
   let energy = w.treasury.energy;
   let coins = w.treasury.coins;
+  if (usesLawSemantics2(w) && w.$feeEscrow) {
+    energy += w.$feeEscrow.energy;
+    coins += w.$feeEscrow.coins;
+  }
   for (const a of agentList(w)) {
     energy += a.energy;
     coins += a.coins;

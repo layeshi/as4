@@ -329,7 +329,7 @@ function placesLine(d, places, code, hereId) {
 
 /** 一个动作错误 → 一句话。第二纪的 forbidden 带着拒绝它的法律与规则写下的理由：forbidden：l2：法案只能在议会提出 */
 export function errorText(e) {
-  if (e.code === 'forbidden' && e.law && e.reason) return `${e.code}：${e.law}：${e.reason}`;
+  if (e.code === 'forbidden' && e.law && e.reason) return `${e.code}：${e.law}：${e.reason}${e.ruleCode ? ` rules[${e.rule}] ${e.ruleCode}` : ''}`;
   return `${e.code}${e.message ? `：${e.message}` : ''}`;
 }
 
