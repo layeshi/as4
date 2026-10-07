@@ -85,7 +85,7 @@
 
 ### 2.1 引擎的门面与分派
 
-两代引擎各自导出一个形状相同的**门面**（facade）。运行时、HTTP、回放、沙盘命令行只通过门面使用引擎：
+两代引擎各自导出一个具有相同公共契约的**门面**（facade）。第二纪另有下述回放与命令准备能力。运行时、HTTP、回放、沙盘命令行只通过门面使用引擎：
 
 ```js
 // src/engine/facade.js（v1，只做转出）与 src/e2/facade.js（v2）
@@ -106,6 +106,8 @@ export default {
   configure(overrides),               // 覆盖该引擎的物理参数
 };
 ```
+
+- E2 独有 `genesisOpts(w)`，用于从世界恢复创世参数；`prepareCommand(w, cmd)` 返回隔离的 `{ candidate, out }`，不改变原世界或发布事件。运行时只在法律语义 2 或显式迁移到语义 2 时调用它，先持久化候选结果回执，再提交候选。相同输入下，E2 的 `applyCommand` 使用同一准备逻辑并提交，返回相同的 `out`。E1 与 E2 历史语义继续通过原有 `applyCommand` 执行，不提供虚假的 E1 准备接口。
 
 - `src/runtime.js`：`Runtime.open` 读到快照后，用 `w.physics === 2 ? e2 : v1` 选择门面，存为 `rt.engine`；新世界用 `cfg.physics` 选择。`exec`、`tickSummary` 等改用 `rt.engine`。
 - `src/http/*`：把对 `../engine/*.js` 的直接引用改为 `ctx.rt.engine.*`。响应头 `X-Houren-Protocol` 取 `rt.engine.protocol`。

@@ -8,6 +8,10 @@ import { registerCommand } from '../src/e2/engine/index.js';
 import { readCommands } from '../src/commands.js';
 import { commandsPath, snapshotPath, stateHash } from '../src/store.js';
 import { replayDir } from '../src/tools/replay.js';
+import { createLaw } from '../src/e2/engine/laws.js';
+import { pushInbox } from '../src/e2/engine/core.js';
+import { P } from '../src/e2/params.js';
+import { sha } from './e2-helpers.js';
 const logger = { log() {}, warn() {}, error() {} };
 function setup(t) {
   const dataDir = mkdtempSync(join(tmpdir(), 'law-receipt-'));
@@ -15,6 +19,43 @@ function setup(t) {
   const cfg = { dataDir, worldId: 'test', physics: 2, premise: 2, seed: 'receipt', tickMs: 100000, sandboxAgents: 0 };
   return { cfg, rt: Runtime.open(cfg, { logger }) };
 }
+test('inbox overflow preserves shared law outcomes, resident identity and durable full replay', t => {
+  const { cfg, rt } = setup(t);
+  for (const name of ['First', 'Second']) assert.equal(rt.exec('register', {
+    name, soul: 's', bio: '', lang: 'zh', model: 'm', creatorName: '', tokenHash: sha(name), ownerKeyHash: sha(name),
+  }).result.ok, true);
+  registerCommand('receipt_inbox_fixture', w => {
+    const [a, b] = Object.values(w.agents);
+    a.inbox = []; b.inbox = [];
+    const law = createLaw(w, { title: 'No enact', text: 'x', author: a.id });
+    pushInbox(w, a, 'law', { lawId: law.id, enact: law.enact });
+    pushInbox(w, b, 'law', { lawId: law.id, enact: law.enact });
+    // Same shared outcome as notifyResult; trimming only a's inbox moves a
+    // different outcome into its old slot, which must not rewrite b or the law.
+    pushInbox(w, a, 'law', { lawId: 'other', enact: { status: 'success', diagnostics: [] } });
+    while (a.inbox.length < P.inboxKeep) pushInbox(w, a, 'letter', { text: 'older' });
+    a.inboxCursor = a.inbox.at(-1).seq;
+    return { ok: true, lawId: law.id };
+  });
+  const lawId = rt.exec('receipt_inbox_fixture').result.lawId;
+  rt.snapshot();
+  const beforeOverflow = readFileSync(snapshotPath(rt.dir));
+  const [a, b] = Object.values(rt.w.agents), inbox = a.inbox;
+  const cmd = { n: rt.w.commandN + 1, type: 'letter', payload: { agentId: a.id, text: 'new' } };
+  const { candidate } = rt.engine.prepareCommand(rt.w, cmd);
+  assert.equal(rt.exec(cmd.type, cmd.payload).result.ok, true);
+  assert.equal(stateHash(rt.w), stateHash(candidate), 'visible commit matches recorded candidate');
+  assert.equal(rt.w.agents[a.id], a);
+  assert.equal(a.inbox, inbox);
+  assert.equal(rt.w.laws[lawId].enact.status, 'no_enact');
+  assert.equal(b.inbox[0].enact.status, 'no_enact');
+  rt.exec('letter', { agentId: b.id, text: 'next command' });
+  const hash = stateHash(rt.w);
+  rt.snapshot();
+  assert.equal(replayDir(rt.dir).hash, hash);
+  writeFileSync(snapshotPath(rt.dir), beforeOverflow);
+  assert.equal(stateHash(Runtime.open(cfg, { logger }).w), hash);
+});
 test('fault, blocked write and recovery receipts survive repaired handlers, tail and full replay', t => {
   const { cfg, rt } = setup(t), baseline = readFileSync(snapshotPath(rt.dir));
   registerCommand('receipt_fault_test', w => { w.vars.leak = 1; throw new Error('private'); });

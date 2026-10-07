@@ -26,12 +26,14 @@ const cfgFor = (dataDir, extra = {}) => ({ ...loadConfig({}, []), dataDir, world
 
 // ── 门面与分派 ───────────────────────────────────────────────
 
-test('门面：两代引擎的形状相同；physics / protocol 各自为 1 与 2', () => {
+test('门面：两代引擎共用公共契约，E2 另有创世回放和隔离命令准备能力', () => {
   assert.equal(v1.physics, 1);
   assert.equal(v1.protocol, 1);
   assert.equal(e2.physics, 2);
   assert.equal(e2.protocol, 2);
-  assert.deepEqual(Object.keys(e2).filter((k) => !(k in v1)), ['genesisOpts']); // 第二纪多一个回放用的函数，其余成员两代一致
+  assert.deepEqual(Object.keys(e2).filter((k) => !(k in v1)), ['genesisOpts', 'prepareCommand']);
+  assert.equal(typeof e2.prepareCommand, 'function');
+  assert.equal(typeof e2.genesisOpts, 'function');
   for (const k of Object.keys(v1)) assert.ok(k in e2, `v2 的门面缺少 ${k}`);
   for (const k of ['createWorld', 'applyCommand', 'drainEvents', 'buildPerception', 'inboxView', 'publicState', 'publicAgent', 'publicMemories',
     'publicPlace', 'publicDoc', 'publicWeather', 'publicEvent', 'ownerEvent', 'publicMap', 'publicLaw', 'researchMetrics', 'tickSummary',
@@ -41,6 +43,26 @@ test('门面：两代引擎的形状相同；physics / protocol 各自为 1 与 
   }
   assert.equal(v1.publicLaw({}, 'l1'), null); // 第一纪没有 /api/public/laws/:id
   assert.ok(Object.isFrozen(v1) && Object.isFrozen(e2));
+});
+
+test('E2 prepareCommand 隔离语义 2 与显式迁移，结果与直接 applyCommand 一致', () => {
+  for (const modern of [false, true]) {
+    const w = e2.createWorld({ seed: 'facade-prepare', ...(modern ? { lawSemanticsVersion: 2 } : {}) });
+    const cmd = modern ? { type: 'tick' } : { type: 'admin', payload: { op: 'law_semantics', args: { version: 2 } } };
+    const before = stateHash(w), clock = w.clock;
+    const { candidate, out } = e2.prepareCommand(w, cmd);
+    assert.equal(out.result.ok, true);
+    assert.equal(stateHash(w), before, 'preparation leaves the original world unchanged');
+    assert.equal(w.clock, clock);
+    assert.notEqual(candidate, w);
+    assert.notEqual(candidate.clock, clock);
+    assert.equal(candidate.lawSemantics.version, 2);
+    assert.equal(candidate.commandN, w.commandN + 1);
+    assert.deepEqual(e2.drainEvents(w), [], 'preparation publishes no original-world events');
+    assert.deepEqual(e2.applyCommand(w, cmd), out);
+    assert.equal(stateHash(w), stateHash(candidate));
+    assert.equal(w.clock, clock, 'direct commit retains the existing clock record');
+  }
 });
 
 test('分派：physics 为 2 的世界用 v2，没有这个字段（或为 1）的用 v1；不认识的版本报错', () => {

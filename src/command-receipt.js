@@ -10,14 +10,29 @@ export function cloneCommandWorld(w) {
   return copy;
 }
 export function commitCommandWorld(target, source) {
-  for (const key of Object.keys(target)) if (!Object.hasOwn(source, key)) delete target[key];
-  for (const [key, value] of Object.entries(source)) {
-    if (Object.hasOwn(target, key) && target[key] === value) continue;
-    if (value && typeof value === 'object' && Object.hasOwn(target, key) && target[key] && typeof target[key] === 'object' && Array.isArray(value) === Array.isArray(target[key])) {
-      commitCommandWorld(target[key], value);
-      if (Array.isArray(value)) target[key].length = value.length;
-    } else Object.defineProperty(target, key, { value, writable: true, configurable: true, enumerable: true });
+  // Reuse stable records, but never reuse one old object for two distinct
+  // candidate objects. Conversely, shared candidate objects must stay shared.
+  const committed = new WeakMap(), claimed = new WeakSet();
+  function visit(into, from) {
+    committed.set(from, into);
+    claimed.add(into);
+    for (const key of Object.keys(into)) if (!Object.hasOwn(from, key)) delete into[key];
+    for (const [key, value] of Object.entries(from)) {
+      let next = value;
+      if (value && typeof value === 'object') {
+        next = committed.get(value);
+        if (!next) {
+          const old = Object.hasOwn(into, key) ? into[key] : null;
+          next = old && typeof old === 'object' && Array.isArray(value) === Array.isArray(old) && !claimed.has(old)
+            ? old : Array.isArray(value) ? [] : {};
+          visit(next, value);
+        }
+      }
+      Object.defineProperty(into, key, { value: next, writable: true, configurable: true, enumerable: true });
+    }
+    if (Array.isArray(from)) into.length = from.length;
   }
+  visit(target, source);
 }
 export function commitCommandCandidate(target, source) {
   commitCommandWorld(target, source);
@@ -48,7 +63,16 @@ export function applyReceipt(w, cmd) {
     const path = change.path;
     if (!Array.isArray(path) || !path.length || path.some(k => typeof k !== 'string')) throw new Error('Invalid command receipt path');
     let target = candidate;
-    for (const key of path.slice(0, -1)) { if (!Object.hasOwn(target, key)) throw new Error('Invalid command receipt parent'); target = target[key]; }
+    for (const key of path.slice(0, -1)) {
+      if (!Object.hasOwn(target, key)) throw new Error('Invalid command receipt parent');
+      // Receipts describe JSON paths, not object aliases. Copy the changed
+      // branch so patching it cannot mutate another path sharing an old object.
+      const child = target[key];
+      if (!child || typeof child !== 'object') throw new Error('Invalid command receipt parent');
+      const branch = Array.isArray(child) ? child.slice() : { ...child };
+      Object.defineProperty(target, key, { value: branch, writable: true, configurable: true, enumerable: true });
+      target = branch;
+    }
     const key = path.at(-1);
     if (change.remove) delete target[key];
     else Object.defineProperty(target, key, { value: structuredClone(change.value), writable: true, configurable: true, enumerable: true });
