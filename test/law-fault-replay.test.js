@@ -282,3 +282,60 @@ test('command tail repair crash before atomic rename preserves acknowledged rece
   repairCommandLog(file);
   assert.equal(readFileSync(file, 'utf8'), complete);
 });
+
+test('capacity-rejected legacy migration keeps durable event barriers and historical failed outcome', async t => {
+  const { createWorld } = await import('../src/e2/world.js');
+  const { writeSnapshot, worldDir } = await import('../src/store.js');
+  const { EventStore } = await import('../src/events.js');
+  const { capacityCheck } = await import('../src/e2/engine/law-execution.js');
+  const { adminCommand } = await import('../src/e2/engine/admin.js');
+  const dataDir = mkdtempSync(join(tmpdir(), 'law-migration-capacity-'));
+  t.after(() => rmSync(dataDir, { recursive: true, force: true }));
+  const cfg = { dataDir, worldId: 'test', physics: 2, premise: 2, seed: 'review-migration-capacity', tickMs: 100000, sandboxAgents: 0 };
+  const dir = worldDir(dataDir, cfg.worldId);
+  writeSnapshot(dir, createWorld({ id: cfg.worldId, seed: cfg.seed, codeVersion: '0.0.0', premise: 2 }));
+  const rt = Runtime.open(cfg, { logger });
+  const admin = (op, args = {}) => rt.exec('admin', { op, args });
+  assert.equal(admin('law_execution', { version: 2 }).result.ok, true);
+  const limit = Buffer.byteLength(JSON.stringify(rt.w)) + 1;
+  assert.equal(admin('law_execution', { version: 2, capacity: { maxWorldBytes: limit } }).result.ok, true);
+  assert.equal(capacityCheck(rt.w).ok, true);
+  assert.ok(Buffer.byteLength(JSON.stringify({ ...rt.w, lawSemantics: { version: 2 } })) > limit);
+  rt.snapshot();
+  const baseline = readFileSync(snapshotPath(dir)), genesis = structuredClone(rt.w.genesis);
+  const sync = rt.events.sync.bind(rt.events);
+  let liveSyncs = 0;
+  rt.events.sync = () => { liveSyncs++; sync(); };
+  const failed = admin('law_semantics', { version: 2 });
+  assert.equal(failed.result.error.reason, 'law_execution_capacity');
+  assert.equal(Object.hasOwn(rt.w, 'lawSemantics'), false);
+  assert.equal(liveSyncs, 1, 'failed migration receipt must sync its event before control snapshot');
+  const failedHash = stateHash(rt.w);
+  assert.equal(readCommands(commandsPath(dir)).at(-1).receipt.out.result.error.reason, 'law_execution_capacity');
+  assert.equal(replayDir(dir).ok, true);
+  writeFileSync(snapshotPath(dir), baseline);
+  let replaySyncs = 0, repairedHandlerCalled = false;
+  const originalSync = EventStore.prototype.sync;
+  EventStore.prototype.sync = function () { replaySyncs++; return originalSync.call(this); };
+  registerCommand('admin', (w, p) => {
+    if (p.op === 'law_semantics') { repairedHandlerCalled = true; w.lawSemantics = { version: 2 }; return { ok: true }; }
+    return adminCommand(w, p);
+  });
+  let reopened;
+  try {
+    reopened = Runtime.open(cfg, { logger });
+    assert.equal(stateHash(reopened.w), failedHash);
+    assert.equal(Object.hasOwn(reopened.w, 'lawSemantics'), false);
+    assert.equal(replaySyncs, 1, 'receipt tail ending in legacy state must sync events before recovery snapshot');
+    assert.equal(replayDir(dir).ok, true);
+    assert.equal(repairedHandlerCalled, false, 'recorded failed migration never executes a repaired handler');
+  } finally { EventStore.prototype.sync = originalSync; registerCommand('admin', adminCommand); }
+  assert.equal(reopened.exec('admin', { op: 'law_execution', args: { version: 2, capacity: { maxWorldBytes: 2000000 } } }).result.ok, true);
+  assert.equal(Object.hasOwn(reopened.w, 'lawSemantics'), false);
+  assert.equal(reopened.exec('admin', { op: 'resume' }).result.ok, true);
+  assert.equal(reopened.exec('admin', { op: 'law_semantics', args: { version: 2 } }).result.ok, true);
+  assert.equal(reopened.w.lawSemantics.version, 2);
+  assert.deepEqual(reopened.w.genesis, genesis);
+  reopened.snapshot();
+  assert.equal(replayDir(dir).ok, true);
+});

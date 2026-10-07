@@ -28,6 +28,8 @@ export class Runtime {
     this.nextTickAt = null;
     this.timer = null;
     this.stopped = false;
+    // Receipts can also record a rejected migration that leaves legacy semantics.
+    this.receiptEventsPending = false;
     this.schedulerStarted = false;
     this.remainingMs = w.paused && w.experimentControl?.active ? w.experimentControl.remainingMs : cfg.tickMs;
     this.wakeSubs = new Set(); // 第二前提：运行器订阅「有人找上门」的通知（SPEC-P2 §6.2）；不落盘、不经 SSE、不进事件流
@@ -74,6 +76,7 @@ export class Runtime {
     if (rt.log.n < w.commandN) throw new Error(`命令日志（${rt.log.n} 条）比快照（commandN = ${w.commandN}）还短：数据已损坏`);
     const tail = readCommands(cmdFile, { fromN: w.commandN });
     for (const cmd of tail) {
+      if (cmd.receipt) rt.receiptEventsPending = true;
       const { events: evs } = engine.applyCommand(w, cmd);
       events.append(evs, { silent: true, tick: w.clock.tick });
       if (cmd.type === 'tick') events.release(w.clock.tick, { silent: true });
@@ -111,6 +114,7 @@ export class Runtime {
         const candidate = prepared.candidate;
         out = prepared.out;
         this.log.appendReceipt(cmd, makeReceipt(this.w, candidate, out));
+        this.receiptEventsPending = true;
         commitCommandCandidate(this.w, candidate);
       } catch (error) {
         // Never publish an unrecorded state or continue after an ambiguous append.
@@ -178,11 +182,12 @@ export class Runtime {
 
   snapshot() {
     if (this.receiptFailed) return;
-    if (usesLawSemantics2(this.w)) {
+    if (usesLawSemantics2(this.w) || this.receiptEventsPending) {
       try { this.events.sync(); }
       catch (error) { this.failStop(); throw error; }
     }
     writeSnapshot(this.dir, this.w);
+    this.receiptEventsPending = false;
   }
 
   /** SSE tick 事件的精简状态（PROTOCOL §9）；内容由引擎门面生成，nextTickAt 是运行时的 */

@@ -187,7 +187,9 @@ export function prepareCommand(original, cmd) {
   } catch (error) {
     const failed = cloneCommandWorld(original);
     failed.commandN = w.commandN;
-    if (!failed.lawSemantics) failed.lawSemantics = { version: 2 };
+    // A capacity-rejected migration retains the original semantic selection.
+    // Unknown engine faults still need the separate program-protection state.
+    if (!(error instanceof CapacityError) && !failed.lawSemantics) failed.lawSemantics = { version: 2 };
     return { candidate: failed, out: semanticFault(failed, cmd, error) };
   }
 }

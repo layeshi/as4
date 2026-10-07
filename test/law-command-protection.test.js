@@ -16,14 +16,17 @@ for (const premise of [0, 1, 2]) for (const vm of premise === 2 ? [1, 2] : [1]) 
     if (vm === 2) assert.equal(admin(w, 'law_execution', { version: 2 }).result.ok, true);
     const before = structuredClone(w);
     const original = HANDLERS.say.apply;
-    HANDLERS.say.apply = (s, actor, ...args) => {
-      const r = original(s, actor, ...args);
-      next(s.rng.world); pushInbox(s, s.agents[b.id], 'whisper', { text: 'private' });
+    let reachedDeliberateThrow = false;
+    HANDLERS.say.apply = (ctx, plan) => {
+      original(ctx, plan);
+      next(ctx.w.rng.world); pushInbox(ctx.w, ctx.w.agents[b.id], 'whisper', { text: 'private' });
+      reachedDeliberateThrow = true;
       throw new Error('private-thought credential-hash');
     };
     let out;
     try { out = applyCommand(w, { type: 'act', payload: { agentId: a.id, thought: 'private-thought', actions: [{ type: 'diary', text: 'first-action' }, { type: 'say', text: 'second-action' }] } }); }
     finally { HANDLERS.say.apply = original; }
+    assert.equal(reachedDeliberateThrow, true, 'RNG/inbox mutation completed before the deliberate private exception');
     assert.equal(out.result.error.reason, 'law_execution_fault');
     assert.equal(w.paused, true);
     assert.equal(w.commandN, before.commandN + 1);

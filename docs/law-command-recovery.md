@@ -11,6 +11,8 @@
 
 升级不自动启用法律计算 VM2，不重写已有法律、提案 spec/voters 或历史门槛。VM2 的容量迁移仍走现有 `/api/admin/law-execution`。
 
+若迁移因容量不足被拒绝，原有法律语义版本保持不变；扩容本身不会启用新语义，需再次显式提交迁移。失败迁移仍有持久回执，其事件在实时执行和启动尾部回放写入快照前都会完成同步落盘。
+
 ## 两种保护暂停
 
 - **容量保护**：`ruleExecution.protection` / `law_execution_capacity`。检查 `/api/admin/law-execution` 的预检和容量需求；合法扩容后使用普通恢复入口。
