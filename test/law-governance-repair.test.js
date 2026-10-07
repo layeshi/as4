@@ -305,3 +305,21 @@ test('public event describes actual runtime-fault reversion and retains legacy e
     assert.match(legacy.template, /stood unusable/);
   } finally { setLang('zh'); }
 });
+
+test('sign event and response use surviving opening-electorate signatures after a signer departs', async () => {
+  const { oneWithEvents } = await import('./e2-helpers.js');
+  for (const version of [0, 2]) {
+    const { w, people: [a, b, c] } = town(4, version);
+    const rid = one(w, a, { type: 'refound', text: '恢复', procedure: 'humans' }).data.refound;
+    one(w, b, { type: 'sign', refound: rid });
+    assert.equal(one(w, a, { type: 'retire', lastWords: '交给后来者' }).ok, true);
+    const { r, events } = oneWithEvents(w, c, { type: 'sign', refound: rid });
+    assert.equal(r.ok, true);
+    assert.equal(r.data.needed, 2);
+    assert.equal(r.data.succeeded, true);
+    const expected = version === 2 ? 2 : 3;
+    assert.equal(r.data.signers, expected, 'response counts live signatures only under new semantics');
+    assert.equal(events.find(e => e.type === 'refound_sign').data.signers, expected, 'event uses the same count as response');
+    assert.equal(events.find(e => e.type === 'refounded').data.signers, 2, 'success records effective signatures');
+  }
+});

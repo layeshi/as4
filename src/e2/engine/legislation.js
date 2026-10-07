@@ -488,9 +488,10 @@ export function openRefound(w, a, { text, procedure }) {
 /** 联署（已校验）：追加联署者，事件 refound_sign，然后立即检查。返回 { signers, needed, succeeded } */
 export function signRefound(w, a, r) {
   r.signers.push(a.id);
-  emit(w, 'refound_sign', { agent: a.id, place: a.place, data: { refoundId: r.id, signer: a.id, signers: r.signers.length } });
+  const signers = usesLawSemantics2(w) ? liveSigners(w, r).length : r.signers.length;
+  emit(w, 'refound_sign', { agent: a.id, place: a.place, data: { refoundId: r.id, signer: a.id, signers } });
   const succeeded = checkRefound(w, r);
-  return { signers: r.signers.length, needed: refoundNeeded(w, r), succeeded };
+  return { signers, needed: refoundNeeded(w, r), succeeded };
 }
 
 /** 检查：在世的联署者 ≥ needed → 成功。返回是否成功 */
