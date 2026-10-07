@@ -297,9 +297,9 @@ test('openai 提供者：请求的形状、可选参数、响应解析与错误�
   await assert.rejects(p3.complete({ system: '', messages: [] }), (err) => err.retryable && !err.fatal);
   await assert.rejects(createProvider({ provider: 'openai' }, { env: {} }), (err) => err.fatal);
   await assert.rejects(createProvider({ provider: 'openai', model: 'm', apiKeyEnv: 'NOT_SET' }, { env: {} }), (err) => err.fatal && err.message.includes('NOT_SET'));
-  // 空内容与缺失的 choices
+  // 缺失 choices 是结构错误；不能与合法空回复混为成功。
   const p4 = await createProvider({ provider: 'openai', model: 'm' }, { fetch: fakeFetch(200, {}), env: {} });
-  assert.deepEqual(await p4.complete({ system: '', messages: [] }), { text: '', stop: 'stop' });
+  await assert.rejects(p4.complete({ system: '', messages: [] }), e => e instanceof ProviderError && e.errorKind === 'invalid_response' && e.phase === 'shape');
   assert.equal(classifyStatus(500, 'x').retryable, true);
   assert.equal(classifyStatus(422, 'x').retryable, false);
 });

@@ -17,16 +17,18 @@
 // 错误分级（ProviderError）：fatal——停止该 agent 并清楚地报错（认证失败、模型不存在）；
 // retryable——本刻放弃，等到下一刻再来（限速、5xx、超时、网络）；其余——本刻放弃并记录。
 
+import { safeProviderFailureDetails } from '../src/telemetry-safety.js';
+
 export class ProviderError extends Error {
   /** timeout：这次失败是超时（运行器据此区分「被刻点截断」与线路自己的故障，SPEC-P2 §7.4） */
-  constructor(message, { fatal = false, retryable = !fatal, status, timeout = false, errorKind } = {}) {
+  constructor(message, { fatal = false, retryable = !fatal, status, timeout = false, errorKind, upstreamErrorType, providerCode, phase } = {}) {
     super(message);
     this.name = 'ProviderError';
     this.fatal = fatal;
     this.retryable = retryable;
     this.status = status;
     this.timeout = timeout;
-    if (['network', 'timeout'].includes(errorKind)) this.errorKind = errorKind;
+    Object.assign(this, safeProviderFailureDetails({ errorKind, upstreamErrorType, providerCode, phase }));
   }
 }
 
@@ -215,24 +217,43 @@ function createOpenAIProvider(cfg, deps) {
       res = await fetchImpl(url, { method: 'POST', headers, body: JSON.stringify(body), signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(limit)]) : AbortSignal.timeout(limit) });
     } catch (e) {
       const timedOut = isTimeout(e);
-      throw new ProviderError(`网络错误：${timedOut ? `timeout（${seconds(limit)} 秒）` : safeMessage(e)}`, { retryable: true, timeout: timedOut, errorKind: timedOut ? 'timeout' : 'network' });
+      throw new ProviderError(`网络错误：${timedOut ? `timeout（${seconds(limit)} 秒）` : safeMessage(e)}`, { retryable: true, timeout: timedOut, errorKind: timedOut ? 'timeout' : 'network', phase: 'request' });
     }
-    let json = null;
+    let json;
     try {
       json = await res.json();
     } catch {
-      json = null;
+      if (!res.ok) throw Object.assign(classifyStatus(res.status, '模型接口请求失败。'), { phase: 'decode' });
+      throw new ProviderError('模型响应不是有效 JSON。', { status: res.status, retryable: true, errorKind: 'invalid_response', phase: 'decode' });
     }
+    const choice = Array.isArray(json?.choices) ? json.choices.find(c => c?.error || c?.finish_reason === 'error') : null;
+    const failed = json?.error || json?.status === 'failed' || choice;
+    const upstream = json?.error || choice?.error;
+    const details = safeProviderFailureDetails({
+      upstreamErrorType: json?.error_type || upstream?.metadata?.error_type || upstream?.error_type,
+      providerCode: upstream?.code, phase: 'response',
+    });
     if (!res.ok) {
       const detail = json && json.error ? (typeof json.error === 'string' ? json.error : json.error.message) : `HTTP ${res.status}`;
-      throw classifyStatus(res.status, String(detail).slice(0, 300));
+      throw Object.assign(classifyStatus(res.status, String(detail).slice(0, 300)), details);
+    }
+    if (failed) throw new ProviderError('模型接口返回业务失败。', { status: res.status, retryable: true, ...details });
+    const invalid = () => { throw new ProviderError('模型响应结构无效。', { status: res.status, retryable: true, errorKind: 'invalid_response', phase: 'shape' }); };
+    if (!isObject(json)) invalid();
+    if (responses) {
+      const pending = ['queued', 'in_progress'].includes(json.status);
+      if ((!pending && !Array.isArray(json.output)) || (json.output !== undefined && !Array.isArray(json.output))) invalid();
+      for (const item of json.output || []) {
+        if (!isObject(item) || (item.type === 'message' && (!Array.isArray(item.content) || item.content.some(part => !isObject(part) || (part.type === 'output_text' && typeof part.text !== 'string'))))) invalid();
+      }
+    } else {
+      if (!Array.isArray(json.choices) || json.choices.some(c => !isObject(c) || !isObject(c.message))) invalid();
     }
     return json;
   };
 
   // ── Responses 的输出：正文、拒绝、未完成 ──
   const responsesOutput = (json) => {
-    if (json?.error || json?.status === 'failed') throw new ProviderError('Responses 接口返回失败状态。', { retryable: true });
     const content = (json?.output || []).filter((item) => item.type === 'message' && item.role === 'assistant').flatMap((item) => item.content || []);
     const refused = content.some((part) => part.type === 'refusal');
     const incomplete = json?.status === 'incomplete';
