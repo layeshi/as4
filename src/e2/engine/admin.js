@@ -16,7 +16,7 @@ import { source } from './ledger.js';
 import { emit, bad, creditEnergy, pushInbox } from './core.js';
 import { forceWeather } from './weather.js';
 import { resetOwnerKey } from '../../owner-key.js';
-import { migrateLawSemantics } from './law-semantics.js';
+import { migrateLawSemantics, usesLawSemantics2 } from './law-semantics.js';
 import { usesLawVM2, migrateLawExecution, capacityCheck } from './law-execution.js';
 
 const isInt = (v) => typeof v === 'number' && Number.isSafeInteger(v);
@@ -47,6 +47,7 @@ export function adminCommand(w, p) {
       emit(w, 'admin', { data: { op: 'pause' } });
       return { ok: true, paused: true };
     case 'resume':
+      if (usesLawSemantics2(w) && w.lawSemantics.protection) return bad('paused', { reason: 'law_execution_fault' });
       if (usesLawVM2(w) && (w.ruleExecution.protection || !capacityCheck(w).ok)) return bad('paused', { reason: 'law_execution_capacity', diagnostics: capacityCheck(w).issues });
       if (w.experimentControl) w.experimentControl.active = false;
       w.paused = false;

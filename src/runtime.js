@@ -1,9 +1,11 @@
 // 运行时：把世界、命令日志、事件存储、快照与刻调度器接在一起。
 //
-// HTTP 层与调度器只能通过 exec() 改变世界：先把命令追加进命令日志，再交给引擎执行，
-// 然后把引擎产出的事件交给 EventStore（落盘、进入缓冲、SSE 推送）。
+// HTTP 层与调度器只能通过 exec() 改变世界。历史语义先记录请求再执行；法律语义 2
+// 在隔离副本执行，持久化请求与结果回执后才提交状态、事件和唤醒。
 // 每日结算发生的那条 tick 命令执行完之后写快照（所以快照的状态与 commandN 严格对应）。
 
+import { usesLawSemantics2 } from './e2/engine/law-semantics.js';
+import { cloneCommandWorld, commitCommandCandidate, makeReceipt } from './command-receipt.js';
 import { engineOf, engineForPhysics } from './engines.js';
 import { CommandLog, readCommands, repairCommandLog } from './commands.js';
 import { EventStore } from './events.js';
@@ -90,23 +92,45 @@ export class Runtime {
     return rt;
   }
 
-  /** 执行一条命令：先写日志，再执行；返回 { result, events, cmd } */
+  /** 执行一条命令；新语义先准备并持久化回执，再公开状态。返回 { result, events, cmd } */
   exec(type, payload = {}) {
+    if (this.receiptFailed) throw new Error('Runtime is stopped after a receipt failure');
     const wasPaused = this.w.paused;
     const wasExperimentPaused = this.w.experimentControl?.active === true;
+    const wasFaultProtected = !!this.w.lawSemantics?.protection;
     const wasCapacityProtected = !!this.w.ruleExecution?.protection;
     if (type === 'admin' && payload.op === 'pause' && payload.args?.experiment === true && (!wasPaused || !wasExperimentPaused)) {
       payload = { ...payload, args: { ...payload.args, remainingMs: this.nextTickAt === null ? this.remainingMs : Math.max(0, this.nextTickAt - Date.now()) } };
     }
-    const cmd = this.log.append(type, payload, this.w.clock.tick);
-    let out;
-    try {
-      out = this.engine.applyCommand(this.w, cmd);
-    } catch (e) {
-      this.logger.error?.(`命令 #${cmd.n}（${type}）执行出错：`, e);
-      out = { result: { ok: false, error: { code: 'internal' } }, events: this.engine.drainEvents(this.w) };
+    let cmd, out;
+    const durable = usesLawSemantics2(this.w) || (this.w.physics === 2 && type === 'admin' && payload.op === 'law_semantics' && payload.args?.version === 2);
+    if (durable) {
+      const candidate = cloneCommandWorld(this.w);
+      cmd = { n: this.log.n + 1, tick: this.w.clock.tick, type, payload };
+      try {
+        out = this.engine.applyCommand(candidate, cmd);
+        this.log.appendReceipt(cmd, makeReceipt(this.w, candidate, out));
+        commitCommandCandidate(this.w, candidate);
+      } catch (error) {
+        // Never publish an unrecorded state or continue after an ambiguous append.
+        this.receiptFailed = true;
+        this.stopped = true;
+        if (this.timer) clearTimeout(this.timer);
+        this.timer = null;
+        this.nextTickAt = null;
+        this.events.emit('control', { paused: true, stopped: true });
+        throw error;
+      }
+    } else {
+      cmd = this.log.append(type, payload, this.w.clock.tick);
+      try {
+        out = this.engine.applyCommand(this.w, cmd);
+      } catch (e) {
+        this.logger.error?.(`命令 #${cmd.n}（${type}）执行出错：`, e);
+        out = { result: { ok: false, error: { code: 'internal' } }, events: this.engine.drainEvents(this.w) };
+      }
     }
-    const controlChanged = wasPaused !== this.w.paused || (!wasExperimentPaused && this.w.experimentControl?.active) || (!wasCapacityProtected && !!this.w.ruleExecution?.protection);
+    const controlChanged = (!wasFaultProtected && !!this.w.lawSemantics?.protection) || wasPaused !== this.w.paused || (!wasExperimentPaused && this.w.experimentControl?.active) || (!wasCapacityProtected && !!this.w.ruleExecution?.protection);
     if (controlChanged) {
       if (this.w.paused) {
         this.remainingMs = this.w.experimentControl?.active ? this.w.experimentControl.remainingMs : (this.nextTickAt === null ? this.cfg.tickMs : Math.max(0, this.nextTickAt - Date.now()));

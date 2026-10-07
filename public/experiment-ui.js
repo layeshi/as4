@@ -11,9 +11,11 @@ export function experimentPanel({ onChanged = () => {} } = {}) {
   let busy = false, view = null, generation = 0;
   const pause = h('button', { type: 'button', class: 'btn primary', onClick: () => change(true) }, tr('暂停实验', 'Pause experiment'));
   const resume = h('button', { type: 'button', class: 'btn primary', onClick: () => change(false) }, tr('恢复实验', 'Resume experiment'));
+  const recover = h('button', { type: 'button', class: 'btn', onClick: recovery }, tr('验证修复并恢复', 'Verify repair and resume'));
+  const protection = h('p', { role: 'status' });
   const refresh = h('button', { type: 'button', class: 'btn', onClick: load }, tr('刷新状态', 'Refresh status'));
   const root = h('section', { class: 'experiment-panel' }, status, clock,
-    h('div', { class: 'form-actions' }, pause, resume, refresh), message,
+    h('div', { class: 'form-actions' }, pause, resume, recover, refresh), protection, message,
     h('p', { class: 'muted' }, tr('暂停冻结世界时间、代谢结算、居民自主行动和托管行动模型调用。浏览、注册/领养、寄信、模型配置和连接测试、管理员调整世界仍可用；手动推进时间不可用。', 'Pausing freezes world time, settlement, autonomous actions and hosted action model calls. Browsing, entry/adoption, letters, model settings, connection tests and world adjustments remain available; manual ticks are blocked.')),
     h('p', { class: 'muted' }, tr('恢复遵循各运行器最新的启用开关，并继续剩余倒计时；服务器重启后仍保持暂停。', 'Resuming follows the latest runner switches and the remaining countdown. A paused experiment stays paused after a server restart.')),
     h('p', { class: 'muted' }, tr('服务器可中止托管请求。项目自带外部运行器读取暂停状态后等待；玩家自写程序或已发出的远程模型请求无法强制中止，已产生的模型费用也可能仍会计费。', 'The server cancels hosted requests locally. Reference external runners wait after reading the pause state. Custom external programs and remote requests already sent cannot be forcibly stopped; incurred model charges may still apply.')));
@@ -29,6 +31,9 @@ export function experimentPanel({ onChanged = () => {} } = {}) {
     const transitioning = ['pausing', 'resuming'].includes(view?.state);
     pause.disabled = busy || !view || transitioning || view.state === 'paused';
     resume.disabled = busy || !view || transitioning || view.state === 'running';
+    resume.disabled ||= !!view?.lawProtection;
+    recover.disabled = busy || transitioning || !view?.lawProtection;
+    protection.textContent = view?.lawProtection ? tr(`执行故障保护 · 命令 #${view.lawProtection.commandN}。普通写入已冻结。修复后验证原请求，验证效果全部丢弃，原请求不会补交。`, `Execution fault protection · command #${view.lawProtection.commandN}. Normal writes are frozen. Verify the repair on a discarded copy; the request will not be resubmitted.`) : view?.capacityProtection ? tr('容量保护暂停：请检查法律执行容量。', 'Capacity protection: inspect law execution capacity.') : '';
     refresh.disabled = busy;
   }
   async function load() {
@@ -38,6 +43,18 @@ export function experimentPanel({ onChanged = () => {} } = {}) {
     if (r.ok) { view = r.json; message.textContent = ''; }
     else { view = null; message.textContent = errorText(r, tr('无法读取实验状态，请重试。', 'Unable to read experiment status. Retry.')); }
     draw();
+  }
+  async function recovery() {
+    if (busy || !view?.lawProtection) return;
+    busy = true; generation++; draw();
+    const r = await api('/api/admin/law-recover', { method: 'POST', body: {} });
+    await load();
+    if (!r.ok) message.textContent = errorText(r, tr('验证失败，仍保持保护暂停。', 'Verification failed; protection remains.'));
+    else {
+      message.textContent = r.json.probe === 'business_failure' ? tr('验证得到预期业务失败，已恢复；原请求未补交，请重新感知后提交。', 'Probe returned an expected business failure. Resumed without resubmitting; perceive again before retrying.') : tr('验证成功，已恢复；原请求未补交。', 'Probe succeeded. Resumed without resubmitting the original request.');
+      onChanged();
+    }
+    busy = false; draw();
   }
   async function change(paused) {
     if (busy || !view) return;

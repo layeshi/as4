@@ -28,7 +28,7 @@ import { openProjectsAt } from './projects.js';
 import { lawReading, lawTitle, lawText, authorView, isSuspended, persistentCount, hasAnnounce, procSpec, isProcedureLaw } from './laws.js';
 import { renderProcedureClass, renderRules } from '../rules/render.js';
 import { HUMAN_PROCEDURE, humanProcedureFor } from '../lore/humanlaws.js';
-import { usesLawSemantics2 } from './law-semantics.js';
+import { usesLawSemantics2, lawProtectionView } from './law-semantics.js';
 import { previewBefore, beforeIndex } from './rules.js';
 import { mayPropose, votersOf, openCityProposals, openRefounds, refoundNeeded, liveSigners, refoundElectorate, procedureHealth, rngCopy } from './legislation.js';
 import { shellsFree, queuePosition } from './shells.js';
@@ -81,6 +81,7 @@ export function buildPerception(w, agentId, opts = {}) {
   }
 
   const now = {
+    ...(usesLawSemantics2(w) ? { lawProtection: lawProtectionView(w) } : {}),
     tick: w.clock.tick, day, month: monthOfDay(day), dayOfMonth: dayOfMonthOf(day), tickOfDay: tickOfDay(w),
     ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth,
     nextTickAt: opts.nextTickAt ?? null, tickMs: P.tickMs, paused: w.paused,

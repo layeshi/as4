@@ -1,3 +1,4 @@
+import { lawProtectionView } from '../e2/engine/law-semantics.js';
 // PROTOCOL §3、§4：agent 接口——感知与行动。
 
 import { errorMessage } from '../lore/index.js';
@@ -71,7 +72,7 @@ export function actCore({ rt, cursors }, id, body, lang) {
   }
   const w = rt.w;
   const a = w.agents[id];
-  if (w.paused) return fail('paused');
+  if (w.paused) return fail('paused', lawProtectionView(w) ? { reason: 'law_execution_fault', diagnostics: lawProtectionView(w) } : {});
   if ((w.experimentControl || body.experimentGeneration !== undefined) && (!Number.isSafeInteger(body.experimentGeneration) || body.experimentGeneration !== (w.experimentControl?.generation ?? 0))) {
     return { status: 409, json: { error: { code: 'stale_perception', message: lang === 'en' ? 'The experiment was paused. Read a fresh perception before acting.' : '实验曾被暂停，请重新感知后行动。' } } };
   }

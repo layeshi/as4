@@ -16,7 +16,7 @@ import { visibleOmens, weatherCodesFor } from './weather.js';
 import { openProjectsAt } from './projects.js';
 import { livingShells, shellsFree, queuePosition, bodyList } from './shells.js';
 import { HUMAN_PROCEDURE, humanProcedureFor } from '../lore/humanlaws.js';
-import { usesLawSemantics2 } from './law-semantics.js';
+import { usesLawSemantics2, lawProtectionView } from './law-semantics.js';
 import { refoundNeeded, liveElectorate, liveSigners, procedureHealth } from './legislation.js';
 
 const ref = (w, id) => (id && w.agents[id] ? { id, name: w.agents[id].name } : null);
@@ -257,7 +257,7 @@ export function publicState(w, extra = {}) {
       ...(w.ruleExecution ? { lawExecution: { version: w.ruleExecution.version, protected: !!w.ruleExecution.protection, protection: w.ruleExecution.protection } } : {}),
       id: w.id, protocol: 2, physics: 2, ...(premised(w) ? { premise: w.premise } : {}), tick: w.clock.tick, day, month: monthOfDay(day), dayOfMonth: dayOfMonthOf(day), tickOfDay: tickOfDay(w),
       ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, monthsPerEpoch: P.monthsPerEpoch, epoch: w.epoch,
-      ...(usesLawSemantics2(w) ? { lawSemanticsVersion: 2 } : {}),
+      ...(usesLawSemantics2(w) ? { lawSemanticsVersion: 2, lawProtection: lawProtectionView(w) } : {}),
       paused: w.paused, revealed: w.revealed, map: w.map,
       cityName: w.cityName, humanCityName: { zh: zh.cityName, en: L('en').cityName },
       nextTickAt: extra.nextTickAt ?? null, tickMs: P.tickMs,

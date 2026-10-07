@@ -1,3 +1,4 @@
+import { usesLawSemantics2, lawProtectionView } from '../e2/engine/law-semantics.js';
 // PROTOCOL §11：管理接口。X-Admin-Key 头，常数时间比较；未配置 ADMIN_KEY 时全部返回 404。
 // 所有管理操作都会产生公开的 admin 事件（不含管理员身份）。
 
@@ -93,6 +94,7 @@ const experimentOp = (paused) => async (req, res, ctx) => {
     if (!parsed.ok) return sendError(res, 'zh', parsed.code);
     sendJson(res, 200, await ctx.experiment.setPaused(paused, authorize));
   } catch (e) {
+    if (e.engineError) return sendEngineError(res, 'zh', e.engineError);
     if (!(e instanceof AccountError)) throw e;
     sendJson(res, e.status, { error: { code: e.code, message: e.message } });
   }
@@ -209,7 +211,30 @@ async function resetOwnerCredential(req, res, ctx, url, params) {
   sendJson(res, 200, { agentId: result.agentId, ownerKey });
 }
 
+async function recoverLaw(req, res, ctx) {
+  try {
+    const authorize = experimentAuth(ctx, req, res, true);
+    if (!authorize) return;
+    const parsed = await readJson(req);
+    if (!parsed.ok) return sendError(res, 'zh', parsed.code);
+    const result = await ctx.experiment.recoverLaw(authorize);
+    if (!result.ok) return sendEngineError(res, 'zh', result.error);
+    sendJson(res, 200, result);
+  } catch (e) {
+    if (e.engineError) return sendEngineError(res, 'zh', e.engineError);
+    if (!(e instanceof AccountError)) throw e;
+    sendJson(res, e.status, { error: { code: e.code, message: e.message } });
+  }
+}
+
 export const adminRoutes = [
+  ['GET', '/api/admin/law-semantics', async (req, res, ctx) => {
+    if (!authOperator(ctx, req, res)) return;
+    if (ctx.rt.w.physics !== 2) return sendError(res, 'zh', 'not_found');
+    sendJson(res, 200, { version: usesLawSemantics2(ctx.rt.w) ? 2 : 1, protection: lawProtectionView(ctx.rt.w), openRefounds: Object.values(ctx.rt.w.refounds).filter(r => r.status === 'open').map(r => ({ id: r.id, expiresTick: r.expiresTick })) });
+  }],
+  ['POST', '/api/admin/law-semantics', op('law_semantics')],
+  ['POST', '/api/admin/law-recover', recoverLaw],
   ['GET', '/api/admin/law-execution', async (req, res, ctx) => {
     if (!authOperator(ctx, req, res)) return;
     if (!agentic(ctx.rt.w)) return sendError(res, 'zh', 'not_found');

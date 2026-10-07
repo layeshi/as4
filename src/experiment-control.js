@@ -1,3 +1,4 @@
+import { usesLawSemantics2, lawProtectionView } from './e2/engine/law-semantics.js';
 /** Coordinate world pause with hosted loops, without changing their own enable switches. */
 export class ExperimentControl {
   constructor(rt, runners, shells) {
@@ -13,13 +14,14 @@ export class ExperimentControl {
   }
 
   reconcile() {
-    this.state = this.rt.w.paused ? 'pausing' : 'resuming';
+    const paused = this.rt.w.paused || this.rt.stopped;
+    this.state = paused ? 'pausing' : 'resuming';
     // Abort synchronously once the world gate closes. A resume waits for the old loops.
-    const stopping = this.rt.w.paused
+    const stopping = paused
       ? Promise.all([this.runners.suspendExperiment(), this.shells?.suspendExperiment()])
       : Promise.resolve();
     this.pending = Promise.all([this.pending.catch(() => {}), stopping]).then(() => {
-      if (this.rt.w.paused) this.state = 'paused';
+      if (this.rt.w.paused || this.rt.stopped) this.state = 'paused';
       else {
         this.runners.resumeExperiment();
         this.shells?.resumeExperiment();
@@ -32,6 +34,7 @@ export class ExperimentControl {
 
   view() {
     return {
+      ...(usesLawSemantics2(this.rt.w) ? { lawProtection: lawProtectionView(this.rt.w), capacityProtection: this.rt.w.ruleExecution?.protection || null } : {}),
       state: this.state,
       paused: this.rt.w.paused,
       remainingMs: this.rt.w.paused ? this.rt.remainingMs : Math.max(0, (this.rt.nextTickAt ?? Date.now() + this.rt.remainingMs) - Date.now()),
@@ -49,7 +52,7 @@ export class ExperimentControl {
       try {
         if (this.rt.w.paused !== paused || (paused && !this.rt.w.experimentControl?.active)) {
           const { result } = this.rt.exec('admin', { op: paused ? 'pause' : 'resume', args: { experiment: true } });
-          if (!result.ok) throw new Error('Experiment transition failed');
+          if (!result.ok) throw Object.assign(new Error('Experiment transition failed'), { engineError: result.error });
         } else if (this.state.endsWith('_error')) this.reconcile();
         await this.pending;
       } catch (error) {
@@ -61,6 +64,24 @@ export class ExperimentControl {
         throw error;
       }
       return { ok: true, paused: this.rt.w.paused };
+    });
+    this.queue = operation.catch(() => {});
+    return operation;
+  }
+
+  recoverLaw(authorize = () => {}) {
+    const operation = this.queue.then(async () => {
+      authorize();
+      if (this.rt.stopped) throw new Error('Runtime is closed');
+      await this.pending;
+      authorize();
+      const { result } = this.rt.exec('admin', { op: 'law_recover' });
+      try { await this.pending; }
+      catch (error) {
+        if (!this.rt.w.paused) this.rt.exec('admin', { op: 'pause', args: { experiment: true } });
+        throw error;
+      }
+      return result;
     });
     this.queue = operation.catch(() => {});
     return operation;

@@ -12,6 +12,8 @@ import { enablePrayers, replyPrayer, reviewInvention } from './prayers.js';
 //
 // 令牌与密钥由 HTTP 层用 crypto 生成，只把哈希放进命令载荷，所以回放时状态完全一致。
 
+import { usesLawSemantics2, lawProtectionView } from './law-semantics.js';
+import { cloneCommandWorld, commitCommandCandidate, applyReceipt } from '../../command-receipt.js';
 import { bad, drainEvents, drainWakes, emit } from './core.js';
 import { usesLawVM2, capacityCheck, CapacityError, commandMeter } from './law-execution.js';
 import { tickWorld } from './tick.js';
@@ -58,6 +60,8 @@ export function registerCommand(type, fn) {
  * 每条命令结束都清空，所以沙盘与回放里没人取走也不会积累。
  */
 export function applyCommand(w, cmd) {
+  if (cmd.receipt) return applyReceipt(w, cmd);
+  if (usesLawSemantics2(w) || (w.physics === 2 && cmd.type === 'admin' && cmd.payload?.op === 'law_semantics' && cmd.payload.args?.version === 2)) return applySemanticCommand(w, cmd);
   const handler = COMMANDS[cmd.type];
   w.commandN = cmd.n !== undefined ? cmd.n : w.commandN + 1;
   if (!handler) return { result: bad('invalid_request', { field: 'type' }), events: drainEvents(w), wakes: drainWakes(w) };
@@ -111,3 +115,73 @@ function applyProtected(w, cmd, handler) {
 }
 
 export { tickWorld } from './tick.js';
+
+// Only controlled maintenance may run during program protection. Its commands
+// still have the same atomic boundary; ordinary resume cannot clear this reason.
+const MAINTENANCE = ['pause', 'law_execution', 'law_recover', 'redact', 'reset_owner_key', 'backstage'];
+function semanticFault(w, cmd, error) {
+  if (error instanceof CapacityError) return protect(w, error.detail);
+  const detail = { code: 'engine_exception', commandN: w.commandN, type: COMMAND_TYPES().includes(cmd.type) ? cmd.type : 'unknown' };
+  w.lawSemantics.protection = detail;
+  w.lawSemantics.failedCommand = structuredClone({ n: w.commandN, type: cmd.type, payload: cmd.payload || {} });
+  w.paused = true;
+  w.experimentControl = { active: true, generation: w.commandN, remainingMs: 0 };
+  emit(w, 'law_fault', { data: detail });
+  return { result: bad('paused', { reason: 'law_execution_fault', diagnostics: lawProtectionView(w) }), events: drainEvents(w), wakes: [] };
+}
+function recoverLaw(w) {
+  if (!w.lawSemantics?.protection || !w.lawSemantics.failedCommand) return bad('invalid_request', { field: 'protection' });
+  const probe = cloneCommandWorld(w), original = probe.lawSemantics.failedCommand;
+  delete probe.lawSemantics.protection;
+  delete probe.lawSemantics.failedCommand;
+  probe.paused = false;
+  if (probe.experimentControl) probe.experimentControl.active = false;
+  if (usesLawVM2(probe)) {
+    if (probe.ruleExecution.protection || !capacityCheck(probe).ok) return bad('paused', { reason: 'law_execution_capacity' });
+    commandMeter(probe);
+  }
+  let result;
+  try {
+    const handler = COMMANDS[original.type];
+    if (!handler) throw new Error('Missing original handler');
+    result = handler(probe, original.payload);
+    if (usesLawVM2(probe) && !capacityCheck(probe).ok) throw new CapacityError({ code: 'capacity' });
+  } catch (error) {
+    return bad('paused', { reason: error instanceof CapacityError ? 'law_execution_capacity' : 'law_execution_fault' });
+  }
+  const classification = !result.ok || result.results?.some(r => !r.ok) ? 'business_failure' : 'success';
+  delete w.lawSemantics.protection;
+  delete w.lawSemantics.failedCommand;
+  w.paused = false;
+  if (w.experimentControl) w.experimentControl.active = false;
+  emit(w, 'admin', { data: { op: 'law_recover', probe: classification, resubmitted: false } });
+  return { ok: true, paused: false, probe: classification, resubmitted: false };
+}
+function applySemanticCommand(w, cmd) {
+  w.commandN = cmd.n !== undefined ? cmd.n : w.commandN + 1;
+  const maintenance = cmd.type === 'admin' && MAINTENANCE.includes(cmd.payload?.op);
+  if (w.lawSemantics?.protection && !maintenance) return { result: bad('paused', { reason: 'law_execution_fault', diagnostics: lawProtectionView(w) }), events: drainEvents(w), wakes: [] };
+  const handler = COMMANDS[cmd.type];
+  if (!handler) return { result: bad('invalid_request', { field: 'type' }), events: drainEvents(w), wakes: drainWakes(w) };
+  const shadow = cloneCommandWorld(w);
+  try {
+    if (usesLawVM2(shadow) && !maintenance) {
+      if (shadow.ruleExecution.protection) return { result: bad('paused', { reason: 'law_execution_capacity' }), events: drainEvents(w), wakes: [] };
+      const check = capacityCheck(shadow);
+      if (!check.ok) throw new CapacityError({ code: 'capacity', required: check.required, issues: check.issues });
+    }
+    if (usesLawVM2(shadow)) commandMeter(shadow);
+    const result = cmd.type === 'admin' && cmd.payload?.op === 'law_recover' ? recoverLaw(shadow) : handler(shadow, cmd.payload || {});
+    if (usesLawVM2(shadow) && !maintenance) {
+      const check = capacityCheck(shadow);
+      if (!check.ok) throw new CapacityError({ code: 'capacity', required: check.required, issues: check.issues });
+    }
+    const events = drainEvents(shadow), wakes = drainWakes(shadow);
+    commitCommandCandidate(w, shadow);
+    return { result, events, wakes };
+  } catch (error) {
+    // Migration faults also activate protection without activating other semantics.
+    if (!w.lawSemantics) w.lawSemantics = { version: 2 };
+    return semanticFault(w, cmd, error);
+  }
+}

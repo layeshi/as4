@@ -1,3 +1,4 @@
+import { lawProtectionView } from './engine/law-semantics.js';
 import { premised as isPremised } from './world.js';
 import { weatherCodesFor } from './engine/weather.js';
 // TODO(spec): Q32 — preserve premise 0 calm votes; premise 1 HTTP uses public types.
@@ -27,6 +28,7 @@ function tickSummary(w, { nextTickAt = null } = {}) {
   const hist = w.well.outputHistory;
   const well = w.places.well;
   return {
+    ...(lawProtectionView(w) ? { lawProtection: lawProtectionView(w) } : {}),
     tick: w.clock.tick,
     day: Math.floor(w.clock.tick / P.ticksPerDay),
     nextTickAt,

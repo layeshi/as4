@@ -12,3 +12,9 @@ export function migrateLawSemantics(w, args) {
   }
   return { ok: true, version: 2 };
 }
+
+// Allowlist projection: private failedCommand never leaves persisted engine state.
+export function lawProtectionView(w) {
+  const p = usesLawSemantics2(w) && w.lawSemantics.protection;
+  return p ? { code: 'engine_exception', commandN: p.commandN, type: p.type } : null;
+}

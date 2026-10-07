@@ -245,3 +245,31 @@ test('恢复任务失败时重新冻结实验，修复后可以重试恢复', as
     assert.equal(x.view().state, 'running');
   } finally { await e.close(); }
 });
+
+test('program fault freezes hosted control; session-authenticated recovery probes without retrying', async () => {
+  const { registerCommand } = await import('../src/e2/engine/index.js');
+  const e = await boot({ physics: 2, premise: 2 });
+  try {
+    const setup = await e.call('/api/account/setup', { method: 'POST', body: { username: 'faultadmin', displayName: '管理员', password: 'long-enough-password', adminKey: e.cfg.adminKey }, headers: { 'X-Houren-Request': '1' } });
+    const cookie = setup.headers.get('set-cookie').split(';')[0];
+    registerCommand('http_fault_test', w => { w.vars.secret = 1; throw new Error('private-command-data'); });
+    e.rt.exec('http_fault_test', { tokenHash: 'private-hash', thought: 'private-thought' });
+    await e.app.ctx.experiment.pending;
+    const status = await e.call('/api/admin/experiment', { headers: { Cookie: cookie } });
+    assert.equal(status.json.lawProtection.code, 'engine_exception');
+    assert.equal(status.json.state, 'paused');
+    assert.doesNotMatch(JSON.stringify(status.json), /private-hash|private-thought|private-command-data/);
+    await assert.rejects(e.app.ctx.experiment.setPaused(false));
+    const ordinary = await control(e, 'resume');
+    assert.equal(ordinary.status, 503);
+    assert.equal(ordinary.json.error.reason, 'law_execution_fault');
+    assert.equal((await e.call('/api/admin/law-recover', { method: 'POST', body: {}, headers: { Cookie: cookie } })).status, 403);
+    assert.equal((await e.call('/api/admin/law-recover', { method: 'POST', body: {}, headers: { Cookie: cookie, 'X-Houren-Request': '1', 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
+    registerCommand('http_fault_test', w => { w.vars.secret = 2; return { ok: false, error: { code: 'not_found' } }; });
+    const recovered = await e.call('/api/admin/law-recover', { method: 'POST', body: {}, headers: { Cookie: cookie, 'X-Houren-Request': '1' } });
+    assert.equal(recovered.status, 200);
+    assert.equal(recovered.json.probe, 'business_failure');
+    assert.equal(e.rt.w.vars.secret, undefined);
+    assert.equal(e.app.ctx.experiment.state, 'running');
+  } finally { await e.close(); }
+});

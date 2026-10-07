@@ -60,6 +60,7 @@ export function errorBody(lang, code, extra = {}, protocol = 1) {
       const en = lang === 'en';
       rest.issues = rest.issues.map((i) => ({ path: i.path, code: i.code, message: en ? i.en : i.zh, ...(i.hint ? { hint: en ? i.hint.en : i.hint.zh } : {}) }));
     }
+    if (code === 'paused' && rest.reason === 'law_execution_fault') return { error: { code, message: lang === 'en' ? 'Execution fault protection. An operator must verify the repair. The failed request was rolled back and will not be resubmitted.' : '执行故障保护暂停，需管理员验证修复。本请求已回滚，不会自动补交。', ...rest } };
     return { error: { code, message: hint?.[lang] ?? errorMessage2(lang, code, rest.status), ...rest } };
   }
   return { error: { code, message: hint?.[lang] ?? errorMessage(lang, code, rest.status), ...rest } };

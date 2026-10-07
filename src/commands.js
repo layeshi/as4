@@ -1,8 +1,9 @@
 // SPEC-M1 §11.2：命令日志。文件 DATA_DIR/WORLD_ID/commands.jsonl，每行 { n, tick, type, payload }，n 连续递增。
 // 先写日志，再执行；执行中的校验失败也是确定性的，回放会得到同样的失败。日志只追加，从不改写或删除。
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, fsyncSync, openSync, writeSync, appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { receiptChecksum } from './command-receipt.js';
 
 export class CommandLog {
   /** @param {string} file 日志文件路径；null 表示只在内存里记（沙盘与测试） */
@@ -16,6 +17,31 @@ export class CommandLog {
         this.n = rows.length ? rows[rows.length - 1].n : 0;
       }
     }
+  }
+
+  /** One newline-terminated, checksummed frame is the commit point. */
+  appendReceipt(cmd, receipt) {
+    if (cmd.n !== this.n + 1) throw new Error('Receipt command number is not contiguous');
+    const command = JSON.parse(JSON.stringify({ ...cmd, receipt }));
+    const frame = { format: 'command-receipt-v1', command, sha256: receiptChecksum(command) };
+    if (this.file) {
+      const bytes = Buffer.from(`${JSON.stringify(frame)}\n`);
+      const fd = openSync(this.file, 'a', 0o600);
+      try {
+        let offset = 0;
+        while (offset < bytes.length) {
+          const written = writeSync(fd, bytes, offset, bytes.length - offset);
+          if (!written) throw new Error('Short receipt write');
+          offset += written;
+        }
+        fsyncSync(fd);
+      } finally { closeSync(fd); }
+      // Persist file creation as well as its data before publishing the state.
+      const dir = openSync(dirname(this.file), 'r');
+      try { fsyncSync(dir); } finally { closeSync(dir); }
+    }
+    this.n = command.n;
+    return command;
   }
 
   /** 追加一条命令并返回带编号的命令对象（调用者随后执行它） */
@@ -47,6 +73,13 @@ export function readCommands(file, { fromN = 0, toN = Infinity } = {}) {
       const isLast = lines.slice(i + 1).every((l) => l === '');
       if (isLast) break; // 崩溃时写了一半的最后一行：丢弃
       throw new Error(`commands.jsonl 第 ${i + 1} 行损坏：${e.message}`);
+    }
+    if (row.format === 'command-receipt-v1') {
+      // A parseable frame without the delimiter is still an incomplete append.
+      if (i === lines.length - 1) break;
+      if (!row.command || row.sha256 !== receiptChecksum(row.command)) throw new Error(`commands.jsonl 第 ${i + 1} 行回执校验失败`);
+      row = row.command;
+      if (!row.receipt || row.receipt.version !== 1) throw new Error('Unsupported command receipt');
     }
     if (expected !== null && row.n !== expected) throw new Error(`commands.jsonl 编号不连续：期望 ${expected}，得到 ${row.n}（第 ${i + 1} 行）`);
     expected = row.n + 1;
