@@ -61,7 +61,11 @@ export function registerCommand(type, fn) {
  */
 export function applyCommand(w, cmd) {
   if (cmd.receipt) return applyReceipt(w, cmd);
-  if (usesLawSemantics2(w) || (w.physics === 2 && cmd.type === 'admin' && cmd.payload?.op === 'law_semantics' && cmd.payload.args?.version === 2)) return applySemanticCommand(w, cmd);
+  if (usesLawSemantics2(w) || (w.physics === 2 && cmd.type === 'admin' && cmd.payload?.op === 'law_semantics' && cmd.payload.args?.version === 2)) {
+    const { candidate, out } = prepareCommand(w, cmd);
+    commitCommandCandidate(w, candidate);
+    return out;
+  }
   const handler = COMMANDS[cmd.type];
   w.commandN = cmd.n !== undefined ? cmd.n : w.commandN + 1;
   if (!handler) return { result: bad('invalid_request', { field: 'type' }), events: drainEvents(w), wakes: drainWakes(w) };
@@ -157,31 +161,33 @@ function recoverLaw(w) {
   emit(w, 'admin', { data: { op: 'law_recover', probe: classification, resubmitted: false } });
   return { ok: true, paused: false, probe: classification, resubmitted: false };
 }
-function applySemanticCommand(w, cmd) {
+// Runtime can prepare once, persist its receipt, then commit. Direct engine
+// callers use this same preparation through applyCommand, without any I/O.
+export function prepareCommand(original, cmd) {
+  const w = cloneCommandWorld(original);
   w.commandN = cmd.n !== undefined ? cmd.n : w.commandN + 1;
+  const done = out => ({ candidate: w, out });
   const maintenance = cmd.type === 'admin' && MAINTENANCE.includes(cmd.payload?.op);
-  if (w.lawSemantics?.protection && !maintenance) return { result: bad('paused', { reason: 'law_execution_fault', diagnostics: lawProtectionView(w) }), events: drainEvents(w), wakes: [] };
+  if (w.lawSemantics?.protection && !maintenance) return done({ result: bad('paused', { reason: 'law_execution_fault', diagnostics: lawProtectionView(w) }), events: drainEvents(w), wakes: [] });
   const handler = COMMANDS[cmd.type];
-  if (!handler) return { result: bad('invalid_request', { field: 'type' }), events: drainEvents(w), wakes: drainWakes(w) };
-  const shadow = cloneCommandWorld(w);
+  if (!handler) return done({ result: bad('invalid_request', { field: 'type' }), events: drainEvents(w), wakes: drainWakes(w) });
   try {
-    if (usesLawVM2(shadow) && !maintenance) {
-      if (shadow.ruleExecution.protection) return { result: bad('paused', { reason: 'law_execution_capacity' }), events: drainEvents(w), wakes: [] };
-      const check = capacityCheck(shadow);
+    if (usesLawVM2(w) && !maintenance) {
+      if (w.ruleExecution.protection) return done({ result: bad('paused', { reason: 'law_execution_capacity' }), events: drainEvents(w), wakes: [] });
+      const check = capacityCheck(w);
       if (!check.ok) throw new CapacityError({ code: 'capacity', required: check.required, issues: check.issues });
     }
-    if (usesLawVM2(shadow)) commandMeter(shadow);
-    const result = cmd.type === 'admin' && cmd.payload?.op === 'law_recover' ? recoverLaw(shadow) : handler(shadow, cmd.payload || {});
-    if (usesLawVM2(shadow) && !maintenance) {
-      const check = capacityCheck(shadow);
+    if (usesLawVM2(w)) commandMeter(w);
+    const result = cmd.type === 'admin' && cmd.payload?.op === 'law_recover' ? recoverLaw(w) : handler(w, cmd.payload || {});
+    if (usesLawVM2(w) && !maintenance) {
+      const check = capacityCheck(w);
       if (!check.ok) throw new CapacityError({ code: 'capacity', required: check.required, issues: check.issues });
     }
-    const events = drainEvents(shadow), wakes = drainWakes(shadow);
-    commitCommandCandidate(w, shadow);
-    return { result, events, wakes };
+    return done({ result, events: drainEvents(w), wakes: drainWakes(w) });
   } catch (error) {
-    // Migration faults also activate protection without activating other semantics.
-    if (!w.lawSemantics) w.lawSemantics = { version: 2 };
-    return semanticFault(w, cmd, error);
+    const failed = cloneCommandWorld(original);
+    failed.commandN = w.commandN;
+    if (!failed.lawSemantics) failed.lawSemantics = { version: 2 };
+    return { candidate: failed, out: semanticFault(failed, cmd, error) };
   }
 }

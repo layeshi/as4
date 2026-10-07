@@ -129,6 +129,9 @@ test('receipt preserves ordinary map keys named constructor without touching pro
   registerCommand('map_key_test', w => { Object.defineProperty(w.vars, 'constructor', { value: { value: 42 }, writable: true, configurable: true, enumerable: true }); return { ok: true }; });
   rt.exec('map_key_test'); rt.snapshot();
   assert.equal(replayDir(rt.dir).ok, true);
+  registerCommand('map_key_remove_test', w => { delete w.vars.constructor; return { ok: true }; });
+  rt.exec('map_key_remove_test'); rt.snapshot();
+  assert.equal(replayDir(rt.dir).ok, true);
   assert.equal(Object.prototype.value, undefined);
 });
 
@@ -173,4 +176,109 @@ test('new program protection while manually paused publishes control and snapsho
   rt.exec('paused_fault_test');
   assert.equal(control.length, 1);
   assert.equal(JSON.parse(readFileSync(snapshotPath(rt.dir), 'utf8')).lawSemantics.protection.commandN, rt.w.commandN);
+});
+
+test('event append failure fail-stops; close cannot snapshot past missing events and reopen repairs them', async t => {
+  const { emit } = await import('../src/e2/engine/core.js');
+  const { cfg, rt } = setup(t), before = readFileSync(snapshotPath(rt.dir));
+  registerCommand('event_failure_test', w => { w.vars.committed = 1; emit(w, 'receipt_event'); return { ok: true }; });
+  rt.events.append = () => { throw new Error('event EIO'); };
+  assert.throws(() => rt.exec('event_failure_test'), /event EIO/);
+  assert.equal(rt.stopped, true);
+  assert.equal(rt.w.vars.committed, 1, 'receipt already committed this state');
+  rt.close();
+  assert.deepEqual(readFileSync(snapshotPath(rt.dir)), before, 'failed publication cannot advance the snapshot');
+  const reopened = Runtime.open(cfg, { logger });
+  assert.equal(reopened.w.vars.committed, 1);
+  assert.equal(reopened.events.since(0, 100).filter(e => e.type === 'receipt_event').length, 1);
+  assert.equal(replayDir(rt.dir).ok, true);
+});
+
+test('event sync failure prevents any advanced snapshot, including later close', t => {
+  const { rt } = setup(t), before = readFileSync(snapshotPath(rt.dir));
+  rt.exec('tick');
+  rt.events.sync = () => { throw new Error('event fsync failed'); };
+  assert.throws(() => rt.snapshot(), /event fsync failed/);
+  assert.equal(rt.stopped, true);
+  assert.deepEqual(readFileSync(snapshotPath(rt.dir)), before);
+  rt.close();
+  assert.deepEqual(readFileSync(snapshotPath(rt.dir)), before);
+});
+
+test('malformed complete terminal receipt fails closed in read and repair without altering evidence', async t => {
+  const { repairCommandLog } = await import('../src/commands.js');
+  const { rt } = setup(t);
+  rt.exec('tick');
+  const file = commandsPath(rt.dir), full = readFileSync(file, 'utf8');
+  const cut = full.lastIndexOf('\n', full.length - 2) + 1;
+  const broken = full.slice(0, cut) + full.slice(cut, -2) + '!\n';
+  writeFileSync(file, broken);
+  assert.throws(() => readCommands(file), /损坏|回执/);
+  assert.throws(() => repairCommandLog(file), /损坏|回执/);
+  assert.equal(readFileSync(file, 'utf8'), broken);
+});
+
+test('startup event truncation uses atomic replacement; a pre-rename crash retains original log', async t => {
+  const fs = (await import('node:fs')).default;
+  const { syncBuiltinESMExports } = await import('node:module');
+  const { EventStore } = await import('../src/events.js');
+  const { eventsPath } = await import('../src/store.js');
+  const { rt } = setup(t), file = eventsPath(rt.dir);
+  const original = [1, 2].map(seq => JSON.stringify({ seq, tick: 0, type: 'test', vis: 'public', data: {} })).join('\n') + '\n';
+  writeFileSync(file, original);
+  t.mock.method(fs, 'renameSync', () => { throw new Error('crash before event rename'); });
+  syncBuiltinESMExports();
+  try {
+    assert.throws(() => new EventStore(file).load({ keepSeq: 1 }), /crash before event rename/);
+    assert.equal(readFileSync(file, 'utf8'), original);
+  } finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+  const events = new EventStore(file); events.load({ keepSeq: 1 });
+  assert.equal(events.lastSeq, 1);
+  assert.equal(readFileSync(file, 'utf8'), original.split('\n')[0] + '\n');
+});
+
+test('startup leaves an already correct event file untouched', async t => {
+  const fs = await import('node:fs');
+  const { EventStore } = await import('../src/events.js');
+  const { eventsPath } = await import('../src/store.js');
+  const { rt } = setup(t), file = eventsPath(rt.dir);
+  const original = JSON.stringify({ seq: 1, tick: 0, type: 'test', vis: 'public', data: {} }) + '\n';
+  writeFileSync(file, original);
+  fs.utimesSync(file, new Date(0), new Date(0));
+  new EventStore(file).load({ keepSeq: 1 });
+  assert.equal(fs.statSync(file).mtimeMs, 0);
+});
+
+test('real event file and directory fsync precede snapshot fsync', async t => {
+  const fs = (await import('node:fs')).default;
+  const { syncBuiltinESMExports } = await import('node:module');
+  const { eventsPath } = await import('../src/store.js');
+  const { rt } = setup(t); rt.exec('tick');
+  const eventInode = fs.statSync(eventsPath(rt.dir)).ino, calls = [], original = fs.fsyncSync;
+  t.mock.method(fs, 'fsyncSync', fd => {
+    const info = fs.fstatSync(fd);
+    calls.push(info.isDirectory() ? 'directory' : info.ino === eventInode ? 'events' : 'snapshot');
+    original(fd);
+  });
+  syncBuiltinESMExports();
+  try { rt.snapshot(); }
+  finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+  assert.deepEqual(calls, ['events', 'directory', 'snapshot']);
+});
+
+test('command tail repair crash before atomic rename preserves acknowledged receipt prefix', async t => {
+  const fs = (await import('node:fs')).default;
+  const { syncBuiltinESMExports } = await import('node:module');
+  const { repairCommandLog } = await import('../src/commands.js');
+  const { rt } = setup(t), file = commandsPath(rt.dir);
+  const complete = readFileSync(file, 'utf8'), original = complete + '{"format":"command-receipt-v1"';
+  writeFileSync(file, original);
+  t.mock.method(fs, 'renameSync', () => { throw new Error('crash before command rename'); });
+  syncBuiltinESMExports();
+  try {
+    assert.throws(() => repairCommandLog(file), /crash before command rename/);
+    assert.equal(readFileSync(file, 'utf8'), original);
+  } finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+  repairCommandLog(file);
+  assert.equal(readFileSync(file, 'utf8'), complete);
 });

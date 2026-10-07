@@ -295,7 +295,7 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
   const env = await boot();
   try {
     const used = new Set();
-    for (const f of jsFiles) for (const m of read(f).matchAll(/['`](\/api\/[a-z/]+)/g)) used.add(m[1]);
+    for (const f of jsFiles) for (const m of read(f).matchAll(/['`](\/api\/[a-z/-]+)/g)) used.add(m[1]);
     assert.ok(used.size >= 10, [...used].join(' '));
     for (const p of used) {
       const path = p.replace(/\/$/, '');
@@ -307,7 +307,7 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
         continue;
       }
       if (path === '/api/public/attention') { assert.equal((await env.call(path)).status, 404); continue; } // Q43 A：只在第二前提存在，由 T15 验证。
-      const method = ['/api/admin/pause', '/api/admin/resume', '/api/account/logout', '/api/port/register', '/api/port/adopt', '/api/port/foster', '/api/owner/letter', '/api/owner/release', '/api/public/weather/vote'].includes(path) ? 'POST' : 'GET';
+      const method = ['/api/admin/pause', '/api/admin/resume', '/api/admin/law-recover', '/api/account/logout', '/api/port/register', '/api/port/adopt', '/api/port/foster', '/api/owner/letter', '/api/owner/release', '/api/public/weather/vote'].includes(path) ? 'POST' : 'GET';
       const r = await env.call(path, method === 'POST' ? { method, body: {} } : {});
       assert.notEqual(r.status, 404, `${method} ${path} 不存在`);
     }

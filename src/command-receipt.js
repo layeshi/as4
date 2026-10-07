@@ -12,6 +12,7 @@ export function cloneCommandWorld(w) {
 export function commitCommandWorld(target, source) {
   for (const key of Object.keys(target)) if (!Object.hasOwn(source, key)) delete target[key];
   for (const [key, value] of Object.entries(source)) {
+    if (Object.hasOwn(target, key) && target[key] === value) continue;
     if (value && typeof value === 'object' && Object.hasOwn(target, key) && target[key] && typeof target[key] === 'object' && Array.isArray(value) === Array.isArray(target[key])) {
       commitCommandWorld(target[key], value);
       if (Array.isArray(value)) target[key].length = value.length;
@@ -27,8 +28,9 @@ export function commitCommandCandidate(target, source) {
   for (const key of ['$lawMeter', '$ruling', '$settling', '$boundary']) delete target[key];
 }
 function diff(before, after, path = [], changes = []) {
-  for (const key of Object.keys(before)) if (!Object.hasOwn(after, key)) changes.push({ path: [...path, key], remove: true });
+  for (const key of Object.keys(before)) if (before[key] !== undefined && (!Object.hasOwn(after, key) || after[key] === undefined)) changes.push({ path: [...path, key], remove: true });
   for (const [key, value] of Object.entries(after)) {
+    if (value === undefined) continue;
     const old = Object.hasOwn(before, key) ? before[key] : undefined, nextPath = [...path, key];
     if (value && old && typeof value === 'object' && typeof old === 'object' && !Array.isArray(value) && !Array.isArray(old)) diff(old, value, nextPath, changes);
     else if (JSON.stringify(old) !== JSON.stringify(value)) changes.push({ path: nextPath, value });
@@ -36,7 +38,7 @@ function diff(before, after, path = [], changes = []) {
   return changes;
 }
 export function makeReceipt(before, after, out) {
-  return { version: 1, before: stateHash(before), after: stateHash(after), changes: diff(JSON.parse(JSON.stringify(before)), JSON.parse(JSON.stringify(after))), out: JSON.parse(JSON.stringify(out)) };
+  return { version: 1, before: stateHash(before), after: stateHash(after), changes: diff(before, after), out };
 }
 export function applyReceipt(w, cmd) {
   const receipt = cmd.receipt;

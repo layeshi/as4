@@ -13,7 +13,7 @@ export { wakeItems } from './engine/perception.js';
 
 import { P, configure, configureWeather } from './params.js';
 import { createWorld, genesisOpts, agentList, isAlive, clockDay } from './world.js';
-import { applyCommand } from './engine/index.js';
+import { applyCommand, prepareCommand } from './engine/index.js';
 import { drainEvents } from './engine/core.js';
 import { checkConservation } from './engine/ledger.js';
 import { shellsFree } from './engine/shells.js';
@@ -46,6 +46,7 @@ export default Object.freeze({
   createWorld,
   genesisOpts,
   applyCommand,
+  prepareCommand,
   drainEvents,
   buildPerception,
   inboxView,

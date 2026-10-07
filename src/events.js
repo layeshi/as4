@@ -5,7 +5,7 @@
 //   延迟队列       delayed 事件按 releaseTick 排序，每刻释放到期的并推送（标记 delayed: true）；
 //   造者日志       每个 agent 最近的 owner / delayed 事件（独白、梦、家书……），造者立即可见。
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, fsyncSync, openSync, renameSync, appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { FiscalView } from './fiscal-view.js';
 
@@ -48,8 +48,9 @@ export class EventStore {
     this.owner = new Map();
     this.lastSeq = 0;
     if (!this.file || !existsSync(this.file)) return;
+    const original = readFileSync(this.file, 'utf8');
     const keep = [];
-    for (const line of readFileSync(this.file, 'utf8').split('\n')) {
+    for (const line of original.split('\n')) {
       if (line === '') continue;
       let ev;
       try {
@@ -62,7 +63,23 @@ export class EventStore {
       this.index(ev, tick);
       this.lastSeq = ev.seq;
     }
-    writeFileSync(this.file, keep.length ? `${keep.join('\n')}\n` : '');
+    const retained = keep.length ? `${keep.join('\n')}\n` : '';
+    if (retained !== original) {
+      // A startup crash must leave either the original log or the complete
+      // retained prefix, never truncate events already covered by a snapshot.
+      const temporary = `${this.file}.tmp`;
+      writeFileSync(temporary, retained, { mode: 0o600 });
+      syncFile(temporary);
+      renameSync(temporary, this.file);
+      syncFile(dirname(this.file));
+    }
+  }
+
+  /** A snapshot may acknowledge events only after this durability barrier. */
+  sync() {
+    if (!this.file || !existsSync(this.file)) return;
+    syncFile(this.file);
+    syncFile(dirname(this.file));
   }
 
   /** 把一条事件放进内存索引（不落盘、不推送） */
@@ -166,4 +183,9 @@ export class EventStore {
     const list = this.owner.get(id) || [];
     return type ? list.filter((e) => e.type === type) : list.slice();
   }
+}
+
+function syncFile(file) {
+  const fd = openSync(file, 'r');
+  try { fsyncSync(fd); } finally { closeSync(fd); }
 }

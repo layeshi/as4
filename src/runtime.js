@@ -5,7 +5,7 @@
 // 每日结算发生的那条 tick 命令执行完之后写快照（所以快照的状态与 commandN 严格对应）。
 
 import { usesLawSemantics2 } from './e2/engine/law-semantics.js';
-import { cloneCommandWorld, commitCommandCandidate, makeReceipt } from './command-receipt.js';
+import { commitCommandCandidate, makeReceipt } from './command-receipt.js';
 import { engineOf, engineForPhysics } from './engines.js';
 import { CommandLog, readCommands, repairCommandLog } from './commands.js';
 import { EventStore } from './events.js';
@@ -105,20 +105,16 @@ export class Runtime {
     let cmd, out;
     const durable = usesLawSemantics2(this.w) || (this.w.physics === 2 && type === 'admin' && payload.op === 'law_semantics' && payload.args?.version === 2);
     if (durable) {
-      const candidate = cloneCommandWorld(this.w);
       cmd = { n: this.log.n + 1, tick: this.w.clock.tick, type, payload };
       try {
-        out = this.engine.applyCommand(candidate, cmd);
+        const prepared = this.engine.prepareCommand(this.w, cmd);
+        const candidate = prepared.candidate;
+        out = prepared.out;
         this.log.appendReceipt(cmd, makeReceipt(this.w, candidate, out));
         commitCommandCandidate(this.w, candidate);
       } catch (error) {
         // Never publish an unrecorded state or continue after an ambiguous append.
-        this.receiptFailed = true;
-        this.stopped = true;
-        if (this.timer) clearTimeout(this.timer);
-        this.timer = null;
-        this.nextTickAt = null;
-        this.events.emit('control', { paused: true, stopped: true });
+        this.failStop();
         throw error;
       }
     } else {
@@ -143,7 +139,13 @@ export class Runtime {
       }
       this.events.emit('control', { paused: this.w.paused });
     }
-    this.events.append(out.events, { tick: this.w.clock.tick });
+    try { this.events.append(out.events, { tick: this.w.clock.tick }); }
+    catch (error) {
+      // The receipt is committed, but an older snapshot must remain available
+      // to rebuild any missing events from that receipt on restart.
+      if (durable) this.failStop();
+      throw error;
+    }
     for (const wake of out.wakes || []) {
       for (const fn of [...this.wakeSubs]) {
         try {
@@ -165,7 +167,21 @@ export class Runtime {
     return { ...out, cmd };
   }
 
+  failStop() {
+    this.receiptFailed = true;
+    this.stopped = true;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.nextTickAt = null;
+    this.events.emit('control', { paused: true, stopped: true });
+  }
+
   snapshot() {
+    if (this.receiptFailed) return;
+    if (usesLawSemantics2(this.w)) {
+      try { this.events.sync(); }
+      catch (error) { this.failStop(); throw error; }
+    }
     writeSnapshot(this.dir, this.w);
   }
 

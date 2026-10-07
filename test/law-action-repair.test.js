@@ -96,7 +96,7 @@ test('escrow conserves both assets and recipient cannot spend fees inside handle
   setHoldings(w, a, { energy: 100, coins: 10 });
   const original = HANDLERS.say;
   let observed;
-  HANDLERS.say = { ...original, apply(ctx, plan) { observed = { holdings: holdings(w), ledger: checkConservation(w).ok, recipient: [b.energy, b.coins], spendable: [a.energy, a.coins] }; return original.apply(ctx, plan); } };
+  HANDLERS.say = { ...original, apply(ctx, plan) { observed = { holdings: holdings(ctx.w), ledger: checkConservation(ctx.w).ok, recipient: [ctx.w.agents[b.id].energy, ctx.w.agents[b.id].coins], spendable: [ctx.a.energy, ctx.a.coins] }; return original.apply(ctx, plan); } };
   try { assert.equal(one(w, a, { type: 'say', text: 'paid' }).ok, true); } finally { HANDLERS.say = original; }
   assert.equal(observed.ledger, true);
   assert.deepEqual(observed.recipient, [0, 0]);
@@ -114,8 +114,8 @@ test('ordinary late ActError restores only failing action, including hidden effe
   let checkpoint, meter, diagnosticSeq;
   HANDLERS.say = { ...original, apply(ctx, plan) {
     const data = original.apply(ctx, plan);
-    if (plan.text === 'fail') { next(ctx.w.rng.world); pushInbox(ctx.w, b, 'whisper', { text: 'rolled back' }); ctx.w.vars.business = 1; diagnosticSeq = emit(ctx.w, 'rule_error', { data: { scope: 'city', owner: 'law', rule: 0, code: 'div0' } }).seq; meter = { ...ctx.w.$lawMeter }; fail('not_allowed'); }
-    checkpoint = { energy: a.energy, inbox: b.inbox.length, rng: w.rng.world.slice() };
+    if (plan.text === 'fail') { next(ctx.w.rng.world); pushInbox(ctx.w, ctx.w.agents[b.id], 'whisper', { text: 'rolled back' }); ctx.w.vars.business = 1; diagnosticSeq = emit(ctx.w, 'rule_error', { data: { scope: 'city', owner: 'law', rule: 0, code: 'div0' } }).seq; meter = { ...ctx.w.$lawMeter }; fail('not_allowed'); }
+    checkpoint = { energy: ctx.a.energy, inbox: ctx.w.agents[b.id].inbox.length, rng: ctx.w.rng.world.slice() };
     return data;
   } };
   try {

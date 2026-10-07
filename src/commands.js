@@ -1,7 +1,7 @@
 // SPEC-M1 §11.2：命令日志。文件 DATA_DIR/WORLD_ID/commands.jsonl，每行 { n, tick, type, payload }，n 连续递增。
 // 先写日志，再执行；执行中的校验失败也是确定性的，回放会得到同样的失败。日志只追加，从不改写或删除。
 
-import { closeSync, fsyncSync, openSync, writeSync, appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, fsyncSync, openSync, writeSync, renameSync, appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { receiptChecksum } from './command-receipt.js';
 
@@ -62,7 +62,7 @@ export function readCommands(file, { fromN = 0, toN = Infinity } = {}) {
   const text = readFileSync(file, 'utf8');
   const lines = text.split('\n');
   const out = [];
-  let expected = null;
+  let expected = null, seenReceipt = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line === '') continue;
@@ -71,10 +71,13 @@ export function readCommands(file, { fromN = 0, toN = Infinity } = {}) {
       row = JSON.parse(line);
     } catch (e) {
       const isLast = lines.slice(i + 1).every((l) => l === '');
-      if (isLast) break; // 崩溃时写了一半的最后一行：丢弃
+      const completeReceipt = i < lines.length - 1 && (seenReceipt || /command-receipt|\"format\"\s*:|\"receipt\"\s*:/.test(line));
+      if (isLast && !completeReceipt) break; // 仅未结束回执或历史半行可丢弃
       throw new Error(`commands.jsonl 第 ${i + 1} 行损坏：${e.message}`);
     }
+    if (row.format !== undefined && row.format !== 'command-receipt-v1') throw new Error('Unsupported command receipt format');
     if (row.format === 'command-receipt-v1') {
+      seenReceipt = true;
       // A parseable frame without the delimiter is still an incomplete append.
       if (i === lines.length - 1) break;
       if (!row.command || row.sha256 !== receiptChecksum(row.command)) throw new Error(`commands.jsonl 第 ${i + 1} 行回执校验失败`);
@@ -91,6 +94,9 @@ export function readCommands(file, { fromN = 0, toN = Infinity } = {}) {
 /** 如果最后一行是只写了一半的坏行，把它从文件里截掉（启动时调用，保证之后的追加从干净的行开始） */
 export function repairCommandLog(file) {
   if (!existsSync(file)) return false;
+  // Validate complete receipts before touching bytes, including malformed JSON
+  // at the final newline. A committed corrupt frame is evidence, not a torn tail.
+  readCommands(file);
   const text = readFileSync(file, 'utf8');
   if (text === '' || text.endsWith('\n')) {
     // 结尾是换行：仍要检查最后一行是否完整
@@ -101,12 +107,23 @@ export function repairCommandLog(file) {
       JSON.parse(last);
       return false;
     } catch {
-      writeFileSync(file, `${lines.slice(0, -2).join('\n')}${lines.length > 2 ? '\n' : ''}`);
+      replaceLog(file, `${lines.slice(0, -2).join('\n')}${lines.length > 2 ? '\n' : ''}`);
       return true;
     }
   }
   // 结尾没有换行：最后一行是半行
   const cut = text.lastIndexOf('\n');
-  writeFileSync(file, cut >= 0 ? text.slice(0, cut + 1) : '');
+  replaceLog(file, cut >= 0 ? text.slice(0, cut + 1) : '');
   return true;
+}
+
+// Tail repair must not overwrite the acknowledged prefix in place.
+function replaceLog(file, text) {
+  const temporary = `${file}.tmp`;
+  writeFileSync(temporary, text, { mode: 0o600 });
+  const fd = openSync(temporary, 'r');
+  try { fsyncSync(fd); } finally { closeSync(fd); }
+  renameSync(temporary, file);
+  const dir = openSync(dirname(file), 'r');
+  try { fsyncSync(dir); } finally { closeSync(dir); }
 }
