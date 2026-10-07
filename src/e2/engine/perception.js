@@ -27,9 +27,10 @@ import { gatedFor, hasGate, isWildOpen } from './movement.js';
 import { openProjectsAt } from './projects.js';
 import { lawReading, lawTitle, lawText, authorView, isSuspended, persistentCount, hasAnnounce, procSpec, isProcedureLaw } from './laws.js';
 import { renderProcedureClass, renderRules } from '../rules/render.js';
-import { HUMAN_PROCEDURE } from '../lore/humanlaws.js';
+import { HUMAN_PROCEDURE, humanProcedureFor } from '../lore/humanlaws.js';
+import { usesLawSemantics2 } from './law-semantics.js';
 import { previewBefore, beforeIndex } from './rules.js';
-import { mayPropose, votersOf, openCityProposals, openRefounds, refoundNeeded, rngCopy } from './legislation.js';
+import { mayPropose, votersOf, openCityProposals, openRefounds, refoundNeeded, liveSigners, refoundElectorate, procedureHealth, rngCopy } from './legislation.js';
 import { shellsFree, queuePosition } from './shells.js';
 
 const ref = (a) => ({ id: a.id, name: a.name });
@@ -337,7 +338,7 @@ function procedureView(w, cls, lang) {
   const id = w.procedure[cls];
   const spec = procSpec(w, cls);
   if (!spec) return { lawId: id, none: true, reading: '' };
-  return { lawId: id, ...(spec.none ? { none: true } : {}), reading: clipText(renderProcedureClass(spec, lang), P.readingInPerception) };
+  return { lawId: id, ...(usesLawSemantics2(w) ? { health: procedureHealth(w, cls) } : {}), ...(spec.none ? { none: true } : {}), reading: clipText(renderProcedureClass(spec, lang), P.readingInPerception) };
 }
 
 function proposalEntry(w, a, p, lang) {
@@ -381,8 +382,9 @@ function cityView(w, a, l, lang, day, costs) {
     .map((p) => proposalEntry(w, a, p, lang));
   const refounds = openRefounds(w).map((r) => ({
     id: r.id, by: refId(w, r.by), text: r.text,
-    reading: joinReading(Object.values(renderProcedureOf(r, lang))), signers: r.signers.filter((id) => w.agents[id] && isAlive(w.agents[id])).length,
-    needed: refoundNeeded(w), expiresTick: r.expiresTick, signed: r.signers.includes(a.id),
+    reading: joinReading(Object.values(renderProcedureOf(w, r, lang))), signers: liveSigners(w, r).length,
+    needed: refoundNeeded(w, r), expiresTick: r.expiresTick, signed: r.signers.includes(a.id),
+    ...(usesLawSemantics2(w) ? { eligible: r.electorate.includes(a.id) } : {}),
   }));
   const places = Object.values(w.places).map((p) => ({
     id: p.id, name: placeDisplayName(p, lang), district: p.district, wild: p.wild, origin: p.origin, razed: p.razed,
@@ -429,8 +431,8 @@ function cityView(w, a, l, lang, day, costs) {
 }
 
 /** 重订的程序的读法：{ ordinary, constitutional } */
-function renderProcedureOf(r, lang) {
-  const proc = r.procedure === 'humans' ? HUMAN_PROCEDURE : r.procedure;
+function renderProcedureOf(w, r, lang) {
+  const proc = r.procedure === 'humans' ? (usesLawSemantics2(w) && !r.electorate ? HUMAN_PROCEDURE : humanProcedureFor(w)) : r.procedure;
   const out = {};
   for (const c of ['ordinary', 'constitutional']) if (proc[c]) out[c] = renderProcedureClass(proc[c], lang);
   return out;
@@ -525,11 +527,12 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
         if (!Object.values(w.proposals).some((p) => p.status === 'open' && p.voters.includes(a.id))) deny({ code: 'not_found', text: R.nothing });
         break;
       case 'refound':
-        if (w.refoundCooldownUntil !== null && clockDay(w) < w.refoundCooldownUntil) deny({ code: 'cooldown', text: fmt(R.cooldown, { day: w.refoundCooldownUntil }) });
+        if (usesLawSemantics2(w) && !refoundElectorate(w).includes(a.id)) deny({ code: 'not_eligible', text: R.not_eligible });
+        else if (w.refoundCooldownUntil !== null && clockDay(w) < w.refoundCooldownUntil) deny({ code: 'cooldown', text: fmt(R.cooldown, { day: w.refoundCooldownUntil }) });
         else if (openRefounds(w).length >= P.refoundsOpenMax || openRefounds(w).some((r) => r.by === a.id)) deny({ code: 'limit_reached', text: R.limit_reached });
         break;
       case 'sign':
-        if (!openRefounds(w).some((r) => !r.signers.includes(a.id))) deny({ code: 'not_found', text: R.nothing });
+        if (!openRefounds(w).some((r) => !r.signers.includes(a.id) && (!usesLawSemantics2(w) || r.electorate.includes(a.id)))) deny({ code: 'not_found', text: R.nothing });
         break;
       case 'found':
         if (a.groups.length >= 5) deny({ code: 'limit_reached', text: R.limit_reached });

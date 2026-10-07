@@ -61,7 +61,7 @@ export class Runtime {
       // TODO(spec): Q13 —— cfg.physics 未指定时按第一纪创建（原有的调用方不受影响）；服务器入口把缺省定为第二纪
       engine = engineForPhysics(cfg.physics === 2 ? 2 : 1);
       const base = { id: cfg.worldId, seed, codeVersion: version, sandboxAdoption: cfg.sandboxAgents > 0, map: cfg.map || (engine.physics === 2 ? 'frontier' : 'classic') };
-      w = engine.createWorld(engine.physics === 2 ? { ...base, ...genesisInputs(cfg) } : base);
+      w = engine.createWorld(engine.physics === 2 ? { ...base, ...genesisInputs(cfg), lawSemanticsVersion: 2 } : base);
       if (engine.physics === 2 && w.founders.length > w.shells.slots) logger.warn?.(`先民 ${w.founders.length} 位多于躯壳名额 ${w.shells.slots}：他们都会入城，但名额在先民长眠之前不会空出来`);
       writeSnapshot(dir, w);
       created = true;

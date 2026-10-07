@@ -16,6 +16,7 @@ import { source } from './ledger.js';
 import { emit, bad, creditEnergy, pushInbox } from './core.js';
 import { forceWeather } from './weather.js';
 import { resetOwnerKey } from '../../owner-key.js';
+import { migrateLawSemantics } from './law-semantics.js';
 import { usesLawVM2, migrateLawExecution, capacityCheck } from './law-execution.js';
 
 const isInt = (v) => typeof v === 'number' && Number.isSafeInteger(v);
@@ -26,6 +27,11 @@ export const EXTRA_ADMIN_OPS = {};
 export function adminCommand(w, p) {
   const args = p.args && typeof p.args === 'object' ? p.args : {};
   switch (p.op) {
+    case 'law_semantics': {
+      const r = migrateLawSemantics(w, args);
+      if (r.ok) emit(w, 'admin', { data: { op: 'law_semantics', version: 2 } });
+      return r;
+    }
     case 'law_execution': {
       const r = migrateLawExecution(w, args);
       if (r.ok) emit(w, 'admin', { data: { op: 'law_execution', version: 2, capacity: r.capacity } });

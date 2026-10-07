@@ -1,3 +1,4 @@
+import { usesLawSemantics2 } from './law-semantics.js';
 // SPEC-E2 §4.5、§8.3–§8.4：法律——生成、分类、立法程序的取代、撤销、读法。
 //
 // 一部法律是文字加规则（或一部立法程序）：
@@ -95,6 +96,7 @@ export function installProcedure(w, law, reason) {
     events.push({ cls: c, oldId });
     w.procedure[c] = law.id;
     w.revertWatch[c] = 0;
+    if (usesLawSemantics2(w) && w.procedureFaults) delete w.procedureFaults[c];
   }
   const retired = new Set();
   for (const oldId of replaced) {

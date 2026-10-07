@@ -627,6 +627,8 @@ export const VARS = {
   announce: (e) => ({ owner: e.data.owner, text: TX(e.data.text) }),
   law_replaced: (e) => ({ law: e.data.lawId, by: e.data.by, cls: e.data.class }),
   law_suspended: (e) => ({ owner: e.data.owner }),
+  procedure_error: (e) => ({ cls: e.data.class, law: e.data.lawId, field: e.data.field, code: e.data.code }),
+  proposal_void: (e) => ({ id: e.data.proposalId, refound: e.data.refoundId }),
   procedure_reverted: (e) => ({ cls: e.data.class, law: e.data.lawId }),
   refound_open: (e) => ({ a: A(e.agent), id: e.data.refoundId, text: TX(e.data.text) }),
   refound_sign: (e) => ({ a: A(e.agent), id: e.data.refoundId, n: e.data.signers }),
@@ -788,6 +790,9 @@ export const TPL = {
     announce: '法律 {owner} 宣告：「{text}」',
     law_replaced: '立法程序（{cls}）：{law} 被 {by} 取代。',
     law_suspended: '{owner} 付不起维持费，今日停摆。',
+    procedure_error: '程序 {law}（{cls}）的 {field} 求值出错：{code}，已进入每日复查。',
+    proposal_void: '程序修改案 {id} 因重订 {refound} 作废。',
+    procedure_reverted_runtime: '立法程序（{cls}）的真实运行错误连续三次每日复查仍失败，恢复为人类程序（{law}）。',
     procedure_reverted: '立法程序（{cls}）无人可行，回到人类留下的样子（{law}）。',
     refound_open: '{a} 发起重订 {id}：「{text}」',
     refound_sign: '{a} 联署了重订 {id}（已有 {n} 人）。',
@@ -926,6 +931,9 @@ export const TPL = {
     announce: 'Law {owner} announces: "{text}"',
     law_replaced: 'Procedure of lawmaking ({cls}): {law} replaced by {by}.',
     law_suspended: '{owner} could not pay its upkeep and is suspended today.',
+    procedure_error: 'Procedure {law} ({cls}) failed in {field}: {code}; daily probes will check recovery.',
+    proposal_void: 'Procedure bill {id} was voided by refounding {refound}.',
+    procedure_reverted_runtime: 'The procedure ({cls}) failed three daily probes of an actual runtime error and returned to the human procedure ({law}).',
     procedure_reverted: 'The procedure ({cls}) stood unusable and returned to what the humans left ({law}).',
     refound_open: '{a} opens refounding {id}: "{text}"',
     refound_sign: '{a} signed refounding {id} ({n} so far).',
@@ -966,7 +974,7 @@ export const CAT = {
   arrive: 'life', born: 'life', fostered: 'life', move: 'life', conceive: 'life', pact_expired: 'life', soul: 'life', faded: 'life', epitaph: 'life', dormant: 'life', revive: 'life', death: 'life', retire: 'life', letter_received: 'life',
   write: 'know', read: 'know', define: 'know', inscribe: 'know',
   repair: 'env', initiate: 'env', contribute: 'env', built: 'env', abandoned: 'env', ruin: 'env', restored: 'env', facility_owner: 'env', place_owner: 'env',
-  rule_op: 'polity', pact_open: 'life', successor: 'life', declare: 'life', sponsor: 'life', embodied: 'life', rule_error: 'polity', announce: 'polity', law_replaced: 'polity', law_suspended: 'polity', procedure_reverted: 'polity',
+  rule_op: 'polity', pact_open: 'life', successor: 'life', declare: 'life', sponsor: 'life', embodied: 'life', rule_error: 'polity', announce: 'polity', law_replaced: 'polity', law_suspended: 'polity', procedure_reverted: 'polity', procedure_error: 'polity', proposal_void: 'polity',
   refound_open: 'polity', refound_sign: 'polity', refounded: 'polity', refound_expired: 'polity', petition: 'polity', cede: 'polity', seize: 'polity', draft: 'polity', bylaws: 'polity', group_procedure: 'polity', place_rules: 'polity', dismantle: 'env', razed: 'env',
   omen: 'world', weather_start: 'world', weather_end: 'world', day: 'world', month: 'world', great_sleep: 'world',
   standing: 'life', standing_fired: 'life', mute: 'life',
@@ -980,6 +988,7 @@ export const CATEGORIES = ['speech', 'econ', 'polity', 'life', 'know', 'env', 'w
 export function templateKey(e) {
   const d = e.data || {};
   switch (e.type) {
+    case 'procedure_reverted': return d.reason === 'runtime_error' ? 'procedure_reverted_runtime' : 'procedure_reverted';
     case 'offer_open': return d.to ? 'offer_open_to' : 'offer_open';
     case 'offer_close': return `offer_close_${d.reason === 'expired' ? 'expired' : 'cancelled'}`;
     case 'vote': return `vote_${d.choice === 'no' ? 'no' : d.choice === 'abstain' ? 'abstain' : 'yes'}`;
@@ -1019,6 +1028,6 @@ export function describeEvent(e) {
 
 /** 设施类型与天象在句子里的名字来自 lore（app.js 提供）；这里只放引擎不提供的少数词 */
 export const ADMIN_OPS = {
-  zh: { pause: '暂停', resume: '恢复', redact: '遮盖', curtain: '谢幕', adjust: '修正余额', weather: '强制天象', seed_sandbox: '播种沙盘', tick: '推进一刻' },
-  en: { pause: 'pause', resume: 'resume', redact: 'redact', curtain: 'curtain call', adjust: 'adjust balance', weather: 'force weather', seed_sandbox: 'seed sandbox', tick: 'advance a tick' },
+  zh: { law_semantics: '启用法律语义版本', pause: '暂停', resume: '恢复', redact: '遮盖', curtain: '谢幕', adjust: '修正余额', weather: '强制天象', seed_sandbox: '播种沙盘', tick: '推进一刻' },
+  en: { law_semantics: 'enable law semantics version', pause: 'pause', resume: 'resume', redact: 'redact', curtain: 'curtain call', adjust: 'adjust balance', weather: 'force weather', seed_sandbox: 'seed sandbox', tick: 'advance a tick' },
 };

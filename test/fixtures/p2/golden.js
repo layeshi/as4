@@ -14,8 +14,11 @@
 // 注意：不含 MCP 的 tools/list 的长度（第二前提会多两个工具，§0.3 允许）；只含前三个工具的定义。
 
 import { createHash } from 'node:crypto';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import e2 from '../../../src/e2/facade.js';
-import { stateHash } from '../../../src/store.js';
+import { stateHash, writeSnapshot, worldDir } from '../../../src/store.js';
 import { renderPerception } from '../../../runner/render.js';
 import { buildSystemPrompt, promptParams } from '../../../runner/prompt.js';
 import { runAgent } from '../../../runner/agent.js';
@@ -225,7 +228,13 @@ const textOf = (res) => res.result.content.map((c) => c.text).join('\n');
 const snapshotRequest = (req) => ({ system: req.system, messages: req.messages.map((m) => ({ role: m.role, content: m.content })) });
 
 async function httpSamples(premise) {
-  const env = await boot({ physics: 2, ...(premise === 1 ? { premise: 1, shellSlots: 12 } : {}), seed: `p2-golden-http-${premise}`, tickMs: 300000 });
+  // These recorded samples describe historical worlds. Restore a legacy genesis snapshot
+  // instead of exercising today's deliberately versioned new-world runtime default.
+  const dir = mkdtempSync(join(tmpdir(), 'houren-golden-legacy-'));
+  const seed = `p2-golden-http-${premise}`;
+  const historicalOpts = premise === 1 ? { premise: 1, shellSlots: 12 } : {};
+  writeSnapshot(worldDir(dir, 'w'), e2.createWorld({ id: 'w', seed, codeVersion: '0.1.0', ...historicalOpts }));
+  const env = await boot({ physics: 2, ...historicalOpts, seed, tickMs: 300000 }, { dir });
   try {
     // 参考运行器：经 HTTP，mock 提供者跑 3 刻（中文），再经进程内客户端跑 3 刻（英文）
     const runner = await env.register('跑者');

@@ -65,7 +65,7 @@ export const D = {
       refound: (i) => `[重订 ${i.refoundId}] ${({ opened: '有人发起了重订', succeeded: '重订成功，立法程序已改', expired: '重订已过期' })[i.event] || i.event}`,
       procedure: (i) => `[立法程序] ${({ ordinary: '普通', constitutional: '修宪' })[i.class] || i.class}类改为 ${i.lawId}（${({ enacted: '经提案通过', reverted: '自动回退', refounded: '重订' })[i.reason] || i.reason}）`,
       revived: (i) => `[系统] 你被唤醒了${i.by ? `（${i.by}）` : ''}。`,
-      law: (i) => `[法案 ${i.proposalId}]《${i.title}》${i.result === 'passed' ? `通过${i.lawId ? `，成为法律 ${i.lawId}` : ''}` : '未通过'}`,
+      law: (i) => `[法案 ${i.proposalId}]《${i.title}》${i.result === 'passed' ? `通过${i.lawId ? `，成为法律 ${i.lawId}` : ''}` : i.result === 'void' && i.reason === 'refounded' ? `因重订 ${i.refoundId} 作废：此案会修改立法程序` : '未通过'}`,
       exile: (i) => `[系统] 你被放逐了（${i.lawId}）。`,
       pardon: (i) => `[系统] 你被赦免了（${i.lawId}）。`,
       project: (i) => `[工程 ${i.projectId}] ${i.result === 'built' ? '建成了' : '烂尾了'}`,
@@ -137,7 +137,7 @@ export const D = {
       refound: (i) => `[refounding ${i.refoundId}] ${({ opened: 'was started', succeeded: 'succeeded; the procedure of lawmaking changed', expired: 'expired' })[i.event] || i.event}`,
       procedure: (i) => `[procedure] the ${({ ordinary: 'ordinary', constitutional: 'constitutional' })[i.class] || i.class} class is now ${i.lawId} (${({ enacted: 'passed as a proposal', reverted: 'reverted automatically', refounded: 'refounded' })[i.reason] || i.reason})`,
       revived: (i) => `[system] You were woken${i.by ? ` (${i.by})` : ''}.`,
-      law: (i) => `[bill ${i.proposalId}] “${i.title}” ${i.result === 'passed' ? `passed${i.lawId ? ` as law ${i.lawId}` : ''}` : 'failed'}`,
+      law: (i) => `[bill ${i.proposalId}] “${i.title}” ${i.result === 'passed' ? `passed${i.lawId ? ` as law ${i.lawId}` : ''}` : i.result === 'void' && i.reason === 'refounded' ? `voided by refounding ${i.refoundId}; this pending bill changed the procedure` : 'failed'}`,
       exile: (i) => `[system] You were exiled (${i.lawId}).`,
       pardon: (i) => `[system] You were pardoned (${i.lawId}).`,
       project: (i) => `[project ${i.projectId}] ${i.result === 'built' ? 'was completed' : 'was abandoned'}`,
@@ -453,12 +453,19 @@ export function cityHead({ p, d }) {
 }
 
 /** 立法程序（两类）；level 0 时读法不裁剪 */
-export function cityProcedure({ p, d, P, level, rmax }) {
+export function cityProcedure({ p, code, d, P, level, rmax }) {
   const c = p.city;
   if (!c.procedure) return [];
   const proc = ['ordinary', 'constitutional'].map((k) => {
     const v = c.procedure[k];
-    return `${d[k]}${P.open}${v.lawId}${P.close}${P.col}${v.none ? d.noMoreLaws : clip(v.reading, level === 0 ? Infinity : Math.max(rmax, 160))}`;
+    const health = v.health;
+    const fault = health?.fault;
+    const recovery = health?.recovery;
+    let diagnostic = '';
+    if (health) diagnostic += code === 'en' ? `; eligibility watch ${health.eligibilityDays}/3` : `；资格恢复观察 ${health.eligibilityDays}/3 日`;
+    if (fault) diagnostic += `${code === 'en' ? '; runtime fault' : '；运行错误'} ${fault.lawId}: ${fault.fields.map(f => `${f.field} ${f.code}`).join(', ')} ${fault.consecutiveDays}/3`;
+    if (recovery) diagnostic += code === 'en' ? `; last recovery ${recovery.reason}: ${recovery.previousLawId} → ${recovery.lawId}` : `；最近恢复原因 ${recovery.reason === 'runtime_error' ? '真实运行错误持续' : '无人具资格'}：${recovery.previousLawId} → ${recovery.lawId}`;
+    return `${d[k]}${P.open}${v.lawId}${P.close}${P.col}${v.none ? d.noMoreLaws : clip(v.reading, level === 0 ? Infinity : Math.max(rmax, 160))}${diagnostic}`;
   });
   return [`  ${d.procedure}${P.col}${indent(proc.join(P.semi), '    ')}`];
 }
@@ -499,8 +506,9 @@ export function cityProposalLines({ d, P, level, rmax }, q) {
   return lines;
 }
 
-export function cityRefoundLines({ d, P, now, rmax }, r) {
+export function cityRefoundLines({ code, d, P, now, rmax }, r) {
   const lines = [`  ${d.refounds}${P.col}[${r.id}] ${d.refoundBy(r.by ? r.by.name : '?')} · ${d.signers(r.signers, r.needed)} · ${d.ticksLeft(Math.max(0, r.expiresTick - (now.tick ?? 0)))}${P.open}${r.signed ? d.signed : d.notSigned}${P.close}${r.text ? `${P.col}${clip(r.text, 200)}` : ''}`];
+  if (r.eligible === false) lines.push(code === 'en' ? '    You are not in this refounding’s opening electorate and cannot sign.' : '    你不在此次重订发起时的资格名单内，不能联署。');
   if (r.reading) lines.push(`    ${d.reading}${P.col}${indent(clip(r.reading, rmax), '      ')}`);
   return lines;
 }

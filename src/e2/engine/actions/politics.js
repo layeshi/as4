@@ -1,3 +1,4 @@
+import { usesLawSemantics2 } from '../law-semantics.js';
 import { prayersEnabled } from '../prayer-rewards.js';
 // 立法的动作（SPEC-E2 §25 第 4 步）：propose vote draft refound sign。
 // （rules 订立社群章程与地点规则在第 5 步；read { law } 在 social.js 的 read 里。）
@@ -14,7 +15,7 @@ import { isOwnerOrSteward } from '../places.js';
 import { classify, procSpec } from '../laws.js';
 import {
   staticLookup, issuesHint, mayPropose, votersOf, rngCopy, openCityProposals, openProposal,
-  openRefounds, openRefound, signRefound, refoundNeeded,
+  openRefounds, openRefound, signRefound, refoundNeeded, refoundElectorate, procedureSource, observeProcedureFault,
 } from '../legislation.js';
 import { previewRules, citySet, groupSet, placeSet } from '../rules.js';
 import { emit } from '../core.js';
@@ -77,10 +78,12 @@ const propose = {
     if (!spec || spec.none) fail('not_allowed', { zh: '这一类已不再立法，只能重订。', en: 'This class no longer makes laws; only a refounding can change that.' });
     admit(w, rules, procedure, null, spec);
     const rng = rngCopy(w); // 校验用副本：失败的动作不推进真正的随机数；成功时 apply 一并提交
-    if (!mayPropose(w, spec, a, rng)) fail('not_eligible');
+    const source = procedureSource(w, cls);
+    const onError = (field, e, context) => observeProcedureFault(w, source, field, e, context);
+    if (!mayPropose(w, spec, a, rng, onError)) fail('not_eligible');
     const open = openCityProposals(w);
     if (open.length >= LIMITS.openProposalsCity || open.some((p) => p.proposer === a.id)) fail('limit_reached');
-    const voters = votersOf(w, spec, rng);
+    const voters = votersOf(w, spec, rng, onError);
     if (voters === null || voters.length === 0) {
       fail('not_allowed', { zh: '当前程序没有合格的表决者。', en: 'The current procedure has no eligible voters.' });
     }
@@ -191,6 +194,7 @@ const draft = {
 const refound = {
   validate(ctx, args) {
     const { w, a } = ctx;
+    if (usesLawSemantics2(w) && !refoundElectorate(w).includes(a.id)) fail('not_eligible', { zh: '重订须入城满三日，且联署须在发起时资格名单内。', en: 'Refounding requires three days of residence; signing requires membership in the opening electorate.' });
     const text = needText(args.text, { max: LIMITS.refoundText });
     let procedure;
     if (args.procedure === 'humans') procedure = 'humans';
@@ -214,7 +218,7 @@ const refound = {
   apply(ctx, plan) {
     const { w, a } = ctx;
     const r = openRefound(w, a, plan);
-    return { refound: r.id, needed: refoundNeeded(w), expiresTick: r.expiresTick, ...(r.status !== 'open' ? { succeeded: r.status === 'succeeded' } : {}) };
+    return { refound: r.id, needed: refoundNeeded(w, r), expiresTick: r.expiresTick, ...(r.status !== 'open' ? { succeeded: r.status === 'succeeded' } : {}) };
   },
 };
 
@@ -225,6 +229,7 @@ const sign = {
     needId(args.refound);
     const r = has(w.refounds, args.refound) ? w.refounds[args.refound] : null;
     if (!r || r.status !== 'open') fail('not_found');
+    if (usesLawSemantics2(w) && !r.electorate?.includes(a.id)) fail('not_eligible', { zh: '你不在此次重订发起时的资格名单内。', en: 'You are not in this refounding’s opening electorate.' });
     if (r.signers.includes(a.id)) fail('already');
     return { r, cost: ctx.cost(ACTIONS.sign.base) };
   },

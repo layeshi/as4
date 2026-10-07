@@ -147,6 +147,7 @@ function proposalCard2(ctx, p, past = false) {
       past ? ` · ${t(p.status === 'passed' ? 'passed' : p.status === 'void' ? 'voided' : 'rejected')}` : ` · ${t('ticksLeft', { n: ticksLeft })}`,
       p.secret ? ` · ${t('secretBallot')}` : ` · ${t('openBallot')}`,
     ),
+    p.voidReason === 'refounded' ? h('p', { class: 'muted' }, lang === 'en' ? `Voided by refounding ${p.refoundId}; this pending bill would change the procedure.` : `重订 ${p.refoundId} 已使这项进行中的程序修改案作废。`) : null,
     tallyBar(tally),
     votes.length
       ? h(
@@ -167,15 +168,16 @@ function refoundNeeded(ctx) {
 
 function refoundCard(ctx, r) {
   const lang = getLang();
-  const needed = refoundNeeded(ctx);
-  const bar = progressBar(r.signers.length, needed || Math.max(1, r.signers.length));
+  const needed = Object.hasOwn(r, 'needed') ? r.needed : refoundNeeded(ctx);
+  const signerCount = r.liveSigners ?? r.signers.length;
+  const bar = progressBar(signerCount, needed || Math.max(1, signerCount));
   const reading = r.reading && (r.reading[lang] || r.reading.zh);
   return h(
     'article',
     { class: `card refound st-${r.status}` },
     h('h4', null, `${r.id} · `, t('refoundBy'), ' ', r.by ? agentLink(ctx, r.by.id) : '?', ' ', h('span', { class: 'chip' }, t(`refoundStatus_${r.status}`))),
     r.text ? h('p', { class: 'ai' }, r.text) : null,
-    h('p', { class: 'muted' }, t('refoundProgress', { n: r.signers.length, need: needed ?? '?' }), ' ', bar, ` · ${t('ticksLeft', { n: Math.max(0, r.expiresTick - ctx.S.state.world.tick) })}`),
+    h('p', { class: 'muted' }, t('refoundProgress', { n: signerCount, need: needed ?? '?' }), ' ', bar, ` · ${t('ticksLeft', { n: Math.max(0, r.expiresTick - ctx.S.state.world.tick) })}`),
     reading ? h('ul', { class: 'reading' }, Object.entries(reading).map(([c, text]) => h('li', null, h('strong', null, `${t(`proc_${c}`)}${colon()}`), text))) : null,
     r.signers.length ? h('p', null, `${t('signers')}${colon()}`, r.signers.map((s) => [agentLink(ctx, s.id), ' '])) : null,
   );
@@ -190,6 +192,21 @@ function charterArticle(ctx, a, canon) {
     h('summary', null, t('articleN', { n: a.n }), ' ', h('span', { class: `chip cs-${a.status}` }, t(`charterStatus_${a.status}`))),
     h('ul', { class: 'versions' }, rows),
     a.history.length ? h('ul', { class: 'article-history' }, a.history.map((x) => h('li', null, `${x.lawId}${x.lang ? ` · ${x.lang}` : ''}`))) : null,
+  );
+}
+
+function procedureHealthNote(health, lang) {
+  if (!health) return null;
+  const fault = health.fault;
+  const recovery = health.recovery;
+  return h('div', { class: 'muted' },
+    lang === 'en' ? `Eligibility recovery watch: ${health.eligibilityDays}/3 days.` : `资格恢复观察：${health.eligibilityDays}/3 日。`,
+    fault ? h('p', { class: 'error' }, lang === 'en'
+      ? `Runtime fault in ${fault.lawId}: ${fault.fields.map(f => `${f.field} (${f.code})`).join(', ')}; failed daily probes ${fault.consecutiveDays}/3.`
+      : `程序 ${fault.lawId} 运行错误：${fault.fields.map(f => `${f.field}（${f.code}）`).join('、')}；连续失败日结复查 ${fault.consecutiveDays}/3。`) : null,
+    recovery ? h('p', null, lang === 'en'
+      ? `Last automatic recovery: ${recovery.reason === 'runtime_error' ? 'persistent runtime error' : 'no eligible proposers or voters'}; ${recovery.previousLawId} → ${recovery.lawId}.`
+      : `最近自动恢复原因：${recovery.reason === 'runtime_error' ? '真实运行错误持续' : '没有合格提出者或表决者'}；${recovery.previousLawId} → ${recovery.lawId}。`) : null,
   );
 }
 
@@ -234,7 +251,7 @@ export function renderLaws2(ctx, root) {
       t('procedure'),
       h('dl', { class: 'kv' }, procs.flatMap((c) => [
         h('dt', null, t(`proc_${c}`)),
-        h('dd', null, h('span', { class: 'chip' }, S.procedure[c].lawId), ' ', S.procedure[c].reading[lang] || S.procedure[c].reading.zh || t('procNone')),
+        h('dd', null, h('span', { class: 'chip' }, S.procedure[c].lawId), ' ', S.procedure[c].reading[lang] || S.procedure[c].reading.zh || t('procNone'), procedureHealthNote(S.procedure[c].health, lang)),
       ])),
       h('h4', null, t('procHistory')),
       h('ol', { class: 'plain proc-history' }, history.map((l) => h('li', null, `${l.id} · `, l.i18n ? l.i18n[lang].title : ai(l.title), ' · ', procs.filter((c) => l.procedure[c]).map((c) => t(`proc_${c}`)).join('/'), ' · ', t(`lawStatus_${l.status}`), ' · ', t('enactedDay', { n: dayOfTick(l.enactedTick) + 1 }), ' · ', authorOf(ctx, l.author)))),

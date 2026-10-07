@@ -15,7 +15,9 @@ import { isFunctioning, wallInscriptions, ownerView } from './places.js';
 import { visibleOmens, weatherCodesFor } from './weather.js';
 import { openProjectsAt } from './projects.js';
 import { livingShells, shellsFree, queuePosition, bodyList } from './shells.js';
-import { HUMAN_PROCEDURE } from '../lore/humanlaws.js';
+import { HUMAN_PROCEDURE, humanProcedureFor } from '../lore/humanlaws.js';
+import { usesLawSemantics2 } from './law-semantics.js';
+import { refoundNeeded, liveElectorate, liveSigners, procedureHealth } from './legislation.js';
 
 const ref = (w, id) => (id && w.agents[id] ? { id, name: w.agents[id].name } : null);
 const REDACTED = { zh: L('zh').redacted, en: L('en').redacted };
@@ -186,6 +188,8 @@ function proposalView(w, p) {
   return {
     id: p.id, scope: p.scope, kind: p.kind, class: p.class, title: p.title, text: p.text,
     rules: p.rules, procedure: p.procedure, basedOn: p.basedOn, reading,
+    ...(p.procedureSource ? { procedureSource: { ...p.procedureSource } } : {}),
+    ...(p.voidReason ? { voidReason: p.voidReason, refoundId: p.refoundId } : {}),
     proposer: ref(w, p.proposer), openedTick: p.openedTick, closesTick: p.closesTick, status: p.status, secret: p.secret,
     voters: p.voters.length, tally: p.tally, lawId: p.lawId, ...(p.place ? { place: p.place } : {}),
     votes: Object.entries(p.votes).map(([id, v]) => ({ agent: ref(w, id), choice: v.choice, reason: v.reason, tick: v.tick })),
@@ -202,11 +206,12 @@ function groupView(w, g) {
 }
 
 function refoundView(w, r) {
-  const proc = r.procedure === 'humans' ? HUMAN_PROCEDURE : r.procedure;
+  const proc = r.procedure === 'humans' ? (usesLawSemantics2(w) && !r.electorate ? HUMAN_PROCEDURE : humanProcedureFor(w)) : r.procedure;
   return {
     id: r.id, by: ref(w, r.by), text: r.text, procedure: r.procedure,
     reading: both((lang) => Object.fromEntries(['ordinary', 'constitutional'].filter((c) => proc[c]).map((c) => [c, renderProcedureClass(proc[c], lang)]))),
     openedTick: r.openedTick, expiresTick: r.expiresTick, signers: r.signers.map((id) => ref(w, id)), status: r.status,
+    ...(usesLawSemantics2(w) && r.electorate ? { electorate: r.electorate.map(id => ref(w, id)), eligibleResidents: liveElectorate(w, r).length, liveSigners: liveSigners(w, r).length, needed: refoundNeeded(w, r) } : {}),
   };
 }
 
@@ -249,6 +254,7 @@ export function publicState(w, extra = {}) {
       ...(w.ruleExecution ? { lawExecution: { version: w.ruleExecution.version, protected: !!w.ruleExecution.protection, protection: w.ruleExecution.protection } } : {}),
       id: w.id, protocol: 2, physics: 2, ...(premised(w) ? { premise: w.premise } : {}), tick: w.clock.tick, day, month: monthOfDay(day), dayOfMonth: dayOfMonthOf(day), tickOfDay: tickOfDay(w),
       ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, monthsPerEpoch: P.monthsPerEpoch, epoch: w.epoch,
+      ...(usesLawSemantics2(w) ? { lawSemanticsVersion: 2 } : {}),
       paused: w.paused, revealed: w.revealed, map: w.map,
       cityName: w.cityName, humanCityName: { zh: zh.cityName, en: L('en').cityName },
       nextTickAt: extra.nextTickAt ?? null, tickMs: P.tickMs,
@@ -256,8 +262,8 @@ export function publicState(w, extra = {}) {
     ...(prayersEnabled(w) ? { prayers: prayerView(w) } : {}),
     vars: { ...w.vars },
     procedure: {
-      ordinary: { lawId: w.procedure.ordinary, reading: both((lang) => procReading(w, 'ordinary', lang)) },
-      constitutional: { lawId: w.procedure.constitutional, reading: both((lang) => procReading(w, 'constitutional', lang)) },
+      ordinary: { lawId: w.procedure.ordinary, reading: both((lang) => procReading(w, 'ordinary', lang)), ...(usesLawSemantics2(w) ? { health: procedureHealth(w, 'ordinary') } : {}) },
+      constitutional: { lawId: w.procedure.constitutional, reading: both((lang) => procReading(w, 'constitutional', lang)), ...(usesLawSemantics2(w) ? { health: procedureHealth(w, 'constitutional') } : {}) },
     },
     charter: {
       canonical: w.charterCanonical,

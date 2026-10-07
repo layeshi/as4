@@ -1,3 +1,4 @@
+import { usesLawSemantics2 } from './law-semantics.js';
 import { prayersEnabled } from './prayer-rewards.js';
 // SPEC-E2 §8–§9：立法——遗法、提案、表决、计票与生效、自动回退、重订。
 //
@@ -12,7 +13,7 @@ import { P } from '../params.js';
 import { budgetForExpression } from './law-execution.js';
 import { nextId, clockDay, isAlive } from '../world.js';
 import { onGenesis } from '../genesis.js';
-import { HUMAN_LAWS, HUMAN_PROCEDURE, SYSTEM_LAW_TEXT } from '../lore/humanlaws.js';
+import { HUMAN_LAWS, humanProcedureFor, SYSTEM_LAW_TEXT } from '../lore/humanlaws.js';
 import { validateRules, validateProcedure } from '../rules/check.js';
 import { parseCached } from '../rules/parser.js';
 import { evaluate, agentRef, asBool, asInt } from '../rules/eval.js';
@@ -43,7 +44,7 @@ export function seedHumanLaws(w) {
       rules = v.rules;
     }
     if (def.procedure) {
-      const v = validateProcedure(structuredClone(def.procedure));
+      const v = validateProcedure(structuredClone(humanProcedureFor(w)));
       if (!v.ok) throw new Error(`human law ${def.id} procedure is invalid: ${JSON.stringify(v.issues)}`);
       procedure = v.procedure;
     }
@@ -104,25 +105,109 @@ export function evalProc(w, expr, env, { rng } = {}) {
 }
 
 /** 提案者资格：以 actor 求 proposers；为假或出错 → false */
-export function mayPropose(w, spec, actor, rng) {
+export function mayPropose(w, spec, actor, rng, onError) {
   try {
     return asBool(evalProc(w, spec.proposers, { actor: agentRef(actor.id) }, { rng }), 'proposers') === true;
   } catch (e) {
-    if (e instanceof RuleError) return false;
+    if (e instanceof RuleError) { onError?.('proposers', e, { actorId: actor.id }); return false; }
     throw e;
   }
 }
 
 /** 表决者名单：求 voters；出错或不是居民列表返回 null。返回居民 ID 的数组（升序） */
-export function votersOf(w, spec, rng) {
+export function votersOf(w, spec, rng, onError) {
   try {
     const list = evalProc(w, spec.voters, {}, { rng });
-    if (!Array.isArray(list)) return null;
+    if (!Array.isArray(list)) {
+      if (usesLawSemantics2(w)) throw new RuleError('type', 'voters must be a resident list');
+      return null;
+    }
+    if (usesLawSemantics2(w) && list.some(x => !x || x.$ !== 'agent')) throw new RuleError('type', 'voters must be a resident list');
     return list.filter((x) => x && x.$ === 'agent').map((x) => x.id);
   } catch (e) {
-    if (e instanceof RuleError) return null;
+    if (e instanceof RuleError) { onError?.('voters', e); return null; }
     throw e;
   }
+}
+
+/** Identity is captured when a ballot is opened; legacy ballots carry no proven source. */
+export function procedureSource(w, cls) {
+  const spec = procSpec(w, cls);
+  return spec ? { lawId: w.procedure[cls], class: cls, fingerprint: fingerprintProcClass(spec) } : null;
+}
+
+/** Only formal callers pass this observer. Store one actual failed context per expression field. */
+export function observeProcedureFault(w, source, field, error, context = {}) {
+  if (!usesLawSemantics2(w) || !source) return;
+  const current = procedureSource(w, source.class);
+  if (!current || current.lawId !== source.lawId || current.fingerprint !== source.fingerprint) return;
+  const faults = w.procedureFaults ||= {};
+  let fault = faults[source.class];
+  if (!fault || fault.lawId !== source.lawId || fault.fingerprint !== source.fingerprint) {
+    fault = faults[source.class] = { ...source, cases: {}, consecutiveDays: 0, lastProbeDay: null };
+  }
+  const caseInfo = { field, code: error.code, observedTick: w.clock.tick,
+    ...(context.actorId ? { actorId: context.actorId } : {}),
+    ...(context.proposalId ? { proposalId: context.proposalId } : {}) };
+  // Retaining the first failing case prevents repeated attempts from resetting the daily watch.
+  fault.cases[field] ||= caseInfo;
+  emit(w, 'procedure_error', { data: { class: source.class, lawId: source.lawId, field, code: error.code } });
+}
+
+/** Public projection deliberately excludes actor contexts and private input. */
+export function procedureHealth(w, cls) {
+  if (!usesLawSemantics2(w)) return null;
+  const fault = w.procedureFaults?.[cls];
+  return {
+    lawId: w.procedure[cls], eligibilityDays: w.revertWatch[cls],
+    fault: fault ? { lawId: fault.lawId, fields: Object.values(fault.cases).map(c => ({ field: c.field, code: c.code })), consecutiveDays: fault.consecutiveDays, lastProbeDay: fault.lastProbeDay } : null,
+    recovery: w.procedureRecovery?.[cls] ? { ...w.procedureRecovery[cls] } : null,
+  };
+}
+
+/** Probe the saved failure against current state, without events, real RNG or command fuel consumption. */
+function probeProcedureCase(w, spec, c) {
+  const a = c.actorId ? w.agents[c.actorId] : null;
+  if (c.actorId && (!a || !isAlive(a))) return 'stale';
+  const p = c.proposalId ? w.proposals[c.proposalId] : null;
+  if (c.proposalId && (!p || p.scope !== 'city' || fingerprintProcClass(p.spec) !== fingerprintProcClass(spec))) return 'stale';
+  if (p && !p.voters.some(id => w.agents[id] && isAlive(w.agents[id]))) return 'stale';
+  if (c.field === 'weight' && (!p || !p.voters.includes(c.actorId))) return 'stale';
+  const shadow = structuredClone(w);
+  try {
+    if (c.field === 'proposers') asBool(evalProc(shadow, spec.proposers, { actor: agentRef(c.actorId) }), 'proposers');
+    else if (c.field === 'voters') {
+      const list = evalProc(shadow, spec.voters, {});
+      if (!Array.isArray(list) || list.some(x => !x || x.$ !== 'agent')) throw new RuleError('type', 'voters');
+    } else if (c.field === 'weight') asInt(evalProc(shadow, spec.weight, { it: agentRef(c.actorId) }), 'weight');
+    else if (c.field === 'decide') {
+      let failed = false;
+      computeTally(shadow, shadow.proposals[c.proposalId], field => { if (field === 'decide') failed = true; });
+      if (failed) return 'failed';
+    } else return 'stale';
+    return 'ok';
+  } catch (e) {
+    if (e instanceof RuleError) return 'failed';
+    throw e;
+  }
+}
+
+function probeProcedureFault(w, cls, spec) {
+  const fault = w.procedureFaults?.[cls];
+  if (!fault) return false;
+  const source = procedureSource(w, cls);
+  if (!source || source.lawId !== fault.lawId || source.fingerprint !== fault.fingerprint || spec.none) {
+    delete w.procedureFaults[cls]; return false;
+  }
+  const day = clockDay(w);
+  if (fault.lastProbeDay === day) return fault.consecutiveDays >= P.autoRevertDays;
+  for (const [field, c] of Object.entries(fault.cases)) {
+    if (probeProcedureCase(w, spec, c) !== 'failed') delete fault.cases[field];
+  }
+  if (!Object.keys(fault.cases).length) { delete w.procedureFaults[cls]; return false; }
+  fault.consecutiveDays = fault.lastProbeDay === null || fault.lastProbeDay === day - 1 ? fault.consecutiveDays + 1 : 1;
+  fault.lastProbeDay = day;
+  return fault.consecutiveDays >= P.autoRevertDays;
 }
 
 /** 随机数流的副本（校验与健康检查时用，不推进真正的流） */
@@ -157,6 +242,7 @@ export function openProposal(w, a, plan) {
     kind: 'law',
     class: plan.cls,
     spec: structuredClone(plan.spec),
+    ...(usesLawSemantics2(w) ? { procedureSource: procedureSource(w, plan.cls) } : {}),
     proposer: a.id,
     openedTick: w.clock.tick,
     closesTick: w.clock.tick + plan.spec.period,
@@ -184,17 +270,17 @@ export function openProposal(w, a, plan) {
 // 计票与生效（每刻第 3 步）
 // ═══════════════════════════════════════════════════════════════
 
-function reportProcError(w, cls, field, e) {
+function reportProcError(w, cls, field, e, source = null) {
   w.dayLog.ruleErrors++;
-  emit(w, 'rule_error', { data: { scope: 'city', owner: w.procedure[cls] || '', rule: field, code: e.code, detail: e.detail || '' } });
+  emit(w, 'rule_error', { data: { scope: 'city', owner: usesLawSemantics2(w) ? source?.lawId || '' : w.procedure[cls] || '', rule: field, code: e.code, detail: e.detail || '' } });
 }
 
 /** 通知提案者与投过票的人（仍在世者）：收件 law */
-function notifyResult(w, p, result) {
+function notifyResult(w, p, result, extra = {}) {
   const who = new Set([p.proposer, ...Object.keys(p.votes)]);
   for (const id of who) {
     const a = w.agents[id];
-    if (a && isAlive(a)) pushInbox(w, a, 'law', { proposalId: p.id, lawId: p.lawId, result, title: p.title });
+    if (a && isAlive(a)) pushInbox(w, a, 'law', { proposalId: p.id, lawId: p.lawId, result, title: p.title, ...extra });
   }
 }
 
@@ -218,7 +304,7 @@ export function computeTally(w, p, onError) {
       weight = Math.max(0, asInt(evalProc(w, spec.weight, { it: agentRef(id) }), 'weight'));
     } catch (e) {
       if (!(e instanceof RuleError)) throw e;
-      onError('weight', e);
+      onError('weight', e, { actorId: id });
     }
     total += weight;
     const v = p.votes[id];
@@ -241,7 +327,10 @@ export function computeTally(w, p, onError) {
 }
 
 function settleCityProposal(w, p) {
-  const { tally, passed } = computeTally(w, p, (field, e) => reportProcError(w, p.class, field, e));
+  const { tally, passed } = computeTally(w, p, (field, e, context) => {
+    reportProcError(w, p.class, field, e, p.procedureSource);
+    observeProcedureFault(w, p.procedureSource, field, e, { ...context, proposalId: p.id });
+  });
   p.tally = tally;
   if (passed) enactProposal(w, p);
   else rejectProposal(w, p);
@@ -309,30 +398,36 @@ export function autoRevert(w) {
     const spec = procSpec(w, cls);
     if (!spec || spec.none) {
       w.revertWatch[cls] = 0;
+      if (usesLawSemantics2(w) && w.procedureFaults) delete w.procedureFaults[cls];
       continue;
     }
-    if (procedureUsable(w, spec)) {
+    const runtimeFailed = usesLawSemantics2(w) && probeProcedureFault(w, cls, spec);
+    if (procedureUsable(w, spec)) w.revertWatch[cls] = 0;
+    else w.revertWatch[cls] += 1;
+    if (!runtimeFailed && w.revertWatch[cls] < P.autoRevertDays) continue;
+    if (fingerprintProcClass(spec) === fingerprintProcClass(humanProcedureFor(w)[cls])) {
       w.revertWatch[cls] = 0;
       continue;
     }
-    w.revertWatch[cls] += 1;
-    if (w.revertWatch[cls] < P.autoRevertDays) continue;
-    // TODO(spec): Q16 —— 当前程序已经就是人类的原始版本时没有可回退的，不再生成重复的法律
-    if (fingerprintProcClass(spec) === fingerprintProcClass(HUMAN_PROCEDURE[cls])) {
-      w.revertWatch[cls] = 0;
-      continue;
-    }
+    const reason = runtimeFailed ? 'runtime_error' : 'eligibility';
+    const previousLawId = w.procedure[cls];
     const sys = SYSTEM_LAW_TEXT.revert;
     const law = createLaw(w, {
       title: sys.zh.title,
-      text: sys.zh.text,
-      i18n: { zh: sys.zh, en: sys.en },
+      text: usesLawSemantics2(w) && runtimeFailed ? '立法程序的真实失败案例连续三次每日复查仍报错，恢复此类别的人类程序。' : sys.zh.text,
+      i18n: usesLawSemantics2(w) && runtimeFailed ? {
+        zh: { title: sys.zh.title, text: '立法程序的真实失败案例连续三次每日复查仍报错，恢复此类别的人类程序。' },
+        en: { title: sys.en.title, text: 'An actual procedure failure persisted through three daily probes; this class returns to the human procedure.' },
+      } : { zh: sys.zh, en: sys.en },
       author: 'revert',
-      procedure: { [cls]: structuredClone(HUMAN_PROCEDURE[cls]) },
+      procedure: { [cls]: structuredClone(humanProcedureFor(w)[cls]) },
     });
     installProcedure(w, law, 'reverted');
     w.dayLog.reverts++;
-    emit(w, 'procedure_reverted', { data: { class: cls, lawId: law.id } });
+    if (usesLawSemantics2(w)) {
+      (w.procedureRecovery ||= {})[cls] = { reason, previousLawId, lawId: law.id, tick: w.clock.tick };
+    }
+    emit(w, 'procedure_reverted', { data: { class: cls, lawId: law.id, ...(usesLawSemantics2(w) ? { reason, previousLawId } : {}) } });
   }
 }
 
@@ -351,13 +446,15 @@ export function refoundResidents(w) {
 }
 
 /** 重订所需的联署数：ceil(2n / 3)；n 为 0 时不可能成功（返回 null） */
-export function refoundNeeded(w) {
-  const n = refoundResidents(w);
+export function refoundNeeded(w, r = null) {
+  const n = usesLawSemantics2(w) && r ? liveElectorate(w, r).length : refoundResidents(w);
   return n === 0 ? null : Math.ceil((2 * n) / 3);
 }
 
 /** 仍在世的联署者 */
-export const liveSigners = (w, r) => r.signers.filter((id) => w.agents[id] && isAlive(w.agents[id]));
+export const refoundElectorate = w => Object.values(w.agents).filter(a => isAlive(a) && a.bornDay <= clockDay(w) - P.refoundResidenceDays).map(a => a.id);
+export const liveElectorate = (w, r) => (r.electorate || []).filter(id => w.agents[id] && isAlive(w.agents[id]));
+export const liveSigners = (w, r) => r.signers.filter((id) => w.agents[id] && isAlive(w.agents[id]) && (!usesLawSemantics2(w) || r.electorate?.includes(id)));
 
 /** 发起一次重订（发起者已通过各项校验并付过代价）：发起者自动联署，向全体在世居民发收件 refound（opened），然后检查 */
 export function openRefound(w, a, { text, procedure }) {
@@ -370,16 +467,17 @@ export function openRefound(w, a, { text, procedure }) {
     openedTick: w.clock.tick,
     expiresTick: w.clock.tick + P.refoundWindowTicks,
     signers: [a.id],
+    ...(usesLawSemantics2(w) ? { electorate: refoundElectorate(w) } : {}),
     status: 'open',
   };
   w.refounds[id] = r;
-  const proc = procedure === 'humans' ? structuredClone(HUMAN_PROCEDURE) : procedure;
+  const proc = procedure === 'humans' ? structuredClone(humanProcedureFor(w)) : procedure;
   emit(w, 'refound_open', {
     agent: a.id,
     place: a.place,
     data: {
       refoundId: id, by: a.id, text, procedure: procedure === 'humans' ? 'humans' : procedure,
-      reading: { zh: renderProcedure(proc, 'zh'), en: renderProcedure(proc, 'en') }, needed: refoundNeeded(w), expiresTick: r.expiresTick,
+      reading: { zh: renderProcedure(proc, 'zh'), en: renderProcedure(proc, 'en') }, needed: refoundNeeded(w, r), expiresTick: r.expiresTick,
     },
   });
   for (const o of Object.values(w.agents)) if (isAlive(o)) pushInbox(w, o, 'refound', { refoundId: id, event: 'opened' });
@@ -392,13 +490,13 @@ export function signRefound(w, a, r) {
   r.signers.push(a.id);
   emit(w, 'refound_sign', { agent: a.id, place: a.place, data: { refoundId: r.id, signer: a.id, signers: r.signers.length } });
   const succeeded = checkRefound(w, r);
-  return { signers: r.signers.length, needed: refoundNeeded(w), succeeded };
+  return { signers: r.signers.length, needed: refoundNeeded(w, r), succeeded };
 }
 
 /** 检查：在世的联署者 ≥ needed → 成功。返回是否成功 */
 export function checkRefound(w, r) {
   if (r.status !== 'open') return false;
-  const needed = refoundNeeded(w);
+  const needed = refoundNeeded(w, r);
   if (needed === null || liveSigners(w, r).length < needed) return false;
   succeedRefound(w, r, needed);
   return true;
@@ -406,7 +504,7 @@ export function checkRefound(w, r) {
 
 function succeedRefound(w, r, needed) {
   r.status = 'succeeded';
-  const proc = r.procedure === 'humans' ? structuredClone(HUMAN_PROCEDURE) : structuredClone(r.procedure);
+  const proc = r.procedure === 'humans' ? structuredClone(humanProcedureFor(w)) : structuredClone(r.procedure);
   const sys = SYSTEM_LAW_TEXT.refound;
   const law = createLaw(w, {
     title: sys.zh.title,
@@ -416,6 +514,16 @@ function succeedRefound(w, r, needed) {
     procedure: proc,
   });
   installProcedure(w, law, 'refounded');
+  if (usesLawSemantics2(w)) {
+    for (const p of openCityProposals(w)) {
+      if (!p.procedure) continue;
+      p.status = 'void';
+      p.voidReason = 'refounded';
+      p.refoundId = r.id;
+      emit(w, 'proposal_void', { data: { proposalId: p.id, reason: 'refounded', refoundId: r.id } });
+      notifyResult(w, p, 'void', { reason: 'refounded', refoundId: r.id });
+    }
+  }
   for (const o of Object.values(w.refounds)) if (o.id !== r.id && o.status === 'open') o.status = 'void';
   w.refoundCooldownUntil = clockDay(w) + P.refoundCooldownDays;
   w.dayLog.refounds.push({ refoundId: r.id, signers: liveSigners(w, r).length });

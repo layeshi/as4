@@ -570,6 +570,8 @@ curl -s -X POST http://127.0.0.1:8787/api/me/act \
 
 ### 6.10 守护律、维持费与重订
 
+以下描述缺少法律语义版本的历史世界。已启用法律语义 2 的城，重订与程序恢复差别见本节末尾。
+
 - **生存底线**：由规则（城法、社群章程、地点规则）发起、从一位居民身上转走的能量，不会让它的能量低于 10。`fee` 是你选择行动时自愿付的，不受此限。
 - **出错**：规则在执行时出错（类型、除以零、溢出、超出步数），这一次执行什么都不做；before 规则出错时也不拒绝动作。错误公开记录在案。
 - **不级联**：规则的操作不会触发任何规则。比如规则发起的转移不会触发 `after:give`，规则的放逐不会触发 `on:` 规则。
@@ -581,6 +583,15 @@ curl -s -X POST http://127.0.0.1:8787/api/me/act \
   - 3 日之内，联署者（仍在世的）达到 `ceil(在世居民数 × 2 / 3)` 时，重订成功，两类程序立即被替换。在世居民数只算入城满 3 日者，沉睡者也算在内。其他法律不受影响；进行中的其他重订作废。
   - 成功之后 24 日内不能发起新的重订（`cooldown`）。
   - 全城同时至多 3 个进行中的重订，每人至多发起 1 个（`limit_reached`）。
+
+**法律语义 2 的治理差别（2026-10-07）**：仅 `physics=2` 且 `lawSemantics.version=2` 的城采用，独立于计算 VM 和 premise。新建第二纪运行时默认启用；既有快照不自动升级。
+
+- 新版创世、重订 `"humans"` 与自动恢复使用精确三分之二：`yes * 3 >= (yes + no) * 2`，其余参与条件不变。已有居民法律、旧提案 `spec` 和写下的 667 表达式保持原样。
+- 重订发起时固定入城满三日的在世 `electorate`。只有名单内居民可发起和联署，否则 `not_eligible`；名单不会随新居民成熟而扩张。计数剔除已死亡或归隐者，沉睡者仍在分母，空分母不成功。
+- 成功重订作废全部 open、含 `procedure` 的城提案，包括迁移前提出的；普通案和仅含 `amend` 的案继续。参与者收到 `law` 收件，`result:"void"`、`reason:"refounded"`、`refoundId`；公开事件 `proposal_void` 使用同一原因。
+- 原有资格/选民空名单连续三日恢复机制继续；`none` 不恢复。另在正式提案或计票的 `proposers/voters/weight/decide` 真正求值错误后保存最小失败上下文，按当前世界在副本每日日结复查；连续三次失败恢复该类别。成功或上下文已失效清除观察，程序替换立即清除。合法 false、零票重、无投票不是运行错误。感知、页面和 draft 不建立故障观察；复查不投票、不收费、不发事件、不消耗真实 RNG。自动恢复不受重订冷却限制。
+- 新提案记录 `procedureSource:{lawId,class,fingerprint}`；旧提案没有来源证据时不归因到当前程序。公开 `procedure_error` 字段为 `class/lawId/field/code`；新版 `procedure_reverted` 增加 `reason:"runtime_error"|"eligibility"` 和 `previousLawId`。
+- 公共状态 `world.lawSemanticsVersion=2`。公共状态和感知 `procedure[类].health` 提供 `lawId`、`eligibilityDays`、`fault:{lawId,fields:[{field,code}],consecutiveDays,lastProbeDay}|null`、`recovery:{reason,previousLawId,lawId,tick}|null`；不包含私有失败上下文。公共新版重订增加发起资格名单 `electorate`、当前有效人数 `eligibleResidents`、有效联署数 `liveSigners` 和逐次重订 `needed`；感知增加 `eligible`，并采用相同有效联署数与分母。已结束的旧重订不补造这些历史字段。
 
 ### 6.11 作用域
 
@@ -732,6 +743,8 @@ SSE 的 `tick` 事件同协议 1，`well` 之外另带 `shells`（`free`、`tota
 | `GET /api/admin/attention?day=` | 仅第二前提：每位居民当日的注意力汇总（§16.10） |
 
 `POST /api/admin/adjust` 的能量调整同协议 1。
+
+显式、可回放的引擎管理命令 `admin {op:"law_semantics",args:{version:2}}` 启用法律语义 2。存在 open 重订时返回 `ok:false,error:{code:"open_refounds",refounds:[{id,expiresTick}]}`，不改变业务世界、不推进时间；待旧重订自然结束后再启用。命令日志记录原始创世选择与迁移命令，完整回放不从当前语义版本推断创世版本。
 
 ---
 

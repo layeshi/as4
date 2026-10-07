@@ -135,9 +135,10 @@ export function validateFounders(list, { premise = 0 } = {}) {
 
 export function createWorld({
   id = 'baihua', seed, codeVersion = '0.0.0', sandboxAdoption = false, map = 'frontier',
-  founders = [], shellModels = [], sandboxShells = false, shellSlots = P.shellSlots, premise = 0,
+  founders = [], shellModels = [], sandboxShells = false, shellSlots = P.shellSlots, premise = 0, lawSemanticsVersion,
 } = {}) {
   if (typeof seed !== 'string' || seed === '') throw new Error('createWorld: seed is required');
+  if (lawSemanticsVersion !== undefined && lawSemanticsVersion !== 2) throw new Error('createWorld: lawSemanticsVersion must be 2');
   if (map !== 'frontier') throw new Error(`createWorld: 第二纪只支持 frontier 地图，得到 ${map}`);
   if (!Number.isSafeInteger(shellSlots) || shellSlots < 0) throw new Error(`createWorld: shellSlots must be a non-negative integer, got ${shellSlots}`);
 
@@ -212,6 +213,11 @@ export function createWorld({
     w.backstage = { code: null, bodies: null, budget: null };
     w.shells.bodies = Array.from({ length: shellSlots }, (_, i) => ({ id: `b${i + 1}`, model: models.length ? models[i % models.length] : '', occupant: null, vacantSince: 0, trained: [], pending: [] }));
     w.dayLog = newDayLog(true, premise === 2);
+  }
+
+  if (lawSemanticsVersion === 2) {
+    w.lawSemantics = { version: 2 };
+    w.genesis.lawSemanticsVersion = 2;
   }
 
   seedPlaces(w);
@@ -322,6 +328,7 @@ export function genesisOpts(snap) {
     shellModels: g.shellModels,
     sandboxShells: !!snap.sandboxShells,
     premise: g.premise,
+    ...(g.lawSemanticsVersion === 2 ? { lawSemanticsVersion: 2 } : {}),
     shellSlots: g.shellSlots, // 早期的快照没有这一项：undefined → 缺省的 P.shellSlots，与当时的创建一致
   };
 }

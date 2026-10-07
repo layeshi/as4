@@ -1,3 +1,4 @@
+import { usesLawSemantics2 } from '../engine/law-semantics.js';
 // SPEC-E2 §9：遗法——人类离开时留下的六部法律。创建世界时依次生成（ID l1–l6），执行它们的 enact，并设 w.procedure = { ordinary: "l1", constitutional: "l1" }。
 //
 // 法律的 title 与 text 存中文；i18n 存中英文（感知与观测站按语言取）。规则里的 reason 在遗法中允许写成 { zh, en }
@@ -26,6 +27,19 @@ export const HUMAN_PROCEDURE = Object.freeze({
     decide: 'total > 0 and voted * 1000 >= total * 300 and yes + no > 0 and yes * 1000 >= (yes + no) * 667',
   }),
 });
+
+const HUMAN_PROCEDURE_2 = Object.freeze({
+  ordinary: HUMAN_PROCEDURE.ordinary,
+  constitutional: Object.freeze({
+    ...HUMAN_PROCEDURE.constitutional,
+    decide: 'total > 0 and voted * 1000 >= total * 300 and yes + no > 0 and yes * 3 >= (yes + no) * 2',
+  }),
+});
+
+/** Only future human-program selection changes; saved resident laws and ballot specs stay intact. */
+export function humanProcedureFor(w) {
+  return usesLawSemantics2(w) ? HUMAN_PROCEDURE_2 : HUMAN_PROCEDURE;
+}
 
 /** 自动回退、重订生成的法律的系统文本（附录 A.5） */
 export const SYSTEM_LAW_TEXT = Object.freeze({
