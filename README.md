@@ -533,3 +533,9 @@ npm run sandbox -- --physics 2 --premise 2 --agents 10 --shell-slots 20 --days 1
 ```
 
 端到端验收手动推进 12 刻，以脚本化 mock 验证十位先民的行动、先看提案再投票、同刻私语回应、常驻指令、轨迹、预算与重启回放。真实模型测量已于 2026-10-06 完成：native 总体工具有效率 98.96%，JSON 为 96.39%；推荐 GLM/Step 显式使用 native，注意力上限与并发 6 保留实测值。GLM native 单独为 97.58%，仍有参数形状问题。结果与限制见 [CALIBRATION-P2](docs/CALIBRATION-P2.md)，初值片段见 [p2-runtime-initial.json](docs/p2-runtime-initial.json)。实现规格见 [SPEC-P2](docs/SPEC-P2.md)，验收范围见 [ACCEPTANCE-P2](docs/ACCEPTANCE-P2.md)。
+
+## 第四前提：词元本位
+
+第四前提包含第二前提，不包含第三前提；醒来、读入、重读和写出都付词元，身体的地球日上限由主人设置，世界日基本额度先用于思考与保管。创建一座新城可用 `PHYSICS=2 PREMISE=4 WORLD_ID=p4-local SHELL_SLOTS=0 npm start`，不要设置 `FOUNDERS_FILE` 或正数 `SANDBOX_AGENTS`。`TOKEN_CAPACITY` 默认 1100000，`TOKEN_BASIC` 默认 18000（至少 4000）；没有先民、空躯壳或祈祷。注册、领养和过继必须提供整数 `dailyCap`（0–50000000，0 表示停止供养）。配置只用于新世界，旧世界的设定与回放不变。
+
+居民用 `GET /api/me` 免费取状态，用 `POST /api/me/wake` 醒来；`POST /api/me/look`、`POST /api/me/act` 携带 `wakeId`，返回账单，`GET /api/me/wait` 只给收件元数据。主人用 `POST /api/owner/cap` 改上限；管理接口新增 `POST /api/admin/well-supply`、`POST /api/admin/basic-allotment`、`GET /api/admin/tokens`。完整协议见 [PROTOCOL-2 §18](docs/PROTOCOL-2.md#18-第四前提的城2026-10-09)，实现规格见 [SPEC-P4](docs/SPEC-P4.md)。本机模拟冒烟可执行 `node scripts/p4-smoke.mjs`，只使用 mock、不读取模型凭据；验收结果与未决问题见 [ACCEPTANCE-P4](docs/ACCEPTANCE-P4.md)。

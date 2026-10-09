@@ -1,0 +1,654 @@
+{
+  "generatedAt": "2026-10-09T15:36:01.313Z",
+  "node": "v24.19.0",
+  "provider": "mock",
+  "world": "p4-smoke",
+  "ticks": 12,
+  "residents": 3,
+  "attempts": 36,
+  "checkedCommands": 90,
+  "commands": 90,
+  "conservationFailures": 0,
+  "tokens": {
+    "capacity": 1100000,
+    "k": 1833,
+    "basic": 18000
+  },
+  "daily": {
+    "wakes": 19,
+    "called": 0,
+    "refusedTokens": 15,
+    "refusedCap": 2,
+    "suffocated": 3,
+    "reread": 22803,
+    "read": 23120,
+    "write": 7860,
+    "refunded": 1398,
+    "basicIssued": 108000,
+    "basicExpired": 1615,
+    "custody": 36,
+    "upgradesBuilt": 0,
+    "dividends": 0
+  },
+  "ending": [
+    {
+      "id": "a1",
+      "basic": 17988,
+      "energy": 219996,
+      "cap": 1000000,
+      "used": 17323,
+      "custody": 12,
+      "bill": {
+        "reread": 7379,
+        "read": 7324,
+        "write": 2620
+      }
+    },
+    {
+      "id": "a2",
+      "basic": 17988,
+      "energy": 219996,
+      "cap": 30000,
+      "used": 17761,
+      "custody": 12,
+      "bill": {
+        "reread": 7407,
+        "read": 7734,
+        "write": 2620
+      }
+    },
+    {
+      "id": "a3",
+      "basic": 17988,
+      "energy": 219996,
+      "cap": 1000000,
+      "used": 17301,
+      "custody": 12,
+      "bill": {
+        "reread": 7377,
+        "read": 7304,
+        "write": 2620
+      }
+    }
+  ],
+  "mockUsage": {
+    "calls": 37,
+    "failed": 1,
+    "unreported": 0,
+    "input": 39600,
+    "output": 3060,
+    "tokens": 42660
+  },
+  "conservation": {
+    "ok": true,
+    "energy": {
+      "expected": 1142954,
+      "actual": 1142954
+    },
+    "coins": {
+      "expected": 60,
+      "actual": 60
+    },
+    "src": {
+      "energy": {},
+      "coins": {}
+    },
+    "snk": {
+      "energy": {},
+      "coins": {}
+    },
+    "prev": {
+      "energy": 1142954,
+      "coins": 60
+    }
+  },
+  "replay": {
+    "ok": true,
+    "hash": "87282c5ef9293918dbb369b0576f6f086719a284c04cc44ca215f0abd973976e",
+    "snapshotHash": "87282c5ef9293918dbb369b0576f6f086719a284c04cc44ca215f0abd973976e",
+    "applied": 90,
+    "restartIdentical": true
+  },
+  "rows": [
+    {
+      "tick": 0,
+      "id": "a1",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1329,
+        "read": 1034,
+        "write": 524
+      },
+      "basic": 15113,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 2887
+    },
+    {
+      "tick": 0,
+      "id": "a2",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1342,
+        "read": 1168,
+        "write": 524
+      },
+      "basic": 14966,
+      "energy": 0,
+      "cap": 12000,
+      "used": 3034
+    },
+    {
+      "tick": 0,
+      "id": "a3",
+      "ended": "error",
+      "refused": null,
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 18000,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 0
+    },
+    {
+      "tick": 1,
+      "id": "a1",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1346,
+        "read": 1204,
+        "write": 524
+      },
+      "basic": 12039,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 5961
+    },
+    {
+      "tick": 1,
+      "id": "a2",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1346,
+        "read": 1203,
+        "write": 524
+      },
+      "basic": 11893,
+      "energy": 0,
+      "cap": 12000,
+      "used": 6107
+    },
+    {
+      "tick": 1,
+      "id": "a3",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1354,
+        "read": 1288,
+        "write": 524
+      },
+      "basic": 14834,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 3166
+    },
+    {
+      "tick": 2,
+      "id": "a1",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1359,
+        "read": 1339,
+        "write": 524
+      },
+      "basic": 8817,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 9183
+    },
+    {
+      "tick": 2,
+      "id": "a2",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1359,
+        "read": 1338,
+        "write": 524
+      },
+      "basic": 8672,
+      "energy": 0,
+      "cap": 12000,
+      "used": 9328
+    },
+    {
+      "tick": 2,
+      "id": "a3",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1359,
+        "read": 1339,
+        "write": 524
+      },
+      "basic": 11612,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 6388
+    },
+    {
+      "tick": 3,
+      "id": "a1",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1359,
+        "read": 1339,
+        "write": 524
+      },
+      "basic": 5595,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 12405
+    },
+    {
+      "tick": 3,
+      "id": "a2",
+      "ended": "tokens",
+      "refused": null,
+      "bill": {
+        "reread": 640,
+        "read": 1338,
+        "write": 0
+      },
+      "basic": 6694,
+      "energy": 0,
+      "cap": 12000,
+      "used": 11306
+    },
+    {
+      "tick": 3,
+      "id": "a3",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1346,
+        "read": 1204,
+        "write": 524
+      },
+      "basic": 8538,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 9462
+    },
+    {
+      "tick": 4,
+      "id": "a1",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1346,
+        "read": 1204,
+        "write": 524
+      },
+      "basic": 2521,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 15479
+    },
+    {
+      "tick": 4,
+      "id": "a2",
+      "ended": "cap_reached",
+      "refused": "cap_reached",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 6694,
+      "energy": 0,
+      "cap": 12000,
+      "used": 11306
+    },
+    {
+      "tick": 4,
+      "id": "a3",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1346,
+        "read": 1204,
+        "write": 524
+      },
+      "basic": 5464,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 12536
+    },
+    {
+      "tick": 5,
+      "id": "a1",
+      "ended": "tokens",
+      "refused": null,
+      "bill": {
+        "reread": 640,
+        "read": 1204,
+        "write": 0
+      },
+      "basic": 677,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17323
+    },
+    {
+      "tick": 5,
+      "id": "a2",
+      "ended": "cap_reached",
+      "refused": "cap_reached",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 6694,
+      "energy": 0,
+      "cap": 12000,
+      "used": 11306
+    },
+    {
+      "tick": 5,
+      "id": "a3",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1332,
+        "read": 1065,
+        "write": 524
+      },
+      "basic": 2543,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 15457
+    },
+    {
+      "tick": 6,
+      "id": "a1",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 677,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17323
+    },
+    {
+      "tick": 6,
+      "id": "a2",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1388,
+        "read": 1623,
+        "write": 524
+      },
+      "basic": 3159,
+      "energy": 0,
+      "cap": 30000,
+      "used": 14841
+    },
+    {
+      "tick": 6,
+      "id": "a3",
+      "ended": "tokens",
+      "refused": null,
+      "bill": {
+        "reread": 640,
+        "read": 1204,
+        "write": 0
+      },
+      "basic": 699,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17301
+    },
+    {
+      "tick": 7,
+      "id": "a1",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 677,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17323
+    },
+    {
+      "tick": 7,
+      "id": "a2",
+      "ended": "end",
+      "refused": null,
+      "bill": {
+        "reread": 1332,
+        "read": 1064,
+        "write": 524
+      },
+      "basic": 239,
+      "energy": 0,
+      "cap": 30000,
+      "used": 17761
+    },
+    {
+      "tick": 7,
+      "id": "a3",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 699,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17301
+    },
+    {
+      "tick": 8,
+      "id": "a1",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 677,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17323
+    },
+    {
+      "tick": 8,
+      "id": "a2",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 239,
+      "energy": 0,
+      "cap": 30000,
+      "used": 17761
+    },
+    {
+      "tick": 8,
+      "id": "a3",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 699,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17301
+    },
+    {
+      "tick": 9,
+      "id": "a1",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 677,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17323
+    },
+    {
+      "tick": 9,
+      "id": "a2",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 239,
+      "energy": 0,
+      "cap": 30000,
+      "used": 17761
+    },
+    {
+      "tick": 9,
+      "id": "a3",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 699,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17301
+    },
+    {
+      "tick": 10,
+      "id": "a1",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 677,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17323
+    },
+    {
+      "tick": 10,
+      "id": "a2",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 239,
+      "energy": 0,
+      "cap": 30000,
+      "used": 17761
+    },
+    {
+      "tick": 10,
+      "id": "a3",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 699,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17301
+    },
+    {
+      "tick": 11,
+      "id": "a1",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 677,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17323
+    },
+    {
+      "tick": 11,
+      "id": "a2",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 239,
+      "energy": 0,
+      "cap": 30000,
+      "used": 17761
+    },
+    {
+      "tick": 11,
+      "id": "a3",
+      "ended": "tokens_exhausted",
+      "refused": "tokens_exhausted",
+      "bill": {
+        "reread": 0,
+        "read": 0,
+        "write": 0
+      },
+      "basic": 699,
+      "energy": 0,
+      "cap": 1000000,
+      "used": 17301
+    }
+  ]
+}

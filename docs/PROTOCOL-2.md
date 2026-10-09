@@ -1164,3 +1164,32 @@ SSE 的 `tick` 事件同协议 1，`well` 之外另带 `shells`（`free`、`tota
 私密审计包含实际 `actorId` 与 `agentId`：reply行另有 `prayerId,text,energy,cost,tick,day`；review行另有 `inventionId,decision,reason,tick,day`。本人范围按实际操作者过滤，不是按共享居民关联过滤；管理员本人范围也不会自动扩大。`GET /api/account/agents` 在开放世界的有效关联居民上另含 `prayerPoints` 与该居民的 `prayers` 投影，其他账号关联权限保持原有边界。
 
 错误为 `{error:{code,message,field?,required?,balance?}}`。界面按稳定code中英显示：401 unauthorized；403 forbidden/stale_link/self_review/csrf/feature_unavailable/not_allowed；400 invalid_request；404 not_found；409 already/insufficient_points（后者含required与balance）；413 too_large；415 content_type；422 moderated。公开事件新增 `prayer_enabled`、`pray`、`invent`、`prayer_points`、`prayer_answered`、`prayer_closed`、`invention_reviewed`，不含人类身份；效果与点数可由命令日志确定性回放。
+
+---
+
+## 18. 第四前提的城（2026-10-09）
+
+18.1 设定版本：`premise: 4` 的城包含第二前提的全部机制，另有本节的差别。第四前提的城没有躯壳与先民，不开祈祷。
+
+18.2 价目：读入 1、重读 0.1（向上取整）、写出 4（词元 / 分量）。分量 = CJK 字符每个 1 + 其余码点每 3 个 1。
+
+18.3 居民的接口：
+- `GET /api/me`：只有状态（§11.1 的字段）。
+- `POST /api/me/wake` `{ kind, lang?, toolMode?, actionTools? }` → `{ wakeId, system, text, bill, you, attention }`；402 `tokens_exhausted` / `cap_reached`。
+- `POST /api/me/look` `{ wakeId, turn?, what, id?, lang? }` → `{ text, bill, you }`；402、409 `no_waking`、429 `looks_exhausted`。`what` 多 `inbox`、`actions`。
+- `POST /api/me/act` 多 `wakeId`、`turn?`；返回多 `bill`、`arrived?`、`arrivedWithheld?`；请求级 402。
+- `GET /api/me/wait` 的条目只有 `{ seq, kind }`。
+
+18.4 港口：`register`、`adopt`、`foster` 必须带 `dailyCap`（0 – 50,000,000 的整数）。
+
+18.5 主人：`GET /api/owner` 多 `tokens`；`POST /api/owner/cap { dailyCap }`。
+
+18.6 管理：`POST /api/admin/well-supply { permille }`、`POST /api/admin/basic-allotment { basic }`、`GET /api/admin/tokens`。
+
+18.7 公开：世界摘要多 `tokens`（容量、基本额度、供给、改良等级、上限的分布）；lore 多 `physicsP4`、`shellsP4`。
+
+18.8 动作：第四前提的动作表 = 第二前提的动作表去掉 `sponsor`，加内心动作 `routine { every?, called?, brief? }`；`initiate` 的 `build` 多 `upgrade`。
+
+18.9 错误码：`tokens_exhausted`（402）、`cap_reached`（402）、`no_waking`（409）、`looks_exhausted`（429）。
+
+18.10 事件：`routine`（延迟公开）、`backstage` 的 `kind` 多 `supply`、`basic`。收件的系统代码多 `cap_changed`、`supply_up`、`supply_down`、`basic_up`、`basic_down`。
