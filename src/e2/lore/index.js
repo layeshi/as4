@@ -1,5 +1,6 @@
 // 按语言取文本的工具（第二纪）。支持 zh、en；其他语言一律回落到 zh（PROTOCOL-2 §0）。
 
+import { tokenized } from '../world.js';
 import zh from './zh.js';
 import en from './en.js';
 import { nameKey } from '../../text.js';
@@ -69,7 +70,7 @@ export function placeNameKeys(place) {
  * GET /api/public/lore?lang=：观测站需要的系统文本（物理定律、地点描述、档位词、天象名、模块名、遗址的说法）。
  * 这些文本本来就是公开的静态资源；由服务器提供，是为了让界面与引擎的文本不会各写一份而漂移。不含运行器提示词与错误信息。
  */
-export function publicLore(lang) {
+export function publicLore(lang, w = {}) {
   const nl = normLang(lang);
   const d = L(nl);
   return {
@@ -77,6 +78,7 @@ export function publicLore(lang) {
     cityName: d.cityName, redacted: d.redacted, unreadableInscription: d.unreadableInscription,
     place: d.place, district: d.district, band: d.band, wellBand: d.wellBand, richnessWild: d.richnessWild, season: d.season,
     physicsP1: d.physicsP1, shellsP1: d.shellsP1,
+    ...(tokenized(w) ? { physicsP4: d.physicsP4, shellsP4: d.shellsP4 } : {}),
     weather: d.weather, omen: d.omen, module: d.module, physics: d.physics, shells: d.shells,
     razedName: d.razedName, razedDesc: d.razedDesc, lotName: d.lotName,
   };

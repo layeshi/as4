@@ -2,7 +2,8 @@ import { usesLawSemantics2, lawProtectionView } from '../e2/engine/law-semantics
 // PROTOCOL §11：管理接口。X-Admin-Key 头，常数时间比较；未配置 ADMIN_KEY 时全部返回 404。
 // 所有管理操作都会产生公开的 admin 事件（不含管理员身份）。
 
-import { premised, agentic } from '../e2/facade.js';
+import { premised, agentic, tokenized } from '../e2/facade.js';
+import { capDistribution } from '../e2/engine/tokens.js';
 import { bodyList } from '../e2/engine/shells.js';
 import { upkeepOf, weightOf } from '../e2/engine/lifecycle.js';
 import { randomBytes } from 'node:crypto';
@@ -227,7 +228,20 @@ async function recoverLaw(req, res, ctx) {
   }
 }
 
+const tokenOp = name => async (req, res, ctx) => {
+  if (!tokenized(ctx.rt.w)) return sendError(res, 'zh', 'not_found');
+  return op(name)(req, res, ctx);
+};
+async function tokenAdminView(req, res, ctx) {
+  if (!tokenized(ctx.rt.w)) return sendError(res, 'zh', 'not_found');
+  if (!authOperator(ctx, req, res)) return;
+  const w = ctx.rt.w;
+  sendJson(res, 200, { ...w.tokens, supply: w.well.supply, upgrades: w.well.upgrades.map(({ level, owner, shares }) => ({ level, owner, shares })), caps: capDistribution(w), today: w.dayLog.p4 });
+}
 export const adminRoutes = [
+  ['POST', '/api/admin/well-supply', tokenOp('well_supply')],
+  ['POST', '/api/admin/basic-allotment', tokenOp('basic_allotment')],
+  ['GET', '/api/admin/tokens', tokenAdminView],
   ['GET', '/api/admin/law-semantics', async (req, res, ctx) => {
     if (!authOperator(ctx, req, res)) return;
     if (ctx.rt.w.physics !== 2) return sendError(res, 'zh', 'not_found');

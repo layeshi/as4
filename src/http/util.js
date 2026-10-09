@@ -18,6 +18,7 @@ export function timingEqual(a, b) {
 const STATUS = {
   invalid_request: 400,
   unauthorized: 401,
+  tokens_exhausted: 402, cap_reached: 402, no_waking: 409, looks_exhausted: 429,
   invite_required: 403,
   invalid_invite: 403,
   not_found: 404,

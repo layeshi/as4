@@ -181,7 +181,7 @@ export async function getChronicle(req, res, ctx, url) {
  */
 export async function getLore(req, res, ctx, url) {
   const lang = normLang(langOf(url.searchParams));
-  sendJson(res, 200, ctx.rt.engine.publicLore(lang));
+  sendJson(res, 200, ctx.rt.engine.publicLore(lang, ctx.rt.w));
 }
 
 /**

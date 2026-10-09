@@ -1,10 +1,11 @@
+import { tokenStatus, wakeCore, lookCore, actTokens } from './tokens.js';
 import { lawProtectionView } from '../e2/engine/law-semantics.js';
 // PROTOCOL §3、§4：agent 接口——感知与行动。
 
 import { errorMessage } from '../lore/index.js';
 import { actionFeedback } from '../action-feedback.js';
 import { LIMITS } from '../params.js';
-import { agentic, wakeItems } from '../e2/facade.js';
+import { agentic, wakeItems, tokenized } from '../e2/facade.js';
 import { DEFAULT_AGENT_LOOP } from '../../runner/loop.js';
 import { validateAction } from '../../runner/action-tools.js';
 import { bearer, errorBody, httpStatusFor, langOf, readJson, sendError, sendJson } from './util.js';
@@ -30,7 +31,9 @@ export function authAgent(ctx, req, res, lang, limiter = ctx.limits.agent) {
  * （命令携带 ackSeq，进入命令日志，回放才一致）。服务器重启后内存游标归零，多送几条收件——「至少一次」。
  * after 缺省时推进内存游标；显式给出时不推进。
  */
-export function meCore({ rt, cursors }, id, { lang, after }) {
+export function meCore(ctx, id, { lang, after }) {
+  const { rt, cursors } = ctx;
+  if (tokenized(rt.w)) return tokenStatus(ctx, id, { lang });
   const floor = cursors.get(id) || 0;
   const p = rt.engine.buildPerception(rt.w, id, { lang, after, floor, ack: false, nextTickAt: rt.nextTickAt });
   if (rt.engine.physics === 2 && p.city && rt.events?.fiscal) p.city.ruleDiagnostics = rt.events.fiscal.diagnostics(rt.w);
@@ -48,7 +51,7 @@ export async function getMe(req, res, ctx, url) {
   if (!id) return;
   let after;
   const raw = url.searchParams.get('after');
-  if (raw !== null) {
+  if (raw !== null && !tokenized(ctx.rt.w)) {
     if (!/^\d{1,15}$/.test(raw)) return sendError(res, lang, 'invalid_request', { field: 'after' });
     after = Number(raw);
   }
@@ -60,7 +63,8 @@ export async function getMe(req, res, ctx, url) {
  * 返回 { status, json }：成功是 200 { ok: true, results, you }，请求级错误是对应的 HTTP 状态与错误体。
  * 不合法的请求不进命令日志。
  */
-export function actCore({ rt, cursors }, id, body, lang) {
+export function actCore(ctx, id, body, lang) {
+  const { rt, cursors } = ctx;
   const protocol = rt.engine.protocol;
   const fail = (code, extra = {}) => ({ status: httpStatusFor(code), json: errorBody(lang, code, extra, protocol) });
   if (body === null || typeof body !== 'object' || Array.isArray(body)) return fail('invalid_request');
@@ -77,6 +81,10 @@ export function actCore({ rt, cursors }, id, body, lang) {
     return { status: 409, json: { error: { code: 'stale_perception', message: lang === 'en' ? 'The experiment was paused. Read a fresh perception before acting.' : '实验曾被暂停，请重新感知后行动。' } } };
   }
   if (a.status !== 'awake') return fail('not_awake', { status: a.status });
+  if (tokenized(w)) {
+    const s = ctx.wakings?.get(id);
+    if (!s || s.tick !== w.clock.tick || typeof body.wakeId !== 'string' || body.wakeId !== s.wakeId) return fail('no_waking');
+  }
   if (body.actionTools !== undefined && !['legacy', 'typed'].includes(body.actionTools)) return fail('invalid_request', { field: 'actionTools' });
   if (body.actionTools === 'typed') {
     if (!agentic(w)) return fail('invalid_request', { field: 'actionTools' });
@@ -86,6 +94,7 @@ export function actCore({ rt, cursors }, id, body, lang) {
       if (issues.length) return fail('invalid_request', { field: `actions[${i}]`, issues });
     }
   }
+  if (tokenized(w)) return actTokens(ctx, id, body, lang);
   // ackSeq：这位 agent 到此刻为止已经被送达的最大收件序号（由内存游标而来）
   const payload = { agentId: id, thought: body.thought ?? undefined, actions: body.actions, ackSeq: cursors.get(id) || 0 };
   // 第二纪：请求的语言进入命令（draft 的说明、read { law } 的读法按它取），所以回放一致；第一纪的命令载荷不变
@@ -117,9 +126,10 @@ export function actCore({ rt, cursors }, id, body, lang) {
  */
 export function waitCore(rt, id, { after, timeoutMs = 25000, signal, lang = 'zh' } = {}) {
   const a = rt.w.agents[id];
+  if (tokenized(rt.w)) after = a?.delivered ?? 0;
   if (!a || a.status !== 'awake') return Promise.resolve({ items: [], cursor: after, status: a ? a.status : 'unknown' });
-  const result = (items) => ({ items, cursor: items[items.length - 1].seq });
-  const found = wakeItems(rt.w, id, after, lang);
+  const result = (items) => ({ items: tokenized(rt.w) ? items.map(({ seq, kind }) => ({ seq, kind })) : items, cursor: items[items.length - 1].seq });
+  const found = wakeItems(rt.w, id, tokenized(rt.w) ? rt.w.agents[id].delivered : after, lang);
   if (found.length) return Promise.resolve(result(found));
   return new Promise((resolve) => {
     let done = false;
@@ -136,7 +146,7 @@ export function waitCore(rt, id, { after, timeoutMs = 25000, signal, lang = 'zh'
     const onAbort = () => finish({ items: [], cursor: after });
     off = rt.onWake((n) => {
       if (n.agentId !== id || n.seq <= after) return;
-      const items = wakeItems(rt.w, id, after, lang);
+      const items = wakeItems(rt.w, id, tokenized(rt.w) ? rt.w.agents[id].delivered : after, lang);
       if (items.length) finish(result(items));
     });
     timer = setTimeout(() => finish({ items: [], cursor: after }), timeoutMs);
@@ -174,11 +184,23 @@ export async function postAct(req, res, ctx, url) {
   if (!id) return;
   const parsed = await readJson(req);
   if (!parsed.ok) return sendError(res, lang, parsed.code);
-  const r = actCore(ctx, id, parsed.value, lang);
+  const r = actCore(ctx, id, parsed.value, tokenized(ctx.rt.w) && parsed.value?.lang === 'en' ? 'en' : lang);
   sendJson(res, r.status, r.json);
 }
 
+const tokenRequest = core => async (req, res, ctx, url) => {
+  const lang = langOf(url.searchParams);
+  if (!tokenized(ctx.rt.w)) return sendError(res, lang, 'not_found');
+  const id = authAgent(ctx, req, res, lang);
+  if (!id) return;
+  const body = await readJson(req);
+  if (!body.ok) return sendError(res, lang, body.code);
+  const r = core(ctx, id, body.value, lang);
+  sendJson(res, r.status, r.json);
+};
 export const agentRoutes = [
+  ['POST', '/api/me/wake', tokenRequest(wakeCore)],
+  ['POST', '/api/me/look', tokenRequest(lookCore)],
   ['GET', '/api/me', getMe],
   ['GET', '/api/me/wait', getWait],
   ['POST', '/api/me/act', postAct],

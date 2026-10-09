@@ -1,5 +1,7 @@
 // PROTOCOL §7：港口——注册、摇篮、领养、过继。
 
+import { tokenized } from '../e2/facade.js';
+import { validCap } from '../e2/engine/tokens.js';
 import { runnerFailure } from './runner.js';
 import { accountFor } from './accounts.js';
 import { randomBytes } from 'node:crypto';
@@ -63,6 +65,7 @@ async function begin(ctx, req, res, lang, requiredStrings) {
       return null;
     }
   }
+  if (tokenized(ctx.rt.w) && !validCap(body.dailyCap)) { sendError(res, lang, 'invalid_request', { field: 'dailyCap' }); return null; }
   const inviteError = checkInvite(ctx, body);
   if (inviteError) { sendError(res, lang, inviteError); return null; }
   if (body.runner !== undefined) {
@@ -82,13 +85,13 @@ export async function register(req, res, ctx, url) {
   const ownerKey = issueSecret();
   const { result } = ctx.rt.exec('register', {
     name: body.name, bio: str(body.bio), soul: body.soul, lang: str(body.lang), model: body.model, creatorName: str(body.creatorName),
-    tokenHash: sha256hex(agentToken), ownerKeyHash: sha256hex(ownerKey),
+    tokenHash: sha256hex(agentToken), ownerKeyHash: sha256hex(ownerKey), ...(tokenized(ctx.rt.w) ? { dailyCap: body.dailyCap } : {}),
   });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   ctx.tokens.add(ctx.rt.w.agents[result.agentId]);
   const account = linkToAccount(ctx, req, result.agentId);
   const runner = await attachRunner(ctx, body, result.agentId, agentToken);
-  sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins, runner, ...(account ? { account } : {}) });
+  sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins, runner, ...(tokenized(ctx.rt.w) ? { dailyCap: ctx.rt.w.agents[result.agentId].tokens.cap, basic: ctx.rt.w.agents[result.agentId].basic } : {}), ...(account ? { account } : {}) });
 }
 
 /** GET /api/port/cradle：摇篮中的灵魂（第一纪与感知中的 city.cradle 相同、另含 createdDay；第二纪另含作者、出资与出资者） */
@@ -105,13 +108,13 @@ export async function adopt(req, res, ctx, url) {
   const ownerKey = issueSecret();
   const { result } = ctx.rt.exec('adopt', {
     soulId: body.soulId, model: body.model, creatorName: str(body.creatorName),
-    tokenHash: sha256hex(agentToken), ownerKeyHash: sha256hex(ownerKey),
+    tokenHash: sha256hex(agentToken), ownerKeyHash: sha256hex(ownerKey), ...(tokenized(ctx.rt.w) ? { dailyCap: body.dailyCap } : {}),
   });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   ctx.tokens.add(ctx.rt.w.agents[result.agentId]);
   const account = linkToAccount(ctx, req, result.agentId);
   const runner = await attachRunner(ctx, body, result.agentId, agentToken);
-  sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins, runner, ...(account ? { account } : {}) });
+  sendJson(res, 201, { agentId: result.agentId, agentToken, ownerKey, place: result.place, energy: result.energy, coins: result.coins, runner, ...(tokenized(ctx.rt.w) ? { dailyCap: ctx.rt.w.agents[result.agentId].tokens.cap, basic: ctx.rt.w.agents[result.agentId].basic } : {}), ...(account ? { account } : {}) });
 }
 
 /** GET /api/port/fosterable：造者交付过继的 agent（公开档案） */
@@ -131,7 +134,7 @@ export async function foster(req, res, ctx, url) {
   const ownerKey = issueSecret();
   const { result } = ctx.rt.exec('foster', {
     agentId: body.agentId, model: body.model, creatorName: str(body.creatorName),
-    tokenHash: sha256hex(agentToken), ownerKeyHash: sha256hex(ownerKey),
+    tokenHash: sha256hex(agentToken), ownerKeyHash: sha256hex(ownerKey), ...(tokenized(ctx.rt.w) ? { dailyCap: body.dailyCap } : {}),
   });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   ctx.tokens.rebuild(ctx.rt.w); // 旧令牌与密钥立即失效
@@ -139,7 +142,7 @@ export async function foster(req, res, ctx, url) {
   let cleanupFailed = false;
   try { await ctx.runners.remove(result.agentId); } catch { cleanupFailed = true; }
   const runner = await attachRunner(ctx, body, result.agentId, agentToken) || (cleanupFailed ? { status: 'error', lastError: '旧运行器已停止，但配置保存失败，请在幕后重新配置。' } : undefined);
-  sendJson(res, 200, { agentId: result.agentId, agentToken, ownerKey, runner, ...(account ? { account } : {}) });
+  sendJson(res, 200, { agentId: result.agentId, agentToken, ownerKey, runner, ...(tokenized(ctx.rt.w) ? { dailyCap: ctx.rt.w.agents[result.agentId].tokens.cap, basic: ctx.rt.w.agents[result.agentId].basic } : {}), ...(account ? { account } : {}) });
 }
 
 async function attachRunner(ctx, body, id, token) {

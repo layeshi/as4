@@ -21,7 +21,7 @@ import { publicRoutes } from './public.js';
 import { adminRoutes } from './admin.js';
 import { snapshotRoutes } from './snapshots.js';
 import { WorldSnapshots } from '../world-snapshots.js';
-import { agentic } from '../e2/facade.js';
+import { agentic, tokenized } from '../e2/facade.js';
 import { DEFAULT_AGENT_LOOP } from '../../runner/loop.js';
 import { TraceStore } from '../runner/traces.js';
 
@@ -132,6 +132,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
       port: new SlidingLimiter(5, 60 * 60 * 1000), // 注册、领养、过继：每个 IP 每小时 5 次
     },
     sse: { clients: new Set(), perIp: new Map(), total: 0 },
+    ...(tokenized(rt.w) ? { wakings: new Map(), looks: new Map() } : {}),
     cursors: new Map(), // agentId → 已经送达的最大收件 seq（内存，不进世界状态；Q9）
     cache: {},
   };

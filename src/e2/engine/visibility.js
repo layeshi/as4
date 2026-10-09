@@ -1,4 +1,4 @@
-import { K } from './tokens.js';
+import { K, capDistribution } from './tokens.js';
 import { prayerView, prayersEnabled } from './prayers.js';
 // SPEC-E2 §18.1：观众视角的唯一出口（第二纪）。公共接口与 SSE 都经过这里。
 //
@@ -8,7 +8,7 @@ import { prayerView, prayersEnabled } from './prayers.js';
 
 import { P, conditionBand, richnessBand } from '../params.js';
 import { L, placeDisplayName, placeDescription } from '../lore/index.js';
-import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum, premised } from '../world.js';
+import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum, premised, tokenized } from '../world.js';
 import { HUMAN_DEFS, WILD_ZONE_IDS } from '../map/index.js';
 import { lawReading, authorView, isSuspended, isProcedureLaw, persistentCount } from './laws.js';
 import { renderRules, renderProcedureClass } from '../rules/render.js';
@@ -256,7 +256,8 @@ export function publicState(w, extra = {}) {
   return {
     world: {
       ...(w.ruleExecution ? { lawExecution: { version: w.ruleExecution.version, protected: !!w.ruleExecution.protection, protection: w.ruleExecution.protection } } : {}),
-      id: w.id, protocol: 2, physics: 2, ...(premised(w) ? { premise: w.premise } : {}), tick: w.clock.tick, day, month: monthOfDay(day), dayOfMonth: dayOfMonthOf(day), tickOfDay: tickOfDay(w),
+      id: w.id, protocol: 2, physics: 2, ...(premised(w) ? { premise: w.premise } : {}),
+      ...(tokenized(w) ? { tokens: publicTokens(w) } : {}), tick: w.clock.tick, day, month: monthOfDay(day), dayOfMonth: dayOfMonthOf(day), tickOfDay: tickOfDay(w),
       ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, monthsPerEpoch: P.monthsPerEpoch, epoch: w.epoch,
       ...(usesLawSemantics2(w) ? { lawSemanticsVersion: 2, lawProtection: lawProtectionView(w) } : {}),
       paused: w.paused, revealed: w.revealed, map: w.map,
@@ -413,4 +414,9 @@ export function publicEvent(w, ev, { released = false } = {}) {
 /** 造者能看到的事件（owner 类事件据 agent 字段确定可见者；delayed 立即可见） */
 export function ownerEvent(ev) {
   return ev.vis === 'owner' || ev.vis === 'delayed' ? ev : null;
+}
+
+function publicTokens(w) {
+  const { max, ...caps } = capDistribution(w);
+  return { capacity: w.tokens.capacity, basic: w.tokens.basic, supply: w.well.supply, upgradeLevel: w.well.upgrades.length, caps };
 }

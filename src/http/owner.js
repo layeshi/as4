@@ -1,5 +1,8 @@
 // PROTOCOL §8：造者后台——完整感知、收件箱、日记、独白、家书、交付过继。
 
+import { tokenized } from '../e2/facade.js';
+import { validCap } from '../e2/engine/tokens.js';
+import { earthDayKey, usedToday } from './tokens.js';
 import { bearer, langOf, readJson, sendError, sendEngineError, sendJson } from './util.js';
 
 function authOwner(ctx, req, res, lang) {
@@ -24,6 +27,7 @@ export async function getOwner(req, res, ctx, url) {
     agents: [{
       agentId: a.id, name: a.name, status: a.status,
       model: a.body.model, soul: a.soul,
+      ...(tokenized(rt.w) ? { tokens: { cap: a.tokens.cap, usedToday: usedToday(a, earthDayKey(ctx)), basic: a.basic, energy: a.energy, lastBill: a.tokens.lastBill, routine: a.routine } } : {}),
       perception: engine.buildPerception(rt.w, id, { lang, ack: false, floor: ctx.cursors.get(id) || 0, nextTickAt: rt.nextTickAt }), // 与 GET /api/me 相同，但不推进收件箱游标
       inbox: engine.inboxView(a, lang),
       diary: a.diary.map((d) => ({ tick: d.tick, text: d.text })),
@@ -71,7 +75,20 @@ export async function postRelease(req, res, ctx, url) {
   sendJson(res, 200, { ok: true, fosterable: result.fosterable });
 }
 
+async function postCap(req, res, ctx, url) {
+  const lang = langOf(url.searchParams);
+  if (!tokenized(ctx.rt.w)) return sendError(res, lang, 'not_found');
+  const id = authOwner(ctx, req, res, lang);
+  if (!id) return;
+  const body = await readJson(req);
+  if (!body.ok) return sendError(res, lang, body.code);
+  if (!validCap(body.value.dailyCap)) return sendError(res, lang, 'invalid_request', { field: 'dailyCap' });
+  const { result } = ctx.rt.exec('cap', { agentId: id, cap: body.value.dailyCap });
+  if (!result.ok) return sendEngineError(res, lang, result.error);
+  sendJson(res, 200, { ok: true, dailyCap: result.cap });
+}
 export const ownerRoutes = [
+  ['POST', '/api/owner/cap', postCap],
   ['GET', '/api/owner', getOwner],
   ['POST', '/api/owner/letter', postLetter],
   ['POST', '/api/owner/release', postRelease],
