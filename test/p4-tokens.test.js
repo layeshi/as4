@@ -4,6 +4,7 @@ import { bareWorld, reg, grant, tickDays, act } from './e2-helpers.js';
 import { payThinking, custodyOf, settleTokens, initialTokens } from '../src/e2/engine/tokens.js';
 import { checkConservation } from '../src/e2/engine/ledger.js';
 import { releaseAgent } from '../src/e2/engine/lifecycle.js';
+import { runActions } from '../src/e2/engine/actions.js';
 import e2 from '../src/e2/facade.js';
 const world = () => bareWorld('p4-tokens', { premise: 4, tokens: { capacity: 6000, basic: 4000 } });
 const resident = (w, name = '甲', cap = 100000) => reg(w, name, { dailyCap: cap });
@@ -29,7 +30,7 @@ test('P4 T5/T6: thinking checks cap before balance, spends basic first, rolls Ea
 
 test('P4 T6: allowance cannot be given; settlement expires old allowance before issuing and keeping', () => {
   const w = world(), a = resident(w), b = resident(w, '乙', 0);
-  assert.equal(act(w, a, [{ type: 'give', to: b.id, energy: 1 }]).results[0].error.code, 'insufficient_energy');
+  assert.equal(runActions(w, a, [{ type: 'give', to: b.id, energy: 1 }])[0].error.code, 'insufficient_energy');
   assert.equal(a.basic, 4000);
   a.memories.push({ text: '短记忆', tick: 0, day: 0 });
   const custody = custodyOf(a);

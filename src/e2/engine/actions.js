@@ -1,3 +1,5 @@
+import { actionWeight, payThinking, recordThinking, tokenView, activeWaking, validMeterDay } from './tokens.js';
+import { routineHandlers } from './actions/routine.js';
 import { prayerHandlers } from './actions/prayers.js';
 import { prayersEnabled } from './prayer-rewards.js';
 // SPEC-E2 §7.6、§16、PROTOCOL-2 §4：动作的注册与分发、行动预算、规则的接入。
@@ -6,7 +8,7 @@ import { prayersEnabled } from './prayer-rewards.js';
 import { P, LIMITS } from '../params.js';
 import { ACTIONS, ACTION_ORDER, NO_BEFORE_ACTIONS, NO_AFTER_ACTIONS, isKnownAction, actionTable } from '../lore/actions.js';
 import { fmt } from '../lore/index.js';
-import { clockDay } from '../world.js';
+import { clockDay, tokenized } from '../world.js';
 import { cpLength, normalizeText, truncateCp } from '../../text.js';
 import { screen } from '../../moderation.js';
 import { ActError, fail, emit, bad } from './core.js';
@@ -36,6 +38,7 @@ export const HANDLERS = {
   ...cityHandlers,
   ...descentHandlers,
   ...standingHandlers,
+  ...routineHandlers,
 };
 
 /** 注册更多的处理函数（供按领域分文件的模块在加载时使用） */
@@ -48,7 +51,7 @@ export function registerHandlers(more) {
 }
 
 /** 已注册处理函数的动作（实现进度用；测试会核对它与动作表一致） */
-export const implementedActions = (premise = 0) => Object.keys(HANDLERS).filter(actionTable(premise).isKnown);
+export const implementedActions = (premise = 0) => tokenized({ premise }) ? actionTable(premise).ORDER.filter(t => HANDLERS[t]) : Object.keys(HANDLERS).filter(actionTable(premise).isKnown);
 
 export const actionsLeft = (a) => Math.max(0, P.maxActionsPerTick - a.actsThisTick);
 
@@ -111,6 +114,13 @@ function runOne(w, a, type, act, index, lang) {
   const feeSum = feeTotals(fees);
   const reserve = plan.reserve || { energy: 0, coins: 0 };
   const cost = plan.cost || 0;
+  if (tokenized(w) && plan.thinking !== undefined) {
+    // TODO(spec): Q62 — automatic reading has no command-supplied Earth day.
+    if (!validMeterDay(w.$thinkingDay)) fail('no_waking');
+    const pay = payThinking(w, a, plan.thinking, w.$thinkingDay);
+    if (!pay.ok) fail(pay.code, null, { need: pay.need, have: pay.have });
+    recordThinking(w, a, { read: plan.thinking });
+  }
   if (a.energy < cost + (reserve.energy || 0) + feeSum.energy) fail('insufficient_energy');
   if (a.coins < (reserve.coins || 0) + feeSum.coins) fail('insufficient_coins');
   const escrow = usesLawSemantics2(w) && fees.length > 0;
@@ -180,7 +190,7 @@ export function runActions(w, a, actions, lang = 'zh') {
       continue;
     }
     a.actsThisTick++;
-    const checkpoint = usesLawSemantics2(w) ? actionCheckpoint(w) : null;
+    const checkpoint = (usesLawSemantics2(w) || tokenized(w)) ? actionCheckpoint(w) : null;
     try {
       if (!actionTable(w.premise || 0, prayersEnabled(w)).isKnown(type)) fail('invalid_args');
       const { data, spent } = runOne(w, a, type, act, i, lang);
@@ -217,14 +227,29 @@ export function actCommand(w, p) {
     if (cpLength(thought) > LIMITS.thought) thought = truncateCp(thought, LIMITS.thought);
     if (thought !== '' && !screen(thought).ok) return bad('moderated', { field: 'thought' });
   }
+  let writeWeight = 0;
+  if (tokenized(w)) {
+    if (!p.meter || !activeWaking(w, a, p.meter.wakeId)) return bad('no_waking');
+    if (!Number.isSafeInteger(p.meter.reread) || p.meter.reread < 0 || !validMeterDay(p.meter.day)) return bad('invalid_request', { field: 'meter' });
+    writeWeight = p.actions.reduce((n, action) => n + actionWeight(action), 0);
+    const write = writeWeight * P.tokenWrite;
+    const pay = payThinking(w, a, p.meter.reread + write, p.meter.day);
+    if (!pay.ok) { w.dayLog.p4.suffocated++; return bad(pay.code, { need: pay.need, have: pay.have }); }
+    recordThinking(w, a, { reread: p.meter.reread, write });
+    a.tokens.waking.refundable = false;
+  }
   // 收件确认（Q9）：HTTP 层把「已经送达」的最大 seq 放在命令里（ackSeq），世界状态里的游标只在这里推进，
   // 所以回放与崩溃恢复都能重建它。它只影响收件箱溢出时「有几条没读到」的计数。
-  if (Number.isInteger(p.ackSeq) && p.ackSeq > a.inboxCursor) a.inboxCursor = p.ackSeq;
+  if (!tokenized(w) && Number.isInteger(p.ackSeq) && p.ackSeq > a.inboxCursor) a.inboxCursor = p.ackSeq;
   if (thought) emit(w, 'thought', { vis: 'delayed', agent: a.id, place: a.place, data: { text: thought } });
-  const results = runActions(w, a, p.actions, p.lang === 'en' ? 'en' : 'zh');
+  let results;
+  if (tokenized(w)) Object.defineProperty(w, '$thinkingDay', { value: p.meter.day, configurable: true });
+  try { results = runActions(w, a, p.actions, p.lang === 'en' ? 'en' : 'zh'); }
+  finally { if (tokenized(w)) delete w.$thinkingDay; }
   return {
     ok: true,
     results,
-    you: { status: a.status, energy: a.energy, coins: a.coins, actionsLeft: actionsLeft(a), place: a.place },
+    ...(tokenized(w) ? { bill: a.tokens.bill, writeWeight } : {}),
+    you: { status: a.status, energy: a.energy, coins: a.coins, actionsLeft: actionsLeft(a), place: a.place, ...(tokenized(w) ? tokenView(a) : {}) },
   };
 }

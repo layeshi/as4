@@ -1,3 +1,5 @@
+import { tokenized } from '../../world.js';
+import { jsonWeight } from '../tokens.js';
 import { usesLawSemantics2 } from '../law-semantics.js';
 import { prayersEnabled } from '../prayer-rewards.js';
 // 立法的动作（SPEC-E2 §25 第 4 步）：propose vote draft refound sign。
@@ -147,6 +149,37 @@ function tempSet(w, scope, rules) {
   return { ...citySet({ id: 'draft', rules }), ...base };
 }
 
+// TODO(spec): Q61 — P4 previews in validate; historical worlds still preview in apply.
+function draftData(ctx, plan) {
+  const { w, lang } = ctx;
+  const pick = (i) => ({ path: i.path, code: i.code, message: lang === 'en' ? i.en : i.zh, ...(i.hint ? { hint: lang === 'en' ? i.hint.en : i.hint.zh } : {}) });
+  const lookup = staticLookup(w);
+  let data;
+  if (plan.rules !== null) {
+    const v = validateRules(plan.rules, { scope: { ...plan.scope, premise: w.premise || 0, prayers: prayersEnabled(w) }, lookup });
+    if (!v.ok) data = { ok: false, errors: v.issues.map(pick), reading: null, preview: [] };
+    else {
+      const budget = usesLawVM2(w) ? lawDiagnostics(w, v.rules) : null;
+      const scopeOpts = plan.scope.kind === 'group' ? { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'group', id: plan.scope.id } } : {};
+      data = {
+        ok: budget ? budget.ok : true,
+        ...(budget ? { staticOk: true, budget } : {}),
+        errors: [],
+        reading: { rules: renderRules(v.rules, lang, scopeOpts) },
+        preview: budget && !budget.ok ? [] : previewRules(w, tempSet(w, plan.scope, v.rules), { rng: rngCopy(w) }),
+      };
+    }
+  } else {
+    const v = validateProcedure(plan.procedure, { lookup });
+    if (!v.ok) data = { ok: false, errors: v.issues.map(pick), reading: null, preview: [] };
+    else {
+      const budget = usesLawVM2(w) ? lawDiagnostics(w, [], v.procedure) : null;
+      data = { ok: budget ? budget.ok : true, ...(budget ? { staticOk: true, budget } : {}), errors: [], reading: { procedure: renderProcedure(v.procedure, lang) }, preview: [] };
+    }
+  }
+  return data;
+}
+
 const draft = {
   validate(ctx, args) {
     const { w } = ctx;
@@ -155,35 +188,13 @@ const draft = {
     if (hasRules === hasProc) fail('invalid_args', { zh: 'draft 要给 rules 或 procedure 之一（不能都给，也不能都不给）。', en: 'draft takes either rules or procedure (not both, and not neither).' });
     const scope = parseScope(w, args.scope);
     if (hasProc && scope.kind !== 'city') fail('invalid_args', { zh: 'procedure 只能试算城法的立法程序。', en: 'A procedure can only be tried out as a city law.' });
-    return { rules: hasRules ? args.rules : null, procedure: hasProc ? args.procedure : null, scope, cost: ctx.cost(ACTIONS.draft.base) };
+    const plan = { rules: hasRules ? args.rules : null, procedure: hasProc ? args.procedure : null, scope, cost: ctx.cost(ACTIONS.draft.base) };
+    if (tokenized(w)) { plan.data = draftData(ctx, plan); plan.thinking = jsonWeight(plan.data); }
+    return plan;
   },
   apply(ctx, plan) {
     const { w, a, lang } = ctx;
-    const pick = (i) => ({ path: i.path, code: i.code, message: lang === 'en' ? i.en : i.zh, ...(i.hint ? { hint: lang === 'en' ? i.hint.en : i.hint.zh } : {}) });
-    const lookup = staticLookup(w);
-    let data;
-    if (plan.rules !== null) {
-      const v = validateRules(plan.rules, { scope: { ...plan.scope, premise: w.premise || 0, prayers: prayersEnabled(w) }, lookup });
-      if (!v.ok) data = { ok: false, errors: v.issues.map(pick), reading: null, preview: [] };
-      else {
-        const budget = usesLawVM2(w) ? lawDiagnostics(w, v.rules) : null;
-        const scopeOpts = plan.scope.kind === 'group' ? { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'group', id: plan.scope.id } } : {};
-        data = {
-          ok: budget ? budget.ok : true,
-          ...(budget ? { staticOk: true, budget } : {}),
-          errors: [],
-          reading: { rules: renderRules(v.rules, lang, scopeOpts) },
-          preview: budget && !budget.ok ? [] : previewRules(w, tempSet(w, plan.scope, v.rules), { rng: rngCopy(w) }),
-        };
-      }
-    } else {
-      const v = validateProcedure(plan.procedure, { lookup });
-      if (!v.ok) data = { ok: false, errors: v.issues.map(pick), reading: null, preview: [] };
-      else {
-        const budget = usesLawVM2(w) ? lawDiagnostics(w, [], v.procedure) : null;
-        data = { ok: budget ? budget.ok : true, ...(budget ? { staticOk: true, budget } : {}), errors: [], reading: { procedure: renderProcedure(v.procedure, lang) }, preview: [] };
-      }
-    }
+    const data = tokenized(w) ? plan.data : draftData(ctx, plan);
     emit(w, 'draft', { vis: 'internal', agent: a.id, place: a.place, data: { ok: data.ok, scope: plan.scope.kind === 'city' ? 'city' : `${plan.scope.kind}:${plan.scope.id}` } });
     return data;
   },

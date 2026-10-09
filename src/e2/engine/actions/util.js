@@ -5,8 +5,10 @@
 //   apply(ctx, plan)    → data   修改世界：框架已扣过动作代价、收费也已确认付得起
 // 这样「失败的动作不扣能量」（PROTOCOL-2 §2.2）与「费用的原子性」是结构性保证，而不是靠每个处理函数自觉。
 
+import { K } from '../tokens.js';
+import { TEXT_ONLY_P4 } from '../../lore/actions.js';
 import { LIMITS } from '../../params.js';
-import { findAgent, isAlive } from '../../world.js';
+import { findAgent, isAlive, tokenized } from '../../world.js';
 import { detectScript } from '../../../text.js';
 import { fail, needId, needText } from '../core.js';
 import { hasRelay, scaledCost } from '../places.js';
@@ -33,6 +35,8 @@ export function actionCost(w, type, base, placeId, { usesModule = false } = {}) 
   return usesModule ? scaledCost(w, placeId, b) : b;
 }
 
+export const cost4 = (w, type, base, place, opts) => TEXT_ONLY_P4.has(type) ? 0 : actionCost(w, type, base, place, opts) * K(w);
+
 export function makeCtx(w, a, index, type, lang = 'zh') {
   const ctx = {
     w,
@@ -44,7 +48,7 @@ export function makeCtx(w, a, index, type, lang = 'zh') {
     fees: [], // 规则收的费（框架填写）：[{ law, to, energy, coins }]
     /** 一次动作的代价（validate 里用）。as：按另一种动作的规则计价；usesModule：使用模块的动作，适用完好度倍率 */
     cost(base, { as = type, place = a.place, usesModule = false } = {}) {
-      return actionCost(w, as, base, place, { usesModule });
+      return tokenized(w) ? cost4(w, as, base, place, { usesModule }) : actionCost(w, as, base, place, { usesModule });
     },
     /** 把直接投入环境的能量（修缮、出工、出资）计入本动作的 cost；它们不是「动作代价」，不进 action_cost */
     invested(n) {

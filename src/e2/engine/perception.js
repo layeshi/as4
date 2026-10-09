@@ -21,7 +21,7 @@ import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNu
 import { truncateCp, cpLength } from '../../text.js';
 import { agentCap } from './economy.js';
 import { metabolismIn, weightOf } from './lifecycle.js';
-import { actionCost } from './actions/util.js';
+import { actionCost, cost4 } from './actions/util.js';
 import { isWeatherActive } from './environment.js';
 import { omensAt } from './weather.js';
 import { hasRelay, functioningModule, hasModuleAt, isFunctioning, wallInscriptions, costMultiplier, costMultiplierBp, ownerView, moduleOf } from './places.js';
@@ -394,7 +394,7 @@ function cityView(w, a, l, lang, day, costs) {
   const places = Object.values(w.places).map((p) => ({
     id: p.id, name: placeDisplayName(p, lang), district: p.district, wild: p.wild, origin: p.origin, razed: p.razed,
     modules: p.modules.map((m) => m.type), gated: hasGate(w, p.id) && !isWildOpen(w, p.id), owner: ownerView(w, p.owner),
-    moveCost: p.id === a.place || costs[p.id] === undefined ? null : costs[p.id],
+    moveCost: p.id === a.place || costs[p.id] === undefined ? null : costs[p.id] * K(w),
   }));
   const roads = Object.values(w.roads).map((r) => ({ a: r.a, b: r.b, functioning: r.condition >= P.functioningBp }));
   const residents = agentList(w).filter(isAlive).map((o) => ({ id: o.id, name: o.name, status: o.status, tags: o.tags.slice() }));
@@ -467,14 +467,14 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
     const def = ACTIONS[type];
     const base = def.base === null ? 0 : def.base;
     const usesModule = MODULE_ACTIONS.has(type) && functioningModule(here, type === 'write' ? 'archive' : type === 'epitaph' ? 'memorial' : 'board') !== null;
-    const entry = { type, cost: actionCost(w, type, base, a.place, { usesModule }), available: true };
+    const entry = { type, cost: tokenized(w) ? cost4(w, type, base, a.place, { usesModule }) : actionCost(w, type, base, a.place, { usesModule }), available: true };
     const notes = [];
     const deny = (reason) => {
       entry.available = false;
       entry.reason = reason;
     };
     // 代价的修正说明
-    if ((type === 'whisper' || type === 'broadcast') && fog) notes.push(relay ? { code: 'relayFog', text: N.relayFog } : { code: 'fog', text: N.fog });
+    if (((type === 'whisper' && !tokenized(w)) || type === 'broadcast') && fog) notes.push(relay ? { code: 'relayFog', text: N.relayFog } : { code: 'fog', text: N.fog });
     if (type === 'broadcast' && relay) notes.push({ code: 'relay', text: N.relay });
     if (type === 'internalize') notes.push({ code: 'trainCost', text: lang === 'en' ? "cost = ⌈the memory's weight ÷ 2⌉" : '代价 = ⌈这段记忆的分量 ÷ 2⌉' });
     if (type === 'move') notes.push({ code: 'distance', text: N.distance });

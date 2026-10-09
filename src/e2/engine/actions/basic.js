@@ -1,3 +1,5 @@
+import { tokenized } from '../../world.js';
+import { K } from '../tokens.js';
 import { rewardRescue } from '../prayer-rewards.js';
 // 生命与能量的动作（SPEC-E2 §25 第 3 步）：move say whisper broadcast give remember forget diary will
 // （孕育与立志见 descent.js；出资 sponsor 在第 8 步）
@@ -74,7 +76,7 @@ const whisper = {
       if (typeof args.anonymous !== 'boolean') fail('invalid_args');
       anon = args.anonymous;
     }
-    return { to, text, anon, cost: ctx.cost(anon ? P.anonymousWhisperCost : ACTIONS.whisper.base) };
+    return { to, text, anon, cost: tokenized(w) ? (anon ? (P.anonymousWhisperCost - 1) * K(w) : 0) : ctx.cost(anon ? P.anonymousWhisperCost : ACTIONS.whisper.base) };
   },
   apply(ctx, plan) {
     const { w, a } = ctx;

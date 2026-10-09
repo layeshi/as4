@@ -39,6 +39,7 @@ function tokenAdmin(w, kind, value) {
 }
 
 export function adminCommand(w, p) {
+  if (tokenized(w) && p.op === 'seed_sandbox') return bad('not_allowed');
   const args = p.args && typeof p.args === 'object' ? p.args : {};
   switch (p.op) {
     case 'law_semantics': {

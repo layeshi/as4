@@ -72,3 +72,23 @@ export function settleTokens(w, d) {
     }
   }
 }
+
+export const jsonWeight = (x) => textWeight(JSON.stringify(x));
+export function actionWeight(act) {
+  const { type, ...args } = act;
+  return jsonWeight(args);
+}
+export const rereadCost = (weight) => Math.ceil(weight * P.tokenRereadPermille / 1000);
+export const tokenView = (a) => ({ energy: a.energy, basic: a.basic, cap: a.tokens.cap, usedToday: a.tokens.used, routine: { ...a.routine }, lastBill: a.tokens.lastBill, bill: a.tokens.bill });
+export function recordThinking(w, a, parts) {
+  let total = 0;
+  for (const key of ['reread', 'read', 'write']) {
+    const n = parts[key] || 0;
+    if (a.tokens.bill) a.tokens.bill[key] += n;
+    w.dayLog.p4[key] += n;
+    total += n;
+  }
+  if (a.tokens.waking?.kind === 'wake') a.tokens.calledCost += total;
+}
+export const activeWaking = (w, a, id) => typeof id === 'string' && a.tokens.waking?.id === id && a.tokens.waking.tick === w.clock.tick;
+export const validMeterDay = (day) => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day);

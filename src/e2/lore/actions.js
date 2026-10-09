@@ -17,6 +17,8 @@
 //   verb       `before:X` / `after:X` 读法里的动词短语（SPEC-E2 附录 C.1）
 //   desc       说明
 
+import { tokenized } from '../world.js';
+
 const W = (zh, en) => ({ zh, en });
 
 export const ACTION_ORDER = Object.freeze([
@@ -265,4 +267,18 @@ const PRAYER_ACTIONS = Object.freeze({
   invent: { base: 1, place: null, module: null, params: 'title, text, ref, submission?', args: [['title', 'str'], ['text', 'str'], ['ref', 'obj'], ['submission', 'str']], where: null, verb: W('提交发明', 'submits an invention'), desc: W('提交成果名称（至多100字）、说明（至多600字），关联自己的作品或已建成工程：ref={kind:"doc"或"project",id}。获独立认定奖励10祈愿点，驳回后以submission编号补充重提。', 'Submit a title (100 characters), explanation (600), and your own work or completed project: ref={kind:"doc" or "project",id}. Independent recognition awards 10 prayer points once. Revise a rejected submission using its submission ID.') },
 });
 const PRAYER_TABLE = Object.freeze({ ...TABLE2, ACTIONS: PRAYER_ACTIONS, ORDER: Object.freeze([...ACTION_ORDER_P2, 'pray', 'invent']), isKnown: (t) => typeof t === 'string' && Object.hasOwn(PRAYER_ACTIONS, t) });
-export const actionTable = (premise = 0, prayers = false) => premise >= 2 ? (prayers ? PRAYER_TABLE : TABLE2) : premise >= 1 ? TABLE1 : TABLE0;
+export const actionTable = (premise = 0, prayers = false) => tokenized({ premise }) ? TABLE4 : premise >= 2 ? (prayers ? PRAYER_TABLE : TABLE2) : premise >= 1 ? TABLE1 : TABLE0;
+
+// Fourth premise adds only rhythm and removes shell sponsorship.
+export const TEXT_ONLY_P4 = new Set(['say', 'whisper', 'write', 'define', 'inscribe', 'epitaph', 'declare', 'diary', 'remember', 'vote', 'reveal', 'retire', 'give', 'offer', 'accept', 'cancel', 'will']);
+export const ACTION_ORDER_P4 = Object.freeze(ACTION_ORDER_P2.filter(t => t !== 'sponsor').flatMap(t => t === 'mute' ? [t, 'routine'] : [t]));
+export const ACTIONS_P4 = Object.freeze({
+  ...Object.fromEntries(Object.entries(ACTIONS_P2).filter(([t]) => t !== 'sponsor')),
+  routine: { base: 0, place: null, module: null, where: null, inner: true, params: 'every?, called?, brief?', args: [['every', 'int'], ['called', 'bool'], ['brief', 'str']],
+    verb: W('定下作息', 'sets a rhythm'),
+    desc: W('定下你的作息：every 是每隔几刻按时醒来一次（1–36；0 = 不按时醒来），called 是被找上门时醒不醒，brief 是醒来时概要的详略（full 全部 / short 只有此刻、你、收件与记忆）。至少给一个，没给的不变。每次醒来都要付钱。内心：任何规则都不能拒绝、收费或读取。', 'Set your rhythm: every is how many ticks between scheduled wakings (1–36; 0 = no scheduled waking), called is whether you wake when someone seeks you, brief is how much summary you see when you wake (full / short: only now, yourself, your inbox and your memories). Give at least one; the rest stay as they are. Every waking costs tokens. Inner life: no rule can refuse, charge or read it.') },
+});
+export const INNER_ACTIONS_P4 = Object.freeze(ACTION_ORDER_P4.filter(t => ACTIONS_P4[t].inner));
+export const NO_BEFORE_ACTIONS_P4 = Object.freeze(ACTION_ORDER_P4.filter(t => ACTIONS_P4[t].inner || ACTIONS_P4[t].noBefore));
+export const NO_AFTER_ACTIONS_P4 = INNER_ACTIONS_P4;
+export const TABLE4 = Object.freeze({ ACTIONS: ACTIONS_P4, ORDER: ACTION_ORDER_P4, INNER: INNER_ACTIONS_P4, NO_BEFORE: NO_BEFORE_ACTIONS_P4, NO_AFTER: NO_AFTER_ACTIONS_P4, isKnown: t => typeof t === 'string' && Object.hasOwn(ACTIONS_P4, t) });

@@ -7,7 +7,7 @@ import { P, LIMITS } from '../../params.js';
 import { ACTIONS } from '../../lore/actions.js';
 import { relicByN, relicTitle } from '../../lore/index.js';
 import { HUMAN_DEFS } from '../../map/index.js';
-import { clockDay, nextId } from '../../world.js';
+import { clockDay, nextId, tokenized } from '../../world.js';
 import { next, int } from '../../../rng.js';
 import { source, sink } from '../ledger.js';
 import { fail, emit, pushInbox, ref, needText, optLang, needInt, needId } from '../core.js';
@@ -115,7 +115,7 @@ const inscribe = {
     } else if (wall.length >= place.wallSlots) {
       fail('wall_full');
     }
-    return { text, lang, target, base, cost: ctx.cost(base) }; // 铭刻不使用模块，不受倍率影响
+    return { text, lang, target, base, cost: tokenized(w) ? (target ? base * K(w) : 0) : ctx.cost(base) }; // 铭刻不使用模块，不受倍率影响
   },
   apply(ctx, plan) {
     const { w, a } = ctx;

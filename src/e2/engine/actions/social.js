@@ -1,3 +1,6 @@
+import { tokenized } from '../../world.js';
+import { jsonWeight } from '../tokens.js';
+import { costMultiplierBp } from '../places.js';
 // 社会的动作（SPEC-E2 §25 第 3 步）：
 //   社群  found join leave admit steward disburse
 //   交易  offer accept cancel
@@ -326,6 +329,28 @@ const write = {
   },
 };
 
+// TODO(spec): Q61 — read lives in social.js; prepare exactly the returned data before charging.
+function readData(ctx, plan) {
+  const { w } = ctx;
+  if (plan.kind === 'doc') {
+    const d = plan.d;
+    const author = d.author ? { id: d.author, name: w.agents[d.author].name } : null;
+    if (d.redacted) return { doc: { id: d.id, kind: d.kind, redacted: true } };
+    return { doc: { id: d.id, kind: d.kind, title: d.title, body: d.body, lang: d.lang, author, ref: d.ref } };
+  }
+  if (plan.kind === 'law') return { law: lawView(w, plan.law, ctx.lang) };
+  if (plan.kind === 'agent') return { agent: agentProfile(w, plan.t) };
+  const ins = plan.ins;
+  return { inscription: { id: ins.id, text: ins.text, lang: ins.lang, day: Math.floor(ins.tick / P.ticksPerDay) } };
+}
+function readPlan(ctx, plan) {
+  if (tokenized(ctx.w)) {
+    plan.data = readData(ctx, plan);
+    plan.thinking = Math.ceil(jsonWeight(plan.data) * (plan.kind === 'doc' ? costMultiplierBp(ctx.w.places[ctx.a.place]) : 10000) / 10000);
+  }
+  return plan;
+}
+
 const read = {
   validate(ctx, args) {
     const { w, a } = ctx;
@@ -337,25 +362,25 @@ const read = {
       if (!hasModuleAt(w, a.place, 'archive')) fail('no_module', null, { module: 'archive' });
       const d = Object.prototype.hasOwnProperty.call(w.docs, args.doc) ? w.docs[args.doc] : null;
       if (!d) fail('not_found');
-      return { kind, d, cost: ctx.cost(ACTIONS.read.base, { usesModule: true }) };
+      return readPlan(ctx, { kind, d, cost: ctx.cost(ACTIONS.read.base, { usesModule: true }) });
     }
     if (kind === 'inscription') {
       needId(args.inscription);
       const ins = Object.prototype.hasOwnProperty.call(w.inscriptions, args.inscription) ? w.inscriptions[args.inscription] : null;
       if (!ins || ins.coveredBy || ins.redacted || ins.lost) fail('not_found');
       if (ins.place !== a.place) fail('wrong_place');
-      return { kind, ins, cost: ctx.cost(ACTIONS.read.base) };
+      return readPlan(ctx, { kind, ins, cost: ctx.cost(ACTIONS.read.base) });
     }
     if (kind === 'law') {
       needId(args.law);
       const law = Object.prototype.hasOwnProperty.call(w.laws, args.law) ? w.laws[args.law] : null;
       if (!law) fail('not_found');
-      return { kind, law, cost: ctx.cost(ACTIONS.read.base) };
+      return readPlan(ctx, { kind, law, cost: ctx.cost(ACTIONS.read.base) });
     }
     // agent：一位居民的公开档案（介绍、志、标签、世代、作者、子女、年龄、状态、社群）
     const t = findAgent(w, needId(args.agent));
     if (!t) fail('not_found');
-    return { kind, t, cost: ctx.cost(ACTIONS.read.base) };
+    return readPlan(ctx, { kind, t, cost: ctx.cost(ACTIONS.read.base) });
   },
   apply(ctx, plan) {
     const { w, a } = ctx;
@@ -367,10 +392,12 @@ const read = {
       w.dayLog.reads++;
       if (d.kind === 'canon') w.dayLog.canonReads++;
       emit(w, 'read', { agent: a.id, place: a.place, data: { docId: d.id, title: d.title } });
+      if (tokenized(w)) return plan.data;
       const author = d.author ? { id: d.author, name: w.agents[d.author].name } : null;
       if (d.redacted) return { doc: { id: d.id, kind: d.kind, redacted: true } };
       return { doc: { id: d.id, kind: d.kind, title: d.title, body: d.body, lang: d.lang, author, ref: d.ref } };
     }
+    if (tokenized(w)) return plan.data;
     if (plan.kind === 'law') return { law: lawView(w, plan.law, ctx.lang) };
     if (plan.kind === 'agent') return { agent: agentProfile(w, plan.t) };
     const ins = plan.ins;
