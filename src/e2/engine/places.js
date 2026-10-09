@@ -1,3 +1,4 @@
+import { ep } from './tokens.js';
 // SPEC-E2 §4.3、§10.1–§10.4：地点与模块的查询——模块是否运转、代价倍率、初始能量系数、储能的腐坏上限。
 //
 // 一座建筑能做什么，只取决于里面装了什么模块（DESIGN §6.3）。模块「运转」的条件：所在地点不是遗址，
@@ -84,7 +85,7 @@ export function storeCount(w, ownerKind, ownerId) {
 
 /** 储能给主人增加的腐坏上限：reservoirCapacity × min(3, 数量) */
 export function reservoirBonus(w, ownerKind, ownerId) {
-  return P.reservoirCapacity * Math.min(P.reservoirMaxPerOwner, storeCount(w, ownerKind, ownerId));
+  return ep(w, 'reservoirCapacity') * Math.min(P.reservoirMaxPerOwner, storeCount(w, ownerKind, ownerId));
 }
 
 // ── 所有权 ─────────────────────────────────────────────────

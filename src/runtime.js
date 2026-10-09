@@ -4,6 +4,7 @@
 // 在隔离副本执行，持久化请求与结果回执后才提交状态、事件和唤醒。
 // 每日结算发生的那条 tick 命令执行完之后写快照（所以快照的状态与 commandN 严格对应）。
 
+import { tokenized } from './e2/facade.js';
 import { usesLawSemantics2 } from './e2/engine/law-semantics.js';
 import { commitCommandCandidate, makeReceipt } from './command-receipt.js';
 import { engineOf, engineForPhysics } from './engines.js';
@@ -237,6 +238,14 @@ export class Runtime {
  */
 function genesisInputs(cfg) {
   const out = { sandboxShells: cfg.sandboxAgents > 0 };
+  if (tokenized(cfg)) {
+    if ((cfg.shellSlots ?? 0) !== 0) throw new Error('PREMISE=4 requires SHELL_SLOTS=0');
+    if (cfg.foundersFile) throw new Error('PREMISE=4 forbids FOUNDERS_FILE');
+    if ((cfg.sandboxAgents ?? 0) !== 0) throw new Error('PREMISE=4 requires SANDBOX_AGENTS=0');
+    if ((cfg.tokenBasic ?? 18000) < 4000) throw new Error('TOKEN_BASIC must be >= 4000');
+    out.shellSlots = 0;
+    out.tokens = { capacity: cfg.tokenCapacity ?? 1100000, basic: cfg.tokenBasic ?? 18000 };
+  }
   if (cfg.premise != null) out.premise = cfg.premise;
   if (cfg.shellSlots !== null && cfg.shellSlots !== undefined) out.shellSlots = cfg.shellSlots;
   if (cfg.foundersFile) out.founders = JSON.parse(readFileSync(cfg.foundersFile, 'utf8'));

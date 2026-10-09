@@ -1,3 +1,4 @@
+import { ep, K } from '../tokens.js';
 import { rewardRepair } from '../prayer-rewards.js';
 // 环境层的动作（SPEC-E2 §25 第 3 步）：repair draw inscribe explore
 // （initiate contribute dismantle 在第 6 步）
@@ -66,7 +67,7 @@ const draw = {
   validate(ctx, args) {
     const { w, a } = ctx;
     if (w.places[a.place].landmark !== 'well') fail('wrong_place');
-    const energy = needInt(args.energy, { min: 1, max: P.drawMaxPerAction });
+    const energy = needInt(args.energy, { min: 1, max: ep(w, 'drawMaxPerAction') });
     if (w.well.drawPoolLeft <= 0) fail('pool_exhausted');
     if (energy > w.well.drawPoolLeft) fail('pool_exhausted', { zh: `今日汲取池只剩 ${w.well.drawPoolLeft}。`, en: `Only ${w.well.drawPoolLeft} is left in today's draw pool.` });
     // 没有物理的配额：限额是法律的事（before:draw 的规则）
@@ -165,7 +166,7 @@ const explore = {
     let doc = null;
     if (r < pE) {
       outcome = 'energy';
-      amount = Math.min(wilds.energy, P.exploreEnergyBase + int(rng, P.exploreEnergySpan));
+      amount = Math.min(wilds.energy, (P.exploreEnergyBase + int(rng, P.exploreEnergySpan)) * K(w));
       wilds.energy -= amount;
       a.energy += amount;
       source(w, 'energy', 'wilds', amount);

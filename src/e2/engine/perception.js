@@ -1,3 +1,4 @@
+import { ep, K } from './tokens.js';
 import { prayerView, prayersEnabled } from './prayers.js';
 // SPEC-E2 §17、PROTOCOL-2 §3：为一位居民构建感知（协议 2）——只含它该看到的。
 //
@@ -180,7 +181,7 @@ function youView(w, a, l, lang, day, openOffers, openPacts) {
     id: a.id, name: a.name, lang: a.lang, bio: a.bio, purpose: a.purpose ?? null, soul: a.soul,
     status: 'awake', tags: a.tags.slice(),
     ...(prayersEnabled(w) ? { prayerPoints: w.prayers.accounts[a.id]?.balance || 0, prayers: prayerView(w, a.id, { recent: 20 }) } : {}),
-    energy: a.energy, energyCap: agentCap(w, a), floor: P.lawFloor, coins: a.coins,
+    energy: a.energy, energyCap: agentCap(w, a), floor: ep(w, 'lawFloor'), coins: a.coins,
     place: a.place,
     ageDays: day - a.bornDay, generation: a.generation,
     authors: a.authors.map((id) => refId(w, id)).filter(Boolean),
@@ -307,7 +308,7 @@ function hereView(w, a, l, lang, wallList, openOffers) {
     const hist = w.well.outputHistory;
     here.well = { outputYesterday: hist.length ? hist[hist.length - 1] : null, drawPoolLeft: w.well.drawPoolLeft, condition: cond(l, w.places.well.condition, true) };
   } else if (place.explorable) {
-    const band = richnessBand(w.regions[a.place].energy, HUMAN_DEFS[a.place].wild.energyMax);
+    const band = richnessBand(w.regions[a.place].energy, HUMAN_DEFS[a.place].wild.energyMax * K(w));
     here.wilds = { richness: band, text: l.richnessWild[band] };
   }
   return here;
@@ -327,14 +328,14 @@ function lawEntry(w, law, lang) {
     id: law.id, title: lawTitle(law, lang), author: authorView(w, law.author), enactedDay: Math.floor(law.enactedTick / P.ticksPerDay),
     text: clipText(lawText(law, lang), P.lawTextInPerception), reading: clipText(text, P.readingInPerception),
     suspended: !isProcedureLaw(law) && persistentCount(law.rules) > 0 && isSuspended(w, law),
-    ...(agentic(w) ? rulesNotes(law.rules) : {}),
+    ...(agentic(w) ? rulesNotes(law.rules, w) : {}),
     ...(law.enact ? { enact: structuredClone(law.enact) } : {}),
   };
 }
 
 /** 第二前提：一份规则每日的维持费，以及它会不会宣告（宣告的费用由持有者另付；SPEC-P2 §4.2） */
-function rulesNotes(rules) {
-  return { upkeep: P.ruleUpkeep * persistentCount(rules || []), announces: hasAnnounce(rules) };
+function rulesNotes(rules, w) {
+  return { upkeep: ep(w, 'ruleUpkeep') * persistentCount(rules || []), announces: hasAnnounce(rules) };
 }
 
 function procedureView(w, cls, lang) {
@@ -367,7 +368,7 @@ function proposalEntry(w, a, p, lang) {
     ballots: p.secret ? null : Object.entries(p.votes).map(([id, v]) => ({ voter: refId(w, id), choice: v.choice, reason: v.reason })),
     yourVote: p.votes[a.id] ? { choice: p.votes[a.id].choice, reason: p.votes[a.id].reason } : null,
     eligible: p.voters.includes(a.id),
-    ...(agentic(w) ? rulesNotes(p.rules) : {}),
+    ...(agentic(w) ? rulesNotes(p.rules, w) : {}),
   };
 }
 

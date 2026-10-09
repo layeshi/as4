@@ -1,3 +1,4 @@
+import { ep } from './tokens.js';
 import { prayersEnabled } from './prayer-rewards.js';
 import { usesLawSemantics2 } from './law-semantics.js';
 // SPEC-E2 §7.5–§7.7：规则的执行——时机的接入、调用（收集 → 施行）、操作的施行。
@@ -668,7 +669,7 @@ function opEvent(w, set, idx, it, res, run, extra = {}, place) {
 /** 账户的可转额：从居民 = max(0, 能量 − lawFloor)（旧币不截）；公库与社群公库 = 余额 */
 function transferable(w, acct) {
   const b = balanceOf(w, acct);
-  if (acct.k === 'agent') return { energy: Math.max(0, b.energy - P.lawFloor), coins: b.coins };
+  if (acct.k === 'agent') return { energy: Math.max(0, b.energy - ep(w, 'lawFloor')), coins: b.coins };
   return b;
 }
 

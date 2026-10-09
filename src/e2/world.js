@@ -5,6 +5,7 @@
 // （均已登记在 docs/QUESTIONS.md）：w.genesis（回放需要的创建参数）。v1 登记过的私有簿记
 // （recentSpeech、redacted、legacy、Place.history、Soul.judged ……）第二纪沿用。
 
+import { K, ep } from './engine/tokens.js';
 import { P, LIMITS, epochDays } from './params.js';
 import { createStreams, shuffle } from '../rng.js';
 import { nameKey, normalizeText, cpLength, textWeight } from '../text.js';
@@ -14,13 +15,15 @@ import { MAP, LOT_IDS } from './map/index.js';
 import { GENESIS_STEPS } from './genesis.js';
 
 export const WORLD_VERSION = 2;
+export const tokenized = (w) => w.premise === 4;
 export const premised = (w) => (w.premise || 0) >= 1;
 /** 第二前提（SPEC-P2 §2.2）：设定版本 2，包含设定 1 的全部机制；第二前提的新判断一律用它 */
 export const agentic = (w) => (w.premise || 0) >= 2;
 
 /** 当日摘要，供指标与史官使用，日终清空（§4.1 dayLog） */
-export function newDayLog(p1 = false, p2 = false) {
+export function newDayLog(p1 = false, p2 = false, p4 = false) {
   return {
+    ...(p4 ? { p4: { wakes: 0, called: 0, refusedTokens: 0, refusedCap: 0, suffocated: 0, reread: 0, read: 0, write: 0, refunded: 0, basicIssued: 0, basicExpired: 0, custody: 0, upgradesBuilt: 0, dividends: 0 } } : {}),
     output: 0, // 源井日产
     ration: 0, // 当日公库的每日分配（遗法 l3 的配给）：每人所得
     rationed: 0, // 领到的人数
@@ -135,15 +138,20 @@ export function validateFounders(list, { premise = 0 } = {}) {
 
 export function createWorld({
   id = 'baihua', seed, codeVersion = '0.0.0', sandboxAdoption = false, map = 'frontier',
-  founders = [], shellModels = [], sandboxShells = false, shellSlots = P.shellSlots, premise = 0, lawSemanticsVersion,
+  founders = [], shellModels = [], sandboxShells = false, shellSlots, premise = 0, lawSemanticsVersion, tokens = {},
 } = {}) {
+  if (shellSlots === undefined) shellSlots = tokenized({ premise }) ? 0 : P.shellSlots;
   if (typeof seed !== 'string' || seed === '') throw new Error('createWorld: seed is required');
   if (lawSemanticsVersion !== undefined && lawSemanticsVersion !== 2) throw new Error('createWorld: lawSemanticsVersion must be 2');
   if (map !== 'frontier') throw new Error(`createWorld: 第二纪只支持 frontier 地图，得到 ${map}`);
   if (!Number.isSafeInteger(shellSlots) || shellSlots < 0) throw new Error(`createWorld: shellSlots must be a non-negative integer, got ${shellSlots}`);
 
-  if (premise !== 0 && premise !== 1 && premise !== 2) throw new Error('PREMISE 只能是 0、1 或 2');
+  if (premise !== 0 && premise !== 1 && premise !== 2 && premise !== 4) throw new Error('PREMISE 只能是 0、1、2 或 4');
   if (premise >= 1 && founders.length > shellSlots) throw new Error('设定 1 的世界里，先民不能多于躯壳');
+  if (tokenized({ premise }) && (shellSlots !== 0 || founders.length || sandboxShells || sandboxAdoption)) throw new Error('PREMISE=4 requires no shells, founders or sandbox');
+  const capacity = tokenized({ premise }) ? tokens.capacity ?? 1100000 : 1100000;
+  const basic = tokenized({ premise }) ? tokens.basic ?? 18000 : 18000;
+  if (tokenized({ premise }) && (!Number.isSafeInteger(capacity) || capacity <= 0 || !Number.isSafeInteger(basic) || basic < 4000)) throw new Error('TOKEN_CAPACITY must be positive; TOKEN_BASIC must be >= 4000');
   const sorted = validateFounders(founders, { premise });
   const models = shellModels.slice();
 
@@ -212,12 +220,20 @@ export function createWorld({
     w.genesis.premise = premise;
     w.backstage = { code: null, bodies: null, budget: null };
     w.shells.bodies = Array.from({ length: shellSlots }, (_, i) => ({ id: `b${i + 1}`, model: models.length ? models[i % models.length] : '', occupant: null, vacantSince: 0, trained: [], pending: [] }));
-    w.dayLog = newDayLog(true, premise === 2);
+    w.dayLog = newDayLog(true, premise >= 2, tokenized(w));
   }
 
   if (lawSemanticsVersion === 2) {
     w.lawSemantics = { version: 2 };
     w.genesis.lawSemanticsVersion = 2;
+  }
+
+  if (tokenized(w)) {
+    w.genesis.tokens = { capacity, basic };
+    w.tokens = { capacity, k: Math.max(1, Math.round(capacity / P.wellBaseOutput)), basic };
+    w.well.supply = 1000;
+    w.well.upgrades = [];
+    w.well.drawPoolLeft = ep(w, 'wellDrawPoolPerDay');
   }
 
   seedPlaces(w);
@@ -253,8 +269,8 @@ function seedPlaces(w) {
       decayPerDay: def.decay,
       wallSlots: def.walls,
       modules: def.modules.map((type) => ({ type, salvage: 0, builtDay: null, projectId: null, inherent: true })),
-      salvage: def.salvage,
-      salvageMax: def.salvage,
+      salvage: def.salvage * K(w),
+      salvageMax: def.salvage * K(w),
       owner: { kind: 'city' },
       rules: null,
       ruined: false,
@@ -307,7 +323,7 @@ function seedWilds(w) {
   for (const def of MAP.places) {
     if (!def.wild) continue;
     w.regions[def.id] = {
-      energy: def.wild.energyMax,
+      energy: def.wild.energyMax * K(w),
       coins: def.wild.coins,
       relicOrder: shuffle(w.rng.world, def.wild.relics.map(String)),
       relicsFound: 0,
@@ -328,6 +344,7 @@ export function genesisOpts(snap) {
     shellModels: g.shellModels,
     sandboxShells: !!snap.sandboxShells,
     premise: g.premise,
+    ...(tokenized(snap) ? { tokens: { ...g.tokens } } : {}),
     ...(g.lawSemanticsVersion === 2 ? { lawSemanticsVersion: 2 } : {}),
     shellSlots: g.shellSlots, // 早期的快照没有这一项：undefined → 缺省的 P.shellSlots，与当时的创建一致
   };

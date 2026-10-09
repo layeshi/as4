@@ -1,3 +1,4 @@
+import { K } from './tokens.js';
 import { prayersEnabled, recordNaturalDamage, consumeNaturalRepair } from './prayer-rewards.js';
 // SPEC-E2 §6、§10.3：环境——完好度、修缮、衰败与受损、源井产出、汲取、荒野。
 // （工程、模块的加装、拆解与遗址见 projects.js、dismantle.js。）
@@ -67,7 +68,8 @@ function markRuin(w, obj, target, place) {
  */
 export function applyRepair(w, obj, target, place, energy) {
   const from = obj.condition;
-  const { cond, spent } = repairCalc(from, energy);
+  const { cond, spent: units } = repairCalc(from, Math.floor(energy / K(w)));
+  const spent = units * K(w);
   obj.condition = cond;
   if (obj.ruined && cond >= P.repairLowBp) {
     obj.ruined = false;
@@ -105,5 +107,5 @@ export function decayAll(w) {
 
 /** 汲取：每汲取 1 能量，源井完好度下降 drawDamageBp 基点 */
 export function damageWellByDraw(w, amount) {
-  return applyDamage(w, w.places.well, 'well', 'well', P.drawDamageBp * amount);
+  return applyDamage(w, w.places.well, 'well', 'well', Math.floor(P.drawDamageBp * amount / K(w)));
 }

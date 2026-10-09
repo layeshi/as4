@@ -1,3 +1,4 @@
+import { ep } from './tokens.js';
 // SPEC-E2 §11：灵魂与出生——孕育（1–5 位作者）、灵魂、传灯、出生地、领养。
 //
 // 灵魂（Soul）是摇篮里等待身体的人：作者们写下它的名字与灵魂，付出它的初始能量（endowment，共 birthCost = 40，由作者们平摊）。
@@ -164,7 +165,7 @@ export function lightSuccessor(w, a) {
     emit(w, 'successor', { agent: a.id, data: { from: a.id, name: s.name, failed: true } });
     return null;
   }
-  const e = Math.min(P.successorMax, a.energy);
+  const e = Math.min(ep(w, 'successorMax'), a.energy);
   a.energy -= e;
   const memories = [];
   for (const i of s.memories || []) {

@@ -1,3 +1,4 @@
+import { ep, K } from './tokens.js';
 // SPEC-E2 §14：每刻与每日结算，严格按规格的顺序。
 // 结算时钟面已是 12(d+1)：设刚结束的那一日为 d，「今日」= d，「明日」= d + 1。
 //
@@ -5,7 +6,7 @@
 
 import { completeTraining } from './bodies.js';
 import { P, epochDays } from '../params.js';
-import { agentList, clockDay, newDayLog, premised, agentic } from '../world.js';
+import { agentList, clockDay, newDayLog, premised, agentic, tokenized } from '../world.js';
 import { emit, setSettling } from './core.js';
 import { produceWell, decayEnergy } from './economy.js';
 import { applyMetabolism, applyDeaths } from './lifecycle.js';
@@ -68,9 +69,9 @@ function restoreDaily(w) {
   for (const id of WILD_ZONE_IDS) {
     const pool = w.regions[id];
     const spec = HUMAN_DEFS[id].wild;
-    pool.energy = Math.min(spec.energyMax, pool.energy + spec.regen);
+    pool.energy = Math.min(spec.energyMax * K(w), pool.energy + spec.regen * K(w));
   }
-  w.well.drawPoolLeft = P.wellDrawPoolPerDay;
+  w.well.drawPoolLeft = ep(w, 'wellDrawPoolPerDay');
   for (const a of agentList(w)) {
     a.drawnToday = 0;
     a.repairedToday = 0;
@@ -123,7 +124,7 @@ export function dailySettlement(w, d) {
       emit(w, 'ledger_mismatch', { vis: 'internal', data: chk });
     }
     closeLedgerDay(w);
-    w.dayLog = newDayLog(premised(w), agentic(w)); // 18
+    w.dayLog = newDayLog(premised(w), agentic(w), tokenized(w)); // 18
     if (d + 1 === epochDays()) {
       // 19 纪元结束：暂停并记「大沉睡」（快照由运行时在命令结束后写入）
       w.paused = true;

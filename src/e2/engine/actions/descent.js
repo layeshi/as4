@@ -8,6 +8,7 @@
 // consent 同意一份孕育之约，付自己的份额。
 // declare 写下或改写公开的「志」与自我介绍。
 
+import { K } from '../tokens.js';
 import { P, LIMITS } from '../../params.js';
 import { ACTIONS } from '../../lore/actions.js';
 import { clockDay, nextId, findAgent, isAlive, isNameTaken, premised } from '../../world.js';
@@ -47,9 +48,9 @@ function pickMemories(w, a, v) {
 }
 
 /** 份额（§11.1）：k 位作者，每人 floor(birthCost / k)，余数由发起者付 */
-export function sharesFor(k) {
-  const each = Math.floor(P.birthCost / k);
-  return { each, initiator: P.birthCost - each * (k - 1) };
+export function sharesFor(k, w = {}) {
+  const each = Math.floor(P.birthCost * K(w) / k);
+  return { each, initiator: P.birthCost * K(w) - each * (k - 1) };
 }
 
 const conceive = {
@@ -83,7 +84,7 @@ const conceive = {
     }
     if (isNameTaken(w, name)) fail('name_taken');
     const k = 1 + withIds.length;
-    const { initiator } = sharesFor(k);
+    const { initiator } = sharesFor(k, w);
     return { name, soul, lang, withIds, memories, cradle, k, share: initiator, cost: ctx.cost(ACTIONS.conceive.base), reserve: { energy: initiator } };
   },
   apply(ctx, plan) {
@@ -100,7 +101,7 @@ const conceive = {
       return { soul: s.id };
     }
     const id = nextId(w, 'c');
-    const { each } = sharesFor(plan.k);
+    const { each } = sharesFor(plan.k, w);
     const shares = {};
     for (const x of authors) shares[x] = x === a.id ? plan.share : each;
     w.pacts[id] = {

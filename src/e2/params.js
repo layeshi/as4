@@ -8,6 +8,10 @@
 
 /** §5.1 沿用 v1 的数值（时间、能量与生命、环境、探索、梦、史官、沙盘领养）与 §5.2 新增的数值 */
 export const P = {
+  // 第四前提：只在 tokenized(w) 的路径使用。
+  tokenRead: 1, tokenRereadPermille: 100, tokenWrite: 4,
+  tokenBriefInbox: 20, tokenCapMax: 50000000, tokenBasicMin: 4000,
+  upgradeStepPermille: 50, upgradeMax: 10, upgradeGrowthNum: 3, upgradeGrowthDen: 2,
   // 时间（SPEC-M1 §6.1）
   ticksPerDay: 12,
   daysPerMonth: 24,

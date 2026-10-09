@@ -19,15 +19,15 @@ test('P2 T1: PREMISE 的配置校验——0、1、2 合法，其余报错；1 �
   for (const n of ['0', '1', '2']) assert.equal(loadConfig({ PHYSICS: '2', PREMISE: n }, []).premise, Number(n));
   assert.equal(loadConfig({}, []).premise, null);
   assert.equal(loadConfig({ PREMISE: '0' }, []).premise, 0, 'PREMISE=0 不要求第二纪');
-  for (const bad of ['3', '-1', '1.5']) assert.throws(() => loadConfig({ PHYSICS: '2', PREMISE: bad }, []), /PREMISE 只能是 0、1 或 2/);
-  assert.throws(() => loadConfig({ PREMISE: '2' }, []), /PREMISE=1 或 2 只用于第二纪（PHYSICS=2）/);
-  assert.throws(() => loadConfig({ PREMISE: '1' }, []), /PREMISE=1 或 2 只用于第二纪（PHYSICS=2）/);
+  for (const bad of ['3', '-1', '1.5']) assert.throws(() => loadConfig({ PHYSICS: '2', PREMISE: bad }, []), /PREMISE 只能是 0、1、2 或 4/);
+  assert.throws(() => loadConfig({ PREMISE: '2' }, []), /PREMISE=1、2 或 4 只用于第二纪（PHYSICS=2）/);
+  assert.throws(() => loadConfig({ PREMISE: '1' }, []), /PREMISE=1、2 或 4 只用于第二纪（PHYSICS=2）/);
   assert.throws(() => loadConfig({ PREMISE: '2', PHYSICS: '1' }, []), /只用于第二纪/);
 });
 
 test('P2 T1: createWorld 的 premise 校验；先民不能多于躯壳（1 与 2 同样）', () => {
   for (const premise of [0, 1, 2]) assert.doesNotThrow(() => e2.createWorld({ seed: 'v', premise }));
-  for (const bad of [3, -1, 1.5, '2', null, true]) assert.throws(() => e2.createWorld({ seed: 'v', premise: bad }), /PREMISE 只能是 0、1 或 2/, String(bad));
+  for (const bad of [3, -1, 1.5, '2', null, true]) assert.throws(() => e2.createWorld({ seed: 'v', premise: bad }), /PREMISE 只能是 0、1、2 或 4/, String(bad));
   const founders = [0, 1, 2].map((i) => ({ day: 0, name: `先民${i}`, soul: `灵魂${i}`, lang: 'zh' }));
   for (const premise of [1, 2]) {
     assert.throws(() => e2.createWorld({ seed: 'f', premise, shellSlots: 2, founders }), /先民不能多于躯壳/);

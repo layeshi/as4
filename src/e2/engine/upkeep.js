@@ -1,3 +1,4 @@
+import { ep } from './tokens.js';
 // SPEC-E2 §7.9：维持费。
 //
 // 每日结算第 2 步，对日 d 结算，付的是 d + 1 日的维持费：
@@ -16,7 +17,7 @@ import { persistentCount } from './laws.js';
 import { STEPS } from './tick.js';
 
 /** 一份规则每日的维持费 */
-export const upkeepOf = (rules) => P.ruleUpkeep * persistentCount(rules);
+export const upkeepOf = (rules, w = {}) => ep(w, 'ruleUpkeep') * persistentCount(rules);
 
 function suspend(w, d, holder, scope, owner, title) {
   holder.suspendedDays += 1;
@@ -46,18 +47,18 @@ export function payUpkeep(w, d) {
       law.paidThrough = d + 1; // 程序免付
       continue;
     }
-    if (!pay(w, law, upkeepOf(law.rules), w.treasury, d)) suspend(w, d, law, 'city', law.id, law.title);
+    if (!pay(w, law, upkeepOf(law.rules, w), w.treasury, d)) suspend(w, d, law, 'city', law.id, law.title);
   }
   // 社群章程
   for (const g of Object.values(w.groups)) {
     if (g.dissolved || !g.bylaws) continue;
-    if (!pay(w, g.bylaws, upkeepOf(g.bylaws.rules), g.treasury, d)) suspend(w, d, g.bylaws, `group:${g.id}`, g.id, g.name);
+    if (!pay(w, g.bylaws, upkeepOf(g.bylaws.rules, w), g.treasury, d)) suspend(w, d, g.bylaws, `group:${g.id}`, g.id, g.name);
   }
   // 地点规则
   for (const p of Object.values(w.places)) {
     if (!p.rules || p.owner.kind === 'city') continue;
     const account = p.owner.kind === 'group' ? w.groups[p.owner.id].treasury : w.agents[p.owner.id];
-    if (!pay(w, p.rules, upkeepOf(p.rules.rules), account, d)) suspend(w, d, p.rules, `place:${p.id}`, p.id, p.name);
+    if (!pay(w, p.rules, upkeepOf(p.rules.rules, w), account, d)) suspend(w, d, p.rules, `place:${p.id}`, p.id, p.name);
   }
   // 常驻指令（第二前提）
   if (agentic(w)) payStanding(w, d);
@@ -73,10 +74,10 @@ function payStanding(w, d) {
     if (a.status !== 'awake' || !a.standing || a.standing.length === 0) continue;
     let unpaid = 0;
     for (const o of a.standing) {
-      if (a.energy >= P.standingUpkeep) {
-        a.energy -= P.standingUpkeep;
-        sink(w, 'energy', 'standing_upkeep', P.standingUpkeep);
-        w.dayLog.p2.standingUpkeep += P.standingUpkeep;
+      if (a.energy >= ep(w, 'standingUpkeep')) {
+        a.energy -= ep(w, 'standingUpkeep');
+        sink(w, 'energy', 'standing_upkeep', ep(w, 'standingUpkeep'));
+        w.dayLog.p2.standingUpkeep += ep(w, 'standingUpkeep');
         o.paidThrough = d + 1;
       } else unpaid++;
     }

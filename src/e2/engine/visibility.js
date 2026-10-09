@@ -1,3 +1,4 @@
+import { K } from './tokens.js';
 import { prayerView, prayersEnabled } from './prayers.js';
 // SPEC-E2 §18.1：观众视角的唯一出口（第二纪）。公共接口与 SSE 都经过这里。
 //
@@ -323,8 +324,8 @@ export function publicRegions(w) {
     const pool = w.regions[id];
     const spec = HUMAN_DEFS[id].wild;
     return {
-      id, energy: pool.energy, energyMax: spec.energyMax, regen: spec.regen, coins: pool.coins,
-      richness: richnessBand(pool.energy, spec.energyMax), relicsFound: pool.relicsFound, relics: pool.relicOrder.length,
+      id, energy: pool.energy, energyMax: spec.energyMax * K(w), regen: spec.regen * K(w), coins: pool.coins,
+      richness: richnessBand(pool.energy, spec.energyMax * K(w)), relicsFound: pool.relicsFound, relics: pool.relicOrder.length,
     };
   });
 }

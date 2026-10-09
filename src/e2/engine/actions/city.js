@@ -1,3 +1,4 @@
+import { ep, K } from '../tokens.js';
 // 城的动作（SPEC-E2 §25 第 6 步）：initiate contribute dismantle。
 //
 // initiate  发起工程：开辟新地点（site）、加装模块（module）、修路（road）。基础代价 2；同一地点进行中的工程不超过 3 个。
@@ -71,7 +72,7 @@ function planSite(ctx, args) {
     target = { on: p.id };
     wild = p.wild;
   }
-  return { ...target, name, description, owner, need: siteCost(wild) };
+  return { ...target, name, description, owner, need: siteCost(wild) * K(w) };
 }
 
 function planModule(ctx, args) {
@@ -93,7 +94,7 @@ function planModule(ctx, args) {
   if (moduleOf(place, args.module) || pending.some((j) => j.module === args.module)) fail('already');
   if (place.modules.length + pending.length >= P.modulesPerPlace) fail('limit_reached', { zh: `一座建筑至多 ${P.modulesPerPlace} 个模块。`, en: `A building holds at most ${P.modulesPerPlace} modules.` });
   if (!mayBuildOn(w, a, place)) fail('not_owner');
-  return { module: args.module, inscription, owner: { ...place.owner }, need: MODULE_DEFS[args.module].cost };
+  return { module: args.module, inscription, owner: { ...place.owner }, need: MODULE_DEFS[args.module].cost * K(w) };
 }
 
 function planRoad(ctx, args) {
@@ -102,7 +103,7 @@ function planRoad(ctx, args) {
   if (to === a.place) fail('invalid_args', { zh: '道路的另一端不能是此地。', en: 'The other end of a road cannot be this place.' });
   if (roadOrProjectBetween(w, a.place, to)) fail('already');
   const name = given(args.name) ? needName(args.name) : null;
-  return { to, name, owner: { kind: 'city' }, need: P.roadCost };
+  return { to, name, owner: { kind: 'city' }, need: ep(w, 'roadCost') };
 }
 
 const initiate = {
@@ -177,7 +178,7 @@ const dismantle = {
     const place = w.places[a.place];
     if (place.landmark) fail('landmark');
     if (place.open || place.razed) fail('nothing_left');
-    let want = P.salvagePerAction;
+    let want = ep(w, 'salvagePerAction');
     if (given(args.energy)) want = needInt(args.energy);
     let module = null;
     let left;
@@ -191,7 +192,7 @@ const dismantle = {
       left = place.salvage;
       if (left <= 0) fail('nothing_left');
     }
-    const n = Math.min(want, P.salvagePerAction, left);
+    const n = Math.min(want, ep(w, 'salvagePerAction'), left);
     return { module, n, cost: ctx.cost(ACTIONS.dismantle.base) }; // 动作代价 dismantleBase，不受倍率影响
   },
   apply(ctx, plan) {

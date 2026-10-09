@@ -1,3 +1,4 @@
+import { K } from './tokens.js';
 import { rewardProject } from './prayer-rewards.js';
 // SPEC-E2 §10.5：工程——开辟新地点（site）、加装模块（module）、修路（road）。
 //
@@ -147,7 +148,7 @@ function buildModule(w, j) {
   const place = w.places[j.place];
   place.modules.push({
     type: j.module,
-    salvage: Math.floor(MODULE_DEFS[j.module].cost / 2),
+    salvage: Math.floor(MODULE_DEFS[j.module].cost * K(w) / 2),
     builtDay: clockDay(w),
     projectId: j.id,
     inherent: false,

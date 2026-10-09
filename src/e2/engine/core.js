@@ -1,3 +1,4 @@
+import { ep } from './tokens.js';
 // 引擎的公共底座：动作级错误、事件产出、收件箱、参数校验器（第二纪，从 v1 复制后修改）。
 //
 // 事件不在这里落盘：引擎把事件放进世界上一个不可枚举的暂存区（w.$out，不进快照、不进哈希），
@@ -152,7 +153,7 @@ export function wake(w, a, by = null) {
 export function creditEnergy(w, a, n, by = null) {
   if (n <= 0) return;
   a.energy += n;
-  if (a.status === 'dormant' && a.energy >= P.reviveThreshold) wake(w, a, by);
+  if (a.status === 'dormant' && a.energy >= ep(w, 'reviveThreshold')) wake(w, a, by);
 }
 
 // ── 命令级错误（HTTP 400 / 409 / 422 一类，不是动作级） ─────────
