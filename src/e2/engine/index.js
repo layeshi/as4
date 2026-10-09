@@ -1,3 +1,4 @@
+import { meterCommand, capCommand } from './meter.js';
 import { enablePrayers, replyPrayer, reviewInvention } from './prayers.js';
 // SPEC-E2 §2：第二纪引擎的命令入口。HTTP 层、运行时与调度器只能通过这些命令改变世界。
 //
@@ -31,6 +32,8 @@ import './records.js'; // 每日指标、人类遗产存活表、史官（STEPS.
 import '../sandbox/brains.js'; // 沙盘脑 v2：每刻行动（STEPS.sandbox）、沙盘领养（STEPS.sandboxAdopt）与 admin seed_sandbox
 
 const COMMANDS = {
+  meter: meterCommand,
+  cap: capCommand,
   prayer_enable: (w) => enablePrayers(w),
   prayer_reply: (w, p) => replyPrayer(w, p),
   invention_review: (w, p) => reviewInvention(w, p),

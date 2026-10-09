@@ -79,7 +79,7 @@ export function actionWeight(act) {
   return jsonWeight(args);
 }
 export const rereadCost = (weight) => Math.ceil(weight * P.tokenRereadPermille / 1000);
-export const tokenView = (a) => ({ energy: a.energy, basic: a.basic, cap: a.tokens.cap, usedToday: a.tokens.used, routine: { ...a.routine }, lastBill: a.tokens.lastBill, bill: a.tokens.bill });
+export const tokenView = (a) => ({ energy: a.energy, basic: a.basic, cap: a.tokens.cap, usedToday: a.tokens.used, routine: { ...a.routine }, lastBill: structuredClone(a.tokens.lastBill), bill: structuredClone(a.tokens.bill) });
 export function recordThinking(w, a, parts) {
   let total = 0;
   for (const key of ['reread', 'read', 'write']) {

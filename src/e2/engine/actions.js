@@ -249,7 +249,7 @@ export function actCommand(w, p) {
   return {
     ok: true,
     results,
-    ...(tokenized(w) ? { bill: a.tokens.bill, writeWeight } : {}),
+    ...(tokenized(w) ? { bill: structuredClone(a.tokens.bill), writeWeight } : {}),
     you: { status: a.status, energy: a.energy, coins: a.coins, actionsLeft: actionsLeft(a), place: a.place, ...(tokenized(w) ? tokenView(a) : {}) },
   };
 }
