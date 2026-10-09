@@ -1,3 +1,4 @@
+import { orderedDistances } from '../graph-distance.js';
 // 地图的注册与查询。引擎、感知、可见性、沙盘脑都通过这里取「这个世界有哪些地点」，不再写死地点 ID。
 //
 // 世界状态里的 w.map 记着它用哪张地图；没有这个字段的世界（M1 以来的所有旧快照）是经典地图。
@@ -91,29 +92,26 @@ export function wildPool(w, id) {
  * only：只经过、只到达满足它的地点（被放逐者只在荒野里走）。
  * 返回 { [placeId]: cost }，到不了的地点没有键。
  */
+const routeIndex = new WeakMap();
 export function shortestCosts(map, from, { extra = [], only = null } = {}) {
-  const dist = { [from]: 0 };
-  const done = new Set();
-  for (;;) {
-    let u = null;
-    for (const id of map.placeIds) {
-      if (done.has(id) || dist[id] === undefined) continue;
-      if (u === null || dist[id] < dist[u]) u = id;
+  // Only our deeply frozen definitions, unrestricted routes and the exact ordered
+  // road list are memoized. Callers always receive their own result object.
+  const cacheable = !only && Object.values(MAPS).includes(map) && extra.every(e => typeof e.a === 'string' && typeof e.b === 'string' && Number.isFinite(e.cost));
+  let cached;
+  if (cacheable) {
+    const topology = JSON.stringify(extra);
+    cached = routeIndex.get(map);
+    if (cached?.topology !== topology) {
+      cached = { topology, routes: new Map() }; routeIndex.set(map, cached);
     }
-    if (u === null) break;
-    done.add(u);
-    const out = map.adj[u].slice();
-    for (const e of extra) {
-      if (e.a === u) out.push({ to: e.b, cost: e.cost });
-      else if (e.b === u) out.push({ to: e.a, cost: e.cost });
-    }
-    for (const { to, cost } of out) {
-      if (only && !only(to)) continue;
-      const nd = dist[u] + cost;
-      if (dist[to] === undefined || nd < dist[to]) dist[to] = nd;
-    }
+    if (cached.routes.has(from)) return { ...cached.routes.get(from) };
   }
-  return dist;
+  const edges = new Map();
+  const add = (from, to, cost) => { if (!edges.has(from)) edges.set(from, []); edges.get(from).push({ to, cost }); };
+  for (const e of extra) { add(e.a, e.b, e.cost); if (e.b !== e.a) add(e.b, e.a, e.cost); }
+  const result = orderedDistances(map.placeIds, from, id => [...map.adj[id], ...(edges.get(id) || [])], only);
+  if (cached) { if (cached.routes.size >= map.placeIds.length + 1) cached.routes.clear(); cached.routes.set(from, result); }
+  return cached ? { ...result } : result;
 }
 
 /**

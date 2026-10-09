@@ -1,3 +1,4 @@
+import { filterValues } from '../collections.js';
 // SPEC-M1 §7.4–§7.9 中与环境有关的规则：完好度、设施的「正常运转」、代价倍率、初始能量系数、
 // 源井产出、蓄能池的腐坏上限。（修缮、衰败、工程、汲取、铭刻、荒野见本文件后半部分。）
 
@@ -307,7 +308,7 @@ export function abandonExpired(w, d) {
 
 /** 某地点进行中的工程 */
 export function openProjectsAt(w, placeId) {
-  return Object.values(w.projects).filter((j) => j.status === 'open' && j.place === placeId);
+  return filterValues(w.projects, (j) => j.status === 'open' && j.place === placeId);
 }
 
 /** 两地之间是否已有道路或进行中的道路工程（不分方向） */
@@ -324,7 +325,7 @@ export function roadOrProjectBetween(w, a, b) {
 
 /** 一处地点的墙上当前可见的铭刻（未被覆盖、未被遮盖），按刻写先后 */
 export function wallInscriptions(w, placeId) {
-  return Object.values(w.inscriptions).filter((i) => i.place === placeId && !i.coveredBy && !i.redacted);
+  return filterValues(w.inscriptions, (i) => i.place === placeId && !i.coveredBy && !i.redacted, w.counters.i);
 }
 
 /** 汲取：每汲取 1 能量，源井完好度下降 drawDamageBp 基点 */

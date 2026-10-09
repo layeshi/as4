@@ -1,3 +1,4 @@
+import { withRecordQueries } from '../collections.js';
 // SPEC-M1 §11.1：引擎的命令入口。HTTP 层与调度器只能通过这些命令改变世界。
 //
 //   tick          调度器
@@ -41,7 +42,9 @@ export function applyCommand(w, cmd) {
   const handler = COMMANDS[cmd.type];
   w.commandN = cmd.n !== undefined ? cmd.n : w.commandN + 1;
   if (!handler) return { result: bad('invalid_request', { field: 'type' }), events: drainEvents(w) };
-  const result = handler(w, cmd.payload || {});
+  // TODO(spec): Q60 — derived indexes live only during this command, never in w.
+  const result = withRecordQueries([w.offers, w.pacts, w.proposals, w.inscriptions, w.laws, w.lexicon],
+    () => handler(w, cmd.payload || {}));
   return { result, events: drainEvents(w) };
 }
 

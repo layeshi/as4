@@ -1,3 +1,4 @@
+import { invalidateRecordKeys } from '../../collections.js';
 // 社会的动作（SPEC §19 第 5 步）：
 //   社群  found join leave admit steward disburse
 //   交易  offer accept cancel
@@ -288,6 +289,7 @@ function define(ctx, args) {
   if (Object.prototype.hasOwnProperty.call(w.lexicon, key)) fail('name_taken');
   ctx.pay(ACTIONS.define.base);
   w.lexicon[key] = { word, meaning, coiner: a.id, tick: w.clock.tick, uses: 0, users: [], redacted: false };
+  invalidateRecordKeys(w.lexicon);
   emit(w, 'define', { agent: a.id, place: a.place, data: { word, meaning } });
   return { word };
 }

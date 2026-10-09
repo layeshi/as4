@@ -1,4 +1,4 @@
-import { actionWeight, payThinking, recordThinking, tokenView, activeWaking, validMeterDay } from './tokens.js';
+import { K, ep, actionWeight, payThinking, recordThinking, tokenView, activeWaking, validMeterDay } from './tokens.js';
 import { routineHandlers } from './actions/routine.js';
 import { prayerHandlers } from './actions/prayers.js';
 import { prayersEnabled } from './prayer-rewards.js';
@@ -59,7 +59,7 @@ export const actionsLeft = (a) => Math.max(0, P.maxActionsPerTick - a.actsThisTi
  * invalid_args 没有带说明时，给模型一句能据以纠正的话：没有这个动作、缺哪些必填参数，或该动作的用法与说明。
  * （只是对结果的文字说明，不进入世界状态。）
  */
-function argsHint(type, act, premise = 0, prayers = false) {
+function argsHint(type, act, premise = 0, prayers = false, w = {}) {
   const { ACTIONS, ORDER: ACTION_ORDER, isKnown: isKnownAction } = actionTable(premise, prayers);
   if (!isKnownAction(type)) {
     const list = ACTION_ORDER.join(' ');
@@ -71,7 +71,8 @@ function argsHint(type, act, premise = 0, prayers = false) {
   const missing = required.filter((k) => act[k] === undefined || act[k] === null || act[k] === '');
   const sig = `${type}(${spec.params})`;
   if (missing.length) return { zh: `缺少必填参数：${missing.join('、')}。用法：${sig}`, en: `Missing required parameter(s): ${missing.join(', ')}. Usage: ${sig}` };
-  const vars = { memorySlots: P.memorySlots };
+  const vars = { memorySlots: P.memorySlots, ...(tokenized(w) ? { K: K(w), capacity: w.tokens.capacity, reviveThreshold: ep(w, 'reviveThreshold'), standingUpkeep: ep(w, 'standingUpkeep'),
+    ...Object.fromEntries([2,15,20,30,40,60].map(n => [`${n}K`, n * K(w)])) } : {}) };
   return {
     zh: `参数不合法（缺失、越界或组合不对）。用法：${sig}——${fmt(spec.desc.zh, vars)}`,
     en: `Invalid parameters (missing, out of range, or a bad combination). Usage: ${sig} — ${fmt(spec.desc.en, vars)}`,
@@ -198,7 +199,7 @@ export function runActions(w, a, actions, lang = 'zh') {
     } catch (e) {
       if (!(e instanceof ActError)) throw e;
       if (checkpoint) rollbackAction(w, a, checkpoint);
-      const hint = e.hint || (e.code === 'invalid_args' ? argsHint(type, act, w.premise || 0, prayersEnabled(w)) : null);
+      const hint = e.hint || (e.code === 'invalid_args' ? argsHint(type, act, w.premise || 0, prayersEnabled(w), w) : null);
       results.push({ index: i, type, ok: false, cost: 0, error: { code: e.code, ...(hint ? { hint } : {}), ...(e.extra || {}) } });
     }
   }

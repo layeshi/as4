@@ -20,7 +20,7 @@ import { noteWordUse } from '../society.js';
  */
 export function actionCost(w, type, base, placeId) {
   let b = base;
-  const relay = hasRelay(w);
+  const relay = (type === 'broadcast' || type === 'whisper') && hasRelay(w);
   if (type === 'broadcast') {
     if (relay) b = 3;
     if (isWeatherActive(w, 'fog') && !relay) b *= 2;

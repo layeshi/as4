@@ -1,3 +1,4 @@
+import { filterValues, tailValues } from '../../collections.js';
 import { upgradeView } from './upgrades.js';
 import { ep, K, tokenView, custodyOf } from './tokens.js';
 import { prayerView, prayersEnabled } from './prayers.js';
@@ -100,11 +101,16 @@ export function buildPerception(w, agentId, opts = {}) {
     };
   }
 
+  const allAgents = agentList(w);
+  const projectsHere = openProjectsAt(w, a.place);
+  const openProposals = filterValues(w.proposals, p => p.status === 'open');
+  const pendingRefounds = openRefounds(w);
+  const activeGroups = filterValues(w.groups, g => !g.dissolved);
   const costs = travelCosts(w, a.place); // 去各地点的路程：city.places 与 actions 里的 move 都要用，算一遍
   const wall = wallInscriptions(w, a.place); // 此处墙上可见的铭刻：here 与 actions（墙满的提示）都要用，扫一遍
   // 进行中的交易与孕育之约：you、here（告示板）、actions 都要用。交易、孕育之约关闭后仍留在表里，所以只扫一遍
-  const openOffers = Object.values(w.offers).filter((o) => o.status === 'open');
-  const openPacts = Object.values(w.pacts).filter((c) => c.status === 'open');
+  const openOffers = filterValues(w.offers, (o) => o.status === 'open');
+  const openPacts = filterValues(w.pacts, (c) => c.status === 'open');
 
   // ── 收件箱 ──
   const after = opts.after !== undefined && opts.after !== null ? opts.after : Math.max(a.inboxCursor, opts.floor || 0);
@@ -122,11 +128,11 @@ export function buildPerception(w, agentId, opts = {}) {
     lang,
     now,
     you: youView(w, a, l, lang, day, openOffers, openPacts),
-    here: hereView(w, a, l, lang, wall, openOffers),
-    city: cityView(w, a, l, lang, day, costs),
+    here: hereView(w, a, l, lang, wall, openOffers, allAgents, projectsHere),
+    city: cityView(w, a, l, lang, day, costs, allAgents, openProposals, pendingRefounds, activeGroups),
     inbox,
     inboxCursor: Math.max(a.inboxCursor, maxSeq),
-    actions: actionsView(w, a, l, lang, costs, wall.length, openOffers, openPacts),
+    actions: actionsView(w, a, l, lang, costs, wall.length, openOffers, openPacts, projectsHere, openProposals, pendingRefounds, activeGroups),
   };
 }
 
@@ -188,7 +194,7 @@ function youView(w, a, l, lang, day, openOffers, openPacts) {
     ageDays: day - a.bornDay, generation: a.generation,
     authors: a.authors.map((id) => refId(w, id)).filter(Boolean),
     children: a.children.map((id) => refId(w, id)).filter(Boolean),
-    ...(tokenized(w) ? { tokens: { ...tokenView(a), custody: custodyOf(a), wakes: a.tokens.wakes, called: a.tokens.called, calledCost: a.tokens.calledCost } } : { metabolism: metabolismIn(w, a, day) }),
+    ...(tokenized(w) ? { tokens: { ...tokenView(a), custody: custodyOf(a), wakes: a.tokens.wakesDay === day ? a.tokens.wakes : 0, called: a.tokens.wakesDay === day ? a.tokens.called : 0, calledCost: a.tokens.wakesDay === day ? a.tokens.calledCost : 0 } } : { metabolism: metabolismIn(w, a, day) }),
     ...(premised(w) ? { weight: weightOf(a), trained: bodyOf(w, a).trained.map((x) => x.text), training: bodyOf(w, a).pending.length } : {}),
     actionsLeft: Math.max(0, P.maxActionsPerTick - a.actsThisTick), maxActionsPerTick: P.maxActionsPerTick,
     drawnToday: a.drawnToday, repairedToday: a.repairedToday, salvagedToday: a.salvagedToday,
@@ -219,9 +225,9 @@ function youView(w, a, l, lang, day, openOffers, openPacts) {
 
 // ── here ───────────────────────────────────────────────────
 
-function hereView(w, a, l, lang, wallList, openOffers) {
+function hereView(w, a, l, lang, wallList, openOffers, allAgents, projectsHere) {
   const place = w.places[a.place];
-  const present = agentList(w)
+  const present = allAgents
     .filter((o) => o.id !== a.id && o.place === a.place && isAlive(o))
     .map((o) => ({ id: o.id, name: o.name, status: o.status, tags: o.tags.slice(), purpose: o.purpose ? clipText(o.purpose, P.purposeInPresent) : null }));
   const heard = w.recentSpeech
@@ -239,7 +245,7 @@ function hereView(w, a, l, lang, wallList, openOffers) {
       ...(m.type === 'surface' && m.inscription && legible ? { inscription: m.inscription } : {}),
     };
   });
-  const projects = openProjectsAt(w, a.place).map((j) => ({
+  const projects = projectsHere.map((j) => ({
     id: j.id, build: j.build, ...(j.lot ? { lot: j.lot } : {}), ...(j.on ? { on: j.on } : {}), ...(j.module ? { module: j.module } : {}), ...(j.to ? { to: j.to } : {}),
     name: j.name ?? null, need: j.need, have: j.have, contributors: Object.keys(j.contributors).length, expiresDay: j.expiresDay,
     owner: ownerView(w, j.owner), ...(j.inscription ? { inscription: j.inscription } : {}),
@@ -374,19 +380,18 @@ function proposalEntry(w, a, p, lang) {
   };
 }
 
-function cityView(w, a, l, lang, day, costs) {
+function cityView(w, a, l, lang, day, costs, allAgents, openProposals, pendingRefounds, activeGroups) {
   const seasonF = SEASON_TABLE[dayOfMonthOf(day)];
   const sBand = seasonBand(seasonF);
   const hist = w.well.outputHistory;
   const pop = { awake: 0, dormant: 0, dead: 0, retired: 0, cradle: Object.keys(w.souls).length };
-  for (const o of agentList(w)) pop[o.status]++;
-  const lexicon = Object.values(w.lexicon).slice(-P.lexiconInPerception).map((e) => ({ word: e.word, meaning: e.redacted ? l.redacted : e.meaning }));
-  const laws = Object.values(w.laws).filter((x) => x.status === 'active').sort((x, y) => idNum(y.id) - idNum(x.id)).slice(0, P.lawsInPerception).map((x) => lawEntry(w, x, lang));
+  for (const o of allAgents) pop[o.status]++;
+  const lexicon = tailValues(w.lexicon, P.lexiconInPerception).map((e) => ({ word: e.word, meaning: e.redacted ? l.redacted : e.meaning }));
+  const laws = filterValues(w.laws, (x) => x.status === 'active').sort((x, y) => idNum(y.id) - idNum(x.id)).slice(0, P.lawsInPerception).map((x) => lawEntry(w, x, lang));
   const myGroupIds = new Set(a.groups);
-  const proposals = Object.values(w.proposals)
-    .filter((p) => p.status === 'open' && (p.scope === 'city' || myGroupIds.has(p.scope.slice(6))))
+  const proposals = openProposals.filter(p => p.scope === 'city' || myGroupIds.has(p.scope.slice(6)))
     .map((p) => proposalEntry(w, a, p, lang));
-  const refounds = openRefounds(w).map((r) => ({
+  const refounds = pendingRefounds.map((r) => ({
     id: r.id, by: refId(w, r.by), text: r.text,
     reading: joinReading(Object.values(renderProcedureOf(w, r, lang))), signers: liveSigners(w, r).length,
     needed: refoundNeeded(w, r), expiresTick: r.expiresTick, signed: r.signers.includes(a.id),
@@ -398,9 +403,8 @@ function cityView(w, a, l, lang, day, costs) {
     moveCost: p.id === a.place || costs[p.id] === undefined ? null : costs[p.id] * K(w),
   }));
   const roads = Object.values(w.roads).map((r) => ({ a: r.a, b: r.b, functioning: r.condition >= P.functioningBp }));
-  const residents = agentList(w).filter(isAlive).map((o) => ({ id: o.id, name: o.name, status: o.status, tags: o.tags.slice() }));
-  const groups = Object.values(w.groups)
-    .filter((g) => !g.dissolved)
+  const residents = allAgents.filter(isAlive).map((o) => ({ id: o.id, name: o.name, status: o.status, tags: o.tags.slice() }));
+  const groups = activeGroups
     .map((g) => ({
       id: g.id, name: g.name, open: g.open, steward: g.steward ? refId(w, g.steward) : null,
       members: g.members.map((id) => refId(w, id)).filter(Boolean), manifesto: g.manifesto, procedure: g.procedure,
@@ -449,7 +453,7 @@ function renderProcedureOf(w, r, lang) {
 
 const MODULE_ACTIONS = new Set(['write', 'epitaph', 'offer', 'accept']);
 
-function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
+function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, projectsHere, openProposals, pendingRefounds, activeGroups) {
   const { ACTIONS, ORDER: ACTION_ORDER } = actionTable(w.premise || 0, prayersEnabled(w));
   const relay = hasRelay(w);
   const fog = isWeatherActive(w, 'fog');
@@ -522,7 +526,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
         const s = spec('ordinary');
         if (!s || s.none) deny({ code: 'not_allowed', text: R.none });
         else if (!mayPropose(w, s, a, rngCopy(w))) deny({ code: 'not_eligible', text: R.not_eligible });
-        else if (openCityProposals(w).some((p) => p.proposer === a.id)) deny({ code: 'limit_reached', text: R.limit_reached });
+        else if (openProposals.some((p) => p.scope === 'city' && p.proposer === a.id)) deny({ code: 'limit_reached', text: R.limit_reached });
         else {
           const v = votersOf(w, s, rngCopy(w));
           if (v === null || v.length === 0) deny({ code: 'not_allowed', text: R.no_voters });
@@ -530,24 +534,24 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
         break;
       }
       case 'vote':
-        if (!Object.values(w.proposals).some((p) => p.status === 'open' && p.voters.includes(a.id))) deny({ code: 'not_found', text: R.nothing });
+        if (!openProposals.some((p) => p.voters.includes(a.id))) deny({ code: 'not_found', text: R.nothing });
         break;
       case 'refound':
         if (usesLawSemantics2(w) && !refoundElectorate(w).includes(a.id)) deny({ code: 'not_eligible', text: R.not_eligible });
         else if (w.refoundCooldownUntil !== null && clockDay(w) < w.refoundCooldownUntil) deny({ code: 'cooldown', text: fmt(R.cooldown, { day: w.refoundCooldownUntil }) });
-        else if (openRefounds(w).length >= P.refoundsOpenMax || openRefounds(w).some((r) => r.by === a.id)) deny({ code: 'limit_reached', text: R.limit_reached });
+        else if (pendingRefounds.length >= P.refoundsOpenMax || pendingRefounds.some((r) => r.by === a.id)) deny({ code: 'limit_reached', text: R.limit_reached });
         break;
       case 'sign':
-        if (!openRefounds(w).some((r) => !r.signers.includes(a.id) && (!usesLawSemantics2(w) || r.electorate.includes(a.id)))) deny({ code: 'not_found', text: R.nothing });
+        if (!pendingRefounds.some((r) => !r.signers.includes(a.id) && (!usesLawSemantics2(w) || r.electorate.includes(a.id)))) deny({ code: 'not_found', text: R.nothing });
         break;
       case 'found':
         if (a.groups.length >= 5) deny({ code: 'limit_reached', text: R.limit_reached });
         break;
       case 'join':
-        if (!Object.values(w.groups).some((g) => !g.dissolved && !g.members.includes(a.id) && !g.pending.includes(a.id))) deny({ code: 'not_found', text: R.nothing });
+        if (!activeGroups.some((g) => !g.members.includes(a.id) && !g.pending.includes(a.id))) deny({ code: 'not_found', text: R.nothing });
         break;
       case 'leave':
-        if (myGroups.length === 0 && !Object.values(w.groups).some((g) => !g.dissolved && g.pending.includes(a.id))) deny({ code: 'not_member', text: R.not_member });
+        if (myGroups.length === 0 && !activeGroups.some((g) => g.pending.includes(a.id))) deny({ code: 'not_member', text: R.not_member });
         break;
       case 'admit':
         if (!stewarded.some((g) => g.pending.length > 0)) deny({ code: 'not_steward', text: R.not_steward });
@@ -569,10 +573,10 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts) {
         break;
       }
       case 'contribute':
-        if (openProjectsAt(w, a.place).length === 0) deny({ code: 'not_found', text: R.nothing });
+        if (projectsHere.length === 0) deny({ code: 'not_found', text: R.nothing });
         break;
       case 'initiate':
-        if (openProjectsAt(w, a.place).length >= P.projectsPerPlace) deny({ code: 'limit_reached', text: R.limit_reached });
+        if (projectsHere.length >= P.projectsPerPlace) deny({ code: 'limit_reached', text: R.limit_reached });
         break;
       case 'dismantle':
         if (here.landmark) deny({ code: 'landmark', text: R.landmark });

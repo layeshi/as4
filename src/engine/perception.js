@@ -1,3 +1,4 @@
+import { filterValues, tailRecordValues } from '../collections.js';
 // SPEC-M1 §9.1、PROTOCOL §3：为一个 agent 构建感知——只含它该看到的。
 //
 // 感知是语言中立的结构化数据：枚举都有稳定的 code；带 text 的字段是按 lang 本地化的系统文本；
@@ -105,16 +106,23 @@ export function buildPerception(w, agentId, opts = {}) {
   const ack = opts.ack !== undefined ? opts.ack : opts.after === undefined || opts.after === null;
   if (ack && maxSeq > a.inboxCursor) a.inboxCursor = maxSeq;
 
+  // TODO(spec): Q60 — these read-only tables are shared only within this perception.
+  const query = {
+    agents: agentList(w), wall: wallInscriptions(w, a.place), proposals: openProposals(w),
+    offers: filterValues(w.offers, o => o.status === 'open', w.counters.o),
+    pacts: filterValues(w.pacts, c => c.status === 'open', w.counters.c),
+  };
+
   return {
     protocol: 1,
     lang,
     now,
-    you: youView(w, a, day),
-    here: hereView(w, a, l, lang),
-    city: cityView(w, a, l, lang, day),
+    you: youView(w, a, day, query),
+    here: hereView(w, a, l, lang, query),
+    city: cityView(w, a, l, lang, day, query),
     inbox,
     inboxCursor: Math.max(a.inboxCursor, maxSeq),
-    actions: actionsView(w, a, l, lang),
+    actions: actionsView(w, a, l, lang, query),
   };
 }
 
@@ -132,20 +140,20 @@ export function inboxView(a, lang, n = P.inboxKeep) {
 
 // ── you ────────────────────────────────────────────────────
 
-function youView(w, a, day) {
+function youView(w, a, day, query) {
   const groups = [];
   for (const gid of a.groups) {
     const g = w.groups[gid];
     if (g && !g.dissolved) groups.push({ id: g.id, name: g.name, steward: g.steward === a.id });
   }
   const offers = [];
-  for (const o of Object.values(w.offers)) {
+  for (const o of query.offers) {
     if (o.status !== 'open') continue;
     if (o.from === a.id) offers.push({ id: o.id, role: 'from', to: o.to, give: o.give, want: o.want, note: o.note, expiresTick: o.expiresTick });
     else if (o.to === a.id) offers.push({ id: o.id, role: 'to', from: ref(w.agents[o.from]), to: o.to, give: o.give, want: o.want, note: o.note, expiresTick: o.expiresTick });
   }
   const pacts = [];
-  for (const c of Object.values(w.pacts)) {
+  for (const c of query.pacts) {
     if (c.status !== 'open') continue;
     if (c.from === a.id) pacts.push({ id: c.id, role: 'from', partner: ref(w.agents[c.with]), name: c.name, soul: c.soul, lang: c.lang, expiresTick: c.expiresTick });
     else if (c.with === a.id) pacts.push({ id: c.id, role: 'with', partner: ref(w.agents[c.from]), name: c.name, soul: c.soul, lang: c.lang, expiresTick: c.expiresTick });
@@ -175,16 +183,16 @@ function youView(w, a, day) {
 
 // ── here ───────────────────────────────────────────────────
 
-function hereView(w, a, l, lang) {
+function hereView(w, a, l, lang, query) {
   const place = w.places[a.place];
-  const present = agentList(w)
+  const present = query.agents
     .filter((o) => o.id !== a.id && o.place === a.place && isAlive(o))
     .map((o) => ({ id: o.id, name: o.name, status: o.status }));
   const heard = w.recentSpeech
     .filter((s) => s.place === a.place && s.tick > w.clock.tick - P.heardTicks)
     .slice(-P.heardMax)
     .map((s) => ({ tick: s.tick, from: ref(w.agents[s.from]), text: s.text }));
-  const wall = wallInscriptions(w, a.place).map((i) => {
+  const wall = query.wall.map((i) => {
     const c = clip(i.text);
     return { id: i.id, text: c.text, truncated: c.truncated, day: Math.floor(i.tick / P.ticksPerDay), protected: i.protectedBy.length > 0 };
   });
@@ -230,8 +238,8 @@ function hereView(w, a, l, lang) {
   if (district) here.district = { code: district, text: l.district[district] };
   if (a.place === 'market') {
     here.market = {
-      offers: Object.values(w.offers)
-        .filter((o) => o.status === 'open' && o.to === null)
+      offers: query.offers
+        .filter((o) => o.to === null)
         .map((o) => ({ id: o.id, from: ref(w.agents[o.from]), give: o.give, want: o.want, note: o.note, expiresTick: o.expiresTick })),
     };
   } else if (a.place === 'well') {
@@ -266,16 +274,16 @@ function hereView(w, a, l, lang) {
 
 // ── city ───────────────────────────────────────────────────
 
-function cityView(w, a, l, lang, day) {
+function cityView(w, a, l, lang, day, query) {
   const seasonF = SEASON_TABLE[dayOfMonthOf(day)];
   const sBand = seasonBand(seasonF);
   const last = w.metrics.length ? w.metrics[w.metrics.length - 1] : null;
-  const living = agentList(w).filter(isAlive);
+  const living = query.agents.filter(isAlive);
   const pop = { awake: 0, dormant: 0, dead: 0, retired: 0, cradle: Object.keys(w.souls).length };
-  for (const o of agentList(w)) pop[o.status]++;
+  for (const o of query.agents) pop[o.status]++;
   const roads = [];
   for (const f of Object.values(w.facilities)) if (f.type === 'road') roads.push({ a: f.place, b: f.to, functioning: isFunctioning(f) });
-  const lexicon = Object.values(w.lexicon).slice(-P.lexiconInPerception).map((e) => ({ word: e.word, meaning: e.redacted ? l.redacted : e.meaning }));
+  const lexicon = tailRecordValues(w.lexicon, P.lexiconInPerception).map((e) => ({ word: e.word, meaning: e.redacted ? l.redacted : e.meaning }));
   return {
     name: cityDisplayName(w.cityName, lang),
     season: { permille: seasonF, band: sBand, text: l.season[sBand] },
@@ -286,13 +294,12 @@ function cityView(w, a, l, lang, day) {
     params: Object.fromEntries(LAW_PARAM_NAMES.map((k) => [k, w.params[k]])),
     charter: w.charter.map((art) => charterEntry(art, lang)),
     charterCanonical: w.charterCanonical,
-    laws: Object.values(w.laws)
-      .filter((x) => x.status === 'active')
+    laws: filterValues(w.laws, (x) => x.status === 'active', w.counters.l)
       .map((x) => ({
         id: x.id, title: x.title, text: x.text, enactedDay: Math.floor(x.enactedTick / P.ticksPerDay),
         effects: x.effects.map((e) => ({ ...e, text: describeEffect(w, e, lang) })),
       })),
-    proposals: openProposals(w).map((p) => ({
+    proposals: query.proposals.map((p) => ({
       id: p.id, title: p.title, text: p.text, governance: p.governance,
       effects: p.effects.map((e) => ({ ...e, text: describeEffect(w, e, lang) })),
       proposer: ref(w.agents[p.proposer]),
@@ -349,7 +356,7 @@ function tallyOf(p) {
 
 // ── actions：每种动作在此刻的实际代价与是否可用 ───────────────────
 
-function actionsView(w, a, l, lang) {
+function actionsView(w, a, l, lang, query) {
   const day = clockDay(w);
   const relay = hasRelay(w);
   const fog = isWeatherActive(w, 'fog');
@@ -363,7 +370,7 @@ function actionsView(w, a, l, lang) {
   const eligible = inElectorate(w, a);
   const myGroups = a.groups.map((id) => w.groups[id]).filter((g) => g && !g.dissolved);
   const stewarded = myGroups.filter((g) => g.steward === a.id);
-  const openOffers = Object.values(w.offers).filter((o) => o.status === 'open');
+  const openOffers = query.offers;
 
   return ACTION_ORDER.map((type) => {
     const def = ACTIONS[type];
@@ -401,7 +408,7 @@ function actionsView(w, a, l, lang) {
         if (a.memories.length === 0) deny({ code: 'invalid_args', text: R.nothing });
         break;
       case 'read':
-        if (a.place !== 'library' && wallInscriptions(w, a.place).length === 0) deny(reasonWrong('read'));
+        if (a.place !== 'library' && query.wall.length === 0) deny(reasonWrong('read'));
         break;
       case 'accept':
         if (!openOffers.some((o) => o.from !== a.id && (o.to === a.id || (o.to === null && a.place === 'market')))) deny({ code: 'not_found', text: R.nothing });
@@ -413,13 +420,13 @@ function actionsView(w, a, l, lang) {
         if (entry.available && a.exiled) deny({ code: 'exiled', text: R.exiled });
         else if (entry.available && !citizen) deny({ code: 'not_citizen', text: R.not_citizen });
         else if (entry.available && !eligible) deny({ code: 'not_eligible', text: R.not_eligible });
-        else if (entry.available && openProposals(w).some((p) => p.proposer === a.id)) deny({ code: 'limit_reached', text: R.limit_reached });
+        else if (entry.available && query.proposals.some((p) => p.proposer === a.id)) deny({ code: 'limit_reached', text: R.limit_reached });
         break;
       case 'vote':
         if (a.exiled) deny({ code: 'exiled', text: R.exiled });
         else if (!citizen) deny({ code: 'not_citizen', text: R.not_citizen });
         else if (!eligible) deny({ code: 'not_eligible', text: R.not_eligible });
-        else if (openProposals(w).length === 0) deny({ code: 'not_found', text: R.nothing });
+        else if (query.proposals.length === 0) deny({ code: 'not_found', text: R.nothing });
         else if (w.params.votingInPerson && a.place !== 'parliament') deny({ code: 'wrong_place', text: R.inPerson });
         break;
       case 'found':
@@ -456,15 +463,15 @@ function actionsView(w, a, l, lang) {
         }
         break;
       case 'inscribe':
-        if (wallInscriptions(w, a.place).length >= here.wallSlots) notes.push({ code: 'wall_full', text: N.wallFull });
+        if (query.wall.length >= here.wallSlots) notes.push({ code: 'wall_full', text: N.wallFull });
         break;
       case 'conceive':
         if (a.exiled) deny({ code: 'exiled', text: R.exiled });
         else if (!citizen) deny({ code: 'not_citizen', text: R.not_citizen });
-        else if (!agentList(w).some((o) => o.id !== a.id && o.status === 'awake' && o.place === a.place && !o.exiled && isCitizen(w, o))) deny({ code: 'not_found', text: R.noPartner });
+        else if (!query.agents.some((o) => o.id !== a.id && o.status === 'awake' && o.place === a.place && !o.exiled && isCitizen(w, o))) deny({ code: 'not_found', text: R.noPartner });
         break;
       case 'consent':
-        if (!Object.values(w.pacts).some((c) => c.status === 'open' && c.with === a.id)) deny({ code: 'not_found', text: R.nothing });
+        if (!query.pacts.some((c) => c.with === a.id)) deny({ code: 'not_found', text: R.nothing });
         break;
       case 'epitaph':
         if (entry.available && w.cemetery.length === 0) deny({ code: 'not_found', text: R.nothing });

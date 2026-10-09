@@ -137,6 +137,7 @@ function matcherFor(wordKey) {
 export function countWord(text, wordKey) {
   if (!wordKey) return 0;
   const hay = text.toLowerCase();
+  if (!hay.includes(wordKey)) return 0; // a literal match cannot exist without its substring
   const m = matcherFor(wordKey);
   if (m.cjk) {
     let n = 0;

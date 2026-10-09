@@ -1,9 +1,11 @@
+import { orderedDistances } from '../../graph-distance.js';
 // SPEC-E2 §10.2、附录 B：第二纪的地图。
 //
 // 静态部分（附录 B）：人类地点的坐标与 glyph、街道、空地块、地形。
 // 动态部分（世界状态）：w.places、w.paths（开辟新地点时连上的小路）、w.roads（道路）、w.lots。
 // 移动的图：街道 + 小路 + 正常运转的道路（代价 0）。节点是 w.places 的全部 ID——遗址仍是节点，与它相连的街道、小路照旧。
 
+import { K } from '../engine/tokens.js';
 import { P } from '../params.js';
 import MAP from './frontier-e2.js';
 
@@ -42,23 +44,7 @@ function adjacency(w) {
  */
 export function travelCosts(w, from) {
   const adj = adjacency(w);
-  const ids = Object.keys(w.places);
-  const dist = { [from]: 0 };
-  const done = new Set();
-  for (;;) {
-    let u = null;
-    for (const id of ids) {
-      if (done.has(id) || dist[id] === undefined) continue;
-      if (u === null || dist[id] < dist[u]) u = id;
-    }
-    if (u === null) break;
-    done.add(u);
-    for (const { to, cost } of adj.get(u)) {
-      const nd = dist[u] + cost;
-      if (dist[to] === undefined || nd < dist[to]) dist[to] = nd;
-    }
-  }
-  return dist;
+  return orderedDistances(Object.keys(w.places), from, id => adj.get(id));
 }
 
 /** 与一个地点有街道或小路（不含道路）直接相连的地点——遗址上重新开辟时「相邻」的含义 */
@@ -85,7 +71,7 @@ export const lotsNear = (w, placeId) => MAP.lots.filter((l) => l.near.includes(p
  * GET /api/public/map：地图的静态数据（给观测站画图）。不含任何世界状态，更不含种子。
  * 当前的地点与小路在 state 里。
  */
-export function publicMap() {
+export function publicMap(w = {}) {
   return {
     id: MAP.id,
     size: MAP.size.slice(),
@@ -93,7 +79,7 @@ export function publicMap() {
     districts: MAP.districts.slice(),
     places: MAP.places.map((p) => ({
       id: p.id, district: p.district, xy: p.xy.slice(), glyph: p.glyph, landmark: p.landmark, open: p.open,
-      wild: p.wild ? { energyMax: p.wild.energyMax, regen: p.wild.regen } : null,
+      wild: p.wild ? { energyMax: p.wild.energyMax * K(w), regen: p.wild.regen * K(w) } : null,
     })),
     streets: MAP.streets.map(([a, b, cost = 1]) => ({ a, b, cost })),
     lots: MAP.lots.map((l) => ({ id: l.id, district: l.district, xy: l.xy.slice(), near: l.near.slice(), wild: l.district === 'wilds' })),

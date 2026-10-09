@@ -1,3 +1,4 @@
+import { filterValues } from '../../collections.js';
 import { usesLawSemantics2 } from './law-semantics.js';
 import { prayersEnabled } from './prayer-rewards.js';
 // SPEC-E2 §8–§9：立法——遗法、提案、表决、计票与生效、自动回退、重订。
@@ -218,7 +219,7 @@ export const rngCopy = (w) => w.rng.world.slice();
 // ═══════════════════════════════════════════════════════════════
 
 /** 城里进行中的提案 */
-export const openCityProposals = (w) => Object.values(w.proposals).filter((p) => p.status === 'open' && p.scope === 'city');
+export const openCityProposals = (w) => filterValues(w.proposals, (p) => p.status === 'open' && p.scope === 'city');
 
 /** 引擎读法（中英文）：提案或法律的规则 / 程序 */
 export function readingsOf({ rules, procedure }) {
@@ -438,7 +439,7 @@ STEPS.revert = (w) => autoRevert(w);
 // 重订（§8.6）
 // ═══════════════════════════════════════════════════════════════
 
-export const openRefounds = (w) => Object.values(w.refounds).filter((r) => r.status === 'open');
+export const openRefounds = (w) => filterValues(w.refounds, (r) => r.status === 'open');
 
 /** 入城满 refoundResidenceDays 的在世居民数（重订的分母） */
 export function refoundResidents(w) {

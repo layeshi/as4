@@ -56,6 +56,8 @@ test('P4 T3: reserves, pool, caps, birth shares, draw damage and repair use worl
     assert.equal(w.places[id].salvageMax, old.places[id].salvageMax * 10);
   }
   for (const id of Object.keys(w.regions)) assert.equal(w.regions[id].energy, old.regions[id].energy * 10);
+  const map = e2.publicMap(w);
+  for (const place of map.places.filter(p => p.wild)) assert.equal(place.wild.energyMax, w.regions[place.id].energy);
   assert.equal(w.well.drawPoolLeft, 600);
   assert.equal(agentCap(w, { id: 'a1' }), 1200);
   assert.deepEqual(sharesFor(3, w), { each: 133, initiator: 134 });

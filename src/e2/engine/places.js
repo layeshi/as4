@@ -1,3 +1,4 @@
+import { filterValues } from '../../collections.js';
 import { ep } from './tokens.js';
 // SPEC-E2 §4.3、§10.1–§10.4：地点与模块的查询——模块是否运转、代价倍率、初始能量系数、储能的腐坏上限。
 //
@@ -38,7 +39,7 @@ export const hasRelay = (w) => hasModuleAnywhere(w, 'relay');
 
 /** 墙上当前可见的铭刻：未被覆盖、未被遮盖、未随地点消失（lost），按刻写先后 */
 export function wallInscriptions(w, placeId) {
-  return Object.values(w.inscriptions).filter((i) => i.place === placeId && !i.coveredBy && !i.redacted && !i.lost);
+  return filterValues(w.inscriptions, (i) => i.place === placeId && !i.coveredBy && !i.redacted && !i.lost);
 }
 
 // ── 代价与系数 ─────────────────────────────────────────────

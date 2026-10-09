@@ -1,3 +1,4 @@
+import { filterValues, recordKeys } from '../collections.js';
 // SPEC-M1 §7.11：社群、交易、典籍、词典（家书、梦、孕育见本文件后半部分，第 5 步补全）。
 // 第 2 步只放死亡与归隐要用到的部分：词典计数、交易与孕育之约的关闭、社群的退出与解散。
 
@@ -14,7 +15,8 @@ import { orphanFacilities } from './environment.js';
  * 词的创造者在 define 时的释义不计入（define 不调用本函数）。
  */
 export function noteWordUse(w, a, text) {
-  for (const [key, e] of Object.entries(w.lexicon)) {
+  for (const key of recordKeys(w.lexicon)) {
+    const e = w.lexicon[key];
     const n = countWord(text, key);
     if (n > 0) {
       e.uses += n;
@@ -112,10 +114,10 @@ export function leaveAllGroups(w, a, reason) {
 
 /** 每刻结算第 3 步：处理到期的交易与孕育之约（退回托管），按 ID 升序 */
 export function expireOffersAndPacts(w) {
-  for (const o of Object.values(w.offers)) {
+  for (const o of filterValues(w.offers, o => o.status === 'open', w.counters.o)) {
     if (o.status === 'open' && o.expiresTick <= w.clock.tick) closeOffer(w, o, 'expired');
   }
-  for (const c of Object.values(w.pacts)) {
+  for (const c of filterValues(w.pacts, c => c.status === 'open', w.counters.c)) {
     if (c.status === 'open' && c.expiresTick <= w.clock.tick) closePact(w, c, 'expired');
   }
 }

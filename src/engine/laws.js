@@ -1,3 +1,4 @@
+import { filterValues } from '../collections.js';
 // SPEC-M1 §7.10 与 PROTOCOL §6：法律——效力的校验与描述、选民范围、计票、效力的执行、津贴。
 //
 // 一部法律 = 自然语言文本 + 可选的「效力」（受限的指令，由引擎真正执行）。没有效力的法律是「规范」，
@@ -310,14 +311,14 @@ export function openProposal(w, proposer, { title, text, effects }) {
   return p;
 }
 
-export const openProposals = (w) => Object.values(w.proposals).filter((p) => p.status === 'open');
+export const openProposals = (w) => filterValues(w.proposals, (p) => p.status === 'open', w.counters.p);
 
 // ── 计票（每刻结算第 4 步） ─────────────────────────────────────
 
 /** 按提案 ID 升序处理 closesTick ≤ 当前刻的提案 */
 export function tallyProposals(w) {
   ensureElectorate(w);
-  const due = Object.values(w.proposals).filter((p) => p.status === 'open' && p.closesTick <= w.clock.tick);
+  const due = filterValues(w.proposals, (p) => p.status === 'open' && p.closesTick <= w.clock.tick, w.counters.p);
   for (const p of due) {
     ensureElectorate(w); // 前一部法律可能改了选民范围
     settleProposal(w, p);
