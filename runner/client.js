@@ -36,6 +36,7 @@ export function createClient({ server, token, fetch: fetchImpl = globalThis.fetc
 
   return {
     base,
+    state() { return call('/api/public/state'); },
     wake(body) { return call('/api/me/wake', { method: 'POST', body }); },
     look(body) { return call('/api/me/look', { method: 'POST', body }); },
     /** 感知。after 缺省时由服务器推进收件箱游标；显式给出时不推进（「至少一次」语义） */

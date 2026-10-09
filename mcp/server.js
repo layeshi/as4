@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { tokenized } from '../src/e2/world.js';
+import { tokenTools } from './tokens.js';
 // MCP 服务（SPEC §15.3）：stdio 上的 JSON-RPC 2.0，零依赖。让 Claude Code 之类的 MCP 客户端直接扮演一位居民。
 //
 // 环境变量：HOUREN_SERVER（默认 http://127.0.0.1:8787）、HOUREN_TOKEN（agent 令牌）、HOUREN_LANG（默认 zh）。
@@ -17,7 +19,7 @@ import { renderPerception, summarizeResults, errorText } from '../runner/render.
 import { D } from '../runner/render2.js';
 import { buildSystemPrompt, promptParams } from '../runner/prompt.js';
 import { DEFAULT_AGENT_LOOP } from '../runner/loop.js';
-import { D2, LOOK_WHATS, clipLook, renderArrived, renderBrief, renderLook } from '../runner/render-p2.js';
+import { D2, LOOK_WHATS, LOOK_WHATS_P4, clipLook, renderArrived, renderBrief, renderLook } from '../runner/render-p2.js';
 
 export const SUPPORTED_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 export const SERVER_INFO = { name: 'houren', version: '0.1.0' };
@@ -89,6 +91,14 @@ export const TOOLS_P2 = [
   },
 ];
 const ALL_TOOLS = [...TOOLS, ...TOOLS_P2];
+export const TOOLS_P4 = ALL_TOOLS.map(tool => {
+  if (tool.name === 'houren_perceive') return { ...tool, description: '醒来：付一次醒来的词元，看到概要。/ Wake: pay for one waking and see your summary.' };
+  if (tool.name === 'houren_look') return { ...tool,
+    description: '展开概要里的一段。what 包括 inbox（未送达收件）与 actions（即时动作状态）。看到的文字按读入付词元。/ Open a section, including inbox and actions. What you see is paid for as reading.',
+    inputSchema: { ...tool.inputSchema, properties: { ...tool.inputSchema.properties, what: { ...tool.inputSchema.properties.what, enum: [...LOOK_WHATS_P4] } } } };
+  if (tool.name === 'houren_rules') return { ...tool, description: tool.description.replace('能量', '词元') };
+  return tool;
+});
 
 const ok = (id, result) => ({ jsonrpc: '2.0', id, result });
 const fail = (id, code, message) => ({ jsonrpc: '2.0', id, error: { code, message } });
@@ -114,6 +124,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
   const token = env.HOUREN_TOKEN || '';
   const defaultLang = env.HOUREN_LANG === 'en' ? 'en' : 'zh';
   const client = token ? createClient({ server, token, ...(fetchImpl ? { fetch: fetchImpl } : {}) }) : null;
+  const paid = client ? tokenTools(client) : null;
   let baseline; // 收件游标：成功行动后才确认
   let pending; // 最近一次感知的游标
   let lastResults = null;
@@ -134,6 +145,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
     if (baseline === undefined) baseline = p.inbox && p.inbox.length ? p.inbox[0].seq - 1 : p.inboxCursor;
     lastPerception = p;
     premise = p.premise || 0;
+    if (tokenized(p)) paid.remember(p);
     return r;
   }
 
@@ -143,6 +155,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
     const r = await client.me({ lang: defaultLang, after: NO_INBOX });
     if (!r.ok) return null;
     premise = r.json.premise || 0;
+    if (tokenized(r.json)) paid.remember(r.json);
     return premise;
   }
 
@@ -151,15 +164,18 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
   async function callTool(name, args) {
     if (!client) return needToken();
     const lang = langOf(args);
+    if (tokenized({ premise })) return paid.call(name, args, lang);
     if (name === 'houren_rules') {
       const r = await client.me({ lang, after: NO_INBOX });
       if (!r.ok) return text(`无法取得规则：${errorMessage(r)}`, true);
+      if (tokenized(r.json)) { premise = 4; return paid.rules(lang, r.json); }
       return text(buildSystemPrompt({ ...promptParams(r.json), soul: null, toolMode: 'mcp' })); // toolMode 只有第二前提的提示用
     }
     if (name === 'houren_perceive') {
       const r = await perceive(lang);
       if (!r.ok) return text(`无法感知：${errorMessage(r)}`, true);
       const p = r.json;
+      if (tokenized(p)) return paid.call(name, args, lang);
       // 第二前提：概要；MCP 不维护跨刻的摘要，只在末尾附上一次 houren_act 的结果
       if (p.premise >= 2) return text(`${renderBrief(p, { lang })}${lastResults ? `\n${D[lang].last}${lastResults}` : ''}`);
       return text(renderPerception(p, { lastResults: lastResults || undefined, lang }));
@@ -170,6 +186,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
         const r = await perceive(lang);
         if (!r.ok) return text(`无法感知：${errorMessage(r)}`, true);
       }
+      if (tokenized(lastPerception)) return paid.call(name, args, lang);
       if (!(lastPerception.premise >= 2)) return noTool(lang);
       if (name === 'houren_look') {
         if (typeof args.what !== 'string' || (args.id !== undefined && typeof args.id !== 'string')) return text(D2[lang].res.invalid(D2[lang].res.details.look), true);
@@ -191,6 +208,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
       if (!args || !Array.isArray(args.actions)) return text('参数错误：actions 必须是数组（什么都不做请传空数组）。', true);
       if (args.thought !== undefined && typeof args.thought !== 'string') return text('参数错误：thought 必须是字符串。', true);
       const r = await client.act({ thought: args.thought, actions: args.actions, lang });
+      if (!r.ok && r.json?.error?.code === 'no_waking') { premise = 4; return paid.rejected(r, lang); }
       if (!r.ok) return text(`行动失败：${errorMessage(r)}`, true);
       if (pending !== undefined) baseline = pending; // 成功行动 = 确认
       lastResults = summarizeResults(r.json.results, lang);
@@ -219,7 +237,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
       case 'tools/list': {
         if (isNotification) return null;
         const p = client ? await probePremise() : 0;
-        return ok(id, { tools: p === null || p >= 2 ? ALL_TOOLS : TOOLS });
+        return ok(id, { tools: tokenized({ premise: p }) ? TOOLS_P4 : p === null || p >= 2 ? ALL_TOOLS : TOOLS });
       }
       case 'tools/call': {
         if (isNotification) return null;
