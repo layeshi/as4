@@ -2,6 +2,7 @@
 // 实况、编年史、典籍、墓园、遗产、天象沿用第一纪的页面（数据形状相同）。每个渲染函数：(ctx, root) → 往 root 里填内容。
 // 所有居民写下的文字（法律的标题与正文、志、介绍、社群的宣言……）一律经 ai() / textContent 渲染，规则的「引擎读法」是系统文本。
 
+import { tokenized } from './e2-strings.js';
 import { h, clear, ai } from './dom.js';
 import { t, getLang, colon } from './i18n.js';
 import { lineChart } from './charts.js';
@@ -41,7 +42,7 @@ const actName = (type) => (ACT2[getLang()] || ACT2.zh)[type] || actName1(type);
 
 /** 第二纪的标签页：id → 渲染函数（app.js 在第二纪的城里用它代替第一纪的标签页列表） */
 export const TABS2 = [
-  ['live', renderLive], ['chronicle', renderChronicle], ['laws', renderLaws2], ['residents', renderResidents2], ['groups', renderGroups2],
+  ['live', renderLive2], ['chronicle', renderChronicle], ['laws', renderLaws2], ['residents', renderResidents2], ['groups', renderGroups2],
   ['environment', renderEnvironment2], ['cradle', renderCradle], ['library', renderLibrary], ['cemetery', renderCemetery], ['metrics', renderMetrics2],
   ['legacy', renderLegacy], ['weather', renderWeather],
 ];
@@ -227,7 +228,7 @@ export function renderLaws2(ctx, root) {
   root.append(
     section(
       t('physics'),
-      ...['natural', 'guardian'].filter((k) => physics[k]).map((k) => h('div', { class: 'physics-group' }, h('h4', null, physics[k].title), h('ol', { class: 'physics' }, physics[k].items.map((x) => h('li', null, x))))),
+      ...(tokenized(S.world) ? [h('p', { class: 'ai-free' }, lore.physicsP4)] : ['natural', 'guardian'].filter((k) => physics[k]).map((k) => h('div', { class: 'physics-group' }, h('h4', null, physics[k].title), h('ol', { class: 'physics' }, physics[k].items.map((x) => h('li', null, x)))))),
     ),
   );
 
@@ -585,7 +586,8 @@ export function renderCradle(ctx, root) {
   const day = S.world.day;
 
   // 躯壳
-  root.append(
+  if (tokenized(S.world)) root.append(section(t('shellsSection'), h('p', { class: 'ai-free' }, lore.shellsP4)));
+  else root.append(
     section(
       t('shellsSection'),
       h('p', { class: 'ai-free' }, S.world.premise >= 1 ? lore.shellsP1 : lore.shells),
@@ -603,7 +605,7 @@ export function renderCradle(ctx, root) {
     ),
   );
 
-  if (S.world.premise >= 1) root.append(section(
+  if (!tokenized(S.world) && S.world.premise >= 1) root.append(section(
     t('bodies'),
     table([t('bodyId'), t('bodyOccupant'), t('bodyVacant'), t('bodyTrained')],
       sh.bodies.map((b) => [b.id, b.occupant ? agentLink(ctx, b.occupant.id) : '—', b.vacantSince === null ? '—' : String(b.vacantSince + 1), String(b.trainedCount)]), 'p1-bodies'),
@@ -621,7 +623,7 @@ export function renderCradle(ctx, root) {
           h('h4', null, ai(c.name), ' ', c.queued ? h('span', { class: 'chip good' }, t('queuePosition', { n: c.queuePosition })) : null, c.successorOf ? h('span', { class: 'chip' }, t('successorSoul')) : null),
           h('p', { class: 'muted' }, `${t('soulAuthors')}${colon()}`, c.authors.map((a) => (a ? [agentLink(ctx, a.id), ' '] : '?')), ` · ${t('generation', { n: c.generation })} · ${t('expiresIn', { n: Math.max(0, c.expiresDay - day) })}`),
           h('p', { class: 'soul' }, ai(c.soul)),
-          h('p', null, t('fundProgress', { have: c.fund, need: sh.cost }), ' ', progressBar(Math.min(c.fund, sh.cost), sh.cost)),
+          tokenized(S.world) ? null : h('p', null, t('fundProgress', { have: c.fund, need: sh.cost }), ' ', progressBar(Math.min(c.fund, sh.cost), sh.cost)),
           Object.keys(c.sponsors).length ? h('p', { class: 'muted' }, `${t('sponsors')}${colon()}`, Object.entries(c.sponsors).map(([who, n]) => [who === 'treasury' ? t('treasury') : who.startsWith('g') ? h('span', { class: 'chip group-chip' }, ctx.groupName(who)) : agentLink(ctx, who), ` ${n} `])) : null,
         ))
         : emptyNote(t('cradleEmpty')),
@@ -721,4 +723,26 @@ export async function renderMetrics2(ctx, root) {
       fig(t('m_standing'), c([{ name: t('s_standingOrders'), points: pts('standingOrders'), color: 4 }, { name: t('s_standingFired'), points: pts('standingFired'), axis: 'right', color: 3 }])),
     ));
   }
+}
+
+export function tokenCityPanel(world) {
+  const v = world.tokens, n = value => Number(value).toLocaleString('en-US');
+  const panel = section(t('tokenCity'), h('dl', { class: 'kv' },
+    h('dt', null, t('tokenCapacity')), h('dd', null, n(v.capacity)),
+    h('dt', null, t('tokenSupply')), h('dd', null, `${n(v.supply / 10)}%`),
+    h('dt', null, t('tokenUpgrades')), h('dd', null, `${v.upgradeLevel} / 10`),
+    h('dt', null, t('tokenBasicAllotment')), h('dd', null, n(v.basic))),
+    h('p', null, t('tokenCaps', { count: n(v.caps.count), zero: n(v.caps.zero), p50: n(v.caps.p50), p90: n(v.caps.p90) })));
+  panel.classList.add('token-city-summary');
+  return panel;
+}
+export function updateTokenCity(root, world) {
+  if (!tokenized(world)) return;
+  const panel = root.querySelector('.token-city-summary');
+  if (panel) panel.replaceChildren(...tokenCityPanel(world).childNodes);
+}
+function renderLive2(ctx, root) {
+  const result = renderLive(ctx, root);
+  if (tokenized(ctx.S.state.world)) root.prepend(tokenCityPanel(ctx.S.state.world));
+  return result;
 }

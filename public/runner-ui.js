@@ -1,3 +1,5 @@
+import { tokenized } from './e2-strings.js';
+import { dailyCapField, readDailyCap } from './token-ui.js';
 import { h, clear } from './dom.js';
 import { t, getLang, colon } from './i18n.js';
 import { api, errorText } from './api.js';
@@ -79,6 +81,7 @@ function validate(root) {
 
 export function entryWizard(ctx, pane, { mode = 'register', subject, success }) {
   clear(pane);
+  const cap = tokenized(ctx.S?.state?.world) ? dailyCapField() : null;
   const name = input('name', '', { required: true, maxlength: 24 });
   const bio = h('textarea', { name: 'bio', rows: 2, maxlength: 200 });
   const soul = h('textarea', { name: 'soul', rows: 6, maxlength: 4000, required: true, placeholder: t('soulPlaceholder') });
@@ -91,6 +94,7 @@ export function entryWizard(ctx, pane, { mode = 'register', subject, success }) 
   applyTemplate.addEventListener('click', () => { soul.value = t(`soulTemplate_${template.value}`); });
   const identity = h('section', { class: 'wizard-step' }, h('h3', null, t(mode === 'register' ? 'createResident' : mode === 'adopt' ? 'adoptTab' : 'fosterTab')),
     mode === 'register' ? [label('f_name', name), label('f_bio', bio), h('div', { class: 'soul-template' }, template, applyTemplate), label('f_soul', soul), h('p', { class: 'muted' }, t('soulHint')), label('f_lang', lang)] : [h('p', { class: 'entry-note' }, subject.name), mode === 'adopt' ? h('details', null, h('summary', null, t('soulFull')), h('p', { class: 'soul' }, subject.soul)) : null],
+    cap ? [cap.root, h('p', { class: 'muted' }, t('tokenCapHelp'))] : null,
     label('f_creator', creator), label('f_invite', invite));
   const settings = modelForm();
   const testBtn = h('button', { type: 'button', class: 'btn' }, t('testModel'));
@@ -120,10 +124,12 @@ export function entryWizard(ctx, pane, { mode = 'register', subject, success }) 
   prev.addEventListener('click', () => { step = Math.max(0, step - 1); msg.textContent = ''; update(); });
   next.addEventListener('click', () => {
     if (!validate(steps[step])) return;
+    if (step === 0 && cap && readDailyCap(cap.input) === null) { msg.textContent = t('tokenCapInvalid'); return; }
     if (step === 1 && tested !== fingerprint()) return;
     step++;
     if (step === 2) {
       clear(summary); const cfg = settings.read();
+      if (cap) summary.append(h('dt', null, t('tokenDailyCap')), h('dd', null, String(readDailyCap(cap.input))));
       for (const [k, v] of [['f_name', mode === 'register' ? name.value : subject.name], ['modelService', cfg.provider === 'mock' ? t('presetMock') : cfg.provider === 'anthropic' ? t('presetAnthropic') : cfg.provider === 'openai-responses' ? t('presetResponses') : t('presetOpenai')], ['f_model', cfg.model], ['actEvery', cfg.actEveryTicks], ['memoryRounds', cfg.historyRounds]]) summary.append(h('dt', null, t(k)), h('dd', null, String(v)));
     }
     update(); steps[step].querySelector('input, select, button')?.focus();
@@ -140,9 +146,10 @@ export function entryWizard(ctx, pane, { mode = 'register', subject, success }) 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (busy || step !== 2 || tested !== fingerprint()) return;
+    if (cap && readDailyCap(cap.input) === null) { msg.textContent = t('tokenCapInvalid'); step = 0; update(); return; }
     busy = true; msg.textContent = t('entryStarting'); update();
     const cfg = settings.read();
-    const body = { model: cfg.model, creatorName: creator.value.trim(), invite: invite.value.trim(), runner: cfg,
+    const body = { ...(cap ? { dailyCap: readDailyCap(cap.input) } : {}), model: cfg.model, creatorName: creator.value.trim(), invite: invite.value.trim(), runner: cfg,
       ...(mode === 'register' ? { name: name.value.trim(), bio: bio.value.trim(), soul: soul.value, lang: lang.value } : mode === 'adopt' ? { soulId: subject.id } : { agentId: subject.id || subject.agentId }) };
     // Freeze the complete draft while registration and connection validation are in flight.
     const controls = [...form.querySelectorAll('input, textarea, select')];

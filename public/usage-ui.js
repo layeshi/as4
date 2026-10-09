@@ -106,7 +106,8 @@ function usageBody(u) {
  * 一位居民的用量面板。initial：GET /api/owner 里的 agents[0].usage（没有就先显示「没有数据」，等刷新）。
  * 面板每 POLL_MS 毫秒向 /api/owner/usage 拉一次，面板离开页面之后自行停止。
  */
-export function usagePanel(key, initial) {
+export function usagePanel(key, initial, initialTokens) {
+  let lastTokens = initialTokens;
   const refresh = h('button', { class: 'btn small ghost', type: 'button' }, t('refresh'));
   const body = h('div', { class: 'usage-body' });
   const root = h('section', { class: 'usage-panel' }, h('div', { class: 'usage-head' }, h('h4', null, t('usageTitle')), refresh), body);
@@ -114,6 +115,7 @@ export function usagePanel(key, initial) {
   const show = (u, failure = '') => {
     clear(body);
     if (failure) body.append(h('p', { class: 'error', role: 'alert' }, failure));
+    if (lastTokens) body.append(tokenLedger(lastTokens, u));
     if (complete(u)) body.append(...usageBody(u));
     else if (u && u.tracked === false) body.append(h('p', { class: 'entry-note' }, t('usageNotTracked')));
     else if (!failure) body.append(h('p', { class: 'empty' }, t('loadFailed')));
@@ -122,9 +124,13 @@ export function usagePanel(key, initial) {
   const load = async () => {
     if (busy) return;
     busy = true; refresh.disabled = true;
-    const r = await api('/api/owner/usage', { key });
+    const r = await api(initialTokens ? '/api/owner' : '/api/owner/usage', { key });
     busy = false; refresh.disabled = false;
-    if (r.ok) { last = r.json; show(last); }
+    if (r.ok) {
+      if (initialTokens) { const agent = r.json.agents?.[0]; last = agent?.usage; lastTokens = agent?.tokens ?? lastTokens; }
+      else last = r.json;
+      show(last);
+    }
     else show(last, r.status === 401 || r.status === 403 ? t('invalidKey') : r.status === 0 ? t('networkError') : errorText(r, t('loadFailed')));
   };
   refresh.addEventListener('click', load);
@@ -173,5 +179,15 @@ export function usageOverview(entries, { onOpen }) {
     }
   };
   entries.forEach(async (entry, i) => fill(i, entry, await api('/api/owner/usage', { key: entry.key })));
+  return root;
+}
+
+export function tokenLedger(tokens, usage) {
+  const bill = tokens.lastBill;
+  const actual = usage?.tracked && Number.isFinite(usage.today?.tokens) && !usage.today.unreported ? usage.today.tokens : null;
+  const root = h('section', { class: 'token-ledger' }, h('h4', null, t('tokenLedger')),
+    h('div', { class: 'usage-tiles' }, tile(t('tokenBalance'), num(tokens.energy)), tile(t('tokenBasicBalance'), num(tokens.basic)), tile(t('tokenToday'), `${num(tokens.usedToday)} / ${num(tokens.cap)}`)),
+    h('p', null, bill ? t('tokenLastWake', { total: num(bill.reread + bill.read + bill.write), reread: num(bill.reread), read: num(bill.read), write: num(bill.write) }) : t('tokenNoBill')),
+    h('p', { class: 'muted' }, `${t('tokenRealToday')}: ${num(actual)} · ${t('tokenRatio')}: ${actual !== null && tokens.usedToday > 0 ? (actual / tokens.usedToday).toFixed(2) : '–'}`));
   return root;
 }

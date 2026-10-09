@@ -1,10 +1,11 @@
+import { tokenized } from './e2-strings.js';
 // 观测站主程序：状态、SSE、顶栏、地图、标签页、档案抽屉、弹窗。
 // 首屏用 GET /api/public/state 取全量，之后用 SSE：事件增量追加；tick 事件携带精简状态，
 // 其余数据在相关事件到达后按需重新拉取（防抖 1 秒）。所有 agent 文本都用 textContent 渲染。
 
 import { initAccounts, refreshAccount } from './accounts.js';
 import { h, clear, debounce, append } from './dom.js';
-import { t, getLang, setLang, ADMIN_OPS, colon } from './i18n.js';
+import { t, getLang, setLang, setPremise, ADMIN_OPS, colon } from './i18n.js';
 import { api, subscribe } from './api.js';
 import { createMap } from './map.js';
 import { renderLive, liveAppend, refreshLive, LIVE_KEEP, renderChronicle, renderLaws, renderResidents, renderGroups } from './tabs1.js';
@@ -13,7 +14,7 @@ import {
 } from './tabs2.js';
 import { renderProfile } from './profile.js';
 import { openEntry, openBackstage, openModal } from './modals.js';
-import { TABS2, signature2 } from './e2-tabs.js';
+import { TABS2, signature2, updateTokenCity } from './e2-tabs.js';
 import { createMap2 } from './e2-map.js';
 import { renderProfile2, openPlace2 } from './e2-profile.js';
 import { pct, bandText, conditionBar, statusChip, section, table, clockConfig, SEASON_TABLE } from './render.js';
@@ -277,7 +278,10 @@ async function loadState() {
     });
     return false;
   }
+  const wasTokenized = tokenized(S.state?.world);
   S.state = r.json;
+  setPremise(S.state.world.premise);
+  if (wasTokenized !== tokenized(S.state.world)) applyLabels();
   S.dirty = false;
   clockConfig.ticksPerDay = S.state.world.ticksPerDay;
   indexState();
@@ -495,6 +499,7 @@ function signature(tab, s) {
 function applyState({ force = false } = {}) {
   const s = S.state;
   renderTopbar();
+  updateTokenCity(els.panel, s.world);
   if (map) map.setState(s);
   const sig = signature(S.tab, s);
   if (force || sigs[S.tab] !== sig || S.tab === 'live') {

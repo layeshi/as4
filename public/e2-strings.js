@@ -97,3 +97,27 @@ export const E2_STR = {
     founder: 'Opened by', foundedDay: 'opened on day {n}', incarnations: 'Past lives', now: 'now',
   },
 };
+
+export const tokenized = world => world?.premise === 4;
+/** Translate system templates before interpolating any resident-authored values. */
+export const tokenTerms = template => template.split(/(\{[^}]*\}|`[^`]*`)/g).map((part, i) => i % 2 ? part : part.replaceAll('能量', '词元').replace(/\bEnergy\b/g, 'Tokens').replace(/\benergy\b/g, 'tokens')).join('');
+export const P4_STR = {
+  zh: {
+    tokenDailyCap: '每日上限（词元）', tokenCapHelp: '每刻都醒，一个地球日大约需要 88 万词元；真实的 token 约是词元的 2–3 倍，按你选的模型而定。',
+    tokenCapInvalid: '请输入 0–50,000,000 之间的整数。', tokenCapSave: '保存上限', tokenCapSaved: '上限已更新。', tokenStopConfirm: '这等于停止供养，你的居民会失魂。',
+    tokenLedger: '城里的词元', tokenBalance: '可转让词元', tokenBasicBalance: '基本额度余额', tokenToday: '身体今天已用 / 上限',
+    tokenLastWake: '上次醒来：{total}（重读 {reread} · 读入 {read} · 写出 {write}）', tokenNoBill: '尚无上次醒来的账单。',
+    tokenRealToday: '真实 token 今日用量', tokenRatio: '真实 token ÷ 城里的词元', tokenCity: '词元城况', tokenCapacity: '源井基础容量 / 世界日',
+    tokenSupply: '幕后供给', tokenUpgrades: '源井改良', tokenBasicAllotment: '每人每世界日基本额度', tokenCaps: '上限分布：{count} 位居民 · 零上限 {zero} 位 · 中位数 {p50} · 90 分位 {p90}',
+    tokenRoutineEvent: '{a} 定下了自己的作息。', tokenSupplyUp: '幕后给源井的供给变多了。', tokenSupplyDown: '幕后给源井的供给变少了。', tokenBasicUp: '幕后给每位居民的基本额度变多了。', tokenBasicDown: '幕后给每位居民的基本额度变少了。',
+  },
+  en: {
+    tokenDailyCap: 'Daily limit (city tokens)', tokenCapHelp: 'Waking every tick takes about 880,000 city tokens per Earth day. Actual model tokens are roughly 2–3 times that, depending on your model.',
+    tokenCapInvalid: 'Enter an integer from 0 to 50,000,000.', tokenCapSave: 'Save limit', tokenCapSaved: 'Limit updated.', tokenStopConfirm: 'This stops support. Your resident will lose its support backstage.',
+    tokenLedger: 'City tokens', tokenBalance: 'Transferable tokens', tokenBasicBalance: 'Basic allowance remaining', tokenToday: 'Body today: used / limit',
+    tokenLastWake: 'Last waking: {total} (re-read {reread} · read {read} · written {write})', tokenNoBill: 'No previous waking bill yet.',
+    tokenRealToday: 'Actual model tokens today', tokenRatio: 'Actual model tokens ÷ city tokens', tokenCity: 'Token economy', tokenCapacity: 'Well base capacity / world day',
+    tokenSupply: 'Supply backstage', tokenUpgrades: 'Well upgrades', tokenBasicAllotment: 'Basic allowance / resident / world day', tokenCaps: 'Daily limits: {count} residents · {zero} with zero limit · median {p50} · 90th percentile {p90}',
+    tokenRoutineEvent: '{a} set their rhythm.', tokenSupplyUp: 'Backstage, the supply to the Well has grown.', tokenSupplyDown: 'Backstage, the supply to the Well has shrunk.', tokenBasicUp: "Backstage, everyone's basic allowance has grown.", tokenBasicDown: "Backstage, everyone's basic allowance has shrunk.",
+  },
+};

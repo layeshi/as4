@@ -2,13 +2,15 @@
 // 事件只存结构化数据，人类可读的句子在这里按 type 与 data 生成（SPEC §10）。
 // 系统文本（物理定律、地点描述、档位词、天象名、法律效力模板）来自 GET /api/public/lore，不在这里重复。
 
-import { E2_STR } from './e2-strings.js';
+import { E2_STR, P4_STR, tokenized, tokenTerms } from './e2-strings.js';
 import { PRAYER_STR } from './prayer-strings.js';
 import { enactText } from './law-outcome.js';
 
 export const LANGS = ['zh', 'en'];
 
 let lang = 'zh';
+let premise = 0;
+export const setPremise = value => { premise = value || 0; };
 
 function detect() {
   try {
@@ -48,7 +50,7 @@ export function fmt(template, vars) {
 /** 界面用语 */
 export function t(key, vars) {
   const s = (STR[lang] && STR[lang][key]) ?? STR.zh[key] ?? key;
-  return fmt(s, vars);
+  return fmt(tokenized({ premise }) ? tokenTerms(s) : s, vars);
 }
 
 export const STR = {
@@ -518,7 +520,7 @@ export const STR = {
 
 // 第二纪观测站的界面用语并进来（只补没有的键，不改第一纪的任何一句）
 for (const l of LANGS) for (const [k, v] of Object.entries(E2_STR[l])) if (!(k in STR[l])) STR[l][k] = v;
-for (const l of LANGS) Object.assign(STR[l], PRAYER_STR[l]);
+for (const l of LANGS) Object.assign(STR[l], PRAYER_STR[l], P4_STR[l]);
 
 // ── 事件模板 ──────────────────────────────────────────────────
 // VARS[type](e) 给出占位符的取值，TPL[lang][type] 是句子。占位符的取值可以是字符串 / 数字，
@@ -1018,7 +1020,7 @@ export function describeEvent(e) {
   const dict = TPL[lang] || TPL.zh;
   if (e.redacted) return { key: 'redacted', template: '{text}', vars: { text: TX(e.data && e.data.text ? e.data.text[lang] || e.data.text.zh : t('redacted')) } };
   const key = templateKey(e);
-  const template = dict[key] ?? dict[e.type];
+  let template = dict[key] ?? dict[e.type];
   const mk = VARS[e.type];
   let vars = {};
   try {
@@ -1027,6 +1029,11 @@ export function describeEvent(e) {
     vars = {};
   }
   if (e.type === 'inscribe' && e.data && e.data.cover) vars.cover = e.data.cover;
+  if (tokenized({ premise })) {
+    if (e.type === 'routine') { template = P4_STR[lang].tokenRoutineEvent; vars.a = A(e.agent); }
+    if (e.type === 'backstage' && ['supply', 'basic'].includes(e.data?.kind)) template = P4_STR[lang][`token${e.data.kind === 'supply' ? 'Supply' : 'Basic'}${e.data.direction === 'up' ? 'Up' : 'Down'}`];
+    if (template !== undefined) template = tokenTerms(template);
+  }
   if (template === undefined) return { key, template: '{type}', vars: { type: e.type } };
   return e.data?.enact ? { key, template: `${template} {enact}`, vars: { ...vars, enact: enactText(e.data.enact, lang) } } : { key, template, vars };
 }
