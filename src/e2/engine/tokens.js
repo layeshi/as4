@@ -90,7 +90,8 @@ export function recordThinking(w, a, parts) {
   }
   if (a.tokens.waking?.kind === 'wake') a.tokens.calledCost += total;
 }
-export const activeWaking = (w, a, id) => typeof id === 'string' && a.tokens.waking?.id === id && a.tokens.waking.tick === w.clock.tick;
+// TODO(spec): Q67 — a refunded bill is no longer an active paid waking.
+export const activeWaking = (w, a, id) => a.tokens.bill !== null && typeof id === 'string' && a.tokens.waking?.id === id && a.tokens.waking.tick === w.clock.tick;
 export const validMeterDay = (day) => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day);
 
 export function capDistribution(w) {

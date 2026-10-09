@@ -6,7 +6,8 @@ import { runAgent, makeLogger } from '../../runner/agent.js';
 import { parseModelJson } from '../../runner/parse.js';
 import { checkEndpoint, modelFetch } from './endpoint.js';
 import { UsageStore } from './usage.js';
-import { agentic } from '../e2/facade.js';
+import { earthDay } from '../shells/budget.js';
+import { agentic, tokenized } from '../e2/facade.js';
 import { waitCore } from '../http/agent.js';
 import { toolDefs } from '../../runner/loop.js';
 
@@ -226,6 +227,7 @@ export class RunnerManager {
       const provider = await this.provider(r.config);
       return runAgent({ ...r.config, token: r.token, server: this.serverURL, lang: this.rt.w.agents[id].lang, name: this.rt.w.agents[id].name }, {
         signal: controller.signal, provider, log,
+        ...(tokenized(this.rt.w) ? { refundWake: async wakeId => this.rt.exec('meter', { op: 'refund', agentId: id, wakeId, day: earthDay(Date.now(), this.cfg.shellTz || 'Asia/Shanghai').key }).result } : {}),
         onUsage: (_agentId, usage, meta) => {
           // A request we cancelled ourselves (pause, saving new settings, shutdown, the tick boundary) is not a provider failure.
           if (!meta.ok && (controller.signal.aborted || meta.cancelled)) return;

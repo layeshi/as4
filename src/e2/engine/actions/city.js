@@ -114,7 +114,7 @@ function planUpgrade(ctx, args) {
   if (w.well.upgrades.length >= P.upgradeMax) fail('invalid_args', { zh: '源井已经改良到头了', en: 'The Well cannot be upgraded further.' });
   if (args.owner !== undefined && !['self', 'city'].includes(args.owner)) fail('invalid_args');
   const level = w.well.upgrades.length + 1;
-  const name = args.name === undefined ? (ctx.lang === 'en' ? `Well upgrade, level ${level}` : `源井改良 第 ${level} 级`) : needName(args.name);
+  const name = !given(args.name) ? (ctx.lang === 'en' ? `Well upgrade, level ${level}` : `源井改良 第 ${level} 级`) : needName(args.name);
   return { name, owner: ownerOf(w, a, args.owner), need: upgradeCost(w, level) };
 }
 

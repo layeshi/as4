@@ -12,7 +12,8 @@ import { renderPerception, summarizeResults } from './render.js';
 import { buildSystemPrompt, promptParams } from './prompt.js';
 import { parseModelJson, normalizeReply } from './parse.js';
 import { completeUntilAborted } from './abortable.js';
-import { runWaking, waitTickOrWake } from './loop.js';
+import { tokenized } from '../src/e2/world.js';
+import { runWaking4, runWaking, waitTickOrWake } from './loop.js';
 
 const KEEP_ROUNDS = 6; // 短期记忆：默认只保留最近 6 轮（配置项 historyRounds 可以调小以省 token）
 const FALLBACK_TICK_MS = 300000;
@@ -192,6 +193,25 @@ export async function runAgent(cfg, deps = {}) {
     if (p.now && p.now.paused) {
       log.info('城中的时间静止了，等待。');
       await waitTick(p);
+      continue;
+    }
+
+    if (tokenized(p)) {
+      rounds++;
+      S.cursor = Number.isFinite(cursor) ? cursor : 0;
+      let current = p;
+      const routine = p.you.routine;
+      if (routine.every > 0 && (S.lastMain === undefined || p.now.tick - S.lastMain >= Math.max(routine.every, cfg.actEveryTicks || 1))) {
+        const waking = await runWaking4(S, p, { kind: 'main' });
+        acted += waking.acted;
+        current = waking.status || p;
+        if (waking.stop) { stopped = waking.stop; break; }
+      }
+      if (signal?.aborted) break;
+      const waited = await waitTickOrWake(S, current, 1);
+      acted += waited.acted;
+      cursor = S.cursor;
+      if (waited.stop) { stopped = waited.stop; break; }
       continue;
     }
 

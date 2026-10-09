@@ -2,7 +2,7 @@
 import { randomBytes } from 'node:crypto';
 import { P } from '../e2/params.js';
 import { clockDay, tokenized } from '../e2/world.js';
-import { ep, K, tokenView, rereadCost } from '../e2/engine/tokens.js';
+import { ep, K, tokenView, rereadCost, activeWaking } from '../e2/engine/tokens.js';
 import { textWeight, cpLength } from '../text.js';
 import { earthDay } from '../shells/budget.js';
 import { normLang, cityDisplayName } from '../e2/lore/index.js';
@@ -25,7 +25,7 @@ export const tokenValues = w => ({ k: K(w), capacity: w.tokens.capacity, basicAl
 
 function sessionFor(ctx, id, wakeId) {
   const s = ctx.wakings?.get(id);
-  return s && s.tick === ctx.rt.w.clock.tick && (wakeId === undefined || wakeId === s.wakeId) ? s : null;
+  return s && activeWaking(ctx.rt.w, ctx.rt.w.agents[id], s.wakeId) && s.tick === ctx.rt.w.clock.tick && (wakeId === undefined || wakeId === s.wakeId) ? s : null;
 }
 export function tokenStatus(ctx, id, { lang = 'zh' } = {}) {
   const { rt } = ctx, w = rt.w, a = w.agents[id], s = sessionFor(ctx, id);

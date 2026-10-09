@@ -454,7 +454,15 @@ export function renderActResult(p, { results, notes = [], arrived = [], moved = 
   if (results.length) for (const r of results) lines.push(summarizeResults([r], code));
   else lines.push(summarizeResults([], code));
   lines.push(...notes);
-  if (fresh && p.you) lines.push(res.now({ status: p.you.status, energy: p.you.energy, coins: p.you.coins, actionsLeft: p.you.actionsLeft, place: placeText(p) }));
+  if (fresh && p.you) {
+    const y = p.you;
+    if (tokenized(p)) {
+      const n = x => Number(x ?? 0).toLocaleString('en-US');
+      lines.push(code === 'en'
+        ? `Now: ${y.status}, tokens ${n(y.energy)} (basic ${n(y.basic)}), body today ${n(y.usedToday)} / ${n(y.cap)}, coins ${n(y.coins)}, ${y.actionsLeft} action(s) left, at ${placeText(p)}.`
+        : `此刻：${y.status === 'awake' ? '醒着' : y.status}，词元 ${n(y.energy)}（基本额度 ${n(y.basic)}），身体今天 ${n(y.usedToday)} / ${n(y.cap)}，旧币 ${n(y.coins)}，本刻还可行动 ${y.actionsLeft} 次，在 ${placeText(p)}。`);
+    } else lines.push(res.now({ status: y.status, energy: y.energy, coins: y.coins, actionsLeft: y.actionsLeft, place: placeText(p) }));
+  }
   if (fresh) lines.push(...renderArrived(p, arrived, { lang: code }));
   if (fresh && moved) lines.push(...renderArrival(p, { lang: code }));
   return lines.join('\n');
@@ -465,3 +473,5 @@ function tokenInbox(c) {
   if (c.p.inboxMore > 0) lines.push(inboxMoreLine(c.p.inboxMore, c.code));
   return lines;
 }
+
+export const renderEarlier = (entry, lang) => [D2[codeOf(lang)].wake.earlier.trimEnd(), ...summaryLines(entry, codeOf(lang))];

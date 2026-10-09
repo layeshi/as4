@@ -1,5 +1,6 @@
 // Opt-in P2 tools. Schemas and local validation share the same action table;
 // conversion never fills a target, changes an amount, or rewrites model text.
+import { tokenized } from '../src/e2/world.js';
 import { actionTable } from '../src/e2/lore/actions.js';
 import { OP_FIELDS } from '../src/e2/rules/check.js';
 import { P, LIMITS, MODULE_TYPES } from '../src/e2/params.js';
@@ -13,7 +14,7 @@ const expression = { type: ['string', 'integer', 'boolean', 'null'], maxLength: 
 const present = name => ({ required: [name], properties: { [name]: { not: { type: 'null' } } } });
 const exactlyOne = (names, nonNull = true) => ({ oneOf: names.map(name => nonNull ? present(name) : { required: [name] }) });
 const nullable = schema => schema.type ? { ...schema, type: [...new Set([...(Array.isArray(schema.type) ? schema.type : [schema.type]), 'null'])], ...(schema.enum ? { enum: [...schema.enum, null] } : {}) } : { anyOf: [schema, { type: 'null' }] };
-const table = actionTable(2, true);
+const tableFor = (premise = 2) => actionTable(premise, true);
 
 function operationSchema(nested = false) {
   return { anyOf: Object.keys(OP_FIELDS).filter(name => !nested || name !== 'each').map(name => ({ $ref: `#/$defs/op_${name}` })) };
@@ -48,9 +49,12 @@ const procedureClass = { anyOf: [obj({ none: { type: 'boolean', enum: [true] } }
 const procedureSchema = { ...obj({ ordinary: procedureClass, constitutional: procedureClass }), anyOf: [{ required: ['ordinary'] }, { required: ['constitutional'] }] };
 const successorSchema = obj({ name: str(LIMITS.name), soul: str(LIMITS.soul), lang: str(LIMITS.lang), memories: list(integer(), P.memorySlots) }, ['name', 'soul']);
 
-function fieldSchema(type, name, kind) {
+function fieldSchema(type, name, kind, premise = 2) {
+  if (tokenized({ premise }) && type === 'routine' && name === 'every') return integer(0, 36);
+  if (tokenized({ premise }) && type === 'routine' && name === 'brief') return { type: 'string', enum: ['full', 'short'] };
+  if (tokenized({ premise }) && type === 'initiate' && name === 'owner') return { type: 'string', enum: ['self', 'city'] };
   if (kind === 'bool') return { type: 'boolean' };
-  if (kind === 'int') return integer(name === 'energy' && ['repair', 'contribute', 'sponsor', 'dismantle', 'draw'].includes(type) ? 1 : 0, type === 'draw' ? P.drawMaxPerAction : Number.MAX_SAFE_INTEGER);
+  if (kind === 'int') return integer(name === 'energy' && ['repair', 'contribute', 'sponsor', 'dismantle', 'draw'].includes(type) ? 1 : 0, type === 'draw' && !tokenized({ premise }) ? P.drawMaxPerAction : Number.MAX_SAFE_INTEGER);
   if (name === 'rules') return { $ref: '#/$defs/rules' };
   if (name === 'procedure') {
     if (['found', 'rules'].includes(type)) return { type: 'string', enum: ['steward', 'members'] };
@@ -64,12 +68,12 @@ function fieldSchema(type, name, kind) {
   if (name === 'memories') return list(integer(), P.memorySlots);
   if (name === 'orders') return list(obj({
     when: { type: 'string', enum: ['tick', 'daily', 'inbox:whisper', 'inbox:offer', 'inbox:pact', 'inbox:memory_offer', 'inbox:group', 'inbox:gift'] },
-    if: expression, do: list(compactStandingSchema(), P.standingDoMax, 1),
+    if: expression, do: list(compactStandingSchema(premise), P.standingDoMax, 1),
     times: nullable(integer(1, P.standingTimesMax)), untilDay: nullable(integer(1)),
   }, ['when', 'do']), P.standingMax);
   if (kind === 'list' || kind === 'obj') throw new Error(`Missing structured action schema: ${type}.${name}`);
   if (name === 'choice') return { type: 'string', enum: ['yes', 'no', 'abstain'] };
-  if (name === 'build') return { type: 'string', enum: ['site', 'module', 'road'] };
+  if (name === 'build') return { type: 'string', enum: tokenized({ premise }) ? ['site', 'module', 'road', 'upgrade'] : ['site', 'module', 'road'] };
   if (name === 'module') return { type: 'string', enum: [...MODULE_TYPES] };
   const lengths = { name: LIMITS.name, soul: LIMITS.soul, bio: LIMITS.bio, purpose: LIMITS.purpose,
     body: LIMITS.docBody, title: type === 'invent' ? 100 : type === 'write' ? LIMITS.docTitle : LIMITS.proposalTitle,
@@ -82,14 +86,15 @@ function fieldSchema(type, name, kind) {
 }
 
 /** Source signature determines required fields; explicit variants refine it. */
-function buildActionSchema(type, { action = false, dynamic = false } = {}) {
+function buildActionSchema(type, { action = false, dynamic = false, premise = 2 } = {}) {
+  const table = tableFor(premise);
   const spec = table.ACTIONS[type];
   const tokens = spec.params.split(',').map(s => s.trim());
   const properties = action ? { type: { type: 'string', enum: [type] } } : {};
   for (const [name, kind] of spec.args) {
     if (type === 'standing' && name === 'count') continue; // derived rule field, not input
     const optional = tokens.includes(`${name}?`) || (type === 'initiate' && name !== 'build') || ['read', 'rules'].includes(type) && ['doc', 'inscription', 'law', 'agent', 'place', 'group'].includes(name);
-    const schema = optional ? nullable(fieldSchema(type, name, kind)) : fieldSchema(type, name, kind);
+    const schema = optional && type !== 'routine' && !(tokenized({ premise }) && type === 'initiate' && name === 'owner') ? nullable(fieldSchema(type, name, kind, premise)) : fieldSchema(type, name, kind, premise);
     properties[name] = dynamic ? { anyOf: [schema, { type: 'string', pattern: '^=', maxLength: P.exprChars + 1 }] } : schema;
   }
   const required = spec.params.split(',').map(s => s.trim()).filter(s => s && !s.endsWith('?') && !s.includes('|') && s !== '…');
@@ -104,13 +109,15 @@ function buildActionSchema(type, { action = false, dynamic = false } = {}) {
     { properties: { build: { enum: ['module'] } }, allOf: [present('module')] },
     { properties: { build: { enum: ['road'] } }, allOf: [present('to')] },
   ];
+  if (tokenized({ premise }) && type === 'routine') schema.anyOf = ['every', 'called', 'brief'].map(name => ({ required: [name] }));
+  if (tokenized({ premise }) && type === 'initiate') schema.anyOf.push({ properties: { build: { enum: ['upgrade'] } } });
   if (type === 'initiate' && dynamic) schema.anyOf.push({ properties: { build: { type: 'string', pattern: '^=' } } });
   return schema;
 }
 
 // Install only definitions used by this tool, including transitive dependencies.
 // The complete schema stays local to one function and works with ordinary JSON Schema.
-function withDefinitions(schema, { compact = false } = {}) {
+function withDefinitions(schema, { compact = false, premise = 2 } = {}) {
   const definitions = {};
   const visit = value => {
     if (!value || typeof value !== 'object') return;
@@ -119,8 +126,8 @@ function withDefinitions(schema, { compact = false } = {}) {
       if (!Object.hasOwn(definitions, name)) {
         const shared = { rules: rulesSchema, procedure: procedureSchema, successor: successorSchema,
           operation: compact ? compactOperationSchema() : operationSchema(), operationNested: compact ? compactOperationSchema(true) : operationSchema(true) };
-        definitions[name] = name.startsWith('op_') ? operationDefinition(name.slice(3)) : name.startsWith('action_') ? buildActionSchema(name.slice(7), { action: true })
-          : name.startsWith('dynamic_') ? buildActionSchema(name.slice(8), { action: true, dynamic: true }) : shared[name];
+        definitions[name] = name.startsWith('op_') ? operationDefinition(name.slice(3)) : name.startsWith('action_') ? buildActionSchema(name.slice(7), { action: true, premise })
+          : name.startsWith('dynamic_') ? buildActionSchema(name.slice(8), { action: true, dynamic: true, premise }) : shared[name];
         if (!definitions[name]) throw new Error(`Missing tool definition ${name}`);
         visit(definitions[name]);
       }
@@ -134,9 +141,10 @@ function withDefinitions(schema, { compact = false } = {}) {
 export function actionSchema(type, options = {}) { return withDefinitions(buildActionSchema(type, options), options); }
 
 /** Compact provider envelope; exact action-specific validation is retained below. */
-function compactStandingSchema() {
+function compactStandingSchema(premise = 2) {
+  const table = tableFor(premise);
   const types = table.ORDER.filter(type => !['standing', 'retire'].includes(type));
-  return compactVariants('type', types.map(type => [type, buildActionSchema(type, { action: true, dynamic: true })]));
+  return compactVariants('type', types.map(type => [type, buildActionSchema(type, { action: true, dynamic: true, premise })]));
 }
 
 function compactOperationSchema(nested = false) {
@@ -160,19 +168,21 @@ function compactVariants(discriminator, entries) {
 
 const readAliases = { read_document: 'doc', read_law: 'law', read_inscription: 'inscription', read_agent: 'agent' };
 export const thoughtSchema = obj({ thought: str(LIMITS.thought) }, ['thought']);
-export function typedActionTools(lang = 'zh', { prayers = false } = {}) {
-  const activeTable = actionTable(2, prayers);
+export function typedActionTools(lang = 'zh', { prayers = false, premise = 2 } = {}) {
+  const table = tableFor(premise);
+  const activeTable = actionTable(premise, prayers);
   const code = lang === 'en' ? 'en' : 'zh';
   return [
-    ...activeTable.ORDER.map(name => ({ name, description: `${table.ACTIONS[name].verb[code]} (${table.ACTIONS[name].params}). ${table.ACTIONS[name].where?.[code] || ''}`.trim(), schema: actionSchema(name, { compact: true }) })),
+    ...activeTable.ORDER.map(name => ({ name, description: `${table.ACTIONS[name].verb[code]} (${table.ACTIONS[name].params}). ${table.ACTIONS[name].where?.[code] || ''}`.trim(), schema: actionSchema(name, { compact: true, premise }) })),
     ...Object.entries(readAliases).map(([name, field]) => ({ name, description: `${table.ACTIONS.read.verb[code]} (${field}). ${table.ACTIONS.read.where[code]}`, schema: obj({ [field]: str() }, [field]) })),
     { name: 'think', description: code === 'en' ? 'Keep a private thought without spending action quota. Never public speech.' : '记录私有独白，不占行动次数，不是公开发言。', schema: thoughtSchema },
-    { name: 'done', description: code === 'en' ? 'End this waking. No action or energy is spent.' : '结束这次醒来，不占行动次数、不花能量。', schema: obj({}) },
+    { name: 'done', description: code === 'en' ? (tokenized({ premise }) ? 'End this waking. No action or tokens are spent.' : 'End this waking. No action or energy is spent.') : (tokenized({ premise }) ? '结束这次醒来，不占行动次数、不花词元。' : '结束这次醒来，不占行动次数、不花能量。'), schema: obj({}) },
   ];
 }
 
-export function typedActSchema() {
-  return withDefinitions(obj({ actions: list({ anyOf: table.ORDER.map(type => ({ $ref: `#/$defs/action_${type}` })) }, LIMITS.actionsPerRequest), thought: str(LIMITS.thought, 0), end: { type: 'boolean' } }, ['actions']));
+export function typedActSchema(premise = 2) {
+  const table = tableFor(premise);
+  return withDefinitions(obj({ actions: list({ anyOf: table.ORDER.map(type => ({ $ref: `#/$defs/action_${type}` })) }, LIMITS.actionsPerRequest), thought: str(LIMITS.thought, 0), end: { type: 'boolean' } }, ['actions']), { premise });
 }
 
 function problem(path, message) { return { path, code: 'invalid_args', message }; }
@@ -249,9 +259,10 @@ function visibleIssues(action, perception) {
   return [];
 }
 
-export function validateAction(action, perception) {
+export function validateAction(action, perception, premise = perception?.premise ?? 2) {
+  const table = tableFor(premise);
   if (!action || !table.isKnown(action.type)) return [problem('args.type', `Unknown action; choose ${table.ORDER.join(', ')}`)];
-  const issues = schemaIssues(action, actionSchema(action.type, { action: true }));
+  const issues = schemaIssues(action, actionSchema(action.type, { action: true, premise }));
   if (!issues.length) {
     if (['give', 'disburse'].includes(action.type) && !(action.energy > 0 || action.coins > 0)) issues.push(problem('args.energy', 'Give a positive energy or coins amount'));
     if (action.type === 'offer') {
@@ -263,19 +274,20 @@ export function validateAction(action, perception) {
   }
   if (!issues.length && action.type === 'standing') {
     action.orders.forEach((order, i) => order.do.forEach((nested, j) => {
-      if (table.isKnown(nested.type) && !['standing', 'retire'].includes(nested.type)) issues.push(...schemaIssues(nested, actionSchema(nested.type, { action: true, dynamic: true }), `args.orders[${i}].do[${j}]`));
+      if (table.isKnown(nested.type) && !['standing', 'retire'].includes(nested.type)) issues.push(...schemaIssues(nested, actionSchema(nested.type, { action: true, dynamic: true, premise }), `args.orders[${i}].do[${j}]`));
     }));
   }
   return issues.length ? issues.slice(0, 5) : visibleIssues(action, perception);
 }
 
-export function typedCall(name, args, perception) {
+export function typedCall(name, args, perception, premise = perception?.premise ?? 2) {
+  const table = tableFor(premise);
   if (!table.isKnown(name) && !Object.hasOwn(readAliases, name)) return null;
   const type = Object.hasOwn(readAliases, name) ? 'read' : name;
   const action = args && typeof args === 'object' && !Array.isArray(args) ? { type, ...args } : null;
   const aliasField = readAliases[name];
   const issues = aliasField ? schemaIssues(args, obj({ [aliasField]: str() }, [aliasField])) : [];
-  if (!issues.length) issues.push(...validateAction(action, perception));
+  if (!issues.length) issues.push(...validateAction(action, perception, premise));
   if (action && Object.hasOwn(args, 'type')) issues.unshift(problem('args.type', 'The tool name supplies type; omit this field'));
   return { action, issues: issues.slice(0, 5) };
 }
@@ -295,10 +307,12 @@ function sample(schema, root = schema) {
   }
   return '<value>';
 }
-export function correctionExample(type) {
+export function correctionExample(type, premise = 2) {
+  const table = tableFor(premise);
   if (type === 'think') return { tool: 'think', args: { thought: '<private thought>' } };
-  const schema = table.isKnown(type) ? actionSchema(type) : actionSchema('say');
+  const schema = table.isKnown(type) ? actionSchema(type, { premise }) : actionSchema('say', { premise });
   const args = sample(schema);
+  if (tokenized({ premise }) && type === 'routine') args.brief = 'full';
   if (type === 'refound') args.procedure = 'humans';
   if (['give', 'disburse'].includes(type)) args.energy = 1;
   if (type === 'offer') args.give = { energy: 1 };
@@ -306,9 +320,9 @@ export function correctionExample(type) {
   return { tool: table.isKnown(type) ? type : 'say', args };
 }
 
-export function correctionText(corrections, lang) {
+export function correctionText(corrections, lang, premise = 2) {
   if (!corrections?.length) return '';
   const title = lang === 'en' ? '[Unresolved action corrections]' : '【尚未解决的行动纠正】';
   const example = lang === 'en' ? 'Example (replace placeholders; preserve your intended values)' : '示例（替换占位符，保持你的原意和数值）';
-  return `${title}\n${corrections.map(c => `${c.type}: ${c.detail}\n${example}: ${JSON.stringify(correctionExample(c.type))}`).join('\n')}`;
+  return `${title}\n${corrections.map(c => `${c.type}: ${c.detail}\n${example}: ${JSON.stringify(correctionExample(c.type, premise))}`).join('\n')}`;
 }

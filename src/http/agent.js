@@ -1,3 +1,4 @@
+import { activeWaking } from '../e2/engine/tokens.js';
 import { tokenStatus, wakeCore, lookCore, actTokens } from './tokens.js';
 import { lawProtectionView } from '../e2/engine/law-semantics.js';
 // PROTOCOL §3、§4：agent 接口——感知与行动。
@@ -83,7 +84,7 @@ export function actCore(ctx, id, body, lang) {
   if (a.status !== 'awake') return fail('not_awake', { status: a.status });
   if (tokenized(w)) {
     const s = ctx.wakings?.get(id);
-    if (!s || s.tick !== w.clock.tick || typeof body.wakeId !== 'string' || body.wakeId !== s.wakeId) return fail('no_waking');
+    if (!s || s.tick !== w.clock.tick || typeof body.wakeId !== 'string' || body.wakeId !== s.wakeId || !activeWaking(w, a, body.wakeId)) return fail('no_waking');
   }
   if (body.actionTools !== undefined && !['legacy', 'typed'].includes(body.actionTools)) return fail('invalid_request', { field: 'actionTools' });
   if (body.actionTools === 'typed') {
@@ -126,10 +127,10 @@ export function actCore(ctx, id, body, lang) {
  */
 export function waitCore(rt, id, { after, timeoutMs = 25000, signal, lang = 'zh' } = {}) {
   const a = rt.w.agents[id];
-  if (tokenized(rt.w)) after = a?.delivered ?? 0;
+  if (tokenized(rt.w)) after = Math.max(a?.delivered ?? 0, after ?? 0);
   if (!a || a.status !== 'awake') return Promise.resolve({ items: [], cursor: after, status: a ? a.status : 'unknown' });
   const result = (items) => ({ items: tokenized(rt.w) ? items.map(({ seq, kind }) => ({ seq, kind })) : items, cursor: items[items.length - 1].seq });
-  const found = wakeItems(rt.w, id, tokenized(rt.w) ? rt.w.agents[id].delivered : after, lang);
+  const found = wakeItems(rt.w, id, tokenized(rt.w) ? Math.max(rt.w.agents[id].delivered, after) : after, lang);
   if (found.length) return Promise.resolve(result(found));
   return new Promise((resolve) => {
     let done = false;
@@ -146,7 +147,7 @@ export function waitCore(rt, id, { after, timeoutMs = 25000, signal, lang = 'zh'
     const onAbort = () => finish({ items: [], cursor: after });
     off = rt.onWake((n) => {
       if (n.agentId !== id || n.seq <= after) return;
-      const items = wakeItems(rt.w, id, tokenized(rt.w) ? rt.w.agents[id].delivered : after, lang);
+      const items = wakeItems(rt.w, id, tokenized(rt.w) ? Math.max(rt.w.agents[id].delivered, after) : after, lang);
       if (items.length) finish(result(items));
     });
     timer = setTimeout(() => finish({ items: [], cursor: after }), timeoutMs);

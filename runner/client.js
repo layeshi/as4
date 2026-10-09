@@ -36,6 +36,8 @@ export function createClient({ server, token, fetch: fetchImpl = globalThis.fetc
 
   return {
     base,
+    wake(body) { return call('/api/me/wake', { method: 'POST', body }); },
+    look(body) { return call('/api/me/look', { method: 'POST', body }); },
     /** 感知。after 缺省时由服务器推进收件箱游标；显式给出时不推进（「至少一次」语义） */
     async me({ lang = 'zh', after } = {}) {
       const q = new URLSearchParams({ lang });
@@ -55,8 +57,11 @@ export function createClient({ server, token, fetch: fetchImpl = globalThis.fetc
       return call(`/api/me/wait?${q}`, { timeoutMs: t + 10000 });
     },
     /** lang 为 en 时动作错误的说明用英文（缺省 zh，请求路径不变）；第二纪里它还进入命令（draft 的说明、read { law } 的读法） */
-    act({ thought, actions, lang, experimentGeneration = lastExperimentGeneration }) {
+    act({ thought, actions, lang, wakeId, turn, actionTools, experimentGeneration = lastExperimentGeneration }) {
       const body = { actions };
+      if (wakeId !== undefined) body.wakeId = wakeId;
+      if (turn !== undefined) body.turn = turn;
+      if (actionTools !== undefined) body.actionTools = actionTools;
       if (experimentGeneration !== undefined) body.experimentGeneration = experimentGeneration;
       if (thought) body.thought = thought;
       return call(`/api/me/act${lang === 'en' ? '?lang=en' : ''}`, { method: 'POST', body });

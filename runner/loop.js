@@ -1,3 +1,5 @@
+import { tokenized } from '../src/e2/world.js';
+import { missedTokensLine, stoppedTokensLine } from './render-p4.js';
 // SPEC-P2 §7：第二前提的工具循环（agent 模式）。
 //
 // 一次醒来（runWaking）：居民先看到概要，用 look 展开想看的段，用 act 行动；每次 act 之后重新感知，新到的收件附在结果里；
@@ -14,7 +16,7 @@ import { parseModelJson, normalizeReply } from './parse.js';
 import { ProviderError } from './providers.js';
 import { safeActionType, safeErrorCode, safeFinishReason, providerErrorLabel, boundedCount } from '../src/telemetry-safety.js';
 import { buildSystemPrompt, promptParams } from './prompt.js';
-import { D2, LOOK_WHATS, clipLook, renderActResult, renderBrief, renderLook, renderWake } from './render-p2.js';
+import { D2, LOOK_WHATS, LOOK_WHATS_P4, renderHistory, renderEarlier, clipLook, renderActResult, renderBrief, renderLook, renderWake } from './render-p2.js';
 import { typedActionTools, typedActSchema, typedCall, validateAction, schemaIssues, correctionText, thoughtSchema } from './action-tools.js';
 
 /** 每刻的上限（A）：运行时的配置，不属于世界；平台的运行器执行，服务器只通过感知的 attention 告诉所有客户端 */
@@ -34,10 +36,10 @@ export function toolDefs(lang, { actionTools, premise = 0, prayers = false } = {
   const legacy = [
     {
       name: 'look',
-      description: t.look,
+      description: tokenized({ premise }) ? t.look.replace('看不花能量', '看到的文字按读入付词元').replace('looking costs no energy', 'what you see is paid for as reading') : t.look,
       schema: {
         type: 'object',
-        properties: { what: { type: 'string', enum: [...LOOK_WHATS] }, id: { type: 'string' } },
+        properties: { what: { type: 'string', enum: [...(tokenized({ premise }) ? LOOK_WHATS_P4 : LOOK_WHATS)] }, id: { type: 'string' } },
         required: ['what'],
         additionalProperties: false,
       },
@@ -58,7 +60,7 @@ export function toolDefs(lang, { actionTools, premise = 0, prayers = false } = {
     },
   ];
   if (actionTools !== 'typed' || premise < 2) return legacy;
-  return [legacy[0], ...typedActionTools(lang, { prayers })].map(t => ({ ...t, strict: false }));
+  return [legacy[0], ...typedActionTools(lang, { prayers, premise })].map(t => ({ ...t, strict: false }));
 }
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -80,7 +82,7 @@ export function parseToolJson(text, { actionTools, premise = 0, prayers = false 
   }
   if (Object.hasOwn(v, 'act')) add('act', Array.isArray(v.act) ? { actions: v.act } : isObj(v.act) ? v.act : null);
   if (actionTools === 'typed' && premise >= 2) {
-    const names = new Set(typedActionTools('en', { prayers }).map(t => t.name));
+    const names = new Set(typedActionTools('en', { prayers, premise }).map(t => t.name));
     for (const [name, args] of Object.entries(v)) if (name !== 'done' && names.has(name)) add(name, args);
   }
   if (v.done === true) add('done', {});
@@ -141,7 +143,9 @@ const receivedOf = (i) => ({
  * 返回 { rec, acted, stop }：rec 是轨迹的一条记录（不含任何文本）；acted 是被服务器接受的 act 请求数；
  * stop 非空时 runAgent 应当停止这位 agent（'auth' | 'provider' | 'aborted'）。
  */
-export async function runWaking(S, p0, { kind }) {
+export async function runWaking(S, p0, { kind, tokenWake } = {}) {
+  const p4 = tokenized(p0);
+  if (p4 && !tokenWake) return runWaking4(S, p0, { kind });
   const { cfg, provider, client, log, signal, deps, report } = S;
   const lang = codeOf(cfg.lang);
   const typed = cfg.actionTools === 'typed' && p0.premise >= 2;
@@ -162,22 +166,25 @@ export async function runWaking(S, p0, { kind }) {
   const mode = wantsNative && typeof provider.step === 'function' ? 'native' : 'json';
 
   // 系统提示整轮不变，便于提供者缓存；换了语言、灵魂、习得、设定版本或调用方式时重建
+  if (!p4) {
   const key = JSON.stringify([p0.lang, p0.you.soul, p0.you.trained || [], p0.premise, mode, ...(typed ? ['typed'] : []), ...(p0.you?.prayers?.enabled ? ['prayers'] : [])]);
   if (S.system === null || key !== S.systemKey) {
     S.system = buildSystemPrompt({ ...promptParams(p0), toolMode: mode, ...(typed ? { actionTools: 'typed' } : {}) });
     S.systemKey = key;
   }
-  const system = S.system;
+  }
+  const system = p4 ? tokenWake.system : S.system;
   const tools = toolDefs(lang, { actionTools: cfg.actionTools, premise: p0.premise, prayers: !!p0.you?.prayers?.enabled });
   if (S.looks.tick !== tick) S.looks = { tick, n: 0 }; // 看的次数按刻归零，醒来与被叫醒合计
 
-  const brief = kind === 'main'
+  const freeHistory = p4 ? [...renderHistory(S.history, { code: lang, now: p0.now }), ...(kind === 'wake' && S.mainEntry?.tick === tick ? renderEarlier(S.mainEntry.entry, lang) : [])].join('\n') : '';
+  const brief = p4 ? `${tokenWake.text}${freeHistory ? `\n${freeHistory}` : ''}` : kind === 'main'
     ? renderBrief(p0, { lang, history: S.history, missed: missedLine(S, p0) })
     : renderWake(p0, { lang, earlier: S.mainEntry && S.mainEntry.tick === tick ? S.mainEntry.entry : null });
-  const corrections = typed ? correctionText(S.corrections, lang) : '';
+  const corrections = typed ? correctionText(S.corrections, lang, p0.premise) : '';
   const first = corrections ? `${brief}\n\n${corrections}` : brief;
 
-  const rec = { tick, kind, mode, turns: 0, looks: [], acts: [], ended: null, tokens: { in: 0, out: 0 }, ms: 0 };
+  const rec = { tick, kind, mode, turns: 0, looks: [], acts: [], ended: null, tokens: { in: 0, out: 0 }, ms: 0, ...(p4 ? { bill: billNumbers(tokenWake.bill), wakeId: tokenWake.wakeId } : {}) };
   const transcript = [{ role: 'user', text: first }]; // 原生：中立的对话记录
   const messages = [{ role: 'user', content: first }]; // 文本 JSON：user 与 assistant 交替的纯文本
   const shown = [...(p0.inbox || [])]; // 这次醒来里渲染过的收件
@@ -195,6 +202,8 @@ export async function runWaking(S, p0, { kind }) {
   let ended = null;
   let endNow = false;
   let pendingNext = pending;
+  let tokenEnded = false;
+  let firstModelFailed = false;
 
   // 用量的回报不能影响运行：回报函数出错只记一条警告
   const reportUsage = (usage, meta) => {
@@ -215,11 +224,11 @@ export async function runWaking(S, p0, { kind }) {
   const malformed = (type, issues) => {
     rememberCorrection(type, JSON.stringify(issues));
     report({ status: 'error', lastError: lang === 'en' ? 'Tool arguments failed local validation; no world action was submitted.' : '工具参数未通过本地校验，本次调用未提交世界动作。' });
-    return { text: correctionText([{ type, detail: cp(JSON.stringify(issues), 1400) }], lang), isError: true };
+    return { text: correctionText([{ type, detail: cp(JSON.stringify(issues), 1400) }], lang, p0.premise), isError: true };
   };
 
   // ── 工具：look ──
-  const doLook = (args) => {
+  const doLook = async (args) => {
     if (typed) {
       const issues = schemaIssues(args, tools[0].schema);
       if (issues.length) return malformed('look', issues);
@@ -228,6 +237,23 @@ export async function runWaking(S, p0, { kind }) {
     if (!isObj(args)) return invalid(res.details.notObject);
     if (typeof args.what !== 'string' || (args.id !== undefined && args.id !== null && typeof args.id !== 'string' && typeof args.id !== 'number')) return invalid(res.details.look);
     if (S.looks.n >= limits.looks) return { text: res.looksOut };
+    if (p4) {
+      const id = args.id === undefined || args.id === null || args.id === '' ? undefined : String(args.id);
+      const r = await client.look({ wakeId: tokenWake.wakeId, turn: rec.turns, what: args.what, id, lang });
+      if (!r.ok) {
+        const code = r.json?.error?.code;
+        if (r.status === 402) { ended = 'tokens'; tokenEnded = true; return { text: stoppedTokensLine(code, lang), isError: true }; }
+        if (r.status === 429) { S.looks.n = limits.looks; return { text: res.looksOut }; }
+        if (r.status === 401) stop = 'auth';
+        if (['no_waking', 'paused', 'not_awake'].includes(code)) { ended = code === 'paused' ? 'paused' : code === 'not_awake' ? 'asleep' : 'deadline'; tokenEnded = true; }
+        return { text: res.actFailed(code || r.status), isError: true };
+      }
+      S.looks.n++;
+      rec.looks.push(id ? `${cp(args.what, 40)}:${cp(id, 40)}` : cp(args.what, 40));
+      latest = { ...latest, you: { ...latest.you, ...r.json.you } };
+      rec.bill = billNumbers(r.json.bill);
+      return { text: r.json.text };
+    }
     S.looks.n++;
     const id = args.id === undefined || args.id === null || args.id === '' ? undefined : String(args.id);
     const what = cp(args.what, 40);
@@ -238,8 +264,8 @@ export async function runWaking(S, p0, { kind }) {
   // ── 工具：act ──
   const doAct = async (args) => {
     if (typed) {
-      const issues = schemaIssues(args, typedActSchema());
-      if (!issues.length) for (const action of args.actions) issues.push(...validateAction(action, latest));
+      const issues = schemaIssues(args, typedActSchema(p0.premise));
+      if (!issues.length) for (const action of args.actions) issues.push(...validateAction(action, p4 ? null : latest, p0.premise));
       if (issues.length) return malformed(args?.actions?.[0]?.type || 'act', issues.slice(0, 5));
     }
     if (!isObj(args)) return invalid(res.details.notObject);
@@ -257,13 +283,22 @@ export async function runWaking(S, p0, { kind }) {
 
     let results = [];
     let failure = null;
+    let tokenArrived = null;
     if (thought || actions.length > 0) {
-      const r = await client.act({ thought, actions, lang, experimentGeneration: p0.now.experimentGeneration ?? 0 });
+      const r = await client.act({ thought, actions, lang, experimentGeneration: p0.now.experimentGeneration ?? 0, ...(p4 ? { wakeId: tokenWake.wakeId, turn: rec.turns, ...(typed ? { actionTools: 'typed' } : {}) } : {}) });
       if (r.ok) {
         results = r.json.results || [];
+        if (p4) {
+          latest = { ...latest, you: { ...latest.you, ...r.json.you } };
+          rec.bill = billNumbers(r.json.bill);
+          tokenArrived = r.json.arrived;
+          if (r.json.arrivedWithheld !== undefined) { ended = 'tokens'; tokenEnded = true; }
+        }
         acted++;
       } else {
         const code = r.json && r.json.error && r.json.error.code;
+        if (p4 && r.status === 402) { ended = 'tokens'; tokenEnded = true; return { text: stoppedTokensLine(code, lang), isError: true }; }
+        if (p4 && ['no_waking', 'paused', 'not_awake'].includes(code)) { ended = code === 'paused' ? 'paused' : code === 'not_awake' ? 'asleep' : 'deadline'; tokenEnded = true; }
         log.warn(`行动失败：${providerErrorLabel(r)} ${safeErrorCode(r.json?.error?.code)}`);
         report({ status: 'error', lastError: '行动提交失败，下一刻重试。' });
         if (r.status === 401) {
@@ -289,7 +324,7 @@ export async function runWaking(S, p0, { kind }) {
 
     // 重新感知：请求到了服务器（成功或被拒）时世界可能变了；什么都没提交就沿用原来的
     let fresh = true;
-    if (results.length || failure) {
+    if (!p4 && (results.length || failure)) {
       const me = await client.me({ lang, after: S.cursor });
       if (me.ok) latest = me.json;
       else {
@@ -301,15 +336,15 @@ export async function runWaking(S, p0, { kind }) {
       }
     }
     if (failure) return { text: failure, isError: true };
-    const arrived = fresh ? (latest.inbox || []).filter((i) => i.seq > shownSeq) : [];
+    const arrived = !p4 && fresh ? (latest.inbox || []).filter((i) => i.seq > shownSeq) : [];
     if (arrived.length) {
       shown.push(...arrived);
       shownSeq = maxSeq(arrived);
       pendingNext = shownSeq;
     }
     const moved = results.some((r) => r.type === 'move' && r.ok);
-    const resultText = renderActResult(latest, { results, notes, arrived, moved, fresh, lang });
-    const feedback = typed && results.some(r => !r.ok || r.data?.ok === false) ? correctionText(S.corrections, lang) : '';
+    const resultText = renderActResult(latest, { results, notes, arrived, moved: !p4 && moved, fresh, lang }) + (p4 && tokenArrived ? `\n${tokenArrived}` : '');
+    const feedback = typed && results.some(r => !r.ok || r.data?.ok === false) ? correctionText(S.corrections, lang, p0.premise) : '';
     return { text: feedback ? `${resultText}\n${feedback}` : resultText };
   };
 
@@ -332,7 +367,7 @@ export async function runWaking(S, p0, { kind }) {
       return { text: '' };
     }
     if (typed) {
-      const converted = typedCall(call.name, call.args, latest);
+      const converted = typedCall(call.name, call.args, p4 ? null : latest, p0.premise);
       if (converted) return converted.issues.length ? malformed(converted.action?.type || call.name, converted.issues) : doAct({ actions: [converted.action] });
     }
     return { text: res.noTool(String(call.name).slice(0, 40)), isError: true };
@@ -377,6 +412,7 @@ export async function runWaking(S, p0, { kind }) {
         ? await completeUntilAborted(provider, { system, transcript, tools, perception: latest, signal: guard.signal, timeoutMs: limit }, 'step')
         : await completeUntilAborted(provider, { system, messages, perception: latest, signal: guard.signal, timeoutMs: limit });
     } catch (e) {
+      if (p4 && rec.turns === 0) firstModelFailed = true;
       const ms = Date.now() - t0;
       rec.ms += ms;
       if (signal && signal.aborted) {
@@ -420,7 +456,7 @@ export async function runWaking(S, p0, { kind }) {
     rec.ms += ms;
     S.rejected = 0;
     delivered = Math.max(delivered, pending); // 刚才发出去的消息里的收件，现在算是交给了模型
-    if (rec.turns === 1) S.lastWoke = tick; // 第一前提的「失去的一刻」：至少有一轮成功，才算醒过（Q28）
+    if (!p4 && rec.turns === 1) S.lastWoke = tick; // 第一前提的「失去的一刻」：至少有一轮成功，才算醒过（Q28）
     const usage = reply.usage || null;
     if (usage) {
       rec.tokens.in += Number.isFinite(usage.input) ? usage.input : 0;
@@ -463,8 +499,9 @@ export async function runWaking(S, p0, { kind }) {
     for (const call of calls) {
       const out = await runCall(call);
       outs.push({ id: call.id, name: call.name, ...out, looksLeft: Math.max(0, limits.looks - S.looks.n) }); // 看的次数记在每个结果自己的时刻
-      if (stop) break;
+      if (stop || tokenEnded) break;
     }
+    if (tokenEnded) break;
     if (stop) { ended = 'error'; failedTurn = turn; break; }
     pending = pendingNext;
     if (endNow) { ended = 'end'; break; }
@@ -493,7 +530,11 @@ export async function runWaking(S, p0, { kind }) {
     if (latest.you.actionsLeft === 0) { ended = 'actions'; break; } // Q40 A：先测量；最后一次结果是否另交一轮，测量后再定。
   }
 
-  if (stop === 'aborted') return { rec, acted, stop }; // 被中止（暂停、关闭）：不记摘要与轨迹
+  if (p4 && firstModelFailed && deps.refundWake) {
+    try { const refunded = await deps.refundWake(tokenWake.wakeId); if (refunded?.ok) rec.bill = billNumbers(refunded.bill); }
+    catch { log.warn('醒来退款失败（正文已省略）'); }
+  }
+  if (stop === 'aborted') return { rec, acted, stop, ...(p4 ? { status: latest } : {}) }; // 被中止（暂停、关闭）：不记摘要与轨迹
 
   // ── 结束：游标、摘要、轨迹 ──
   rec.ended = ended;
@@ -514,7 +555,7 @@ export async function runWaking(S, p0, { kind }) {
   } catch (e) {
     log.warn('onWaking 出错（正文已省略）');
   }
-  return { rec, acted, stop };
+  return { rec, acted, stop, ...(p4 ? { status: latest } : {}) };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -529,7 +570,7 @@ export async function runWaking(S, p0, { kind }) {
 export async function waitTickOrWake(S, p, n = 1) {
   const { cfg, client, deps, log, signal } = S;
   const lang = codeOf(cfg.lang);
-  const waitFn = deps.waitWake === false ? null : (deps.waitWake ?? (typeof client.wait === 'function' ? (o) => client.wait(o) : null));
+  const waitFn = deps.waitWake === false || (tokenized(p) && !p.you.routine.called) ? null : (deps.waitWake ?? (typeof client.wait === 'function' ? (o) => client.wait(o) : null));
   if (!waitFn) {
     await S.waitTick(p, n);
     return { stop: null, acted: 0 };
@@ -582,11 +623,37 @@ export async function waitTickOrWake(S, p, n = 1) {
       continue;
     }
     const qp = q.json;
+    if (tokenized(qp) && !qp.you?.routine?.called) { await S.waitTick(qp, 1); break; }
     if (!qp.you || qp.you.status !== 'awake' || qp.you.actionsLeft === 0 || !qp.now || qp.now.tick !== tick) continue;
     S.wakes.n++;
-    const out = await runWaking(S, qp, { kind: 'wake' });
+    const out = await (tokenized(qp) ? runWaking4 : runWaking)(S, qp, { kind: 'wake' });
     acted += out.acted;
     if (out.stop) return { stop: out.stop, acted };
   }
   return { stop: null, acted };
+}
+
+const billNumbers = bill => ({ reread: bill?.reread || 0, read: bill?.read || 0, write: bill?.write || 0 });
+export async function runWaking4(S, status, { kind = 'main' } = {}) {
+  const mode = S.cfg.toolMode === 'native' && typeof S.provider.step === 'function' ? 'native' : 'json';
+  if (kind === 'main') S.lastMain = status.now.tick;
+  const r = await S.client.wake({ kind, lang: codeOf(S.cfg.lang), toolMode: mode, actionTools: S.cfg.actionTools || 'legacy' });
+  if (!r.ok) {
+    const reason = r.json?.error?.code || 'error';
+    if (r.status === 402) (S.missed ||= []).push({ tick: status.now.tick, reason });
+    const rec = { tick: status.now.tick, kind, mode, turns: 0, looks: [], acts: [], ended: reason, tokens: { in: 0, out: 0 }, ms: 0,
+      bill: billNumbers(null), ...(r.status === 402 ? { refused: reason } : {}) };
+    try { S.deps.onWaking?.(status.you.id, rec); } catch { S.log.warn('onWaking 出错（正文已省略）'); }
+    return { rec, acted: 0, stop: r.status === 401 ? 'auth' : null, status };
+  }
+  const tokenWake = { ...r.json };
+  if (S.missed?.length) {
+    const lines = ['tokens_exhausted', 'cap_reached'].flatMap(reason => {
+      const count = new Set(S.missed.filter(m => m.reason === reason).map(m => m.tick)).size;
+      return count ? [missedTokensLine(count, reason, codeOf(S.cfg.lang))] : [];
+    });
+    tokenWake.text = [...lines, tokenWake.text].join('\n');
+    S.missed = [];
+  }
+  return runWaking(S, { ...status, you: { ...status.you, ...r.json.you }, attention: r.json.attention || status.attention }, { kind, tokenWake });
 }
