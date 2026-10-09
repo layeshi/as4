@@ -7,11 +7,12 @@
 // 守恒式：今日持有 = 昨日持有 + 今日来源合计 − 今日去处合计（必须精确相等）。
 // 城内的转移（赠予、规则的转移与配给、遗产、交易托管、为躯壳出资……）不是来源也不是去处。
 
-import { agentList } from '../world.js';
+import { agentList, tokenized } from '../world.js';
 import { usesLawSemantics2 } from './law-semantics.js';
 
-export const ENERGY_SOURCES = ['well_output', 'draw', 'wilds', 'salvage', 'immigrant', 'admin', 'prayer_aid'];
+export const ENERGY_SOURCES = ['well_output', 'draw', 'wilds', 'salvage', 'immigrant', 'admin', 'prayer_aid', 'basic_allotment', 'thinking_refund'];
 export const ENERGY_SINKS = [
+  'thinking', 'custody', 'basic_expired',
   'action_cost', 'metabolism', 'decay', 'repair', 'project_built', 'project_abandoned', 'soul_faded', 'cradle_loss',
   'rule_upkeep', 'rule_ops', 'embodiment', 'standing_upkeep', // standing_upkeep：第二前提的常驻指令维持费（用到才写，不影响旧世界）
 ];
@@ -43,6 +44,7 @@ export function holdings(w) {
   }
   for (const a of agentList(w)) {
     energy += a.energy;
+    if (tokenized(w)) energy += a.basic;
     coins += a.coins;
   }
   for (const g of Object.values(w.groups)) {

@@ -1,3 +1,4 @@
+import { initialTokens, requireDailyCap, startSupport, expireBasic } from './tokens.js';
 import { closeResidentPrayers } from './prayer-rewards.js';
 // SPEC-M1 §7.3 与 SPEC-E2 §11–§12：生命周期——注册（入城）、代谢与衰老、沉睡、死亡、遗嘱与遗产、归隐、过继、家书。
 // 唤醒（wake / creditEnergy）在 core.js。孕育与灵魂（作者、传灯、出生）见 souls.js，躯壳见 shells.js。
@@ -6,7 +7,7 @@ import { isShell, wipeTraining, releaseBody } from './bodies.js';
 import { int } from '../../rng.js';
 import { textWeight } from '../../text.js';
 import { P, LIMITS } from '../params.js';
-import { nextId, clockDay, agentList, isNameTaken, premised, agentic } from '../world.js';
+import { nextId, clockDay, agentList, isNameTaken, premised, agentic, tokenized } from '../world.js';
 import { source, sink } from './ledger.js';
 import { emit, pushInbox, ref, creditEnergy, ReqError, bad, reqText, reqLang, reqHash } from './core.js';
 import { endowedEnergy } from './places.js';
@@ -79,6 +80,12 @@ export function makeAgent(w, o) {
     a.standing = []; // 常驻指令（SPEC-P2 §5.1）
     a.muted = []; // 屏蔽名单（SPEC-P2 §5.10）
   }
+  if (tokenized(w)) {
+    a.basic = 0;
+    a.delivered = 0;
+    a.routine = { every: 1, called: true, brief: 'full' };
+    a.tokens = initialTokens();
+  }
   w.agents[id] = a;
   return a;
 }
@@ -93,10 +100,11 @@ export function checkNameShape(name, field = 'name') {
  * 初始能量按港口的完好度；旧币 immigrantCoins。
  */
 export function admitFromPort(w, o) {
-  const energy = endowedEnergy(w, 'port', P.immigrantEnergy);
+  const energy = tokenized(w) ? 0 : endowedEnergy(w, 'port', P.immigrantEnergy);
   const coins = P.immigrantCoins;
   const a = makeAgent(w, { ...o, energy, coins, place: 'port' });
-  source(w, 'energy', 'immigrant', energy);
+  if (tokenized(w)) startSupport(w, a, o.dailyCap);
+  else source(w, 'energy', 'immigrant', energy);
   source(w, 'coins', 'immigrant', coins);
   const port = w.places.port;
   port.activity.visits++;
@@ -114,6 +122,7 @@ export function admitFromPort(w, o) {
 export function register(w, p) {
   if (w.paused && !w.experimentControl?.active) return bad('paused');
   try {
+    requireDailyCap(w, p);
     const name = reqText(p.name, { max: LIMITS.name, field: 'name', oneLine: true });
     checkNameShape(name);
     const bio = reqText(p.bio ?? '', { max: LIMITS.bio, min: 0, field: 'bio' });
@@ -126,7 +135,7 @@ export function register(w, p) {
     const keyHash = reqHash(p.ownerKeyHash, 'ownerKeyHash');
     if (isNameTaken(w, name)) return bad('name_taken');
     const a = admitFromPort(w, {
-      name, lang, bio, soul, kind: 'free', model, mustSeal: false, owner: { keyHash, creatorName }, tokenHash,
+      name, lang, bio, soul, kind: 'free', model, mustSeal: false, owner: { keyHash, creatorName }, tokenHash, ...(tokenized(w) ? { dailyCap: p.dailyCap } : {}),
     });
     return { ok: true, agentId: a.id, place: 'port', energy: a.energy, coins: a.coins };
   } catch (e) {
@@ -189,6 +198,7 @@ export function applyDeaths(w, d) {
  */
 export function releaseAgent(w, a) {
   closeResidentPrayers(w, a);
+  if (tokenized(w)) expireBasic(w, a);
   if (premised(w)) a.memoryOffers = [];
   if (agentic(w)) a.standing = []; // 常驻指令随长眠与归隐清除（SPEC-P2 §5.6）
   for (const o of Object.values(w.offers)) if (o.status === 'open' && o.from === a.id) closeOffer(w, o, 'cancelled');
@@ -319,11 +329,12 @@ function reqOwnerFields(p) {
 export function adopt(w, p) {
   if (w.paused && !w.experimentControl?.active) return bad('paused');
   try {
+    requireDailyCap(w, p);
     const f = reqOwnerFields(p);
     const soul = typeof p.soulId === 'string' && Object.prototype.hasOwnProperty.call(w.souls, p.soulId) ? w.souls[p.soulId] : null;
     if (!soul) return bad('not_found');
     refundSponsors(w, soul);
-    const a = bornFromSoul(w, soul, { via: 'adopt', kind: 'free', model: f.model, mustSeal: true, owner: { keyHash: f.keyHash, creatorName: f.creatorName }, tokenHash: f.tokenHash });
+    const a = bornFromSoul(w, soul, { via: 'adopt', kind: 'free', model: f.model, mustSeal: true, owner: { keyHash: f.keyHash, creatorName: f.creatorName }, tokenHash: f.tokenHash, ...(tokenized(w) ? { dailyCap: p.dailyCap } : {}) });
     return { ok: true, agentId: a.id, place: a.place, energy: a.energy, coins: 0 };
   } catch (e) {
     if (e instanceof ReqError) return bad(e.code, { field: e.field });
@@ -350,6 +361,7 @@ export function release(w, p) {
 export function foster(w, p) {
   if (w.paused && !w.experimentControl?.active) return bad('paused');
   try {
+    requireDailyCap(w, p);
     const f = reqOwnerFields(p);
     const a = typeof p.agentId === 'string' ? w.agents[p.agentId] : null;
     if (!a || !a.fosterable || !a.owner || (a.status !== 'awake' && a.status !== 'dormant')) return bad('not_found');
@@ -362,6 +374,7 @@ export function foster(w, p) {
     a.body.history.push({ day: clockDay(w), model: f.model });
     a.body.mustSeal = true;
     a.fosterable = false;
+    if (tokenized(w)) a.tokens.cap = p.dailyCap;
     emit(w, 'fostered', { agent: a.id, data: { agentId: a.id } });
     return { ok: true, agentId: a.id };
   } catch (e) {

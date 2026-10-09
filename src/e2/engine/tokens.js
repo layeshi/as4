@@ -3,3 +3,72 @@ import { P } from '../params.js';
 import { tokenized } from '../world.js';
 export const K = (w) => tokenized(w) ? w.tokens.k : 1;
 export const ep = (w, key) => P[key] * K(w);
+
+import { agentList, isAlive } from '../world.js';
+import { textWeight } from '../../text.js';
+import { source, sink } from './ledger.js';
+import { wake, emit, ReqError } from './core.js';
+
+export const initialTokens = () => ({
+  cap: 0, day: null, used: 0, waking: null, bill: null, lastBill: null,
+  wakesDay: null, wakes: 0, called: 0, calledCost: 0,
+});
+export const custodyOf = (a) => textWeight(a.soul) + a.memories.reduce((n, m) => n + textWeight(m.text), 0);
+export const validCap = (n) => Number.isSafeInteger(n) && n >= 0 && n <= P.tokenCapMax;
+export function requireDailyCap(w, p) {
+  if (tokenized(w) && !validCap(p.dailyCap)) throw new ReqError('invalid_request', 'dailyCap');
+}
+
+/** All-or-nothing thinking debit, with a monotonic Earth-day key supplied by a command. */
+export function payThinking(w, a, n, day) {
+  if (n <= 0) return { ok: true, basic: 0, energy: 0 };
+  const t = a.tokens;
+  if (t.day === null || day > t.day) { t.day = day; t.used = 0; }
+  if (t.used + n > t.cap) return { ok: false, code: 'cap_reached', need: n, have: Math.max(0, t.cap - t.used) };
+  if (a.basic + a.energy < n) return { ok: false, code: 'tokens_exhausted', need: n, have: a.basic + a.energy };
+  const basic = Math.min(a.basic, n);
+  a.basic -= basic;
+  a.energy -= n - basic;
+  t.used += n;
+  sink(w, 'energy', 'thinking', n);
+  return { ok: true, basic, energy: n - basic };
+}
+
+export function expireBasic(w, a) {
+  if (a.basic > 0) {
+    sink(w, 'energy', 'basic_expired', a.basic);
+    w.dayLog.p4.basicExpired += a.basic;
+    a.basic = 0;
+  }
+}
+export function issueBasic(w, a) {
+  if (a.tokens.cap <= 0) return;
+  a.basic = w.tokens.basic;
+  source(w, 'energy', 'basic_allotment', a.basic);
+  w.dayLog.p4.basicIssued += a.basic;
+}
+export function startSupport(w, a, cap) {
+  a.tokens.cap = cap;
+  issueBasic(w, a);
+}
+
+/** Settlement 11.5: expire, issue, revive, then pay custody in resident ID order. */
+export function settleTokens(w, d) {
+  for (const a of agentList(w).filter(isAlive)) {
+    expireBasic(w, a);
+    issueBasic(w, a);
+    if (a.tokens.cap > 0 && a.status === 'dormant') wake(w, a, null);
+    if (a.status !== 'awake') continue;
+    const need = custodyOf(a), paid = Math.min(need, a.basic + a.energy);
+    const basic = Math.min(a.basic, paid);
+    a.basic -= basic;
+    a.energy -= paid - basic;
+    sink(w, 'energy', 'custody', paid);
+    w.dayLog.p4.custody += paid;
+    if (paid < need) {
+      a.status = 'dormant';
+      a.dormantSinceDay = d;
+      emit(w, 'dormant', { agent: a.id, place: a.place, data: { agentId: a.id } });
+    }
+  }
+}

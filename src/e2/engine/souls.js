@@ -1,4 +1,4 @@
-import { ep } from './tokens.js';
+import { ep, startSupport } from './tokens.js';
 // SPEC-E2 §11：灵魂与出生——孕育（1–5 位作者）、灵魂、传灯、出生地、领养。
 //
 // 灵魂（Soul）是摇篮里等待身体的人：作者们写下它的名字与灵魂，付出它的初始能量（endowment，共 birthCost = 40，由作者们平摊）。
@@ -10,7 +10,7 @@ import { ep } from './tokens.js';
 //     fund, sponsors, fundedTick, queueExpiresDay, successorOf, judged }
 
 import { P } from '../params.js';
-import { nextId, clockDay, isAlive, isNameTaken, premised } from '../world.js';
+import { nextId, clockDay, isAlive, isNameTaken, premised, tokenized } from '../world.js';
 import { sink } from './ledger.js';
 import { emit, pushInbox, creditEnergy } from './core.js';
 import { endowedEnergy, hasModuleAt } from './places.js';
@@ -127,6 +127,7 @@ export function bornFromSoul(w, soul, o) {
     coins: 0,
     place,
   });
+  if (tokenized(w)) startSupport(w, a, o.dailyCap);
   for (const m of soul.inheritedMemories.slice(0, P.memorySlots)) a.memories.push({ day, tick: w.clock.tick, text: m.text, from: m.from, ...(premised(w) ? { origin: m.origin ?? m.from } : {}) });
   // TODO(spec): Q27 — confirmed: fork bookkeeping and its chronicle line land in step 5.
   if (premised(w) && soul.authors.length === 1) {

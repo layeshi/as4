@@ -1,4 +1,4 @@
-import { ep, K } from './tokens.js';
+import { ep, K, settleTokens } from './tokens.js';
 // SPEC-E2 §14：每刻与每日结算，严格按规格的顺序。
 // 结算时钟面已是 12(d+1)：设刚结束的那一日为 d，「今日」= d，「明日」= d + 1。
 //
@@ -98,7 +98,7 @@ export function dailySettlement(w, d) {
     produceWell(w, d); // 1 源井日产，全部进入公库
     STEPS.upkeep(w, d); // 2 维持费
     STEPS.dailyRules(w, d); // 3 daily 与 monthly 规则
-    applyMetabolism(w, d); // 4 代谢与衰老；能量为负者进入沉睡
+    if (!tokenized(w)) applyMetabolism(w, d); // 4 代谢与衰老；能量为负者进入沉睡
     decayEnergy(w); // 5 腐坏
     applyDeaths(w, d); // 6 沉睡满 3 日者死亡
     if (premised(w)) completeTraining(w);
@@ -108,6 +108,7 @@ export function dailySettlement(w, d) {
     STEPS.sandboxAdopt(w, d); // 9（沙盘世界）沙盘领养判定
     STEPS.revert(w, d); // 10 自动回退
     restoreDaily(w); // 11
+    if (tokenized(w)) settleTokens(w, d); // 11.5
     stepWeather(w, d); // 12 天象：结束到期的、开始 startDay == d + 1 的、首次出现的征兆记事件
     if ((d + 1) % P.daysPerMonth === 0) {
       const month = (d + 1) / P.daysPerMonth;
