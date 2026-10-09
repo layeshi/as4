@@ -144,7 +144,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
   }
 
   // 注意力轨迹（SPEC-P2 §14.1）：只在第二前提的世界；躯壳管理器与托管运行器共用，两个接口从 ctx.traces 读
-  ctx.traces = agentic(rt.w) ? new TraceStore({ file: join(rt.dir, 'agent-loops.jsonl'), timezone: cfg.shellTz }) : null;
+  ctx.traces = agentic(rt.w) ? new TraceStore({ file: join(rt.dir, 'agent-loops.jsonl'), timezone: cfg.shellTz, premise: rt.w.premise || 0 }) : null;
   if (ctx.traces) {
     if (ctx.shells) ctx.shells.traces = ctx.traces;
     ctx.runners.traces = ctx.traces;

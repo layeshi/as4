@@ -1,3 +1,4 @@
+import { capDistribution, custodyOf } from './tokens.js';
 // SPEC-E2 §20：每日指标（20.1）与人类遗产存活表（20.2），以及史官（附录 A.8）的接线。
 //
 // 每日结算的第 15–16 步（STEPS.metrics）：算出今日指标、更新遗产存活表、写史官，然后才清空 dayLog。
@@ -5,7 +6,7 @@
 
 import { conditionBand } from '../params.js';
 import { L, fmt, cityDisplayName } from '../lore/index.js';
-import { agentList, isAlive, premised, agentic } from '../world.js';
+import { agentList, isAlive, premised, agentic, tokenized } from '../world.js';
 import { HUMAN_DEFS, MAP, WILD_ZONE_IDS } from '../map/index.js';
 import { parseCached, countNodes } from '../rules/parser.js';
 import { OP_FIELDS } from '../rules/check.js';
@@ -168,6 +169,7 @@ export function dailyMetrics(w, d) {
     tagsDistinct: tags.size,
     ...(premised(w) ? premiseMetrics(w) : {}),
     ...(agentic(w) ? agenticMetrics(w) : {}),
+    ...(tokenized(w) ? { p4: { ...g.p4 }, capsP50: capDistribution(w).p50, capsZero: capDistribution(w).zero, basicHolders: alive.filter(a => a.basic > 0).length } : {}),
   };
 }
 
@@ -325,7 +327,7 @@ function premiseMetrics(w) {
   ];
   const g = w.dayLog.p1;
   return {
-    upkeepMean: mean(alive.map(upkeepOf)), upkeepMax: Math.max(0, ...alive.map(upkeepOf)),
+    upkeepMean: mean(alive.map(tokenized(w) ? custodyOf : upkeepOf)), upkeepMax: Math.max(0, ...alive.map(tokenized(w) ? custodyOf : upkeepOf)),
     memoryWeightMean: mean(alive.map((a) => weightOf(a).memories)),
     soulWeightByGeneration: Object.fromEntries(Object.entries(generations).map(([k, v]) => [k, mean(v)])),
     imparts: g.imparts, impartsAccepted: g.impartsAccepted, dormancyLosses: g.dormancyLosses,

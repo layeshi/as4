@@ -1,3 +1,4 @@
+import { tokenized } from '../e2/world.js';
 // 注意力轨迹（SPEC-P2 §14.1）：运行器每次醒来（含被叫醒）结束时回报一条记录，这里追加到世界目录的 agent-loops.jsonl，
 // 并按地球日汇总：公开的日平均（没有逐位居民的数据）与管理员的逐位汇总。
 //
@@ -9,8 +10,8 @@
 import { existsSync, readFileSync, writeFileSync, appendFileSync, renameSync } from 'node:fs';
 import { earthDay } from '../shells/budget.js';
 import { validTimeZone } from '../shells/config.js';
-import { LOOK_WHATS } from '../../runner/render-p2.js';
-import { ACTION_ORDER_P2 } from '../e2/lore/actions.js';
+import { LOOK_WHATS, LOOK_WHATS_P4 } from '../../runner/render-p2.js';
+import { ACTION_ORDER_P2, ACTION_ORDER_P4 } from '../e2/lore/actions.js';
 import { safeErrorCode } from '../telemetry-safety.js';
 
 export const TRACE_TZ = 'Asia/Shanghai';
@@ -21,6 +22,11 @@ const MODES = new Set(['native', 'json']);
 const ENDED = new Set(['end', 'reply', 'actions', 'turns', 'deadline', 'budget', 'error', 'refusal', 'asleep', 'paused', 'format']);
 const SECTIONS = new Set(LOOK_WHATS);
 const ACTIONS = new Set(ACTION_ORDER_P2);
+const P4_ENDED = new Set([...ENDED, 'tokens', 'tokens_exhausted', 'cap_reached']);
+const P4_SECTIONS = new Set(LOOK_WHATS_P4);
+const P4_ACTIONS = new Set(ACTION_ORDER_P4);
+const REFUSED = new Set(['tokens_exhausted', 'cap_reached']);
+const P4_ERRORS = new Set([...REFUSED, 'no_waking', 'looks_exhausted']);
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 const count = (v, max = 1e9) => (Number.isFinite(v) && v >= 0 ? Math.min(Math.round(v), max) : 0);
@@ -40,7 +46,9 @@ function dayBefore(key, n) {
 }
 
 /** 一条回报 → 文件里的一行里「rec」那一部分：每个字段都规整成合法的形状，不认识的字符串记作 other */
-export function cleanRecord(rec) {
+export function cleanRecord(rec, premise = 0) {
+  const p4 = tokenized({ premise });
+  const sections = p4 ? P4_SECTIONS : SECTIONS, actions = p4 ? P4_ACTIONS : ACTIONS, endings = p4 ? P4_ENDED : ENDED;
   const r = rec && typeof rec === 'object' ? rec : {};
   return {
     tick: count(r.tick),
@@ -49,21 +57,31 @@ export function cleanRecord(rec) {
     turns: count(r.turns, 1000),
     looks: (Array.isArray(r.looks) ? r.looks : []).slice(0, 200).map((x) => {
       const [what, id] = String(x).split(':');
-      if (!SECTIONS.has(what)) return 'other';
+      if (!sections.has(what)) return 'other';
       // 轨迹保留看过的具体条目；只接受城内编号，不能把模型给出的文本写进文件。
       return id && /^[lpg][1-9]\d{0,11}$/.test(id) ? `${what}:${id}` : what;
     }),
     acts: (Array.isArray(r.acts) ? r.acts : []).slice(0, 200).map((a) => {
       const o = a && typeof a === 'object' ? a : {};
-      return { type: ACTIONS.has(o.type) ? o.type : 'other', ok: o.ok === true, ...(o.ok === true ? {} : { error: errorCode(o.error) }) };
+      return { type: actions.has(o.type) ? o.type : 'other', ok: o.ok === true, ...(o.ok === true ? {} : { error: p4 && P4_ERRORS.has(o.error) ? o.error : errorCode(o.error) }) };
     }),
-    ended: ENDED.has(r.ended) ? r.ended : 'other',
+    ended: endings.has(r.ended) ? r.ended : 'other',
     tokens: { in: count(r.tokens && r.tokens.in), out: count(r.tokens && r.tokens.out) },
     ms: count(r.ms),
+    ...(p4 ? { bill: { reread: count(r.bill?.reread), read: count(r.bill?.read), write: count(r.bill?.write) },
+      ...(REFUSED.has(r.refused) ? { refused: r.refused } : {}),
+      ...(typeof r.wakeId === 'string' && /^w\d{1,15}-[a-f0-9]{6}$/.test(r.wakeId) ? { wakeId: r.wakeId } : {}) } : {}),
   };
 }
 
-const blank = () => ({ model: '', wakings: 0, wakes: 0, turns: 0, looks: {}, acts: 0, ended: {}, tokens: { in: 0, out: 0 } });
+const tokenFields = () => ({ bill: { reread: 0, read: 0, write: 0 }, refused: { tokens_exhausted: 0, cap_reached: 0 } });
+const blank = (premise = 0) => ({ model: '', wakings: 0, wakes: 0, turns: 0, looks: {}, acts: 0, ended: {}, tokens: { in: 0, out: 0 }, ...(tokenized({ premise }) ? tokenFields() : {}) });
+function addTokenFields(into, line) {
+  if (!into.bill) return;
+  for (const key of ['reread', 'read', 'write']) into.bill[key] += line.bill?.[key] || 0;
+  if (typeof line.refused === 'string' && REFUSED.has(line.refused)) into.refused[line.refused]++;
+  else for (const code of REFUSED) into.refused[code] += line.refused?.[code] || 0;
+}
 
 function add(into, line) {
   into.wakings += 1;
@@ -74,6 +92,7 @@ function add(into, line) {
   plus(into.ended, line.ended);
   into.tokens.in += line.tokens.in;
   into.tokens.out += line.tokens.out;
+  addTokenFields(into, line);
 }
 
 export class TraceStore {
@@ -83,7 +102,8 @@ export class TraceStore {
    * @param o.keepDays  保留的天数（含今天）
    * @param o.now       () => 毫秒时间戳（测试注入假时钟）
    */
-  constructor({ file = null, timezone = TRACE_TZ, keepDays = TRACE_KEEP_DAYS, now = Date.now } = {}) {
+  constructor({ file = null, timezone = TRACE_TZ, keepDays = TRACE_KEEP_DAYS, now = Date.now, premise = 0 } = {}) {
+    this.premise = premise;
     this.file = file;
     this.timezone = typeof timezone === 'string' && validTimeZone(timezone) ? timezone : TRACE_TZ;
     this.keepDays = keepDays;
@@ -115,14 +135,14 @@ export class TraceStore {
         continue;
       }
       if (!line || typeof line !== 'object' || typeof line.day !== 'string' || !DAY_KEY.test(line.day) || line.day < cutoff || typeof line.agentId !== 'string') continue;
-      this.tally(line.day, String(line.agentId).slice(0, 40), String(line.model ?? '').slice(0, 100), cleanRecord(line));
+      this.tally(line.day, String(line.agentId).slice(0, 40), String(line.model ?? '').slice(0, 100), cleanRecord(line, this.premise));
     }
   }
 
   tally(day, agentId, model, rec) {
     if (!this.days.has(day)) this.days.set(day, new Map());
     const agents = this.days.get(day);
-    if (!agents.has(agentId)) agents.set(agentId, blank());
+    if (!agents.has(agentId)) agents.set(agentId, blank(this.premise));
     const a = agents.get(agentId);
     if (model) a.model = model;
     add(a, rec);
@@ -153,7 +173,7 @@ export class TraceStore {
     const day = earthDay(at, this.timezone).key;
     const id = String(agentId).slice(0, 40);
     const m = String(model || '').slice(0, 100);
-    const clean = cleanRecord(rec);
+    const clean = cleanRecord(rec, this.premise);
     try {
       if (this.lastPrune !== day) this.prune(day);
       if (this.file) appendFileSync(this.file, `${JSON.stringify({ at: new Date(at).toISOString(), day, agentId: id, model: m, ...clean })}\n`);
@@ -169,16 +189,19 @@ export class TraceStore {
    */
   daySummary(day) {
     const agents = this.days.get(day);
-    const out = { day, residents: 0, wakingsPerResident: 0, turnsPerWaking: 0, looksPerWaking: 0, wakesPerResident: 0, sections: {} };
+    const out = { day, residents: 0, wakingsPerResident: 0, turnsPerWaking: 0, looksPerWaking: 0, wakesPerResident: 0, sections: {}, ...(tokenized(this) ? tokenFields() : {}) };
     if (!agents || agents.size === 0) return out;
-    const total = blank();
+    const total = blank(this.premise);
     for (const a of agents.values()) {
       total.wakings += a.wakings;
       total.wakes += a.wakes;
       total.turns += a.turns;
+      addTokenFields(total, a);
       for (const [s, n] of Object.entries(a.looks)) plus(total.looks, s, n);
     }
     const looks = Object.values(total.looks).reduce((n, x) => n + x, 0);
+    // TODO(spec): Q68 — extend the existing daily aggregate, not public per-agent traces.
+    if (tokenized(this)) { out.bill = total.bill; out.refused = total.refused; }
     out.residents = agents.size;
     out.wakingsPerResident = round2(total.wakings / agents.size);
     out.turnsPerWaking = round2(total.turns / total.wakings);
@@ -198,7 +221,7 @@ export class TraceStore {
   agentsDay(day) {
     const agents = this.days.get(day) || new Map();
     const list = [...agents.entries()].sort(([a], [b]) => agentOrder(a, b)).map(([agentId, a]) => ({ agentId, ...structuredClone(a) }));
-    const totals = { agents: list.length, wakings: 0, wakes: 0, turns: 0, looks: {}, acts: 0, ended: {}, tokens: { in: 0, out: 0 } };
+    const totals = { agents: list.length, wakings: 0, wakes: 0, turns: 0, looks: {}, acts: 0, ended: {}, tokens: { in: 0, out: 0 }, ...(tokenized(this) ? tokenFields() : {}) };
     for (const a of list) {
       totals.wakings += a.wakings;
       totals.wakes += a.wakes;
@@ -208,6 +231,7 @@ export class TraceStore {
       for (const [k, n] of Object.entries(a.ended)) plus(totals.ended, k, n);
       totals.tokens.in += a.tokens.in;
       totals.tokens.out += a.tokens.out;
+      addTokenFields(totals, a);
     }
     return { day, agents: list, totals };
   }
