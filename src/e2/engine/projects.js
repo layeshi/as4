@@ -1,3 +1,4 @@
+import { buildUpgrade } from './upgrades.js';
 import { K } from './tokens.js';
 import { rewardProject } from './prayer-rewards.js';
 // SPEC-E2 §10.5：工程——开辟新地点（site）、加装模块（module）、修路（road）。
@@ -11,7 +12,7 @@ import { rewardProject } from './prayer-rewards.js';
 //     owner, need, have, contributors, initiator, createdDay, expiresDay, status: 'open' | 'built' | 'abandoned', result }
 
 import { P, MODULE_DEFS } from '../params.js';
-import { nextId, clockDay, isAlive } from '../world.js';
+import { nextId, clockDay, isAlive, tokenized } from '../world.js';
 import { LOT_DEFS } from '../map/index.js';
 import { sink } from './ledger.js';
 import { emit, pushInbox } from './core.js';
@@ -180,7 +181,7 @@ function buildRoad(w, j) {
 export function buildProject(w, j) {
   j.status = 'built';
   sink(w, 'energy', 'project_built', j.have);
-  const result = j.build === 'site' ? buildSite(w, j) : j.build === 'module' ? buildModule(w, j) : buildRoad(w, j);
+  const result = tokenized(w) && j.build === 'upgrade' ? buildUpgrade(w, j) : j.build === 'site' ? buildSite(w, j) : j.build === 'module' ? buildModule(w, j) : buildRoad(w, j);
   j.result = result;
   rewardProject(w, j);
   const where = j.build === 'site' ? result : j.place;

@@ -1,3 +1,4 @@
+import { tokenized } from '../world.js';
 import { K } from './tokens.js';
 import { prayersEnabled, recordNaturalDamage, consumeNaturalRepair } from './prayer-rewards.js';
 // SPEC-E2 §6、§10.3：环境——完好度、修缮、衰败与受损、源井产出、汲取、荒野。
@@ -29,7 +30,11 @@ export function wellFactor(w) {
 }
 
 /** 源井在第 d 日（dayOfMonth 按 d 计）的产出：基础产出 × 完好度（下限 20%）× 季节 × 天象 */
+export const tokenWellUnit = (w) => Math.floor(w.tokens.capacity * w.well.supply * wellFactor(w) / 1000000);
+export const tokenWellStep = (w) => Math.floor(tokenWellUnit(w) * P.upgradeStepPermille / 1000);
+
 export function wellOutput(w, d) {
+  if (tokenized(w)) return tokenWellUnit(w) + tokenWellStep(w) * w.well.upgrades.filter(u => u.owner === 'city').length;
   const seasonF = SEASON_TABLE[d % P.daysPerMonth];
   return Math.floor((P.wellBaseOutput * wellFactor(w) * seasonF * weatherFactor(w)) / 1e9);
 }

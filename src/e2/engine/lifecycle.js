@@ -1,3 +1,4 @@
+import { releaseShares } from './upgrades.js';
 import { initialTokens, requireDailyCap, startSupport, expireBasic } from './tokens.js';
 import { closeResidentPrayers } from './prayer-rewards.js';
 // SPEC-M1 §7.3 与 SPEC-E2 §11–§12：生命周期——注册（入城）、代谢与衰老、沉睡、死亡、遗嘱与遗产、归隐、过继、家书。
@@ -198,7 +199,7 @@ export function applyDeaths(w, d) {
  */
 export function releaseAgent(w, a) {
   closeResidentPrayers(w, a);
-  if (tokenized(w)) expireBasic(w, a);
+  if (tokenized(w)) { expireBasic(w, a); releaseShares(w, a.id); }
   if (premised(w)) a.memoryOffers = [];
   if (agentic(w)) a.standing = []; // 常驻指令随长眠与归隐清除（SPEC-P2 §5.6）
   for (const o of Object.values(w.offers)) if (o.status === 'open' && o.from === a.id) closeOffer(w, o, 'cancelled');

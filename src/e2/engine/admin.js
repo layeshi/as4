@@ -9,8 +9,8 @@
 //   shell_models     设定躯壳醒来时轮流分配的模型名（第 8 步）
 //   seed_sandbox     开发用：放入 N 位由沙盘脑驱动的先民（第 13 步；生产环境必须为 0）
 
-import { premised, agentList, isAlive } from '../world.js';
-import { LIMITS } from '../params.js';
+import { premised, agentList, isAlive, tokenized } from '../world.js';
+import { LIMITS, P } from '../params.js';
 import { nameKey, normalizeText, cpLength } from '../../text.js';
 import { source } from './ledger.js';
 import { emit, bad, creditEnergy, pushInbox } from './core.js';
@@ -22,7 +22,21 @@ import { usesLawVM2, migrateLawExecution, capacityCheck } from './law-execution.
 const isInt = (v) => typeof v === 'number' && Number.isSafeInteger(v);
 
 /** 其他步骤加入的管理操作：{ op: (w, args) => result } */
-export const EXTRA_ADMIN_OPS = {};
+export const EXTRA_ADMIN_OPS = {
+  well_supply: (w, args) => tokenAdmin(w, 'supply', args.permille),
+  basic_allotment: (w, args) => tokenAdmin(w, 'basic', args.basic),
+};
+function tokenAdmin(w, kind, value) {
+  if (!tokenized(w)) return bad('not_allowed');
+  if (!Number.isSafeInteger(value) || (kind === 'supply' ? value < 100 || value > 10000 : value < P.tokenBasicMin)) return bad('invalid_request', { field: kind === 'supply' ? 'permille' : 'basic' });
+  const target = kind === 'supply' ? w.well : w.tokens;
+  if (target[kind] === value) return { ok: true };
+  const direction = value > target[kind] ? 'up' : 'down';
+  target[kind] = value;
+  emit(w, 'backstage', { data: { kind, direction } });
+  for (const a of agentList(w).filter(isAlive)) pushInbox(w, a, 'system', { code: `${kind}_${direction}` });
+  return { ok: true };
+}
 
 export function adminCommand(w, p) {
   const args = p.args && typeof p.args === 'object' ? p.args : {};

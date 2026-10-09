@@ -7,7 +7,7 @@
 
 import { P, WEATHER_DEFS, WEATHER_CODES, WEATHER } from '../params.js';
 import { L } from '../lore/index.js';
-import { clockDay, monthOfDay, agentList, premised } from '../world.js';
+import { clockDay, monthOfDay, agentList, premised, tokenized } from '../world.js';
 import { int, pickWeighted } from '../../rng.js';
 import { emit, pushInbox, bad, HASH_RE } from './core.js';
 import { applyDamage } from './environment.js';
@@ -15,7 +15,8 @@ import { hasModuleAt } from './places.js';
 import { hooks } from './hooks.js';
 
 const P1_CODES = Object.freeze(WEATHER_CODES.filter((c) => c !== 'aurora' && c !== 'migration'));
-export const weatherCodesFor = (w) => premised(w) ? P1_CODES : WEATHER_CODES;
+export const P4_CODES = Object.freeze(P1_CODES.filter(c => c !== 'drought' && c !== 'bounty'));
+export const weatherCodesFor = (w) => tokenized(w) ? P4_CODES : premised(w) ? P1_CODES : WEATHER_CODES;
 const DEFAULT_WEIGHTS = WEATHER_CODES.map((c) => [c, WEATHER_DEFS[c].weight]);
 
 // ── 投票（命令 weather_vote） ─────────────────────────────────

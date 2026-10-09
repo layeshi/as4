@@ -1,3 +1,4 @@
+import { upgradeCost } from '../upgrades.js';
 import { ep, K } from '../tokens.js';
 // 城的动作（SPEC-E2 §25 第 6 步）：initiate contribute dismantle。
 //
@@ -8,7 +9,7 @@ import { ep, K } from '../tokens.js';
 import { P, LIMITS, MODULE_DEFS, MODULE_TYPES } from '../../params.js';
 import { ACTIONS } from '../../lore/actions.js';
 import { LOT_DEFS, streetNeighbors } from '../../map/index.js';
-import { clockDay, nextId } from '../../world.js';
+import { clockDay, nextId, tokenized } from '../../world.js';
 import { fail, emit, needInt, needId, optText } from '../core.js';
 import { placeNameTaken, moduleOf } from '../places.js';
 import { noteWordUse } from '../society.js';
@@ -106,14 +107,26 @@ function planRoad(ctx, args) {
   return { to, name, owner: { kind: 'city' }, need: ep(w, 'roadCost') };
 }
 
+function planUpgrade(ctx, args) {
+  const { w, a } = ctx;
+  if (a.place !== 'well') fail('wrong_place');
+  if (Object.values(w.projects).some(j => j.build === 'upgrade' && j.status === 'open')) fail('already');
+  if (w.well.upgrades.length >= P.upgradeMax) fail('invalid_args', { zh: '源井已经改良到头了', en: 'The Well cannot be upgraded further.' });
+  if (args.owner !== undefined && !['self', 'city'].includes(args.owner)) fail('invalid_args');
+  const level = w.well.upgrades.length + 1;
+  const name = args.name === undefined ? (ctx.lang === 'en' ? `Well upgrade, level ${level}` : `源井改良 第 ${level} 级`) : needName(args.name);
+  return { name, owner: ownerOf(w, a, args.owner), need: upgradeCost(w, level) };
+}
+
 const initiate = {
   validate(ctx, args) {
     const { w, a } = ctx;
-    if (typeof args.build !== 'string' || !BUILDS.includes(args.build)) {
+    if (typeof args.build !== 'string' || !(BUILDS.includes(args.build) || (tokenized(w) && args.build === 'upgrade'))) {
       fail('invalid_args', { zh: `build 须是 ${BUILDS.join(' / ')} 之一。`, en: `build must be one of ${BUILDS.join(' / ')}.` });
     }
+    const upgrade = tokenized(w) && args.build === 'upgrade' ? planUpgrade(ctx, args) : null;
     if (openProjectsAt(w, a.place).length >= P.projectsPerPlace) fail('limit_reached');
-    const plan = args.build === 'site' ? planSite(ctx, args) : args.build === 'module' ? planModule(ctx, args) : planRoad(ctx, args);
+    const plan = upgrade || (args.build === 'site' ? planSite(ctx, args) : args.build === 'module' ? planModule(ctx, args) : planRoad(ctx, args));
     return { build: args.build, ...plan, cost: ctx.cost(ACTIONS.initiate.base) };
   },
   apply(ctx, plan) {

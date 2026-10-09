@@ -1,3 +1,4 @@
+import { upgradeView } from './upgrades.js';
 import { ep, K } from './tokens.js';
 import { prayerView, prayersEnabled } from './prayers.js';
 // SPEC-E2 §17、PROTOCOL-2 §3：为一位居民构建感知（协议 2）——只含它该看到的。
@@ -16,7 +17,7 @@ import { actionTable } from '../lore/actions.js';
 import { P, SEASON_TABLE, conditionBand, seasonBand, richnessBand } from '../params.js';
 import { travelCosts, lotsNear, HUMAN_DEFS } from '../map/index.js';
 import { L, fmt, normLang, placeDisplayName, placeDescription, cityDisplayName, ACTIONS, ACTION_ORDER } from '../lore/index.js';
-import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum, premised, agentic } from '../world.js';
+import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum, premised, agentic, tokenized } from '../world.js';
 import { truncateCp, cpLength } from '../../text.js';
 import { agentCap } from './economy.js';
 import { metabolismIn, weightOf } from './lifecycle.js';
@@ -306,7 +307,7 @@ function hereView(w, a, l, lang, wallList, openOffers) {
   if (cradle) here.cradle = { functioning: isFunctioning(place, cradle) };
   if (a.place === 'well') {
     const hist = w.well.outputHistory;
-    here.well = { outputYesterday: hist.length ? hist[hist.length - 1] : null, drawPoolLeft: w.well.drawPoolLeft, condition: cond(l, w.places.well.condition, true) };
+    here.well = { outputYesterday: hist.length ? hist[hist.length - 1] : null, drawPoolLeft: w.well.drawPoolLeft, condition: cond(l, w.places.well.condition, true), ...(tokenized(w) ? { upgrades: upgradeView(w) } : {}) };
   } else if (place.explorable) {
     const band = richnessBand(w.regions[a.place].energy, HUMAN_DEFS[a.place].wild.energyMax * K(w));
     here.wilds = { richness: band, text: l.richnessWild[band] };

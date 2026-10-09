@@ -2,9 +2,10 @@ import { ep } from './tokens.js';
 // SPEC-E2 §14.2 第 1、5 步：源井日产（全部进入公库，配给是遗法 l3 的规则）与腐坏。
 
 import { P } from '../params.js';
-import { agentList } from '../world.js';
+import { payDividends } from './upgrades.js';
+import { agentList, tokenized } from '../world.js';
 import { source, sink } from './ledger.js';
-import { wellOutput } from './environment.js';
+import { wellOutput, tokenWellStep } from './environment.js';
 import { reservoirBonus } from './places.js';
 
 // ── 腐坏上限 ────────────────────────────────────────────────
@@ -24,6 +25,7 @@ export function produceWell(w, d) {
   w.well.outputHistory.push(output);
   if (w.well.outputHistory.length > P.wellHistoryDays) w.well.outputHistory.shift();
   w.dayLog.output = output;
+  if (tokenized(w)) payDividends(w, tokenWellStep(w));
   return output;
 }
 
