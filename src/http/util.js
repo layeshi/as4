@@ -2,7 +2,7 @@
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { errorMessage } from '../lore/index.js';
-import { errorMessage as errorMessage2 } from '../e2/lore/index.js';
+import { errorMessage as errorMessage2, fmt as fmt2 } from '../e2/lore/index.js';
 
 export const sha256hex = (s) => createHash('sha256').update(s).digest('hex');
 
@@ -62,7 +62,8 @@ export function errorBody(lang, code, extra = {}, protocol = 1) {
       rest.issues = rest.issues.map((i) => ({ path: i.path, code: i.code, message: en ? i.en : i.zh, ...(i.hint ? { hint: en ? i.hint.en : i.hint.zh } : {}) }));
     }
     if (code === 'paused' && rest.reason === 'law_execution_fault') return { error: { code, message: lang === 'en' ? 'Execution fault protection. An operator must verify the repair. The failed request was rolled back and will not be resubmitted.' : '执行故障保护暂停，需管理员验证修复。本请求已回滚，不会自动补交。', ...rest } };
-    return { error: { code, message: hint?.[lang] ?? errorMessage2(lang, code, rest.status), ...rest } };
+    const message = hint?.[lang] ?? errorMessage2(lang, code, rest.status);
+    return { error: { code, message: ['tokens_exhausted', 'cap_reached'].includes(code) ? fmt2(message, rest) : message, ...rest } };
   }
   return { error: { code, message: hint?.[lang] ?? errorMessage(lang, code, rest.status), ...rest } };
 }

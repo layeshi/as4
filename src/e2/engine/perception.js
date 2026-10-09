@@ -1,5 +1,5 @@
 import { upgradeView } from './upgrades.js';
-import { ep, K } from './tokens.js';
+import { ep, K, tokenView, custodyOf } from './tokens.js';
 import { prayerView, prayersEnabled } from './prayers.js';
 // SPEC-E2 §17、PROTOCOL-2 §3：为一位居民构建感知（协议 2）——只含它该看到的。
 //
@@ -132,7 +132,8 @@ export function buildPerception(w, agentId, opts = {}) {
 
 export function localizeInbox(item, l) {
   if (item.kind !== 'system') return item;
-  const tpl = l.perception.system[item.code] || l.perception.system.unknown;
+  const template = l.perception.system[item.code] || l.perception.system.unknown;
+  const tpl = typeof template === 'object' ? template[item.direction] || l.perception.system.unknown : template;
   return { ...item, text: fmt(tpl, { n: item.dropped, name: item.name }) };
 }
 
@@ -187,7 +188,7 @@ function youView(w, a, l, lang, day, openOffers, openPacts) {
     ageDays: day - a.bornDay, generation: a.generation,
     authors: a.authors.map((id) => refId(w, id)).filter(Boolean),
     children: a.children.map((id) => refId(w, id)).filter(Boolean),
-    metabolism: metabolismIn(w, a, day),
+    ...(tokenized(w) ? { tokens: { ...tokenView(a), custody: custodyOf(a), wakes: a.tokens.wakes, called: a.tokens.called, calledCost: a.tokens.calledCost } } : { metabolism: metabolismIn(w, a, day) }),
     ...(premised(w) ? { weight: weightOf(a), trained: bodyOf(w, a).trained.map((x) => x.text), training: bodyOf(w, a).pending.length } : {}),
     actionsLeft: Math.max(0, P.maxActionsPerTick - a.actsThisTick), maxActionsPerTick: P.maxActionsPerTick,
     drawnToday: a.drawnToday, repairedToday: a.repairedToday, salvagedToday: a.salvagedToday,

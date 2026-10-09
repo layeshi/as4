@@ -17,6 +17,7 @@
 //   verb       `before:X` / `after:X` 读法里的动词短语（SPEC-E2 附录 C.1）
 //   desc       说明
 
+import { tokenDescription } from './actions-p4.js';
 import { tokenized } from '../world.js';
 
 const W = (zh, en) => ({ zh, en });
@@ -273,7 +274,7 @@ export const actionTable = (premise = 0, prayers = false) => tokenized({ premise
 export const TEXT_ONLY_P4 = new Set(['say', 'whisper', 'write', 'define', 'inscribe', 'epitaph', 'declare', 'diary', 'remember', 'vote', 'reveal', 'retire', 'give', 'offer', 'accept', 'cancel', 'will']);
 export const ACTION_ORDER_P4 = Object.freeze(ACTION_ORDER_P2.filter(t => t !== 'sponsor').flatMap(t => t === 'mute' ? [t, 'routine'] : [t]));
 export const ACTIONS_P4 = Object.freeze({
-  ...Object.fromEntries(Object.entries(ACTIONS_P2).filter(([t]) => t !== 'sponsor')),
+  ...Object.fromEntries(Object.entries(ACTIONS_P2).filter(([t]) => t !== 'sponsor').map(([t, a]) => [t, { ...a, desc: tokenDescription(t, a.desc) }])),
   routine: { base: 0, place: null, module: null, where: null, inner: true, params: 'every?, called?, brief?', args: [['every', 'int'], ['called', 'bool'], ['brief', 'str']],
     verb: W('定下作息', 'sets a rhythm'),
     desc: W('定下你的作息：every 是每隔几刻按时醒来一次（1–36；0 = 不按时醒来），called 是被找上门时醒不醒，brief 是醒来时概要的详略（full 全部 / short 只有此刻、你、收件与记忆）。至少给一个，没给的不变。每次醒来都要付钱。内心：任何规则都不能拒绝、收费或读取。', 'Set your rhythm: every is how many ticks between scheduled wakings (1–36; 0 = no scheduled waking), called is whether you wake when someone seeks you, brief is how much summary you see when you wake (full / short: only now, yourself, your inbox and your memories). Give at least one; the rest stay as they are. Every waking costs tokens. Inner life: no rule can refuse, charge or read it.') },

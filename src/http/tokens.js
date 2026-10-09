@@ -8,7 +8,7 @@ import { earthDay } from '../shells/budget.js';
 import { normLang, cityDisplayName } from '../e2/lore/index.js';
 import { buildSystemPrompt, promptParams } from '../../runner/prompt.js';
 import { renderBrief, renderWake, renderLook, clipLook, renderArrived, renderArrival } from '../../runner/render-p2.js';
-import { makeCtx, secInbox, secActions } from '../../runner/render2.js';
+import { makeCtx, secInbox } from '../../runner/render2.js';
 import { DEFAULT_AGENT_LOOP } from '../../runner/loop.js';
 import { actionFeedback } from '../action-feedback.js';
 import { errorBody, httpStatusFor } from './util.js';
@@ -64,7 +64,10 @@ export function wakeCore(ctx, id, body, lang) {
   if (a.status !== 'awake') return failure(lang, 'not_awake');
   lang = normLang(body.lang ?? a.lang);
   const p = perception(ctx, id, lang), wakeId = `w${w.clock.tick}-${randomBytes(3).toString('hex')}`;
+  // TODO(spec): Q66 — preview the bill that this wake will move into lastBill.
+  if (p.you.tokens && a.tokens.bill) p.you.tokens.lastBill = structuredClone(a.tokens.bill);
   const text = body.kind === 'wake' ? renderWake(p, { lang }) : renderBrief(p, { lang, brief: a.routine.brief });
+  // TODO(spec): Q65 — charge the full standard prompt, including its acquired block.
   const system = prompt(ctx, id, p, normLang(a.lang));
   const result = ctx.rt.exec('meter', { op: 'wake', agentId: id, wakeId, day: earthDayKey(ctx), kind: body.kind,
     system: textWeight(system), brief: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) }).result;
@@ -91,10 +94,9 @@ export function lookCore(ctx, id, body, lang) {
   const current = ctx.looks.get(id), count = current?.tick === s.tick ? current.n : 0;
   if (count >= limits(ctx).looks) return failure(lang, 'looks_exhausted');
   const p = perception(ctx, id, lang), a = ctx.rt.w.agents[id];
-  // Inbox/actions use the existing section primitives until the P4 renderer dispatch (step 8).
+  // Keep the inbox line boundaries for delivery accounting after clipping.
   const lines = body.what === 'inbox' ? secInbox(makeCtx(p, { code: lang, level: 0 })) : null;
-  const full = lines ? (lines.join('\n') || (lang === 'en' ? 'No unread items.' : '没有未读的收件。'))
-    : body.what === 'actions' ? secActions(makeCtx(p, { code: lang, level: 0 })).join('\n') : renderLook(p, body.what, body.id, { lang });
+  const full = renderLook(p, body.what, body.id, { lang });
   const text = clipLook(full, limits(ctx).lookChars, lang);
   let delivered = a.delivered;
   if (lines) {

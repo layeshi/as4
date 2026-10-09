@@ -5,6 +5,8 @@
 // 看到的不会超出引擎本来给的感知（法律的读法至多 400 字符，开放提案的读法至多 2000 字符；铭刻与典籍的全文仍要 read）。
 // 各段的行直接用 render2.js 拆出来的函数（SPEC-P2 §8.1），所以与「一刻一问」的渲染逐字相同；新的字符串都在字典 D2 里（中、英，附录 A.3–A.7）。
 
+import { tokenized } from '../src/e2/world.js';
+import { inboxMoreLine, emptyInboxLine } from './render-p4.js';
 import {
   makeCtx, secDiagnostics, secNow, secAbsent, secInbox, secMemories, secActions, secHere,
   youHead, youBio, youLetters, youOffers, youPacts, youWill, youTraining, youMemoryOffers, youPrayers,
@@ -23,6 +25,8 @@ const codeOf = (lang) => (lang === 'en' ? 'en' : 'zh');
 // ═══════════════════════════════════════════════════════════════
 // 字典 D2（附录 A.3–A.7）
 // ═══════════════════════════════════════════════════════════════
+
+export const LOOK_WHATS_P4 = Object.freeze([...LOOK_WHATS, 'inbox', 'actions']);
 
 export const D2 = {
   zh: {
@@ -283,16 +287,17 @@ export function renderHistory(history, { code, now = {}, missed = null } = {}) {
  * 【收件箱】全文；【全城】的索引；【你的记忆】全文；【动作的即时状态】；上几次醒来的摘要。概要不分级裁剪。
  * opts：{ lang?, history?（运行器的摘要，旧的在前）, missed? }
  */
-export function renderBrief(p, { lang, history = [], missed = null } = {}) {
+export function renderBrief(p, { lang, history = [], missed = null, brief } = {}) {
   const code = codeOf(lang || p.lang);
   const c = makeCtx(p, { code, level: 0 });
   const lines = [...secDiagnostics(c), ...secNow(c)];
   const absent = secAbsent(c);
   if (absent) return [...lines, ...absent].join('\n'); // 沉睡、长眠、归隐：同原来
+  if (tokenized(p) && (brief ?? p.you.tokens.routine.brief) === 'short') return [...lines, ...youHead(c), ...tokenInbox(c), ...secMemories(c)].join('\n');
   lines.push(...youHead(c), ...youCounts(c), ...youTraining(c));
   lines.push(...hereLine(c), ...herePresent(c), ...hereCounts(c), ...hereWell(c), ...hereWilds(c), ...hereOmens(c));
-  lines.push(...secInbox(c), ...cityBrief(c), ...secMemories(c), ...secActions(c));
-  lines.push(...renderHistory(history, { code, now: p.now || {}, missed }));
+  lines.push(...(tokenized(p) ? tokenInbox(c) : secInbox(c)), ...cityBrief(c), ...secMemories(c), ...secActions(c));
+  if (!tokenized(p)) lines.push(...renderHistory(history, { code, now: p.now || {}, missed }));
   return lines.join('\n');
 }
 
@@ -304,11 +309,11 @@ export function renderWake(p, { lang, earlier = null } = {}) {
   const code = codeOf(lang || p.lang);
   const c = makeCtx(p, { code, level: 0 });
   const lines = [D2[code].wake.woken];
-  if (earlier) lines.push(D2[code].wake.earlier.trimEnd(), ...summaryLines(earlier, code));
+  if (earlier && !tokenized(p)) lines.push(D2[code].wake.earlier.trimEnd(), ...summaryLines(earlier, code));
   lines.push(...secNow(c));
   const absent = secAbsent(c);
   if (absent) return [...lines, ...absent].join('\n');
-  lines.push(...youHead(c).slice(0, 1), ...secInbox(c), ...hereLine(c), ...herePresent(c));
+  lines.push(...youHead(c).slice(0, 1), ...(tokenized(p) ? tokenInbox(c) : secInbox(c)), ...hereLine(c), ...herePresent(c));
   return lines.join('\n');
 }
 
@@ -376,14 +381,17 @@ function lookGroups(c, id) {
 export function renderLook(p, what, id, { lang } = {}) {
   const code = codeOf(lang || p.lang);
   const t = D2[code].look;
-  if (!LOOK_WHATS.includes(what)) return t.noSection(String(what), LOOK_WHATS.join(D2[code].sep));
+  const whats = tokenized(p) ? LOOK_WHATS_P4 : LOOK_WHATS;
+  if (!whats.includes(what)) return t.noSection(String(what), whats.join(D2[code].sep));
   const c = makeCtx(p, { code, level: 0 });
   const key = id === undefined || id === null || id === '' ? null : String(id);
   let lines;
   const city = p.city;
   switch (what) {
+    case 'inbox': return tokenInbox(c).join('\n') || emptyInboxLine(code);
+    case 'actions': return secActions(c).join('\n');
     case 'here': lines = secHere(c); break;
-    case 'self': lines = lookSelf(c); break;
+    case 'self': lines = tokenized(p) ? [...youHead(c), ...lookSelf(c)] : lookSelf(c); break;
     case 'laws': case 'law': lines = lookLaws(c, key); break;
     case 'proposals': case 'proposal': lines = lookProposals(c, key); break;
     case 'procedure': lines = city ? [...cityProcedure(c), ...cityVars(c), ...cityCharter(c)] : []; break;
@@ -450,4 +458,10 @@ export function renderActResult(p, { results, notes = [], arrived = [], moved = 
   if (fresh) lines.push(...renderArrived(p, arrived, { lang: code }));
   if (fresh && moved) lines.push(...renderArrival(p, { lang: code }));
   return lines.join('\n');
+}
+
+function tokenInbox(c) {
+  const lines = secInbox(c);
+  if (c.p.inboxMore > 0) lines.push(inboxMoreLine(c.p.inboxMore, c.code));
+  return lines;
 }

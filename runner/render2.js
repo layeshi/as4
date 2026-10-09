@@ -2,6 +2,8 @@
 // 没有内容的分区省略。所有居民写下的文本（志、介绍、铭刻、法律的文字、规则里的理由与宣告……）原样呈现，不翻译。
 // 「第 N 日」一律按 日序号 + 1 显示（感知里的 day 从 0 起）。规则的「引擎读法」是城里直接执行的规则的真实含义，必须完整给出。
 
+import { tokenized } from '../src/e2/world.js';
+import { tokenHeadParts, tokenBillLines } from './render-p4.js';
 import { L } from '../src/e2/lore/index.js';
 import { enactText } from '../public/law-outcome.js';
 
@@ -260,13 +262,13 @@ export function secAbsent({ d, you, lastResults }) {
 }
 
 /** 【你】的头两行：能量、代谢、标签、志、剩余次数；世代、作者、子女、社群、名下 */
-export function youHead({ p, d, P, you }) {
+export function youHead({ p, d, P, you, code }) {
   const lines = [];
-  const head = [you.name, d.status[you.status] || you.status, d.energy(you.energy, you.energyCap, you.floor), d.coins(you.coins), d.age(you.ageDays), p.premise >= 1 ? d.metabW(you.metabolism, you.weight.soul, you.weight.memories) : d.metab(you.metabolism)];
+  const head = tokenized(p) ? tokenHeadParts({ code, d, you }) : [you.name, d.status[you.status] || you.status, d.energy(you.energy, you.energyCap, you.floor), d.coins(you.coins), d.age(you.ageDays), p.premise >= 1 ? d.metabW(you.metabolism, you.weight.soul, you.weight.memories) : d.metab(you.metabolism)];
   if (you.tags && you.tags.length) head.push(`${d.tags}${P.col}${you.tags.join(P.sep)}`);
   if (you.purpose) head.push(`${d.purpose}${P.col}${you.purpose}`);
   if (you.prayers?.enabled) head.push(`${p.lang === 'en' ? 'prayer points' : '祈愿点'} ${you.prayerPoints}`);
-  head.push(d.left(you.actionsLeft));
+  head.push(tokenized(p) ? (code === 'en' ? `${you.actionsLeft} actions left this tick` : `本刻还能做 ${you.actionsLeft} 个动作`) : d.left(you.actionsLeft));
   lines.push(`${d.you}${head.join(' · ')}`);
   const meta = [d.generation(you.generation)];
   if (you.authors && you.authors.length) meta.push(`${d.authors}${P.col}${you.authors.map(ref).join(P.sep)}`);
@@ -275,6 +277,7 @@ export function youHead({ p, d, P, you }) {
   if (you.owns && you.owns.length) meta.push(`${d.owns}${P.col}${you.owns.map(ref).join(P.sep)}`);
   if (you.drawnToday || you.repairedToday || you.salvagedToday) meta.push(d.handleToday(you.drawnToday, you.repairedToday, you.salvagedToday));
   lines.push(`  ${meta.join(' · ')}`);
+  if (tokenized(p)) lines.push(...tokenBillLines(you.tokens, code));
   return lines;
 }
 
