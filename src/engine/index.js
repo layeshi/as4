@@ -42,7 +42,7 @@ export function applyCommand(w, cmd) {
   const handler = COMMANDS[cmd.type];
   w.commandN = cmd.n !== undefined ? cmd.n : w.commandN + 1;
   if (!handler) return { result: bad('invalid_request', { field: 'type' }), events: drainEvents(w) };
-  // TODO(spec): Q60 — derived indexes live only during this command, never in w.
+  // Q60: derived indexes live only during this command, never in w.
   const result = withRecordQueries([w.offers, w.pacts, w.proposals, w.inscriptions, w.laws, w.lexicon],
     () => handler(w, cmd.payload || {}));
   return { result, events: drainEvents(w) };

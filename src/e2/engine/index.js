@@ -1,4 +1,5 @@
 import { meterCommand, capCommand } from './meter.js';
+import { withRecordQueries } from '../../collections.js';
 import { enablePrayers, replyPrayer, reviewInvention } from './prayers.js';
 // SPEC-E2 §2：第二纪引擎的命令入口。HTTP 层、运行时与调度器只能通过这些命令改变世界。
 //
@@ -73,7 +74,10 @@ export function applyCommand(w, cmd) {
   w.commandN = cmd.n !== undefined ? cmd.n : w.commandN + 1;
   if (!handler) return { result: bad('invalid_request', { field: 'type' }), events: drainEvents(w), wakes: drainWakes(w) };
   if (usesLawVM2(w) && !(cmd.type === 'admin' && ['law_execution', 'pause'].includes(cmd.payload?.op))) return applyProtected(w, cmd, handler);
-  const result = handler(w, cmd.payload || {});
+  // Q60: share only key enumeration during this synchronous command. Values
+  // remain live; ID counters and explicit lexicon invalidation track insertions.
+  const result = withRecordQueries([w.offers, w.pacts, w.proposals, w.inscriptions, w.laws, w.lexicon, w.projects, w.refounds, w.groups],
+    () => handler(w, cmd.payload || {}));
   return { result, events: drainEvents(w), wakes: drainWakes(w) };
 }
 

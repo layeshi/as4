@@ -39,7 +39,7 @@ export const hasRelay = (w) => hasModuleAnywhere(w, 'relay');
 
 /** 墙上当前可见的铭刻：未被覆盖、未被遮盖、未随地点消失（lost），按刻写先后 */
 export function wallInscriptions(w, placeId) {
-  return filterValues(w.inscriptions, (i) => i.place === placeId && !i.coveredBy && !i.redacted && !i.lost);
+  return filterValues(w.inscriptions, (i) => i.place === placeId && !i.coveredBy && !i.redacted && !i.lost, w.counters.i);
 }
 
 // ── 代价与系数 ─────────────────────────────────────────────

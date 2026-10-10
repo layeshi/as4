@@ -26,7 +26,7 @@ import { nameKey } from '../../text.js';
 
 /** 某地点进行中的工程 */
 export function openProjectsAt(w, placeId) {
-  return filterValues(w.projects, (j) => j.status === 'open' && j.place === placeId);
+  return filterValues(w.projects, (j) => j.status === 'open' && j.place === placeId, w.counters.j);
 }
 
 /** 两地之间是否已有道路或进行中的道路工程（不分方向） */
@@ -73,7 +73,7 @@ const projectKind = (j) => (j.build === 'module' ? j.module : j.build);
 
 /** 进行中的开辟工程已经占用的名字（发起时检查，避免两项工程取同一个名字） */
 export function pendingSiteNames(w) {
-  return filterValues(w.projects, (j) => j.status === 'open' && j.build === 'site').map((j) => nameKey(j.name));
+  return filterValues(w.projects, (j) => j.status === 'open' && j.build === 'site', w.counters.j).map((j) => nameKey(j.name));
 }
 
 /**

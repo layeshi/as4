@@ -1,4 +1,4 @@
-import { filterValues, tailValues } from '../../collections.js';
+import { filterValues, tailRecordValues } from '../../collections.js';
 import { upgradeView } from './upgrades.js';
 import { ep, K, tokenView, custodyOf } from './tokens.js';
 import { prayerView, prayersEnabled } from './prayers.js';
@@ -103,14 +103,14 @@ export function buildPerception(w, agentId, opts = {}) {
 
   const allAgents = agentList(w);
   const projectsHere = openProjectsAt(w, a.place);
-  const openProposals = filterValues(w.proposals, p => p.status === 'open');
+  const openProposals = filterValues(w.proposals, p => p.status === 'open', w.counters.p);
   const pendingRefounds = openRefounds(w);
-  const activeGroups = filterValues(w.groups, g => !g.dissolved);
+  const activeGroups = filterValues(w.groups, g => !g.dissolved, w.counters.g);
   const costs = travelCosts(w, a.place); // 去各地点的路程：city.places 与 actions 里的 move 都要用，算一遍
   const wall = wallInscriptions(w, a.place); // 此处墙上可见的铭刻：here 与 actions（墙满的提示）都要用，扫一遍
   // 进行中的交易与孕育之约：you、here（告示板）、actions 都要用。交易、孕育之约关闭后仍留在表里，所以只扫一遍
-  const openOffers = filterValues(w.offers, (o) => o.status === 'open');
-  const openPacts = filterValues(w.pacts, (c) => c.status === 'open');
+  const openOffers = filterValues(w.offers, (o) => o.status === 'open', w.counters.o);
+  const openPacts = filterValues(w.pacts, (c) => c.status === 'open', w.counters.c);
 
   // ── 收件箱 ──
   const after = opts.after !== undefined && opts.after !== null ? opts.after : Math.max(a.inboxCursor, opts.floor || 0);
@@ -386,8 +386,8 @@ function cityView(w, a, l, lang, day, costs, allAgents, openProposals, pendingRe
   const hist = w.well.outputHistory;
   const pop = { awake: 0, dormant: 0, dead: 0, retired: 0, cradle: Object.keys(w.souls).length };
   for (const o of allAgents) pop[o.status]++;
-  const lexicon = tailValues(w.lexicon, P.lexiconInPerception).map((e) => ({ word: e.word, meaning: e.redacted ? l.redacted : e.meaning }));
-  const laws = filterValues(w.laws, (x) => x.status === 'active').sort((x, y) => idNum(y.id) - idNum(x.id)).slice(0, P.lawsInPerception).map((x) => lawEntry(w, x, lang));
+  const lexicon = tailRecordValues(w.lexicon, P.lexiconInPerception).map((e) => ({ word: e.word, meaning: e.redacted ? l.redacted : e.meaning }));
+  const laws = filterValues(w.laws, (x) => x.status === 'active', w.counters.l).sort((x, y) => idNum(y.id) - idNum(x.id)).slice(0, P.lawsInPerception).map((x) => lawEntry(w, x, lang));
   const myGroupIds = new Set(a.groups);
   const proposals = openProposals.filter(p => p.scope === 'city' || myGroupIds.has(p.scope.slice(6)))
     .map((p) => proposalEntry(w, a, p, lang));

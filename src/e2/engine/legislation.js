@@ -219,7 +219,7 @@ export const rngCopy = (w) => w.rng.world.slice();
 // ═══════════════════════════════════════════════════════════════
 
 /** 城里进行中的提案 */
-export const openCityProposals = (w) => filterValues(w.proposals, (p) => p.status === 'open' && p.scope === 'city');
+export const openCityProposals = (w) => filterValues(w.proposals, (p) => p.status === 'open' && p.scope === 'city', w.counters.p);
 
 /** 引擎读法（中英文）：提案或法律的规则 / 程序 */
 export function readingsOf({ rules, procedure }) {
@@ -439,7 +439,7 @@ STEPS.revert = (w) => autoRevert(w);
 // 重订（§8.6）
 // ═══════════════════════════════════════════════════════════════
 
-export const openRefounds = (w) => filterValues(w.refounds, (r) => r.status === 'open');
+export const openRefounds = (w) => filterValues(w.refounds, (r) => r.status === 'open', w.counters.r);
 
 /** 入城满 refoundResidenceDays 的在世居民数（重订的分母） */
 export function refoundResidents(w) {

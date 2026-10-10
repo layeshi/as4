@@ -12,6 +12,7 @@ import { costMultiplierBp } from '../places.js';
 import { P, LIMITS } from '../../params.js';
 import { ACTIONS } from '../../lore/actions.js';
 import { clockDay, nextId, isAlive, findAgent } from '../../world.js';
+import { invalidateRecordKeys } from '../../../collections.js';
 import { nameKey } from '../../../text.js';
 import {
   fail, emit, pushInbox, ref, creditEnergy, needText, optText, optLang, optAmount, needObject, needId, isMuted,
@@ -417,6 +418,7 @@ const define = {
   apply(ctx, plan) {
     const { w, a } = ctx;
     w.lexicon[plan.key] = { word: plan.word, meaning: plan.meaning, coiner: a.id, tick: w.clock.tick, uses: 0, users: [], redacted: false };
+    invalidateRecordKeys(w.lexicon);
     emit(w, 'define', { agent: a.id, place: a.place, data: { word: plan.word, meaning: plan.meaning } });
     return { word: plan.word };
   },

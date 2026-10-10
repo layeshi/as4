@@ -106,7 +106,7 @@ export function buildPerception(w, agentId, opts = {}) {
   const ack = opts.ack !== undefined ? opts.ack : opts.after === undefined || opts.after === null;
   if (ack && maxSeq > a.inboxCursor) a.inboxCursor = maxSeq;
 
-  // TODO(spec): Q60 — these read-only tables are shared only within this perception.
+  // Q60: these read-only tables are shared only within this perception.
   const query = {
     agents: agentList(w), wall: wallInscriptions(w, a.place), proposals: openProposals(w),
     offers: filterValues(w.offers, o => o.status === 'open', w.counters.o),
