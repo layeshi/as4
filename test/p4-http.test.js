@@ -9,6 +9,48 @@ const city = () => boot({ physics: 2, premise: 4, shellSlots: 0, tokenBasic: 500
 const post = (env, path, token, body) => env.call(path, { method: 'POST', token, body });
 const billTotal = b => b.reread + b.read + b.write;
 
+for (const lang of ['zh', 'en']) {
+  test(`P4 Q65: ${lang} acquired content is delivered but free at wake and every later round`, async () => {
+    const env = await city();
+    try {
+      const r = await env.register('甲', { dailyCap: 1000000, lang });
+      const a = env.rt.w.agents[r.agentId];
+      // Keep the standard pricing language fixed independently of transport options.
+      a.lang = lang;
+      const baseline = await post(env, '/api/me/wake', r.agentToken, { kind: 'main', lang });
+      assert.equal(baseline.status, 200, baseline.text);
+      const standardWeight = textWeight(baseline.json.system);
+      const acquired = '习得 ABC 🧠 不再计费。'.repeat(35);
+      a.body.trained.push({ text: acquired, weight: textWeight(acquired), by: a.id, day: 0 });
+      for (const toolMode of ['native', 'json', 'mcp']) {
+        const wake = await post(env, '/api/me/wake', r.agentToken, { kind: 'main', lang, toolMode });
+        assert.equal(wake.status, 200, wake.text);
+        assert.ok(wake.json.system.includes(acquired), 'the model still receives acquired content');
+        assert.equal(wake.json.bill.reread, Math.ceil(standardWeight / 10));
+        assert.equal(wake.json.bill.read, textWeight(wake.json.text));
+        const wakeId = wake.json.wakeId;
+        const look = await post(env, '/api/me/look', r.agentToken, { wakeId, what: 'self', turn: 2, lang });
+        assert.equal(look.status, 200, look.text);
+        assert.equal(look.json.bill.reread - wake.json.bill.reread, Math.ceil(standardWeight / 10));
+        const act = await post(env, '/api/me/act', r.agentToken, { wakeId, actions: [], turn: 3, lang });
+        assert.equal(act.status, 200, act.text);
+        assert.equal(act.json.bill.reread - look.json.bill.reread,
+          Math.ceil((standardWeight + textWeight(wake.json.text)) / 10));
+        assert.equal(checkConservation(env.rt.w).ok, true);
+      }
+      // Exact remaining allowance proves later rereading of acquired content cannot cause a cap refusal.
+      const expectedWakeCost = Math.ceil(standardWeight / 10);
+      const probe = await post(env, '/api/me/wake', r.agentToken, { kind: 'main', lang });
+      assert.equal(probe.status, 200);
+      const cap = a.tokens.used + expectedWakeCost;
+      await post(env, '/api/owner/cap', r.ownerKey, { dailyCap: cap });
+      const next = await post(env, '/api/me/act', r.agentToken, { wakeId: probe.json.wakeId, actions: [], turn: 2, lang });
+      assert.equal(next.status, 200, next.text);
+      assert.equal(a.tokens.used, cap);
+    } finally { await env.close(); }
+  });
+}
+
 test('P4 T7/T18: status is free and private, wake/look/act meter explicit and implicit turns', async () => {
   const env = await city();
   try {

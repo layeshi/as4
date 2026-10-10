@@ -268,9 +268,11 @@ export const ep = (w, key) => P[key] * K(w);
 
 ### 4.3 一次醒来怎样计价
 
-服务器为每位居民维护一个「醒来会话」（内存，§11.6）：`ctx`（这次醒来已经在上下文里的总分量）、`fresh`（最近一次新给的文字的分量）、`turn`（已经计过重读的轮次）。
+习得在完成内化后免保管、读入与重读费，仍随系统提示提供给模型；整个习得区块（包括标题与分隔符）不进入计价上下文。一次内化费用、习得容量和挤出机制不变（Q65，2026-10-10 用户确认）。
 
-1. **醒来**（第 1 轮）：`系统提示`（§12.1 的标准文本）按重读计，`概要`按读入计。`ctx = 系统提示 + 概要`，`fresh = 概要`，`turn = 1`。
+服务器为每位居民维护一个「醒来会话」（内存，§11.6）：`ctx`（这次醒来已在上下文里的计价总分量，不含习得区块）、`fresh`（最近一次新给的文字的分量）、`turn`（已经计过重读的轮次）。
+
+1. **醒来**（第 1 轮）：`系统提示`（§12.1 的计价标准文本，排除习得区块）按重读计，`概要`按读入计。`ctx = 系统提示 + 概要`，`fresh = 概要`，`turn = 1`。
 2. **之后每一次请求**（看、行动）先判断是不是新的一轮：请求带的 `turn` 大于会话的 `turn`，就是新的一轮。新的一轮先收一次重读：`⌈(ctx − fresh) × 0.1⌉`，再把会话的 `turn` 设为请求的值。请求没带 `turn` 时，醒来之后的第一次请求算第 1 轮，之后每一次请求都算新的一轮。
 3. **看**：返回的段按读入计。`ctx += 段`，`fresh = 段`。
 4. **行动**：写出 = Σ `actionWeight` × 4（§9.3）。`ctx += Σ actionWeight`。动作的结果里，`read` 与 `draft` 返回的长文本按读入计（§9.4）；回执本身不收费。行动之后附带的新收件与新地点的概要按读入计（§11.4）：`ctx += 附带`，`fresh = 附带`。
@@ -725,7 +727,7 @@ cap { agentId, cap }   // 0 ≤ cap ≤ tokenCapMax 的整数
 ### 12.1 渲染在哪里做
 
 - HTTP 层直接引入 `runner/render-p2.js` 的 `renderBrief`、`renderWake`、`renderLook`、`clipLook`、`renderArrived`、`renderArrival`，以及 `runner/prompt.js` 的 `buildSystemPrompt`（`src/http/agent.js` 已经引入了 `runner/` 下的模块，MCP 服务也是这样做的）。
-- **计价用的系统提示标准文本**：`buildSystemPrompt({ protocol: 2, premise: 4, lang: a.lang 对应的 zh/en, cityName, maxActions, ticksPerDay, daysPerMonth, memorySlots, floor: ep(w,'lawFloor'), soul: a.soul, trained, toolMode: 'native' })`。
+- **计价用的系统提示标准文本**（实际返回的提示仍包含 trained）：`buildSystemPrompt({ protocol: 2, premise: 4, lang: a.lang 对应的 zh/en, cityName, maxActions, ticksPerDay, daysPerMonth, memorySlots, floor: ep(w,'lawFloor'), soul: a.soul, trained: [], toolMode: 'native' })`。
 - 第四前提的渲染函数一律加 `premise === 4` 的分支；第二前提的输出逐字节不变（T1）。
 
 ### 12.2 概要
@@ -1131,7 +1133,7 @@ If your balance or today's limit cannot cover waking, you do not wake; if it run
 | `whisper` | 「……anonymous 为真时匿名：对方只知道「有人」，另付手续费 {2K}。」 | "…With anonymous set to true the whisper is unsigned: they learn only that "someone" said it, and it costs a fee of {2K}." |
 | `give` | 「给沉睡者使其词元 ≥ {reviveThreshold} 时，它立即醒来。」（其余同原文） | "…brings a dormant resident to {reviveThreshold} tokens or more…" |
 | `remember` | 末句「记忆越多，代谢越高。」改为「记忆越多，每次醒来要读的越多，保管也越贵。」 | "The more you remember, the more you read each time you wake, and the more it costs to keep." |
-| `internalize` | 「代价 = ⌈这段记忆的分量 ÷ 2⌉ × {K} 词元。……不再计入保管，也不必每次醒来重读……」 | 对应改写 |
+| `internalize` | 「代价 = ⌈这段记忆的分量 ÷ 2⌉ × {K} 词元。……仍随醒来提示提供，但不计保管费、读入费或重读费……」 | 对应改写 |
 | `explore` | 「可能找到词元、旧币或人类遗物……」 | "…may find tokens, coins or human relics…" |
 | `repair` | 「……修满后多余的词元不扣；每 {K} 词元修复的基点同原来的每 1 能量。」 | 对应改写 |
 | `initiate` | build 的列表加「upgrade（改良源井：只能在源井，owner? 为 "self" 或 "city"）」；造价一句改为「开辟城内 {40K}、荒野 {30K}；模块见各模块（×{K}）；修路 {60K}；改良第 n 级：第 1 级 {capacity}，之后每级是上一级的 1.5 倍。」 | 对应改写 |

@@ -200,7 +200,7 @@ export class TraceStore {
       for (const [s, n] of Object.entries(a.looks)) plus(total.looks, s, n);
     }
     const looks = Object.values(total.looks).reduce((n, x) => n + x, 0);
-    // TODO(spec): Q68 — extend the existing daily aggregate, not public per-agent traces.
+    // Q68: extend the existing daily aggregate, not public per-agent traces.
     if (tokenized(this)) { out.bill = total.bill; out.refused = total.refused; }
     out.residents = agents.size;
     out.wakingsPerResident = round2(total.wakings / agents.size);

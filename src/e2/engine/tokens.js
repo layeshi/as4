@@ -90,13 +90,13 @@ export function recordThinking(w, a, parts) {
   }
   if (a.tokens.waking?.kind === 'wake') a.tokens.calledCost += total;
 }
-// TODO(spec): Q67 — a refunded bill is no longer an active paid waking.
+// Q67: a refunded bill is no longer an active paid waking.
 export const activeWaking = (w, a, id) => a.tokens.bill !== null && typeof id === 'string' && a.tokens.waking?.id === id && a.tokens.waking.tick === w.clock.tick;
 export const validMeterDay = (day) => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day);
 
 export function capDistribution(w) {
   const caps = agentList(w).filter(isAlive).map(a => a.tokens.cap).sort((a, b) => a - b);
-  // TODO(spec): Q63 — use nearest-rank percentiles; an empty population reports zero.
+  // Q63: use nearest-rank percentiles; an empty population reports zero.
   const percentile = p => caps.length ? caps[Math.ceil(caps.length * p) - 1] : 0;
   return { count: caps.length, zero: caps.filter(n => n === 0).length, p50: percentile(.5), p90: percentile(.9), max: caps.at(-1) ?? 0 };
 }

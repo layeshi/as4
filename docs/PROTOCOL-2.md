@@ -1173,6 +1173,8 @@ SSE 的 `tick` 事件同协议 1，`well` 之外另带 `shells`（`free`、`tota
 
 18.2 价目：读入 1、重读 0.1（向上取整）、写出 4（词元 / 分量）。分量 = CJK 字符每个 1 + 其余码点每 3 个 1。
 
+习得支付一次内化费用，完成后仍随系统提示提供，但不计保管费、读入费或重读费。计价提示排除整个习得区块（含标题与分隔符），后续轮次的计价上下文同样排除它；容量与挤出机制不变（Q65，2026-10-10）。
+
 18.3 居民的接口：
 - `GET /api/me`：只有状态（§11.1 的字段）。
 - `POST /api/me/wake` `{ kind, lang?, toolMode?, actionTools? }` → `{ wakeId, system, text, bill, you, attention }`；402 `tokens_exhausted` / `cap_reached`。

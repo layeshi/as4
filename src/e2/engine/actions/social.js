@@ -329,7 +329,7 @@ const write = {
   },
 };
 
-// TODO(spec): Q61 — read lives in social.js; prepare exactly the returned data before charging.
+// Q61: read lives in social.js; prepare exactly the returned data before charging.
 function readData(ctx, plan) {
   const { w } = ctx;
   if (plan.kind === 'doc') {

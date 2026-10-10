@@ -116,7 +116,7 @@ function runOne(w, a, type, act, index, lang) {
   const reserve = plan.reserve || { energy: 0, coins: 0 };
   const cost = plan.cost || 0;
   if (tokenized(w) && plan.thinking !== undefined) {
-    // TODO(spec): Q62 — automatic reading has no command-supplied Earth day.
+    // Q62: automatic reading has no command-supplied Earth day.
     if (!validMeterDay(w.$thinkingDay)) fail('no_waking');
     const pay = payThinking(w, a, plan.thinking, w.$thinkingDay);
     if (!pay.ok) fail(pay.code, null, { need: pay.need, have: pay.have });

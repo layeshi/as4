@@ -149,7 +149,7 @@ function tempSet(w, scope, rules) {
   return { ...citySet({ id: 'draft', rules }), ...base };
 }
 
-// TODO(spec): Q61 — P4 previews in validate; historical worlds still preview in apply.
+// Q61: P4 previews in validate; historical worlds still preview in apply.
 function draftData(ctx, plan) {
   const { w, lang } = ctx;
   const pick = (i) => ({ path: i.path, code: i.code, message: lang === 'en' ? i.en : i.zh, ...(i.hint ? { hint: lang === 'en' ? i.hint.en : i.hint.zh } : {}) });

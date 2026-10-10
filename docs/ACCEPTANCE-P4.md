@@ -4,7 +4,7 @@
 
 ## 验收状态
 
-功能、黄金样本、冻结世界回放、60 日守恒及 T25 模拟冒烟通过。**全量测试尚未全绿：Q60 原有第二纪沙盘性能门槛仍未通过。** 第 14 步最终全量结果为 **1450 项，1449 通过、1 失败、0 跳过**；唯一失败是第二纪 720 日耗时 **292205 ms** 超过 **150000 ms**。第一纪 60 秒门槛已通过，其他全部检查通过。因此尚未满足用户要求的「npm test 全部通过」，不将暂行规格决定视为已获设计方确认。
+功能、黄金样本、冻结世界回放、60 日守恒及 T25 模拟冒烟通过。**全量测试尚未全绿：Q60 原有第二纪沙盘性能门槛仍未通过。** 第 14 步最终全量结果为 **1450 项，1449 通过、1 失败、0 跳过**；唯一失败是第二纪 720 日耗时 **292205 ms** 超过 **150000 ms**。第一纪 60 秒门槛已通过，其他全部检查通过。因此尚未满足用户要求的「npm test 全部通过」，Q61–Q68 已于 2026-10-10 获用户确认，详见下文；Q60 仍未解决。
 
 第 13 步完整测试：**1450 项，1449 通过、1 失败、0 跳过**。唯一失败是 `test/e2-sandbox.test.js:759` 的 720 日耗时 `294291 ms < 150000 ms` 断言；守恒、动作覆盖等断言通过。此前同一第二纪用例曾以 140548 ms 通过；原始基线也存在第一纪、第二纪两项性能失败。等价查询优化后，本轮第一纪 60 秒门槛通过。没有修改、跳过或放宽原性能断言。原有测试仅有 SPEC-P4 §19.3 允许的两类变化（PREMISE 报错文字、UI 新端点例外）。
 
@@ -15,6 +15,22 @@ HOUREN_FROZEN_WORLDS=/home/ctyun/projects/as4/data npm test -- --test-concurrenc
 ```
 
 实际运行将 Node 24 的目录 `/home/ctyun/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin` 放在 PATH 首位。第 13 步完整日志：`/tmp/as4-p4-step13-complete-test.log`；第 14 步最终日志：`/tmp/as4-p4-step14-test.log`（退出码 1，总耗时约 46.7 分钟）。串行执行用于避免测试互相争用性能测量资源；测试内容及覆盖范围完整。
+
+## 2026-10-10：规则定案与 Q65 修正
+
+用户确认 Q61–Q68。Q65 实现现按最终决定：实际提示保留习得区块，计价时构建不含习得的标准提示，并用该分量初始化会话计价上下文；因此醒来与后续轮次均不为习得收费。一次内化费用、容量与挤出机制保持不变。中英文动作说明、SPEC-P4 与 PROTOCOL-2 已同步；旧交接正文的待定状态由其页首更新说明覆盖。
+
+相关回归使用 Node 24.19.0、串行执行：
+
+```bash
+env HOUREN_FROZEN_WORLDS=/home/ctyun/projects/as4/data \
+  /home/ctyun/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node \
+  --test --test-concurrency=1 test/p4-*.test.js test/p2-golden.test.js
+```
+
+结果：**71 项，71 通过、0 失败、0 跳过**，约 62.5 秒。新增 Q65 中英文 HTTP 验证覆盖 native/json/MCP 提示保留习得、醒来读入与重读、后续 look/act 多轮重读、每日额度边界与守恒。premise 0/1/2 黄金样本逐字节一致；P4 60 世界日 1118 条命令守恒失败 0，回放哈希仍为 `7c57645bf65f696762fb48ee2b9a36bd47ec73e8bfa7bfb1ef78803053aa514d`；测试后 fixtures 无 Git 差异。
+
+这次只运行相关回归，未重跑完整 npm test、三个冻结生产世界回放或 T25 独立冒烟；不覆盖上次完整验收结果，Q60 仍未解决。本机日志：`/tmp/as4-p4-q65-tests.log`。
 
 ## 黄金样本与回放
 
@@ -56,9 +72,9 @@ HOUREN_FROZEN_WORLDS=/home/ctyun/projects/as4/data npm test -- --test-concurrenc
 87282c5ef9293918dbb369b0576f6f086719a284c04cc44ca215f0abd973976e
 ```
 
-## 全部未决问题
+## 问题与规则决定
 
-本次条目均在 [QUESTIONS.md](QUESTIONS.md) 记录问题、选项、建议与状态，代码有对应 TODO(spec)。Q60 是未通过的性能验收；Q61–Q68 按用户授权采用建议暂行实现，等待设计方确认。
+本次条目均在 [QUESTIONS.md](QUESTIONS.md) 记录问题、选项、建议与状态。Q60 是未通过的性能验收。2026-10-10 用户确认 Q62 采用 C，Q61/Q63/Q64/Q66/Q67/Q68 采用建议 A，Q65 采用新增 D；已移除这些已定案条目的 TODO(spec) 标记。
 
 | 编号 | 问题 | 当前处理 |
 |---|---|---|
@@ -67,7 +83,7 @@ HOUREN_FROZEN_WORLDS=/home/ctyun/projects/as4/data npm test -- --test-concurrenc
 | Q62 | 常驻 read/draft 缺少地球日 | 缺少本次命令的计价日时返回 no_waking；其余常驻动作照常执行且免写出。 |
 | Q63 | 上限分布百分位 | 在世居民 nearest-rank；空城为 0。 |
 | Q64 | look inbox 截断后的确认 | 只推进完整可见的收件；未完整显示的保留。 |
-| Q65 | 习得文本与提示重读 | 按标准提示总分量计价，包含 trained；保留附录原文待定。 |
+| Q65 | 习得文本与提示重读 | 一次内化费用不变；完成后免保管、读入与重读费，提示仍提供 trained。整个习得区块不进入醒来或后续轮次的计价上下文。 |
 | Q66 | 概要的上次账单 | 感知副本预览当前账单，成功 meter 才更新持久状态。 |
 | Q67 | 退款会话是否可继续 | bill=null 后会话失效，保留 waking/refundable=false 记录。 |
 | Q68 | 公开注意力账单粒度 | 公开每日总账单与拒绝次数；逐居民数据只在管理接口和本地轨迹。 |

@@ -7,7 +7,7 @@ export function tokenDescription(type, desc) {
   if (type === 'remember') replace('记忆越多，代谢越高。', 'The more you remember, the higher your metabolism.', '记忆越多，每次醒来要读的越多，保管也越贵。', 'The more you remember, the more you read each time you wake, and the more it costs to keep.');
   if (type === 'internalize') {
     replace('代价 = ⌈这段记忆的分量 ÷ 2⌉。', "Cost = ⌈the memory's weight ÷ 2⌉.", '代价 = ⌈这段记忆的分量 ÷ 2⌉ × {K} 词元。', "Cost = ⌈the memory's weight ÷ 2⌉ × {K} tokens.");
-    replace('不再计入代谢', 'it no longer counts toward your metabolism', '不再计入保管，也不必每次醒来重读', 'it no longer counts toward keeping, nor must it be re-read at every waking');
+    replace('不再计入代谢', 'it no longer counts toward your metabolism', '仍随醒来提示提供，但不计保管费、读入费或重读费', 'it is still included in your waking prompt, but costs no keeping, reading or re-reading fees');
   }
   if (type === 'repair') replace('修满后多余的词元不扣。', 'tokens left over once fully repaired is not spent.', '修满后多余的词元不扣；每 {K} 词元修复的基点同原来的每 1 能量。', 'tokens left over once fully repaired is not spent; each {K} tokens repairs as many basis points as 1 energy did before.');
   if (type === 'initiate') {

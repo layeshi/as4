@@ -51,10 +51,10 @@ function perception(ctx, id, lang) {
   p.attention = { ...limits(ctx) };
   return p;
 }
-function prompt(ctx, id, p, lang, toolMode = 'native', actionTools = 'legacy') {
+function prompt(ctx, id, p, lang, toolMode = 'native', actionTools = 'legacy', trained = p.you.trained) {
   const w = ctx.rt.w;
   return buildSystemPrompt({ ...promptParams(p), premise: 4, lang, cityName: cityDisplayName(w.cityName, lang),
-    toolMode, actionTools, prayers: false, tokenValues: tokenValues(w) });
+    toolMode, actionTools, trained, prayers: false, tokenValues: tokenValues(w) });
 }
 export function wakeCore(ctx, id, body, lang) {
   const w = ctx.rt.w, a = w.agents[id];
@@ -64,15 +64,16 @@ export function wakeCore(ctx, id, body, lang) {
   if (a.status !== 'awake') return failure(lang, 'not_awake');
   lang = normLang(body.lang ?? a.lang);
   const p = perception(ctx, id, lang), wakeId = `w${w.clock.tick}-${randomBytes(3).toString('hex')}`;
-  // TODO(spec): Q66 — preview the bill that this wake will move into lastBill.
+  // Q66: preview the bill that this wake will move into lastBill.
   if (p.you.tokens && a.tokens.bill) p.you.tokens.lastBill = structuredClone(a.tokens.bill);
   const text = body.kind === 'wake' ? renderWake(p, { lang }) : renderBrief(p, { lang, brief: a.routine.brief });
-  // TODO(spec): Q65 — charge the full standard prompt, including its acquired block.
-  const system = prompt(ctx, id, p, normLang(a.lang));
+  // Q65: acquired content remains in the model prompt, but its entire block is free.
+  // The session context tracks only billable weight, including on later turns.
+  const systemWeight = textWeight(prompt(ctx, id, p, normLang(a.lang), 'native', 'legacy', []));
   const result = ctx.rt.exec('meter', { op: 'wake', agentId: id, wakeId, day: earthDayKey(ctx), kind: body.kind,
-    system: textWeight(system), brief: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) }).result;
+    system: systemWeight, brief: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) }).result;
   if (!result.ok) return failed(lang, result);
-  ctx.wakings.set(id, { wakeId, tick: w.clock.tick, kind: body.kind, turn: 1, ctx: textWeight(system) + textWeight(text), fresh: textWeight(text), requests: 0 });
+  ctx.wakings.set(id, { wakeId, tick: w.clock.tick, kind: body.kind, turn: 1, ctx: systemWeight + textWeight(text), fresh: textWeight(text), requests: 0 });
   return { status: 200, json: { wakeId, system: prompt(ctx, id, p, lang, body.toolMode ?? 'native', body.actionTools ?? 'legacy'), text,
     bill: result.bill, you: tokenStatus(ctx, id, { lang }).you, attention: { ...limits(ctx) } } };
 }
@@ -100,7 +101,7 @@ export function lookCore(ctx, id, body, lang) {
   const text = clipLook(full, limits(ctx).lookChars, lang);
   let delivered = a.delivered;
   if (lines) {
-    // TODO(spec): Q64 — acknowledge only complete inbox entries visible before clipping.
+    // Q64: acknowledge only complete inbox entries visible before clipping.
     let chars = cpLength(lines[0] || '');
     for (let i = 0; i < p.inbox.length; i++) {
       chars += 1 + cpLength(lines[i + 1]);
