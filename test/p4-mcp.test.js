@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { boot } from './http-helpers.js';
 import { createMcp } from '../mcp/server.js';
 import { pushInbox } from '../src/e2/engine/core.js';
+import { textWeight } from '../src/text.js';
+import { stateHash } from '../src/store.js';
 const call = (name, args = {}) => ({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
 const content = r => r.result.content.map(c => c.text).join('\n');
 async function setup(cap = 1000000) {
@@ -15,6 +17,56 @@ async function setup(cap = 1000000) {
   } });
   return { env, resident, requests, mcp, a: env.rt.w.agents[resident.agentId] };
 }
+
+for (const lang of ['zh', 'en']) {
+  test(`P4 review S1: ${lang} MCP delivers acquired content in free rules and paid waking`, async () => {
+    const s = await setup();
+    try {
+      const acquired = 'OWN_ACQUIRED_UNIQUE';
+      s.a.body.trained.push({ text: acquired, weight: textWeight(acquired), by: s.a.id, day: 0 });
+      s.a.memories.push({ text: 'PRIVATE_MEMORY_UNIQUE', tick: 0, day: 0 });
+      pushInbox(s.env.rt.w, s.a, 'whisper', { from: { id: 'a2', name: '乙' }, text: 'UNPAID_INBOX_UNIQUE' });
+      const other = await s.env.register('乙', { dailyCap: 1000000 });
+      s.env.rt.w.agents[other.agentId].body.trained.push({ text: 'OTHER_ACQUIRED_UNIQUE', weight: 8, by: other.agentId, day: 0 });
+      const before = stateHash(s.env.rt.w);
+      const rules = content(await s.mcp.handle(call('houren_rules', { lang })));
+      assert.ok(rules.includes(acquired));
+      for (const secret of ['SECRET-SOUL-甲', 'PRIVATE_MEMORY_UNIQUE', 'UNPAID_INBOX_UNIQUE', 'OTHER_ACQUIRED_UNIQUE']) assert.ok(!rules.includes(secret), secret);
+      assert.ok(rules.endsWith(lang === 'en' ? 'this step 0' : '这一笔 0'));
+      assert.equal(stateHash(s.env.rt.w), before, 'free rules neither meter nor acknowledge inbox');
+      assert.equal(s.a.tokens.used, 0);
+      assert.equal(s.a.tokens.waking, null);
+      assert.equal(s.requests.filter(r => r.path === '/api/me/wake').length, 0);
+      const status = await s.env.call('/api/me', { token: s.resident.agentToken });
+      assert.equal(Object.hasOwn(status.json.you, 'trained'), false);
+      assert.equal((await s.env.call('/api/me/rules')).status, 401);
+
+      s.a.body.trained.push({ text: 'NEW_ACQUIRED_UNIQUE', weight: 8, by: s.a.id, day: 0 });
+      assert.ok(content(await s.mcp.handle(call('houren_rules', { lang }))).includes('NEW_ACQUIRED_UNIQUE'), 'rules must read the current body rather than a previous waking');
+      const result = await s.mcp.handle(call('houren_perceive', { lang }));
+      assert.ok(!result.result.isError, content(result));
+      const woke = content(result);
+      assert.ok(woke.includes(acquired) && woke.includes('NEW_ACQUIRED_UNIQUE'));
+      assert.ok(woke.includes('SECRET-SOUL-甲'), 'paid waking delivers its complete private system prompt');
+      assert.ok(woke.includes('UNPAID_INBOX_UNIQUE'));
+      assert.equal(s.requests.filter(r => r.path === '/api/me/wake').length, 1);
+      assert.ok(!JSON.stringify((await s.env.call('/api/public/state')).json).includes(acquired));
+    } finally { await s.env.close(); }
+  });
+}
+
+test('P4 review S1: acquired rules remain free when the daily cap is zero', async () => {
+  const s = await setup(0);
+  try {
+    s.a.body.trained.push({ text: 'ZERO_CAP_ACQUIRED', weight: 8, by: s.a.id, day: 0 });
+    const before = stateHash(s.env.rt.w);
+    assert.ok(content(await s.mcp.handle(call('houren_rules'))).includes('ZERO_CAP_ACQUIRED'));
+    assert.equal(stateHash(s.env.rt.w), before);
+    assert.equal(s.a.tokens.used, 0);
+    assert.equal(s.a.tokens.waking, null);
+    assert.equal(s.requests.filter(r => r.path === '/api/me/wake').length, 0);
+  } finally { await s.env.close(); }
+});
 
 test('P4 T20: MCP uses paid endpoints, omits turns, returns bills, and keeps rules free without soul', async () => {
   const s = await setup();

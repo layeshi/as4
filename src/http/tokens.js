@@ -2,7 +2,8 @@
 import { randomBytes } from 'node:crypto';
 import { P } from '../e2/params.js';
 import { clockDay, tokenized } from '../e2/world.js';
-import { ep, K, tokenView, rereadCost, activeWaking } from '../e2/engine/tokens.js';
+import { ep, K, tokenView, rereadCost, activeWaking, jsonWeight } from '../e2/engine/tokens.js';
+import { bodyOf } from '../e2/engine/bodies.js';
 import { textWeight, cpLength } from '../text.js';
 import { earthDay } from '../shells/budget.js';
 import { normLang, cityDisplayName } from '../e2/lore/index.js';
@@ -40,6 +41,18 @@ export function tokenStatus(ctx, id, { lang = 'zh' } = {}) {
     waking: s ? { wakeId: s.wakeId, tick: s.tick, kind: s.kind } : null,
     ...(a.status === 'awake' ? { attention: { ...limits(ctx) } } : {}),
   };
+}
+// Free rules expose only the owner's acquired block and generic city rules.
+// Build directly from the body: a free query must not render or acknowledge inbox.
+export function rulesCore(ctx, id, lang = 'zh') {
+  const w = ctx.rt.w;
+  if (!tokenized(w)) return failure(lang, 'not_found');
+  lang = normLang(lang);
+  return { status: 200, json: { system: buildSystemPrompt({ protocol: 2, premise: 4, lang,
+    cityName: cityDisplayName(w.cityName, lang), maxActions: P.maxActionsPerTick,
+    ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, memorySlots: P.memorySlots,
+    floor: ep(w, 'lawFloor'), soul: null, trained: bodyOf(w, w.agents[id]).trained.map(entry => entry.text),
+    toolMode: 'mcp', prayers: false, tokenValues: tokenValues(w) }) } };
 }
 function perception(ctx, id, lang) {
   const { rt } = ctx, a = rt.w.agents[id];
@@ -124,7 +137,15 @@ export function actTokens(ctx, id, body, lang) {
   const result = ctx.rt.exec('act', { agentId: id, actions: body.actions, thought: body.thought ?? undefined, lang,
     meter: { wakeId: s.wakeId, turn: next.turn, reread: next.reread, day: earthDayKey(ctx) } }).result;
   if (!result.ok) { if (['tokens_exhausted', 'cap_reached'].includes(result.error.code)) ctx.wakings.delete(id); return failed(lang, result); }
-  s.ctx += result.writeWeight; s.turn = next.turn; s.requests++;
+  // Successful long outputs enter context at raw weight, not their multiplied
+  // archive price. Failed/rolled-back actions and short fee receipts stay free.
+  const readWeight = result.results.reduce((n, r) => {
+    if (!r.ok || !['read', 'draft'].includes(r.type)) return n;
+    const { fees, ...data } = r.data;
+    return n + jsonWeight(data);
+  }, 0);
+  s.ctx += result.writeWeight + readWeight; s.turn = next.turn; s.requests++;
+  if (readWeight) s.fresh = readWeight;
   let bill = result.bill, arrived, arrivedWithheld;
   if (a.status === 'awake') {
     const p = perception(ctx, id, lang);

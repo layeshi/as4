@@ -5,9 +5,98 @@ import { pushInbox } from '../src/e2/engine/core.js';
 import { textWeight } from '../src/text.js';
 import { checkConservation } from '../src/e2/engine/ledger.js';
 import { earthDay } from '../src/shells/budget.js';
+import { actionWeight, jsonWeight } from '../src/e2/engine/tokens.js';
 const city = () => boot({ physics: 2, premise: 4, shellSlots: 0, tokenBasic: 500000 });
 const post = (env, path, token, body) => env.call(path, { method: 'POST', token, body });
 const billTotal = b => b.reread + b.read + b.write;
+
+for (const [label, action, implicit] of [
+  ['read law', { type: 'read', law: 'l1' }, false],
+  ['draft', { type: 'draft', rules: [] }, true],
+  ['read doc with archive multiplier', { type: 'read', doc: 'd1' }, false],
+]) {
+  test(`P4 review S2: ${label} updates context and freshness across later model rounds`, async () => {
+    const env = await boot({ physics: 2, premise: 4, shellSlots: 0, tokenCapacity: 6000, tokenBasic: 500000 });
+    try {
+      const r = await env.register('甲', { dailyCap: 1000000 }), a = env.rt.w.agents[r.agentId];
+      env.rt.exec('admin', { op: 'adjust', args: { agentId: a.id, energy: 100000, reason: 'read-context fixture' } });
+      if (action.doc) { a.place = 'library'; env.rt.w.places.library.condition = 5000; }
+      const woke = await post(env, '/api/me/wake', r.agentToken, { kind: 'main' });
+      assert.equal(woke.status, 200);
+      const wakeId = woke.json.wakeId, turn = n => implicit ? {} : { turn: n };
+      const base = textWeight(woke.json.system) + textWeight(woke.json.text) + actionWeight(action);
+      const read = await post(env, '/api/me/act', r.agentToken, { wakeId, ...turn(1), actions: [action] });
+      assert.equal(read.status, 200);
+      assert.equal(read.json.results[0].ok, true, JSON.stringify(read.json.results));
+      // HTTP adds free feedback flags to draft; its priced content is the canonical data.
+      const weight = jsonWeight(action.type === 'draft'
+        ? { ok: true, errors: [], reading: { rules: [] }, preview: [] }
+        : read.json.results[0].data);
+      assert.equal(read.json.bill.read - woke.json.bill.read, action.doc ? Math.ceil(weight * 1.5) : weight);
+      const session = env.app.ctx.wakings.get(a.id);
+      assert.equal(session.ctx, base + weight, 'raw returned weight enters context, independently of the archive price');
+      assert.equal(session.fresh, weight);
+      const immediate = await post(env, '/api/me/act', r.agentToken, { wakeId, ...turn(2), actions: [] });
+      assert.equal(immediate.status, 200);
+      assert.equal(immediate.json.bill.reread - read.json.bill.reread, Math.ceil(base / 10), 'the newest long output is fresh for the next round');
+      const look = await post(env, '/api/me/look', r.agentToken, { wakeId, ...turn(2), what: 'self' });
+      assert.equal(look.status, 200);
+      const next = await post(env, '/api/me/act', r.agentToken, { wakeId, ...turn(3), actions: [] });
+      assert.equal(next.status, 200);
+      assert.equal(next.json.bill.reread - look.json.bill.reread, Math.ceil((base + weight) / 10), 'after a later look, the long output must be reread');
+      assert.equal(checkConservation(env.rt.w).ok, true);
+    } finally { await env.close(); }
+  });
+}
+
+test('P4 review S2: a later physical failure rolls back its read fee and never adds unseen output to context', async () => {
+  const env = await boot({ physics: 2, premise: 4, shellSlots: 0, tokenCapacity: 6000, tokenBasic: 500000 });
+  try {
+    const r = await env.register('甲', { dailyCap: 1000000 }), a = env.rt.w.agents[r.agentId];
+    env.rt.exec('admin', { op: 'adjust', args: { agentId: a.id, energy: 0, reason: 'rollback fixture' } });
+    const woke = await post(env, '/api/me/wake', r.agentToken, { kind: 'main' });
+    const actions = [{ type: 'read', law: 'l1' }, { type: 'draft', rules: [] }];
+    const out = await post(env, '/api/me/act', r.agentToken, { wakeId: woke.json.wakeId, turn: 1, actions });
+    assert.equal(out.status, 200);
+    assert.equal(out.json.results[0].ok, true);
+    assert.equal(out.json.results[1].error.code, 'insufficient_energy');
+    const weight = jsonWeight(out.json.results[0].data);
+    assert.equal(out.json.bill.read - woke.json.bill.read, weight);
+    const session = env.app.ctx.wakings.get(a.id);
+    assert.equal(session.ctx, textWeight(woke.json.system) + textWeight(woke.json.text) + actions.reduce((n, act) => n + actionWeight(act), 0) + weight);
+    assert.equal(session.fresh, weight);
+    assert.equal(checkConservation(env.rt.w).ok, true);
+  } finally { await env.close(); }
+});
+
+test('P4 review S2: the daily cap rejects rereading a long output rather than allowing an underpriced round', async () => {
+  const env = await boot({ physics: 2, premise: 4, shellSlots: 0, tokenCapacity: 6000, tokenBasic: 500000 });
+  try {
+    const r = await env.register('甲', { dailyCap: 1000000 }), a = env.rt.w.agents[r.agentId];
+    env.rt.exec('admin', { op: 'adjust', args: { agentId: a.id, energy: 100000, reason: 'cap fixture' } });
+    const woke = await post(env, '/api/me/wake', r.agentToken, { kind: 'main' }), wakeId = woke.json.wakeId;
+    const action = { type: 'read', law: 'l1' };
+    const read = await post(env, '/api/me/act', r.agentToken, { wakeId, turn: 1, actions: [action] });
+    assert.equal(read.json.results[0].ok, true);
+    assert.equal((await post(env, '/api/me/look', r.agentToken, { wakeId, turn: 1, what: 'self' })).status, 200);
+    const oldPrice = Math.ceil((textWeight(woke.json.system) + textWeight(woke.json.text) + actionWeight(action)) / 10);
+    await post(env, '/api/owner/cap', r.ownerKey, { dailyCap: a.tokens.used + oldPrice });
+    const before = [a.energy, a.basic, a.tokens.used];
+    const out = await post(env, '/api/me/act', r.agentToken, { wakeId, turn: 2, actions: [] });
+    assert.equal(out.status, 402);
+    assert.equal(out.json.error.code, 'cap_reached');
+    assert.deepEqual([a.energy, a.basic, a.tokens.used], before);
+    assert.equal((await env.call('/api/me', { token: r.agentToken })).json.waking, null);
+  } finally { await env.close(); }
+});
+
+test('P4 review S1: the free rules endpoint is absent from premise 0, 1 and 2', async () => {
+  for (const premise of [0, 1, 2]) {
+    const env = await boot({ physics: 2, premise, shellSlots: 0 });
+    try { assert.equal((await env.call('/api/me/rules')).status, 404); }
+    finally { await env.close(); }
+  }
+});
 
 for (const lang of ['zh', 'en']) {
   test(`P4 Q65: ${lang} acquired content is delivered but free at wake and every later round`, async () => {

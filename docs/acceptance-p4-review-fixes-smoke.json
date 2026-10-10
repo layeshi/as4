@@ -1,0 +1,70 @@
+{
+  "generatedAt": "2026-10-10T01:17:23.290Z",
+  "node": "v24.19.0",
+  "provider": "mock",
+  "ticks": 12,
+  "residents": 3,
+  "attempts": 36,
+  "checkedCommands": 90,
+  "commands": 90,
+  "conservationFailures": 0,
+  "tokens": {
+    "capacity": 1100000,
+    "k": 1833,
+    "basic": 18000
+  },
+  "daily": {
+    "wakes": 19,
+    "called": 0,
+    "refusedTokens": 15,
+    "refusedCap": 2,
+    "suffocated": 3,
+    "reread": 22809,
+    "read": 23120,
+    "write": 7860,
+    "refunded": 1398,
+    "basicIssued": 108000,
+    "basicExpired": 1609,
+    "custody": 36,
+    "upgradesBuilt": 0,
+    "dividends": 0
+  },
+  "mockUsage": {
+    "calls": 37,
+    "failed": 1,
+    "unreported": 0,
+    "input": 39600,
+    "output": 3060,
+    "tokens": 42660
+  },
+  "conservation": {
+    "ok": true,
+    "energy": {
+      "expected": 1142954,
+      "actual": 1142954
+    },
+    "coins": {
+      "expected": 60,
+      "actual": 60
+    },
+    "src": {
+      "energy": {},
+      "coins": {}
+    },
+    "snk": {
+      "energy": {},
+      "coins": {}
+    },
+    "prev": {
+      "energy": 1142954,
+      "coins": 60
+    }
+  },
+  "replay": {
+    "ok": true,
+    "hash": "a0c57a1eea9679fd3b1dcc27bf9ca89f92172608b1cc9181274eba9700554a03",
+    "snapshotHash": "a0c57a1eea9679fd3b1dcc27bf9ca89f92172608b1cc9181274eba9700554a03",
+    "applied": 90,
+    "restartIdentical": true
+  }
+}

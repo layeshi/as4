@@ -4,7 +4,9 @@
 
 ## 验收状态
 
-**2026-10-10 Q60 后续完整验收：1454 项，1454 通过、0 失败、0 跳过。** 第二纪原 720 日用例约 142.3 秒，通过未修改的 150 秒断言；第一纪原 60 秒断言也通过。黄金样本、三个冻结世界回放、P4 60 日守恒与回放均通过，样本目录无 Git 差异；T25 保留第 14 步已完成的模拟冒烟证据。Q61–Q68 已获用户确认，Q65 已按最终免费习得规则修改。Q60 本次开发验收通过，第二纪的 60 秒规格目标仍未达到，历史 292 秒的差异未充分归因；详见 [Q60-PERFORMANCE.md](Q60-PERFORMANCE.md)。独立代码审查已完成：Standards 2 项、Spec 2 项，MCP 习得不可达与 read/draft 后续重读漏计待修复，详见 [REVIEW-P4.md](REVIEW-P4.md)。人工浏览器验收与发布准备仍待执行。
+**最新：独立审查 S1/S2 修复后完整验收 1463 项，1463 通过、0 失败、0 跳过。** 全量启用三个冻结世界，两个黄金目录无差异；原第二纪性能用例约 123.5 秒，通过原 150 秒断言。两项规格问题已修复，190 项相关回归及重新运行的 T25 mock 冒烟均通过。下面保留 Q60 阶段及第 13/14 步的历史结果。
+
+**2026-10-10 Q60 后续完整验收：1454 项，1454 通过、0 失败、0 跳过。** 第二纪原 720 日用例约 142.3 秒，通过未修改的 150 秒断言；第一纪原 60 秒断言也通过。黄金样本、三个冻结世界回放、P4 60 日守恒与回放均通过，样本目录无 Git 差异；T25 保留第 14 步已完成的模拟冒烟证据。Q61–Q68 已获用户确认，Q65 已按最终免费习得规则修改。Q60 本次开发验收通过，第二纪的 60 秒规格目标仍未达到，历史 292 秒的差异未充分归因；详见 [Q60-PERFORMANCE.md](Q60-PERFORMANCE.md)。独立代码审查已完成：原发现 Standards 2 项、Spec 2 项；两项 Spec 问题已修复并通过 190 项相关回归和 T25 mock 冒烟，Standards 两项 P3 仍保留，详见 [REVIEW-P4.md](REVIEW-P4.md)。人工浏览器验收与发布准备仍待执行。
 
 以下保留历史失败记录：第 14 步最终全量结果为 **1450 项，1449 通过、1 失败、0 跳过**；唯一失败是第二纪 720 日耗时 **292205 ms** 超过 **150000 ms**。该结果由本次完整验收取代为当前状态，未改写原失败证据。
 
@@ -17,6 +19,22 @@ HOUREN_FROZEN_WORLDS=/home/ctyun/projects/as4/data npm test -- --test-concurrenc
 ```
 
 实际运行将 Node 24 的目录 `/home/ctyun/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin` 放在 PATH 首位。第 13 步完整日志：`/tmp/as4-p4-step13-complete-test.log`；第 14 步最终日志：`/tmp/as4-p4-step14-test.log`（退出码 1，总耗时约 46.7 分钟）。串行执行用于避免测试互相争用性能测量资源；测试内容及覆盖范围完整。
+
+## 2026-10-10：独立审查 S1/S2 修复验证
+
+修复仅涉及 P4 的 HTTP/MCP 传输：免费认证规则接口提供当前习得且不泄露灵魂、记忆或收件；付费 MCP 醒来交付完整提示；成功 read/draft 的规范返回数据进入会话 ctx/fresh，档案倍率只用于首次收费，失败或回滚不累加。规格、协议与 README 已同步。
+
+先新增回归并复现失败，修复后执行 Node 24.19.0 串行相关回归：
+
+```bash
+node --test --test-concurrency=1 test/p4-*.test.js test/p2-golden.test.js \
+  test/mcp.test.js test/p2-mcp.test.js test/runner.test.js test/e2-runner.test.js \
+  test/http.test.js test/managed-runner.test.js test/runner-usage.test.js
+```
+
+结果 **190/190 通过，0 失败、0 跳过**，约 89.6 秒。新增用例覆盖 MCP 中英文习得、免费规则的私密信息隔离与零上限、无世界副作用；read/draft 后续轮次、倍率、回滚与上限拒绝。黄金样本无 Git 差异；相关日志 /tmp/as4-review-fixes-regression.log。
+
+T25 独立 mock 冒烟再次通过，3 居民/12 刻/90 命令，守恒失败 0，快照/回放/重启一致；新数字证据见 [acceptance-p4-review-fixes-smoke.json](acceptance-p4-review-fixes-smoke.json)。随后启用三个冻结世界，使用相同 Node 24.19.0 执行 `npm test -- --test-concurrency=1`，退出码 0，**1463/1463 通过、0 失败、0 跳过**，约 24.2 分钟。旧世界黄金样本与冻结回放通过，P4 60 世界日/1118 命令守恒失败 0、回放哈希不变，原第二纪 720 日用例约 123.5 秒。测试后两个黄金目录无差异。完整日志 /tmp/as4-review-fixes-full-test.log；下面的 1454/1454 保留为修复前版本记录。
 
 ## 2026-10-10：Q60 性能修正与最终完整回归
 

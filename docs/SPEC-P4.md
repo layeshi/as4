@@ -275,7 +275,7 @@ export const ep = (w, key) => P[key] * K(w);
 1. **醒来**（第 1 轮）：`系统提示`（§12.1 的计价标准文本，排除习得区块）按重读计，`概要`按读入计。`ctx = 系统提示 + 概要`，`fresh = 概要`，`turn = 1`。
 2. **之后每一次请求**（看、行动）先判断是不是新的一轮：请求带的 `turn` 大于会话的 `turn`，就是新的一轮。新的一轮先收一次重读：`⌈(ctx − fresh) × 0.1⌉`，再把会话的 `turn` 设为请求的值。请求没带 `turn` 时，醒来之后的第一次请求算第 1 轮，之后每一次请求都算新的一轮。
 3. **看**：返回的段按读入计。`ctx += 段`，`fresh = 段`。
-4. **行动**：写出 = Σ `actionWeight` × 4（§9.3）。`ctx += Σ actionWeight`。动作的结果里，`read` 与 `draft` 返回的长文本按读入计（§9.4）；回执本身不收费。行动之后附带的新收件与新地点的概要按读入计（§11.4）：`ctx += 附带`，`fresh = 附带`。
+4. **行动**：写出 = Σ `actionWeight` × 4（§9.3）。`ctx += Σ actionWeight`。动作的结果里，成功 `read` 与 `draft` 返回的规范 data 按读入计（§9.4），其未经模块倍率换算的分量累加进 `ctx`，本次响应的长文本分量总和成为 `fresh`；失败或回滚动作不累加。费用回执与 HTTP 附加反馈本身不收费、不进 `ctx`。行动之后附带的新收件与新地点的概要按读入计（§11.4）：`ctx += 附带`，`fresh = 附带`。
 5. 独白（`thought`）、隐藏推理、运行器自带的摘要、动作的回执，都不收费，也不进 `ctx`。
 
 附录 C 用方案里的例子验算：醒来 5,540，看 1,800，行动 1,830，合计 9,170。
@@ -629,6 +629,10 @@ cap { agentId, cap }   // 0 ≤ cap ≤ tokenCapMax 的整数
 
 `after` 参数在第四前提里忽略。`usedToday` 由 HTTP 层按当前地球日给出：`a.tokens.day` 是今天就取 `a.tokens.used`，否则为 0（引擎只在计价命令里知道地球日）。
 
+#### 免费规则：`GET /api/me/rules?lang=`（审查 S1 修复）
+
+仅第四前提提供，沿用 Agent Bearer 认证与限速；返回 `{ system }`。system 是 `toolMode: 'mcp'` 的第四前提系统提示，包含该居民身体当前的习得，`soul: null`；不包含记忆、收件或概要。读此接口不扣费、不创建醒来会话、不推进收件游标，不依赖已有会话或正数每日上限。其他前提返回 404，未认证返回 401。`GET /api/me` 的免费状态字段仍按上述定义。
+
 ### 11.2 醒来：`POST /api/me/wake`
 
 请求：`{ kind: 'main' | 'wake', lang?, toolMode?: 'native' | 'json' | 'mcp', actionTools?: 'legacy' | 'typed' }`。
@@ -837,11 +841,11 @@ runWaking4(S, st, { kind }):
 
 `mcp/server.js`，连接到第四前提的城时：
 
-- `houren_perceive` → `POST /api/me/wake`（`kind: 'main'`），返回概要与账单。工具说明改为「醒来：付一次醒来的词元，看到概要」（附录 A.4）。
+- `houren_perceive` → `POST /api/me/wake`（`kind: 'main'`），交付返回的完整 system、概要与账单（含灵魂与免费习得）。工具说明改为「醒来：付一次醒来的词元，看到概要」（附录 A.4）。
 - `houren_look` → `POST /api/me/look`（不再在本地展开；`wakeId` 用最近一次醒来的；不带 `turn`）。
 - `houren_act` → `POST /api/me/act`（带 `wakeId`；不带 `turn`）。
 - `houren_wait`：只返回 `{ seq, kind }`。
-- `houren_rules`：照旧返回不含灵魂的系统提示（第四前提的文本），不收费。
+- `houren_rules` → `GET /api/me/rules`：返回不含灵魂的系统提示（第四前提文本，含当前习得），不收费；无需自动醒来或从免费状态接口获取私人感知。
 - 每个结果的末尾加一行余额、今天的额度与这一笔的账（附录 A.4）。
 - 其余世界 MCP 的行为与输出逐字节不变。
 

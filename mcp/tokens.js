@@ -1,8 +1,5 @@
 // MCP transport for P4. Keep the old tools' request/output path untouched.
-import { buildSystemPrompt, tokenPromptValues } from '../runner/prompt.js';
 import { renderActResult, D2 } from '../runner/render-p2.js';
-import { cityDisplayName } from '../src/e2/lore/index.js';
-import { P } from '../src/e2/params.js';
 import { errorMessage } from '../runner/client.js';
 const total = bill => (bill?.reread || 0) + (bill?.read || 0) + (bill?.write || 0);
 const text = (value, isError = false) => ({ content: [{ type: 'text', text: value }], ...(isError ? { isError: true } : {}) });
@@ -24,12 +21,9 @@ export function tokenTools(client) {
     const st = known ? { ok: true, json: known } : await refresh(lang);
     if (!st.ok) return finish(errorMessage(st), lang, 0, true);
     remember(st.json);
-    const state = await client.state();
-    if (!state.ok) return finish(errorMessage(state), lang, 0, true);
-    const w = state.json.world, values = tokenPromptValues({ capacity: w.tokens.capacity, basicAllotment: w.tokens.basic });
-    return finish(buildSystemPrompt({ protocol: 2, premise: 4, lang, cityName: cityDisplayName(w.cityName, lang),
-      maxActions: st.json.you.maxActionsPerTick, ticksPerDay: st.json.now.ticksPerDay, daysPerMonth: st.json.now.daysPerMonth,
-      memorySlots: P.memorySlots, floor: values.floor, tokenValues: { ...values, basicAllotment: w.tokens.basic }, soul: null, toolMode: 'mcp' }), lang);
+    const r = await client.rules({ lang });
+    if (!r.ok) return finish(errorMessage(r), lang, 0, true);
+    return finish(r.json.system, lang);
   }
   async function call(name, args, lang) {
     if (name === 'houren_rules') return rules(lang);
@@ -37,7 +31,7 @@ export function tokenTools(client) {
       const r = await client.wake({ kind: 'main', lang, toolMode: 'mcp' });
       if (!r.ok) return rejected(r, lang);
       wakeId = r.json.wakeId; bill = r.json.bill; remember(r.json);
-      return finish(r.json.text, lang, total(bill));
+      return finish([r.json.text, r.json.system].filter(Boolean).join('\n\n'), lang, total(bill));
     }
     if (name === 'houren_look' || name === 'houren_act') {
       const before = total(bill);

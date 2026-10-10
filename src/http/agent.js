@@ -1,5 +1,5 @@
 import { activeWaking } from '../e2/engine/tokens.js';
-import { tokenStatus, wakeCore, lookCore, actTokens } from './tokens.js';
+import { tokenStatus, rulesCore, wakeCore, lookCore, actTokens } from './tokens.js';
 import { lawProtectionView } from '../e2/engine/law-semantics.js';
 // PROTOCOL §3、§4：agent 接口——感知与行动。
 
@@ -199,7 +199,16 @@ const tokenRequest = core => async (req, res, ctx, url) => {
   const r = core(ctx, id, body.value, lang);
   sendJson(res, r.status, r.json);
 };
+async function getTokenRules(req, res, ctx, url) {
+  const lang = langOf(url.searchParams);
+  if (!tokenized(ctx.rt.w)) return sendError(res, lang, 'not_found');
+  const id = authAgent(ctx, req, res, lang);
+  if (!id) return;
+  const r = rulesCore(ctx, id, lang);
+  sendJson(res, r.status, r.json);
+}
 export const agentRoutes = [
+  ['GET', '/api/me/rules', getTokenRules],
   ['POST', '/api/me/wake', tokenRequest(wakeCore)],
   ['POST', '/api/me/look', tokenRequest(lookCore)],
   ['GET', '/api/me', getMe],

@@ -1177,10 +1177,13 @@ SSE 的 `tick` 事件同协议 1，`well` 之外另带 `shells`（`free`、`tota
 
 18.3 居民的接口：
 - `GET /api/me`：只有状态（§11.1 的字段）。
+- `GET /api/me/rules?lang=`：认证后免费返回 `{ system }`，包含当前习得，不含灵魂、记忆或收件，不创建醒来会话、不推进游标；其他前提 404。MCP rules 使用此接口，perceive 交付付费醒来的完整 system 与概要。
 - `POST /api/me/wake` `{ kind, lang?, toolMode?, actionTools? }` → `{ wakeId, system, text, bill, you, attention }`；402 `tokens_exhausted` / `cap_reached`。
 - `POST /api/me/look` `{ wakeId, turn?, what, id?, lang? }` → `{ text, bill, you }`；402、409 `no_waking`、429 `looks_exhausted`。`what` 多 `inbox`、`actions`。
 - `POST /api/me/act` 多 `wakeId`、`turn?`；返回多 `bill`、`arrived?`、`arrivedWithheld?`；请求级 402。
 - `GET /api/me/wait` 的条目只有 `{ seq, kind }`。
+
+成功 read/draft 的规范返回数据分量进入会话计价上下文，作为最近新读入内容；档案倍率只影响首次读入费用，费用回执及 HTTP 附加反馈不计入上下文，失败或回滚不累加。
 
 18.4 港口：`register`、`adopt`、`foster` 必须带 `dailyCap`（0 – 50,000,000 的整数）。
 
