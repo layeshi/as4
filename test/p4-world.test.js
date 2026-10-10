@@ -31,8 +31,42 @@ test('P4 T2: configuration, empty city, genesis round trip and P4-only state', (
     assert.equal(Object.hasOwn(old.dayLog, 'p4'), false);
     assert.equal(Object.hasOwn(old.well, 'supply'), false);
   }
-  for (const key of ['TOKEN_CAPACITY', 'TOKEN_BASIC']) for (const value of ['0', '-1', '1.5']) {
-    assert.throws(() => loadConfig({ PHYSICS: '2', PREMISE: '4', [key]: value }, []), /正整数/);
+});
+
+test('review C1: token inputs are validated only for new P4 worlds; snapshots retain their genesis', () => {
+  for (const premise of [0, 1, 2, 4]) {
+    const dir = mkdtempSync(join(tmpdir(), 'p4-config-compat-'));
+    const env = { PHYSICS: '2', PREMISE: String(premise), DATA_DIR: dir, WORLD_ID: 'w', SHELL_SLOTS: '0' };
+    try {
+      const rt = Runtime.open(loadConfig(env, []), { logger: {} });
+      const tokens = rt.w.tokens && { ...rt.w.tokens };
+      rt.close();
+      for (const value of ['0', '-1', '1.5', 'invalid', 'Infinity', '9007199254740992']) {
+        const cfg = loadConfig({ ...env, TOKEN_CAPACITY: value, TOKEN_BASIC: value }, []);
+        const restored = Runtime.open(cfg, { logger: {} });
+        assert.deepEqual(restored.w.tokens, tokens);
+        restored.close();
+        const fresh = { ...cfg, worldId: `new-${value}` };
+        if (premise === 4) {
+          assert.throws(() => Runtime.open(fresh), /正整数/);
+          assert.equal(existsSync(join(dir, fresh.worldId, 'snapshot.json')), false);
+        } else {
+          const old = Runtime.open(fresh, { logger: {} });
+          assert.equal(old.w.tokens, undefined);
+          old.close();
+        }
+      }
+      if (premise === 4) {
+        for (const key of ['TOKEN_CAPACITY', 'TOKEN_BASIC']) {
+          const cfg = loadConfig({ ...env, WORLD_ID: key, [key]: 'invalid' }, []);
+          assert.throws(() => Runtime.open(cfg), /正整数/);
+        }
+        const custom = Runtime.open(loadConfig({ ...env, WORLD_ID: 'custom', TOKEN_CAPACITY: '6000', TOKEN_BASIC: '4000' }, []));
+        assert.equal(custom.w.tokens.capacity, 6000);
+        assert.equal(custom.w.tokens.basic, 4000);
+        custom.close();
+      }
+    } finally { rmSync(dir, { recursive: true, force: true }); }
   }
 });
 

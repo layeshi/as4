@@ -51,8 +51,9 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
     foundersFile: env.FOUNDERS_FILE || null, // 先民文件（附录 D），只在创建第二纪的新世界时读取
     shellsFile: env.SHELLS_FILE || null, // 躯壳配置文件（§13.1）；没有它时躯壳居民不会被驱动
     premise: num(env.PREMISE, null),
-    tokenCapacity: num(env.TOKEN_CAPACITY, 1100000),
-    tokenBasic: num(env.TOKEN_BASIC, 18000),
+    // 保留原始输入；只有创建 P4 新世界时才解析和校验，已有快照忽略这些环境变量。
+    tokenCapacity: env.TOKEN_CAPACITY || 1100000,
+    tokenBasic: env.TOKEN_BASIC || 18000,
     shellSlots: num(env.SHELL_SLOTS, null), // 躯壳名额；缺省取 P.shellSlots（30）。只在创建第二纪的新世界时生效，之后记在世界里（Q26）
     shellTokensPerDay: num(env.SHELL_TOKENS_PER_DAY, null), // 覆盖每地球日的预算；缺省取 SHELLS_FILE，再缺省 50000000
     shellTz: env.SHELL_TZ || null, // 地球日的时区；缺省取 SHELLS_FILE，再缺省 Asia/Shanghai
@@ -70,7 +71,6 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
   if (cfg.physics === 2 && cfg.map !== 'frontier') throw new Error('PHYSICS=2 只支持 MAP=frontier（第二纪没有经典地图）');
   if (cfg.shellTokensPerDay !== null && (!Number.isInteger(cfg.shellTokensPerDay) || cfg.shellTokensPerDay < 1)) throw new Error('SHELL_TOKENS_PER_DAY 必须是正整数');
   if (cfg.shellSlots !== null && (!Number.isInteger(cfg.shellSlots) || cfg.shellSlots < 0)) throw new Error('SHELL_SLOTS 必须是非负整数');
-  for (const key of ['tokenCapacity', 'tokenBasic']) if (!Number.isSafeInteger(cfg[key]) || cfg[key] <= 0) throw new Error(`${key} 必须是正整数`);
   return cfg;
 }
 

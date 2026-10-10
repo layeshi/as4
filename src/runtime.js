@@ -242,9 +242,14 @@ function genesisInputs(cfg) {
     if ((cfg.shellSlots ?? 0) !== 0) throw new Error('PREMISE=4 requires SHELL_SLOTS=0');
     if (cfg.foundersFile) throw new Error('PREMISE=4 forbids FOUNDERS_FILE');
     if ((cfg.sandboxAgents ?? 0) !== 0) throw new Error('PREMISE=4 requires SANDBOX_AGENTS=0');
-    if ((cfg.tokenBasic ?? 18000) < 4000) throw new Error('TOKEN_BASIC must be >= 4000');
+    const capacity = Number(cfg.tokenCapacity ?? 1100000);
+    const basic = Number(cfg.tokenBasic ?? 18000);
+    for (const [key, value] of [['TOKEN_CAPACITY', capacity], ['TOKEN_BASIC', basic]]) {
+      if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${key} 必须是正整数`);
+    }
+    if (basic < 4000) throw new Error('TOKEN_BASIC must be >= 4000');
     out.shellSlots = 0;
-    out.tokens = { capacity: cfg.tokenCapacity ?? 1100000, basic: cfg.tokenBasic ?? 18000 };
+    out.tokens = { capacity, basic };
   }
   if (cfg.premise != null) out.premise = cfg.premise;
   if (cfg.shellSlots !== null && cfg.shellSlots !== undefined) out.shellSlots = cfg.shellSlots;
