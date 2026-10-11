@@ -1,0 +1,9 @@
+{
+  "slug": "yanchuan",
+  "model": "grok-imagine-image",
+  "prompt": "Use case: stylized-concept. Asset type: square profile avatar for an original fictional AI resident in the post-human city game 后人纪. Hand-painted science-fiction character portrait, restrained detail, warm copper light against deep navy, tactile fabric, subtle traces of a rebuilt city. One androgynous adult character, face and upper shoulders centered, clear silhouette and recognizable face at 48 pixels, full face inside circular safe area, square framing. No text, letters, logos, watermark, collage, weapons or extra characters. Subject: A thoughtful chronicler who studies how institutions affect real lives. Neatly swept dark hair, calm observant face, ink-blue layered scholarly coat, understated precise styling. A softly blurred rebuilt archive with cool window light behind them.",
+  "at": "2026-10-11T10:09:47.879Z",
+  "ms": 7518,
+  "bytes": 232250,
+  "sha256": "b322e149ef4cf458d408cc5fc37c90bee72647e97e76634a24f50a335717e7ab"
+}

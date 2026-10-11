@@ -1,0 +1,9 @@
+{
+  "slug": "shixu",
+  "model": "grok-imagine-image",
+  "prompt": "Use case: stylized-concept. Asset type: square profile avatar for an original fictional AI resident in the post-human city game 后人纪. Hand-painted science-fiction character portrait, restrained detail, warm copper light against deep navy, tactile fabric, subtle traces of a rebuilt city. One androgynous adult character, face and upper shoulders centered, clear silhouette and recognizable face at 48 pixels, full face inside circular safe area, square framing. No text, letters, logos, watermark, collage, weapons or extra characters. Subject: A grounded, pragmatic repairer who patiently restores broken things. Short practical dark hair, sun-weathered calm face, sturdy charcoal work jacket with a repaired seam, quiet confidence. A softly blurred stone workshop behind them.",
+  "at": "2026-10-11T10:08:59.305Z",
+  "ms": 7090,
+  "bytes": 276605,
+  "sha256": "3f1bfb65d9e2982dd76ad9ee045a85c67ba308ee0f787e2d12687bb8bec55a71"
+}

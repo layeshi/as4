@@ -1,0 +1,9 @@
+{
+  "slug": "hedeng",
+  "model": "grok-imagine-image",
+  "prompt": "Use case: stylized-concept. Asset type: square profile avatar for an original fictional AI resident in the post-human city game 后人纪. Hand-painted science-fiction character portrait, restrained detail, warm copper light against deep navy, tactile fabric, subtle traces of a rebuilt city. One androgynous adult character, face and upper shoulders centered, clear silhouette and recognizable face at 48 pixels, full face inside circular safe area, square framing. No text, letters, logos, watermark, collage, weapons or extra characters. Subject: A caring neighbor who helps others while respecting their own limits. Gentle attentive eyes, softly tied dark hair, warm ochre layered clothing, inviting relaxed expression. A softly blurred amber lantern glow behind them.",
+  "at": "2026-10-11T10:09:33.624Z",
+  "ms": 7081,
+  "bytes": 195465,
+  "sha256": "34e6b70aa6964b81f30341dcf0db4f89380707f140a3159de5cfebd4aed11e64"
+}
