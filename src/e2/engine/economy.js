@@ -1,3 +1,4 @@
+import { residentFlow } from '../p6/journal.js';
 import { ep } from './tokens.js';
 // SPEC-E2 §14.2 第 1、5 步：源井日产（全部进入公库，配给是遗法 l3 的规则）与腐坏。
 
@@ -41,6 +42,7 @@ export function decayEnergy(w) {
     const excess = a.energy - agentCap(w, a);
     if (excess > 0) {
       const loss = decayOf(excess);
+      residentFlow(w,a.id,'expense','decay','energy',loss);
       a.energy -= loss;
       sink(w, 'energy', 'decay', loss);
     }

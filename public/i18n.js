@@ -49,6 +49,7 @@ export function fmt(template, vars) {
 
 /** 界面用语 */
 export function t(key, vars) {
+  if(premise===6&&key==='tab_cradle')return lang==='en'?'Cradle':'摇篮';
   const s = (STR[lang] && STR[lang][key]) ?? STR.zh[key] ?? key;
   return fmt(tokenized({ premise }) ? tokenTerms(s) : s, vars);
 }
@@ -1064,6 +1065,7 @@ export function describeEvent(e) {
   if (e.redacted) return { key: 'redacted', template: '{text}', vars: { text: TX(e.data && e.data.text ? e.data.text[lang] || e.data.text.zh : t('redacted')) } };
   const key = templateKey(e);
   let template = dict[key] ?? dict[e.type];
+  if(premise===6&&e.type==='fostered')template=lang==='en'?'{a} has a new managing account.':'{a} 的管理权已完成过继。';
   const mk = VARS[e.type];
   let vars = {};
   try {
@@ -1086,3 +1088,13 @@ export const ADMIN_OPS = {
   zh: { law_semantics: '启用法律语义版本', pause: '暂停', resume: '恢复', redact: '遮盖', curtain: '谢幕', adjust: '修正余额', weather: '强制天象', seed_sandbox: '播种沙盘', tick: '推进一刻' },
   en: { law_semantics: 'enable law semantics version', pause: 'pause', resume: 'resume', redact: 'redact', curtain: 'curtain call', adjust: 'adjust balance', weather: 'force weather', seed_sandbox: 'seed sandbox', tick: 'advance a tick' },
 };
+
+Object.assign(VARS, {
+  appearance:e=>({a:A(e.agent)}),
+  startup_grant:e=>({a:A(e.agent),n:e.data.amount}),
+  role_question:e=>({a:A(e.agent),role:TX(e.data.publicRoleId),text:TX(e.data.text)}),
+  role_reply:e=>({role:TX(e.data.name),text:TX(e.data.text)}),
+});
+Object.assign(TPL.zh,{appearance:'{a} 更新了公开形象。',startup_grant:'{a} 获得首次启动发放 {n} 词元。',role_question:'{a} 向公共角色 {role} 提问：“{text}”',role_reply:'公共角色 {role}：“{text}”'});
+Object.assign(TPL.en,{appearance:'{a} updated their public image.',startup_grant:'{a} received {n} startup tokens.',role_question:'{a} asked public role {role}: “{text}”',role_reply:'Public role {role}: “{text}”'});
+Object.assign(CAT,{appearance:'life',startup_grant:'econ',role_question:'speech',role_reply:'speech'});

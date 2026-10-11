@@ -1,3 +1,4 @@
+import { residentFlow } from '../../p6/journal.js';
 import { fail, needInt, emit } from '../core.js';
 import { nextId, isAlive } from '../../world.js';
 import { K } from '../tokens.js';
@@ -57,6 +58,7 @@ const gather = {
   apply({ w, a }, { z, n }) {
     z.stock -= n;
     z.harvestedThisDay += n;
+    residentFlow(w,a.id,'income','gather','materials',n);
     a.materials += n;
     emit(w, 'gather', {
       agent: a.id,
@@ -89,10 +91,12 @@ const claim = {
     if (n > c.amount) fail('insufficient_materials');
     return { c, n, cost: 0 };
   },
-  apply({ a }, { c, n }) {
+  apply({ w, a }, { c, n }) {
     c.amount -= n;
-    if (['public', 'agent'].includes(c.beneficiary.kind))
+    if (['public', 'agent'].includes(c.beneficiary.kind)){
+      residentFlow(w,a.id,c.source?.startsWith('project:')||c.source?.startsWith('offer:')?'refund':'income','claim','materials',n);
       a.materials = addSafe(a.materials, n);
+    }
     else {
       let h = a.earmarkedMaterials.find((h) => h.claimId === c.id);
       if (!h) {
@@ -287,6 +291,8 @@ const repair = {
       emit(w, 'restored', { place: a.place, data: { target: obj.id } });
       w.dayLog.restored.push({ target: obj.id, place: a.place });
     }
+    residentFlow(w,a.id,'expense','repair','energy',energy);
+    residentFlow(w,held?.beneficiary.kind==='agent'?held.beneficiary.id:held?null:a.id,'expense','repair','materials',materials);
     a.energy -= energy;
     takeMaterials(a, materials, held);
     w.materialLedger.lost += materials;
@@ -350,6 +356,7 @@ const dismantle = {
   },
   apply({ w, a }, { p, target, n, module, project }) {
     target.materialRecoverable -= n;
+    residentFlow(w,a.id,'income','dismantle','materials',n);
     a.materials = addSafe(a.materials, n);
     if (project) {
       if (!target.materialRecoverable && p.lot) w.lots[p.lot].project = null;

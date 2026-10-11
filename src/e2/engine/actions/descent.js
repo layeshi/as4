@@ -1,3 +1,4 @@
+import { residentFlow } from '../../p6/journal.js';
 // 后代与目的的动作（SPEC-E2 §25 第 7 步）：conceive consent declare。
 // （will 的 successor 在 basic.js。）
 // sponsor 为摇篮里的灵魂购买躯壳出资（第 8 步，§12.2）。
@@ -89,6 +90,7 @@ const conceive = {
   },
   apply(ctx, plan) {
     const { w, a } = ctx;
+    residentFlow(w,a.id,plan.k===1?'payment':'escrow','pact','energy',plan.share);
     a.energy -= plan.share;
     const authors = [a.id, ...plan.withIds];
     if (plan.k === 1) {
@@ -134,6 +136,7 @@ const consent = {
   apply(ctx, plan) {
     const { w, a } = ctx;
     const { c } = plan;
+    residentFlow(w,a.id,plan.k===1?'payment':'escrow','pact','energy',plan.share);
     a.energy -= plan.share;
     c.consents[a.id] = { paid: plan.share, memories: plan.memories };
     c.escrow += plan.share;
@@ -144,6 +147,7 @@ const consent = {
     const memories = [];
     for (const x of c.authors) for (const m of c.consents[x].memories) memories.push({ from: x, text: m.text, ...(premised(w) ? { origin: m.origin } : {}) });
     const s = createSoul(w, { name: c.name, soul: c.soul, lang: c.lang, authors: c.authors, endowment: c.escrow, inheritedMemories: memories, cradle: c.cradle });
+    for(const [id,consent] of Object.entries(c.consents))residentFlow(w,id,'payment','pact','energy',consent.paid);
     c.status = 'done';
     c.escrow = 0;
     noteWordUse(w, a, c.soul);
@@ -196,6 +200,7 @@ const sponsor = {
   apply(ctx, plan) {
     const { w, a } = ctx;
     const { soul, energy } = plan;
+    residentFlow(w,a.id,'payment','soul_sponsor','energy',energy);
     a.energy -= energy;
     ctx.invested(energy);
     credit(w, { k: 'soul', id: soul.id }, energy, 0, ref(a), { k: 'agent', id: a.id });

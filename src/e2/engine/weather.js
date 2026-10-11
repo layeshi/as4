@@ -16,7 +16,7 @@ import { hooks } from './hooks.js';
 
 const P1_CODES = Object.freeze(WEATHER_CODES.filter((c) => c !== 'aurora' && c !== 'migration'));
 export const P4_CODES = Object.freeze(P1_CODES.filter(c => c !== 'drought' && c !== 'bounty'));
-export const weatherCodesFor = (w) => tokenized(w) ? P4_CODES : premised(w) ? P1_CODES : WEATHER_CODES;
+export const weatherCodesFor = (w) => w.premise === 6 ? ['calm', 'quake', 'fog', 'eclipse'] : tokenized(w) ? P4_CODES : premised(w) ? P1_CODES : WEATHER_CODES;
 const DEFAULT_WEIGHTS = WEATHER_CODES.map((c) => [c, WEATHER_DEFS[c].weight]);
 
 // ── 投票（命令 weather_vote） ─────────────────────────────────
@@ -26,6 +26,7 @@ const DEFAULT_WEIGHTS = WEATHER_CODES.map((c) => [c, WEATHER_DEFS[c].weight]);
  * 载荷：voterHash（投票者指纹的哈希，由 HTTP 层生成）、type。
  */
 export function weatherVote(w, p) {
+  if (w.premise === 6) return bad('not_found');
   if (typeof p.voterHash !== 'string' || !HASH_RE.test(p.voterHash)) return bad('invalid_request', { field: 'voterHash' });
   if (typeof p.type !== 'string' || !weatherCodesFor(w).includes(p.type)) return bad('invalid_request', { field: 'type' });
   const v = w.weather.votes;
@@ -53,11 +54,13 @@ function voteWinner(w) {
  */
 export function scheduleMonth(w, month) {
   const rng = w.rng.weather;
-  const weights = premised(w) ? DEFAULT_WEIGHTS.filter(([c]) => weatherCodesFor(w).includes(c)) : DEFAULT_WEIGHTS;
+  const weights = w.premise === 6 ? [['calm',400],['quake',80],['fog',100],['eclipse',60]] : premised(w) ? DEFAULT_WEIGHTS.filter(([c]) => weatherCodesFor(w).includes(c)) : DEFAULT_WEIGHTS;
   let type;
   let decidedBy;
   let startDom = null;
-  if (WEATHER.mode === 'schedule') {
+  if (w.premise === 6) {
+    type = pickWeighted(rng, weights); decidedBy = 'random';
+  } else if (WEATHER.mode === 'schedule') {
     const entry = WEATHER.schedule.find((s) => s.month === month);
     type = entry ? entry.type : 'calm';
     if (premised(w) && !weatherCodesFor(w).includes(type)) type = 'calm';
@@ -74,7 +77,7 @@ export function scheduleMonth(w, month) {
       decidedBy = 'random';
     }
   }
-  const votes = { ...w.weather.votes.tallies };
+  const votes = w.premise === 6 ? {} : { ...w.weather.votes.tallies };
   w.weather.scheduled = null;
   if (type !== 'calm') {
     if (startDom === null) startDom = 3 + int(rng, 18); // dayOfMonth ∈ [3, 20]
@@ -83,7 +86,7 @@ export function scheduleMonth(w, month) {
     w.weather.scheduled = { month, type, startDay, lead, decidedBy, votes };
     emit(w, 'weather_scheduled', { vis: 'internal', data: { month, type, startDay, lead, decidedBy } });
   }
-  w.weather.votes = { month, tallies: {}, voters: [] };
+  if (w.premise !== 6) w.weather.votes = { month, tallies: {}, voters: [] };
 }
 
 /**
@@ -91,6 +94,7 @@ export function scheduleMonth(w, month) {
  * month 缺省为当前月；dayOfMonth 缺省为「今天 + lead + 1」；开始日必须在未来（≥ 明天）。
  */
 export function forceWeather(w, { type, month, dayOfMonth, lead }) {
+  if (w.premise === 6) return bad('forbidden');
   if (typeof type !== 'string' || !(type in WEATHER_DEFS) || type === 'calm' || !weatherCodesFor(w).includes(type)) return bad('invalid_request', { field: 'type' });
   const today = clockDay(w);
   const m = month === undefined || month === null ? monthOfDay(today) : month;

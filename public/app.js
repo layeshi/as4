@@ -126,6 +126,7 @@ async function boot() {
   await loadEvents();
   initMap();
   applyState();
+  const resident=new URL(location.href).searchParams.get('resident');if(resident)await openAgent(resident);
   connect();
   setInterval(updateCountdown, 500);
   setInterval(() => {
@@ -136,7 +137,7 @@ async function boot() {
 
 /** 读到状态之后，按这座城的纪选择标签页（第二纪多了「摇篮与躯壳」等），并重画标签栏 */
 function chooseTabs() {
-  tabsNow = isE2() ? [...TABS2,...(S.state.world.premise===5?[['market',renderMaterialsMarket]]:[])] : TABS;
+  tabsNow = isE2() ? [...TABS2.filter(([id])=>S.state.world.premise!==6||id!=='legacy'),...((S.state.world.premise === 5 || S.state.world.premise === 6)?[['market',renderMaterialsMarket]]:[])] : TABS;
   const first = location.hash.slice(1);
   if (tabsNow.some((x) => x[0] === first)) S.tab = first;
   else if (!tabsNow.some((x) => x[0] === S.tab)) S.tab = 'live';
@@ -160,8 +161,8 @@ function showStatus(text, retry) {
 }
 
 function wireStatic() {
-  els['btn-enter'].addEventListener('click', () => openEntry(ctx));
-  els['btn-back'].addEventListener('click', () => openBackstage(ctx));
+  els['btn-enter'].addEventListener('click', () => S.state?.world.premise===6 ? location.assign('/residents.html') : openEntry(ctx));
+  els['btn-back'].addEventListener('click', () => S.state?.world.premise===6 ? location.assign('/residents.html') : openBackstage(ctx));
   els['btn-lang'].addEventListener('click', async () => {
     setLang(getLang() === 'zh' ? 'en' : 'zh');
     await loadLore(getLang());
@@ -196,8 +197,8 @@ function wireStatic() {
 function applyLabels() {
   refreshAccount();
   document.documentElement.lang = getLang();
-  els['btn-enter'].textContent = t('enter');
-  els['btn-back'].textContent = t('backstage');
+  els['btn-enter'].textContent = S.state?.world.premise===6 ? '创建居民' : t('enter');
+  els['btn-back'].textContent = S.state?.world.premise===6 ? '我的居民' : t('backstage');
   els['btn-lang'].textContent = t('langSwitch');
   els.foot.textContent = `${t('aiContent')} · ${t('keyboardHint')}`;
   for (const o of els['color-mode'].options) o.textContent = t(o.value === 'script' ? 'colorScript' : 'colorGroup');
@@ -415,7 +416,7 @@ function renderTopbar() {
   els.clock.textContent = t('clock', { epoch: w.epoch, month: Math.floor(day / w.daysPerMonth) + 1, day: (day % w.daysPerMonth) + 1, tick: (tick % w.ticksPerDay) + 1 });
   const c = pop();
   els.pop.textContent = t('population', c);
-  els.treasury.textContent = `${t('treasury')} ${s.treasury.energy}${s.shells ? ` · ${t('shellsTop', { free: s.shells.free, total: s.shells.total })}` : ''}`;
+  els.treasury.textContent = `${t('treasury')} ${s.treasury.energy}${s.shells && s.world.premise!==6 ? ` · ${t('shellsTop', { free: s.shells.free, total: s.shells.total })}` : ''}`;
   const well = placeIndex.get('well');
   const hist = s.well.outputHistory;
   const cond = well ? well.condition : 0;
@@ -473,6 +474,7 @@ function initMap() {
     districtName: (id) => ctx.districtName(id),
     agentName: (id) => ctx.agentName(id),
     onAgent: (id) => openAgent(id),
+    onRole: id => openRole(id),
     onPlace: (id) => openPlace(id),
   });
   map.setColorMode(els['color-mode'].value);
@@ -598,7 +600,7 @@ function openPlace(id) {
     p.district ? h('p', { class: 'muted' }, `${t('col_district')}${colon()}${ctx.districtName(p.district)}`) : null,
     h('p', null, lore.place[id].desc),
     region
-      ? h('p', null, `${t('richness')}${colon()}${words[region.richness] || region.richness} · ${t('wildsEnergy')} ${region.energy}/${region.energyMax} · ${t('wildsCoins')} ${region.coins} · ${t('relicsFound')} ${region.relicsFound}/${region.relics}`)
+      ? h('p', null, `${t('richness')}${colon()}${words[region.richness] || region.richness} · ${t('wildsEnergy')} ${region.energy}/${region.energyMax}${S.state.world.premise===6?'':` · ${t('wildsCoins')} ${region.coins}`} · ${t('relicsFound')} ${region.relicsFound}/${region.relics}`)
       : p.condition === null ? h('p', { class: 'muted' }, t('fx_open')) : h('p', null, `${t('condition')}${colon()}`, conditionBar(p.condition), ` ${pct(p.condition)} · ${bandText(ctx, p.condition, id === 'well')}`),
     section(`${t('col_place')} (${here.length})`, here.length ? h('ul', { class: 'plain inline' }, here.map((a) => h('li', null, h('button', { class: 'link', type: 'button', onClick: () => { m.close(); openAgent(a.id); } }, a.name), ' ', statusChip(a.status)))) : h('p', { class: 'empty' }, t('empty'))),
     p.inscriptions.length ? section(t('walls'), wallBlock(ctx, p)) : null,
@@ -618,3 +620,14 @@ function openPlace(id) {
 }
 
 boot();
+
+async function openRole(id){
+  const role=S.state.publicRoles?.find(r=>r.id===id);if(!role)return;
+  drawerId=`role:${id}`;els.drawer.hidden=false;clear(els.drawer);
+  const body=h('div',{class:'drawer-body'}),close=h('button',{class:'icon-btn',type:'button',onClick:closeDrawer,'aria-label':t('close')},'×');
+  els.drawer.append(h('header',{class:'drawer-head'},h('strong',null,`${role.name} · 公共角色`),close),body);
+  body.append(h('img',{src:role.avatar,width:64,height:64,alt:role.name}),h('h2',null,role.duty),h('p',null,`${role.personality} · ${role.status==='on_duty'?'值守中':'暂离'} · ${role.place??'—'}`),h('p',{class:'muted'},'居民在同一地点通过公开发言提问。公共角色使用独立额度。'));
+  const list=h('ol',{class:'timeline'}),more=h('button',{type:'button',class:'btn'},'下一页');body.append(list,more);let cursor=null;
+  async function page(){more.disabled=true;try{const q=new URLSearchParams({limit:'50'});if(cursor)q.set('cursor',cursor);const r=await api(`/api/public/roles/${encodeURIComponent(id)}/events?${q}`);if(drawerId!==`role:${id}`)return;if(!r.ok)throw Error('读取失败');for(const e of r.json.events)list.append(h('li',null,h('strong',null,`第${e.day+1}日 · #${e.seq} · ${e.type==='role_question'?'居民提问':'角色回复'}`),h('p',null,e.data.text)));cursor=r.json.cursor;more.hidden=!cursor;}catch(e){body.append(h('p',{class:'error'},e.message));}finally{more.disabled=false;}}
+  more.addEventListener('click',page);await page();
+}

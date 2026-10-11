@@ -28,12 +28,13 @@ function cleanWaking(w) {
   if (!w || typeof w !== 'object' || !Number.isInteger(w.tick) || w.tick < 0 || !['main', 'wake'].includes(w.kind) || !Number.isInteger(w.turn) || w.turn < 1) return null;
   return { tick: w.tick, kind: w.kind, turn: w.turn };
 }
-function cleanCall(c) {
+function cleanCall(c,permanent=false) {
   if (!c || typeof c !== 'object' || !validTime(c.at)) return null;
   const ok = c.ok !== false;
   const waking = cleanWaking(c.waking);
   return {
-    at: c.at, ok, ...(ok ? { reported: c.reported !== false } : {}), input: count(c.input) ?? 0, output: count(c.output) ?? 0,
+    at: c.at, ok, ...(ok ? { reported: c.reported !== false } : {}), input: count(c.input) ?? (permanent ? null : 0), output: count(c.output) ?? (permanent ? null : 0),
+    ...(permanent?{cacheRead:count(c.cacheRead),cacheWrite:count(c.cacheWrite)}:{}),
     ms: Number.isFinite(c.ms) ? Math.round(c.ms) : null, model: String(c.model ?? '').slice(0, 100), ...(Number.isInteger(c.status) && c.status >= 100 && c.status <= 599 ? { status: c.status } : {}),
     ...(waking ? { waking } : {}), ...cleanPersistedMetadata(c),
   };
@@ -60,12 +61,14 @@ export class UsageStore {
    * @param o.timezone  日历日的时区；无效时退回缺省值
    * @param o.now       () => 毫秒时间戳（测试注入假时钟）
    */
-  constructor({ file = null, timezone = DEFAULT_USAGE_TZ, now = Date.now } = {}) {
+  constructor({ file = null, timezone = DEFAULT_USAGE_TZ, now = Date.now, permanent=false } = {}) {
+    this.permanent=permanent;
     this.file = file;
     this.timezone = typeof timezone === 'string' && validTimeZone(timezone) ? timezone : DEFAULT_USAGE_TZ;
     this.now = now;
     this.agents = Object.create(null); // { agentId: { since, total, days: { 'YYYY-MM-DD': bucket }, recent: [call] } }；无原型，id 取什么名字都不会碰到 Object.prototype
     this.load();
+    if(this.permanent)this.prune();
   }
 
   load() {
@@ -77,13 +80,21 @@ export class UsageStore {
           if (!a || typeof a !== 'object') continue;
           const days = Object.create(null);
           if (a.days && typeof a.days === 'object' && !Array.isArray(a.days)) for (const [k, b] of Object.entries(a.days)) if (DAY_KEY.test(k)) days[k] = cleanBucket(b);
-          const recent = Array.isArray(a.recent) ? a.recent.map(cleanCall).filter(Boolean).slice(-USAGE_RECENT) : [];
+          const recent = Array.isArray(a.recent) ? a.recent.map(c=>cleanCall(c,this.permanent)).filter(Boolean).slice(this.permanent?0:-USAGE_RECENT) : [];
           this.agents[id] = { since: validTime(a.since) ? a.since : new Date(this.now()).toISOString(), total: cleanBucket(a.total), days, recent };
         }
       }
     } catch {
       this.agents = Object.create(null); // 文件损坏：从零累计，不要让运行器停摆
     }
+  }
+
+  prune() {
+    if(!this.permanent)return;
+    const today=earthDay(this.now(),this.timezone).key;if(this.prunedDay===today)return;
+    this.prunedDay=today;let changed=false;
+    for(const a of Object.values(this.agents)){const kept=a.recent.filter(c=>earthDay(Date.parse(c.at),this.timezone).key>=dayBefore(today,29));if(kept.length!==a.recent.length){a.recent=kept;changed=true;}}
+    if(changed)this.save();
   }
 
   save() {
@@ -106,7 +117,7 @@ export class UsageStore {
     if (meta.cancelled) return;
     const at = this.now();
     const ok = meta.ok !== false;
-    const used = ok ? reported(usage) : null;
+    const used = ok||this.permanent ? reported(usage) : null;
     const today = earthDay(at, this.timezone).key;
     const a = (this.agents[id] ||= { since: new Date(at).toISOString(), total: blank(), days: Object.create(null), recent: [] });
     const day = (a.days[today] ||= blank());
@@ -124,13 +135,15 @@ export class UsageStore {
     const status = !ok && Number.isInteger(meta.error?.status) && meta.error.status >= 100 && meta.error.status <= 599 ? meta.error.status : null;
     const waking = cleanWaking(meta.waking);
     a.recent.push({
-      at: new Date(at).toISOString(), ok, ...(ok ? { reported: !!used } : {}), input: used ? used.input : 0, output: used ? used.output : 0,
+      at: new Date(at).toISOString(), ok, ...(ok ? { reported: !!used } : {}), input: used ? used.input : this.permanent ? null : 0, output: used ? used.output : this.permanent ? null : 0,
+      ...(this.permanent?{cacheRead:count(usage?.cacheRead),cacheWrite:count(usage?.cacheWrite)}:{}),
       ms: Number.isFinite(meta.ms) ? Math.round(meta.ms) : null, model: String(model || '').slice(0, 100), ...(status ? { status } : {}),
       ...(waking ? { waking } : {}), ...(enriched ? safeCallMetadata(meta, !!used) : {}),
     });
-    if (a.recent.length > USAGE_RECENT) a.recent.splice(0, a.recent.length - USAGE_RECENT);
+    if (!this.permanent && a.recent.length > USAGE_RECENT) a.recent.splice(0, a.recent.length - USAGE_RECENT);
     const keep = new Set(Array.from({ length: USAGE_DAYS }, (_, i) => dayBefore(today, i)));
-    for (const k of Object.keys(a.days)) if (!keep.has(k)) delete a.days[k];
+    if(this.permanent)a.recent=a.recent.filter(c=>earthDay(Date.parse(c.at),this.timezone).key>=dayBefore(today,29));
+    else for (const k of Object.keys(a.days)) if (!keep.has(k)) delete a.days[k];
     this.save();
   }
 
@@ -156,13 +169,13 @@ export class UsageStore {
   view(id) {
     const a = this.has(id) ? this.agents[id] : null;
     const today = earthDay(this.now(), this.timezone).key;
-    const days = Array.from({ length: USAGE_DAYS }, (_, i) => dayBefore(today, USAGE_DAYS - 1 - i)).map((day) => ({ day, ...withTokens((a && a.days[day]) || blank()) }));
+    const days = this.permanent && a ? Object.entries(a.days).sort(([x],[y])=>x.localeCompare(y)).map(([day,b])=>({day,...withTokens(b)})) : Array.from({ length: USAGE_DAYS }, (_, i) => dayBefore(today, USAGE_DAYS - 1 - i)).map((day) => ({ day, ...withTokens((a && a.days[day]) || blank()) }));
     return {
       timezone: this.timezone, day: today, since: a ? a.since : null,
       total: withTokens(a ? a.total : blank()),
-      today: days[days.length - 1],
+      today: this.permanent ? {day:today,...withTokens(a?.days[today]??blank())} : days[days.length - 1],
       days,
-      recent: a ? a.recent.map((c) => ({ ...c })) : [],
+      recent: a ? a.recent.filter(c=>!this.permanent||earthDay(Date.parse(c.at),this.timezone).key>=dayBefore(today,29)).map((c) => ({ ...c })) : [],
     };
   }
 }

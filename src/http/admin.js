@@ -40,7 +40,7 @@ async function hostedUsage(req, res, ctx) {
   const links = ctx.accounts.linkIndex(ctx.rt.w.id);
   for (const row of overview.agents) {
     const token = ctx.rt.w.agents[row.agentId].tokenHash; // 令牌换过（过继）的关联不算
-    row.accounts = (links.get(row.agentId) || []).filter((l) => l.token === token).map((l) => l.username);
+    row.accounts = ctx.rt.w.premise===6 ? [ctx.accounts.get(ctx.rt.w.access.residents[row.agentId]?.managerAccountId)?.username].filter(Boolean) : (links.get(row.agentId) || []).filter((l) => l.token === token).map((l) => l.username);
   }
   sendJson(res, 200, overview);
 }

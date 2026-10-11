@@ -1,3 +1,4 @@
+import { residentFlow } from '../p6/journal.js';
 // Pricing commands contain integer weights and an Earth day, never rendered text.
 import { P } from '../params.js';
 import { tokenized, clockDay, isAlive } from '../world.js';
@@ -26,6 +27,7 @@ export function meterCommand(w, p) {
     if (t.wakesDay === clockDay(w)) { a.basic += basic; a.energy += energy; }
     else a.energy += n;
     if (t.day === p.day) t.used = Math.max(0, t.used - n);
+    residentFlow(w,a.id,'refund','thinking_refund','basic',t.wakesDay===clockDay(w)?basic:0);residentFlow(w,a.id,'refund','thinking_refund','energy',t.wakesDay===clockDay(w)?energy:n);
     source(w, 'energy', 'thinking_refund', n);
     t.bill = null;
     t.waking.refundable = false;

@@ -300,6 +300,7 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
     for (const p of used) {
       const path = p.replace(/\/$/, '');
       if (path === '/api/public/agents' || path === '/api/public/docs') continue; // 带 id 的接口，下面单独试
+      if (path === '/api/public/avatars' || path === '/api/public/worlds') continue; // ID-based P6 endpoints are exercised by p6.test.js.
       if (path === '/api/public') continue; // Dynamic P5 collection names are covered by p5-http.test.js.
       if (path === '/api/public/stream') continue; // SSE，长连接
       if (path === '/api/account/prayers') { // 插值的祈祷编号：实际入口是带会话的 POST，而非集合 GET。

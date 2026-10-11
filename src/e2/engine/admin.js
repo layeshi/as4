@@ -39,6 +39,7 @@ function tokenAdmin(w, kind, value) {
 }
 
 export function adminCommand(w, p) {
+  if(w.premise===6&&['reset_owner_key','seed_sandbox','backstage'].includes(p.op))return bad('forbidden');
   if (tokenized(w) && p.op === 'seed_sandbox') return bad('not_allowed');
   const args = p.args && typeof p.args === 'object' ? p.args : {};
   switch (p.op) {

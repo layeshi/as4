@@ -126,7 +126,7 @@ test('P2 T9 anthropic: step——tools 转成 input_schema；一轮里有几个�
   ]);
   assert.equal(out.text, '我先看看法律。');
   assert.equal(out.stop, 'tool_use');
-  assert.deepEqual(out.usage, { input: 1200 + 100 + 4000, output: 150 });
+  assert.deepEqual(out.usage, { input: 1200 + 100 + 4000, output: 150, cacheRead:4000, cacheWrite:100 });
   assert.deepEqual(out.raw, { content: ANTHROPIC_REPLY.content }, '整段 content，含思考块');
   // 请求
   const { req, options } = fake.seen[0];

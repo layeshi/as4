@@ -120,7 +120,7 @@ async function createAnthropicProvider(cfg, deps) {
 
   // 用量：输入含缓存写入与缓存命中（缓存命中也照常计入，SPEC-E2 §13.3）；响应里没有缓存字段时与原来相同
   const usageOf = (resp) => (resp.usage && Number.isFinite(resp.usage.input_tokens)
-    ? { usage: { input: resp.usage.input_tokens + (resp.usage.cache_creation_input_tokens || 0) + (resp.usage.cache_read_input_tokens || 0), output: resp.usage.output_tokens } }
+    ? { usage: { input: resp.usage.input_tokens + (resp.usage.cache_creation_input_tokens || 0) + (resp.usage.cache_read_input_tokens || 0), output: resp.usage.output_tokens, ...(Number.isFinite(resp.usage.cache_read_input_tokens)?{cacheRead:resp.usage.cache_read_input_tokens}:{}), ...(Number.isFinite(resp.usage.cache_creation_input_tokens)?{cacheWrite:resp.usage.cache_creation_input_tokens}:{}) } }
     : {});
 
   /** 中立的对话记录 → anthropic 的消息；助手的内容（含思考块与 tool_use 块）原样传回 */
@@ -265,6 +265,7 @@ function createOpenAIProvider(cfg, deps) {
     const usage = u && Number.isFinite(u.input_tokens) ? { input: u.input_tokens, output: u.output_tokens } : undefined;
     const reasoning = u?.output_tokens_details?.reasoning_tokens;
     if (usage && Number.isFinite(reasoning)) usage.reasoning = reasoning;
+    if(usage&&Number.isFinite(u?.input_tokens_details?.cached_tokens))usage.cacheRead=u.input_tokens_details.cached_tokens;
     return { usable, stop, text, usage };
   };
 
@@ -299,6 +300,7 @@ function createOpenAIProvider(cfg, deps) {
       if (u && Number.isFinite(u.prompt_tokens)) out.usage = { input: u.prompt_tokens, output: u.completion_tokens };
       const reasoning = u?.completion_tokens_details?.reasoning_tokens;
       if (out.usage && Number.isFinite(reasoning)) out.usage.reasoning = reasoning;
+      if(out.usage&&Number.isFinite(u?.prompt_tokens_details?.cached_tokens))out.usage.cacheRead=u.prompt_tokens_details.cached_tokens;
       return out;
     },
     /** 原生工具调用（SPEC-P2 §9.3）：不发 jsonMode；extraBody 不能覆盖 tools；raw 原样传回（含推理内容） */
@@ -328,6 +330,7 @@ function createOpenAIProvider(cfg, deps) {
       if (u && Number.isFinite(u.prompt_tokens)) out.usage = { input: u.prompt_tokens, output: u.completion_tokens };
       const reasoning = u?.completion_tokens_details?.reasoning_tokens;
       if (out.usage && Number.isFinite(reasoning)) out.usage.reasoning = reasoning;
+      if(out.usage&&Number.isFinite(u?.prompt_tokens_details?.cached_tokens))out.usage.cacheRead=u.prompt_tokens_details.cached_tokens;
       return out;
     },
   };

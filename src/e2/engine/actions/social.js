@@ -1,3 +1,4 @@
+import { residentFlow } from '../../p6/journal.js';
 import { tokenized, materialsEnabled } from '../../world.js';
 import { jsonWeight } from '../tokens.js';
 import { costMultiplierBp } from '../places.js';
@@ -178,6 +179,7 @@ const disburse = {
   apply(ctx, plan) {
     const { w, a } = ctx;
     const { g, t, energy, coins } = plan;
+    residentFlow(w,t.id,'income','group_disburse','energy',energy);
     g.treasury.energy -= energy;
     g.treasury.coins -= coins;
     t.coins += coins;
@@ -227,6 +229,7 @@ const offer = {
     const { w, a } = ctx;
     const { give, want, note, to } = plan;
     if(materialsEnabled(w))a.materials-=give.materials;
+    for(const resource of ['energy','materials'])residentFlow(w,a.id,'escrow','trade',resource,give[resource]);
     a.energy -= give.energy;
     a.coins -= give.coins;
     const id = nextId(w, 'o');
@@ -268,6 +271,10 @@ const accept = {
     const { w, a } = ctx;
     const { o } = plan;
     const from = w.agents[o.from];
+    for(const resource of ['energy','materials']){
+      residentFlow(w,from.id,'payment','trade',resource,o.give[resource]);residentFlow(w,a.id,'income','trade',resource,o.give[resource]);
+      residentFlow(w,a.id,'payment','trade',resource,o.want[resource]);residentFlow(w,from.id,'income','trade',resource,o.want[resource]);
+    }
     // 原子交换：接受者付 want，得到托管中的 give
     if(materialsEnabled(w)){a.materials+=o.give.materials-o.want.materials;from.materials+=o.want.materials;}
     a.energy -= o.want.energy;

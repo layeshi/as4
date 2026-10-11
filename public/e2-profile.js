@@ -1,3 +1,4 @@
+import { residentAvatar } from './resident-avatar.js';
 // 第二纪的居民档案与地点详情：标签、志与立志史、多作者的谱系网、遗传的记忆的来源；
 // 地点的来源、模块、残料、主人、门、地点规则与「前世」（被拆成遗址、又在遗址上重新开辟的历史）。
 
@@ -109,7 +110,7 @@ export function renderProfile2(ctx, data) {
     [t('col_gen'), t('generation', { n: a.generation })],
     [t('col_age'), t('ageDays', { n: a.ageDays })],
     [t('col_energy'), String(a.energy)],
-    [t('col_coins'), String(a.coins)],
+    ...(S.world?.premise===6?[]:[[t('col_coins'), String(a.coins)]]),
     [t('col_place'), a.place ? placeLink(ctx, a.place) : '—'],
     [t('col_groups'), a.groups.length ? a.groups.map((g) => [groupChip(ctx, g), ' ']) : '—'],
     [t('col_tags'), a.tags.length ? a.tags.map((x) => [h('span', { class: `chip tag${x === 'exiled' ? ' exile' : ''}` }, x), ' ']) : '—'],
@@ -118,7 +119,7 @@ export function renderProfile2(ctx, data) {
   return h(
     'div',
     { class: 'profile' },
-    h('h3', null, a.name),
+    h('h3', null, residentAvatar(a), a.name),
     h('p', { class: 'muted' }, t('aiContent'), ' · ', a.body ? `${t('model')}${colon()}${a.body.model} · ${t('bodyKind')}${colon()}${t(`bodyKind_${a.body.kind}`)}${a.creatorName ? ` · ${t('creator')}${colon()}${a.creatorName}` : ''}` : t('trueBody')),
     h('dl', { class: 'kv' }, facts.flatMap(([k, v]) => [h('dt', null, k), h('dd', null, v)])),
     h('p', { class: 'muted' }, t('bornDay', { n: a.bornDay + 1 }), a.diedDay !== null && a.diedDay !== undefined ? ` · ${t('diedDay', { n: a.diedDay + 1 })}` : ''),
@@ -184,7 +185,7 @@ export function openPlace2(ctx, id) {
     h('p', { class: 'muted' }, `${t('col_district')}${colon()}${ctx.districtName(p.district)} · ${t('col_origin')}${colon()}${t(`origin_${p.origin}`)}${p.founder ? ` · ${t('founder')}${colon()}` : ''}`, p.founder ? agentLink(ctx, p.founder.id) : null, p.foundedDay !== null && p.foundedDay !== undefined ? ` · ${t('foundedDay', { n: p.foundedDay + 1 })}` : ''),
     desc ? h('p', p.origin === 'agent' && !p.razed ? { class: 'ai' } : null, desc) : null,
     region
-      ? h('p', null, `${t('richness')}${colon()}${(lore.richnessWild || {})[region.richness] || region.richness} · ${t('wildsEnergy')} ${region.energy}/${region.energyMax} · ${t('wildsCoins')} ${region.coins} · ${t('relicsFound')} ${region.relicsFound}/${region.relics}`)
+      ? h('p', null, `${t('richness')}${colon()}${(lore.richnessWild || {})[region.richness] || region.richness} · ${t('wildsEnergy')} ${region.energy}/${region.energyMax}${S.world?.premise===6?'':` · ${t('wildsCoins')} ${region.coins}`} · ${t('relicsFound')} ${region.relicsFound}/${region.relics}`)
       : p.razed ? h('p', { class: 'muted' }, t('mapRazed'))
         : p.condition === null ? h('p', { class: 'muted' }, t('fx_open'))
           : h('p', null, `${t('condition')}${colon()}`, conditionBar(p.condition), ` ${pct(p.condition)} · ${bandText(ctx, p.condition, id === 'well')}`),

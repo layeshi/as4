@@ -1,3 +1,4 @@
+import { residentFlow } from '../p6/journal.js';
 // Fixed-price, single-provider orders. Objective facts only; never judge truth or quality.
 import { materialsEnabled, nextId, isAlive } from '../world.js';
 import {
@@ -110,6 +111,8 @@ export function settleOrder(w, o, status, reason) {
   if (!pendingOrder(o)) return;
   const n = o.escrow,
     to = status === 'completed' ? o.provider : o.requester;
+  residentFlow(w,to,status==='completed'?'income':'refund','order','energy',n);
+  if(status==='completed')residentFlow(w,o.requester,'payment','order','energy',n);
   o.escrow = 0;
   o.status = status;
   o.closedTick = w.clock.tick;
@@ -118,7 +121,7 @@ export function settleOrder(w, o, status, reason) {
   addSafe(a.energy, n);
   creditEnergy(w, a, n);
   emit(w, 'order_settled', {
-    data: { order: o.id, status, reason, to, amount: n },
+    data: { order: o.id, status, reason, to, amount: n, ...(w.premise===6?{requester:o.requester,provider:o.provider}:{}) },
   });
   for (const id of [o.requester, o.provider])
     if (w.agents[id] && isAlive(w.agents[id]))
@@ -264,6 +267,7 @@ function buyerCapacity(w, a) {
     fail('limit_reached');
 }
 function newOrder(w, a, plan) {
+  residentFlow(w,a.id,'escrow','order','energy',plan.terms.price);
   a.energy -= plan.terms.price;
   const id = nextId(w, 'so');
   const o = {

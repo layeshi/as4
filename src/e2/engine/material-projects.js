@@ -1,3 +1,4 @@
+import { residentFlow } from '../p6/journal.js';
 import { MODULE_DEFS, P } from '../params.js';
 import { lotDefs } from '../map/index.js';
 import { isAlive } from '../world.js';
@@ -52,6 +53,7 @@ export function contributeMaterials(
   materials = 0,
   b = { kind: 'agent', id: who }
 ) {
+  if(b.kind==='agent'){residentFlow(w,b.id,'escrow','project','energy',energy);residentFlow(w,b.id,'escrow','project','materials',materials);}
   j.have += energy;
   j.haveMaterials += materials;
   j.contributors[who] = (j.contributors[who] || 0) + energy;
@@ -75,6 +77,7 @@ export function spendProject(w, j, work) {
     for (const k of ['energy', 'materials']) {
       const spent = k === 'energy' ? 'spentEnergy' : 'spentMaterials';
       const n = fraction(c[k], next, j.needWork) - c[spent];
+      if(c.beneficiary.kind==='agent'&&!c.refunds?.[k])residentFlow(w,c.beneficiary.id,'expense','construction',k,n);
       c[spent] += n;
       if (k === 'energy') energy += n;
       else materials += n;
@@ -87,6 +90,7 @@ export function spendProject(w, j, work) {
           cumulative += h.amount;
           const upto = fraction(n, cumulative, total);
           const use = upto - prior;
+          if(h.beneficiary.kind==='agent')residentFlow(w,h.beneficiary.id,'expense','construction',k,use);
           h.amount -= use;
           prior = upto;
         }
@@ -132,7 +136,7 @@ export function terminateProject(w, j, reason = 'cancelled') {
         },
       ];
       for (const h of list)
-        if (k === 'energy') refundEnergy(w, h.beneficiary, h.amount);
+        if (k === 'energy') { if(h.beneficiary.kind==='agent')residentFlow(w,h.beneficiary.id,'refund','project','energy',h.amount);refundEnergy(w, h.beneficiary, h.amount); }
         else newClaim(w, j.place, h.amount, h.beneficiary, `project:${j.id}`);
     }
   }

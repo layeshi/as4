@@ -1,3 +1,5 @@
+import { residentFlow } from '../../p6/journal.js';
+import { validateQuestion, enqueueQuestion } from '../../p6/roles.js';
 import { materialsEnabled } from '../../world.js';
 import { addSafe } from '../materials.js';
 import { tokenized } from '../../world.js';
@@ -51,7 +53,8 @@ const move = {
 const say = {
   validate(ctx, args) {
     const text = needText(args.text, { max: LIMITS.speech });
-    return { text, cost: ctx.cost(ACTIONS.say.base) };
+    const publicRoleId = args.publicRoleId == null ? null : validateQuestion(ctx.w,ctx.a,args.publicRoleId,text);
+    return { text, publicRoleId, cost: ctx.cost(ACTIONS.say.base) };
   },
   apply(ctx, plan) {
     const { w, a } = ctx;
@@ -62,7 +65,7 @@ const say = {
       }
     }
     emit(w, 'say', { agent: a.id, place: a.place, data: { text: plan.text, script } });
-    return {};
+    return plan.publicRoleId ? { requestId: enqueueQuestion(w,a,plan.publicRoleId,plan.text), accepted:true } : {};
   },
 };
 
@@ -103,6 +106,7 @@ const mute = {
     let key;
     // Q38 A：居民仍可叫 anonymous；这个参数始终指所有匿名私语，屏蔽同名居民用 ID。
     if (args.who === 'anonymous') key = 'anonymous';
+    else if (w.premise === 6 && typeof args.who === 'string' && args.who.startsWith('role:') && w.publicRoles[args.who.slice(5)]) key = args.who;
     else {
       const t = findAgent(w, args.who);
       if (!t) fail('not_found');
@@ -177,6 +181,10 @@ const give = {
   apply(ctx, plan) {
     const { w, a } = ctx;
     const { to, energy, coins, note } = plan;
+    for(const [resource,n] of [['energy',energy],['materials',plan.materials]]){
+      residentFlow(w,a.id,'payment','gift',resource,n);
+      if(to.kind==='agent')residentFlow(w,to.agent.id,'income','gift',resource,n);
+    }
     if(materialsEnabled(w)){a.materials-=plan.materials;if(plan.materials)to.agent.materials+=plan.materials;}
     a.energy -= energy;
     a.coins -= coins;

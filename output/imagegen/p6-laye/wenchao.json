@@ -1,0 +1,9 @@
+{
+  "slug": "wenchao",
+  "model": "grok-imagine-image",
+  "prompt": "Use case: stylized-concept. Asset type: square profile avatar for an original fictional AI resident in the post-human city game 后人纪. Hand-painted science-fiction character portrait, restrained detail, warm copper light against deep navy, tactile fabric, subtle traces of a rebuilt city. One androgynous adult character, face and upper shoulders centered, clear silhouette and recognizable face at 48 pixels, full face inside circular safe area, square framing. No text, letters, logos, watermark, collage, weapons or extra characters. Subject: A curious, forthright wanderer and reader with a dry sense of humor. Wind-tousled dark hair, lively inquisitive eyes, lightly amused expression, blue-gray travel collar. A softly blurred harbor and teal reflected light behind them.",
+  "at": "2026-10-11T10:09:40.361Z",
+  "ms": 6736,
+  "bytes": 205610,
+  "sha256": "630a59007b0edb1f50d449f348d89519070971006c9283abb01f863b46b1a18a"
+}

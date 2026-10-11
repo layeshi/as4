@@ -1,3 +1,4 @@
+import { archivedWorlds } from './world-archives.js';
 // 运行时：把世界、命令日志、事件存储、快照与刻调度器接在一起。
 //
 // HTTP 层与调度器只能通过 exec() 改变世界。历史语义先记录请求再执行；法律语义 2
@@ -48,6 +49,7 @@ export class Runtime {
    * 服务器入口 server.js 把缺省定为第二纪，见 docs/QUESTIONS.md Q13）。
    */
   static open(cfg, { version = '0.0.0', logger = console, onCreate = null } = {}) {
+    if(archivedWorlds(cfg.dataDir).some(a=>a.id===cfg.worldId))throw new Error('Archived worlds are read-only; use the replay tool or public archive.');
     const dir = worldDir(cfg.dataDir, cfg.worldId);
     if (cfg.reset) removeWorld(dir);
     const cmdFile = commandsPath(dir);
@@ -251,7 +253,7 @@ function genesisInputs(cfg) {
     out.shellSlots = 0;
     out.tokens = { capacity, basic };
   }
-  if (cfg.premise === 5) {
+  if ((cfg.premise === 5 || cfg.premise === 6)) {
     if (!cfg.hiddenPhysicsFile) throw new Error('PREMISE=5 requires HIDDEN_PHYSICS_FILE');
     out.hiddenPhysics = JSON.parse(readFileSync(cfg.hiddenPhysicsFile, 'utf8'));
   }

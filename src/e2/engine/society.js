@@ -1,3 +1,4 @@
+import { residentFlow } from '../p6/journal.js';
 import { materialsEnabled } from '../world.js';
 import { newClaim, dissolveMaterialRights } from './materials.js';
 // SPEC-M1 §7.11 与 SPEC-E2 §8.7、§11：社群、交易、孕育之约、词典、梦（第二纪）。
@@ -30,6 +31,8 @@ export function closeOffer(w, o, reason) {
   if(materialsEnabled(w)&&o.status!=='open')return;
   o.status = reason === 'expired' ? 'expired' : 'cancelled';
   const from = w.agents[o.from];
+  residentFlow(w,from.id,'refund','trade','energy',o.give.energy);
+  if(from.place===o.materialPlace)residentFlow(w,from.id,'refund','trade','materials',o.give.materials);
   if(materialsEnabled(w)&&o.give.materials){if(from.place===o.materialPlace)from.materials+=o.give.materials;else newClaim(w,o.materialPlace,o.give.materials,{kind:'agent',id:from.id},`offer:${o.id}`);}
   if (o.give.energy > 0) creditEnergy(w, from, o.give.energy, null);
   if (o.give.coins > 0) from.coins += o.give.coins;
@@ -44,6 +47,7 @@ export function closeOffer(w, o, reason) {
 export function closePact(w, c, reason = 'expired') {
   c.status = 'expired';
   for (const [id, consent] of Object.entries(c.consents)) {
+    residentFlow(w,id,'refund','pact','energy',consent.paid);
     if (consent.paid > 0) creditEnergy(w, w.agents[id], consent.paid, null);
   }
   c.escrow = 0;

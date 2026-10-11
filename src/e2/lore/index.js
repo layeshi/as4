@@ -78,10 +78,10 @@ export function publicLore(lang, w = {}) {
   return {
     lang: nl,
     cityName: d.cityName, redacted: d.redacted, unreadableInscription: d.unreadableInscription,
-    place: w.premise===5?Object.fromEntries(mapFor(w).places.map(p=>[p.id,{...d.place[p.id],name:nl==='zh'?p.name:(w.places?.[p.id]?.humanName?.en??d.place[p.id].name),desc:p.id==='workshop'?(nl==='zh'?'研究所支持全城获授权居民的施工和维修。':'Research institutes support authorized construction and repair throughout the city.'):d.place[p.id].desc}])):d.place, district: d.district, band: d.band, wellBand: d.wellBand, richnessWild: d.richnessWild, season: d.season,
+    place: (w.premise === 5 || w.premise === 6)?Object.fromEntries(mapFor(w).places.map(p=>[p.id,{...d.place[p.id],name:nl==='zh'?p.name:(w.places?.[p.id]?.humanName?.en??d.place[p.id].name),desc:p.id==='workshop'?(nl==='zh'?'研究所支持全城获授权居民的施工和维修。':'Research institutes support authorized construction and repair throughout the city.'):d.place[p.id].desc}])):d.place, district: d.district, band: d.band, wellBand: d.wellBand, richnessWild: d.richnessWild, season: d.season,
     physicsP1: d.physicsP1, shellsP1: d.shellsP1,
     ...(tokenized(w) ? { physicsP4: d.physicsP4, shellsP4: d.shellsP4 } : {}),
-    weather: d.weather, omen: d.omen, module: w.premise===5?{...d.module,research:{name:'研究所',description:'全城支持；名义施工上限 15，维修上限 750bp，不叠加。'}}:d.module, physics: d.physics, shells: d.shells,
+    weather: d.weather, omen: d.omen, module: (w.premise === 5 || w.premise === 6)?{...d.module,research:{name:'研究所',description:'全城支持；名义施工上限 15，维修上限 750bp，不叠加。'}}:d.module, physics: d.physics, shells: d.shells,
     razedName: d.razedName, razedDesc: d.razedDesc, lotName: d.lotName,
   };
 }

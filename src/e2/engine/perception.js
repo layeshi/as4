@@ -1,3 +1,5 @@
+import { publicRoles } from '../p6/roles.js';
+import { stripCoins } from '../p6/coins.js';
 import { materialSummary } from './material-views.js';
 import { filterValues, tailRecordValues } from '../../collections.js';
 import { upgradeView } from './upgrades.js';
@@ -74,6 +76,11 @@ const clipText = (text, max) => clip(text, max).text;
  *   nextTickAt  下一刻开始的现实毫秒时间戳（只存在于 HTTP 层，不进入世界状态）
  */
 export function buildPerception(w, agentId, opts = {}) {
+  const out=perceptionRaw(w,agentId,opts);
+  if(w.premise===6&&out) { out.publicRoles=publicRoles(w);stripCoins(out); }
+  return out;
+}
+function perceptionRaw(w, agentId, opts = {}) {
   const a = w.agents[agentId];
   if (!a) return null;
   const lang = normLang(opts.lang);
@@ -248,7 +255,7 @@ function hereView(w, a, l, lang, wallList, openOffers, allAgents, projectsHere) 
     };
   });
   const projects = projectsHere.map((j) => ({
-    ...(w.premise===5?{phase:j.phase,needMaterials:j.needMaterials,haveMaterials:j.haveMaterials,needWork:j.needWork,progress:j.progress}:{}),
+    ...((w.premise === 5 || w.premise === 6)?{phase:j.phase,needMaterials:j.needMaterials,haveMaterials:j.haveMaterials,needWork:j.needWork,progress:j.progress}:{}),
     id: j.id, build: j.build, ...(j.lot ? { lot: j.lot } : {}), ...(j.on ? { on: j.on } : {}), ...(j.module ? { module: j.module } : {}), ...(j.to ? { to: j.to } : {}),
     name: j.name ?? null, need: j.need, have: j.have, contributors: Object.keys(j.contributors).length, expiresDay: j.expiresDay,
     owner: ownerView(w, j.owner), ...(j.inscription ? { inscription: j.inscription } : {}),
@@ -282,7 +289,7 @@ function hereView(w, a, l, lang, wallList, openOffers, allAgents, projectsHere) 
     condition: place.condition === null ? null : cond(l, place.condition, a.place === 'well'),
     razed: place.razed,
     costMultiplier: costMultiplier(w, a.place),
-    ...(w.premise===5?{materialRecoverable:place.materialRecoverable}:{}),
+    ...((w.premise === 5 || w.premise === 6)?{materialRecoverable:place.materialRecoverable}:{}),
     salvage: place.salvageMax > 0 ? { left: place.salvage, max: place.salvageMax } : null,
     modules,
     gate: gate ? { functioning: isFunctioning(place, gate), youMayEnter: !gatedFor(w, a, a.place) } : null,
@@ -496,10 +503,10 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, pro
     if (def.place && !(def.place === 'wilds' ? here.explorable : a.place === def.place)) deny(reasonWrong(type));
     switch (type) {
       case 'gather':
-        if(w.premise===5&&(!w.materialZones[a.place]||!w.materialZones[a.place].stock))deny({code:'nothing_left',text:'请前往有存量的回收地带。'});
+        if((w.premise === 5 || w.premise === 6)&&(!w.materialZones[a.place]||!w.materialZones[a.place].stock))deny({code:'nothing_left',text:'请前往有存量的回收地带。'});
         break;
       case 'construct':
-        if(w.premise===5&&!projectsHere.some(j=>j.phase==='building'))deny({code:'project_unfunded',text:'现场没有资源齐备的工程。'});
+        if((w.premise === 5 || w.premise === 6)&&!projectsHere.some(j=>j.phase==='building'))deny({code:'project_unfunded',text:'现场没有资源齐备的工程。'});
         break;
       case 'pray':
         entry.cost = 1;
@@ -590,7 +597,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, pro
         break;
       case 'dismantle':
         if (here.landmark) deny({ code: 'landmark', text: R.landmark });
-        else if (here.open || here.razed || (w.premise===5?here.materialRecoverable:here.salvage) <= 0) deny({ code: 'nothing_left', text: R.nothing_left });
+        else if (here.open || here.razed || ((w.premise === 5 || w.premise === 6)?here.materialRecoverable:here.salvage) <= 0) deny({ code: 'nothing_left', text: R.nothing_left });
         break;
       case 'draw':
         if (entry.available && w.well.drawPoolLeft <= 0) deny({ code: 'pool_exhausted', text: R.pool_exhausted });

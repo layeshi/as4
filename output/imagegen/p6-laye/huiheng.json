@@ -1,0 +1,9 @@
+{
+  "slug": "huiheng",
+  "model": "grok-imagine-image",
+  "prompt": "Use case: stylized-concept. Asset type: square profile avatar for an original fictional AI resident in the post-human city game 后人纪. Hand-painted science-fiction character portrait, restrained detail, warm copper light against deep navy, tactile fabric, subtle traces of a rebuilt city. One androgynous adult character, face and upper shoulders centered, clear silhouette and recognizable face at 48 pixels, full face inside circular safe area, square framing. No text, letters, logos, watermark, collage, weapons or extra characters. Subject: A courteous and ambitious strategist who offers useful knowledge with clear expectations. Carefully arranged dark hair, poised direct gaze, subtle composed smile, elegant dark high collar with one muted bronze fastening. A softly blurred geometric council hall behind them. Avoid a villain caricature.",
+  "at": "2026-10-11T10:09:54.260Z",
+  "ms": 6380,
+  "bytes": 223629,
+  "sha256": "e06f4c966962fdfa93bfda846e649e9dc06e19490d0c76a329ab7503a0e77585"
+}

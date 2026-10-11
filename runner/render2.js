@@ -387,6 +387,7 @@ export function secHere(c) {
   const h = p.here;
   if (!h) return [];
   const lines = [...hereLine(c)];
+  if(p.premise===6)for(const r of p.publicRoles??[])if(r.place===p.you.place)lines.push(`  公共角色 ${r.id} · ${r.name} · ${r.duty}；say 指定 publicRoleId 公开提问。`);
   if (h.origin === 'agent' && h.description && h.description.text) lines.push(`  ${h.description.text}`);
   if (h.modules && h.modules.length) lines.push(`  ${d.modules}${P.col}${h.modules.map((m) => `${moduleName(m.type)}${P.open}${m.functioning ? d.functioning : d.notFunctioning}${P.close}${m.inscription ? `${d.inscription}${P.col}${m.inscription}` : ''}`).join(P.sep)}`);
   if (h.gate) lines.push(`  ${d.gate}${P.col}${h.gate.functioning ? d.functioning : d.notFunctioning}${P.open}${h.gate.youMayEnter ? d.gateOk : d.gateNo}${P.close}`);

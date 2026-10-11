@@ -9,6 +9,7 @@ import { adminInventionsPanel } from './inventions-ui.js';
 import { prayerAuditPanel } from './prayers-ui.js';
 const tr = (zh, en) => getLang() === 'en' ? en : zh;
 let current = null;
+let accountGeneration = 0;
 let accountButton;
 let appCtx; // 观测站的上下文：「我的居民」里的「进入幕后」要用
 const button = (label, run, primary = false) => h('button', { type: 'button', class: `btn${primary ? ' primary' : ''}`, onClick: run }, label);
@@ -43,9 +44,13 @@ function form(fields, label, submit) {
 const request = (path, body, method = 'POST') => api(path, { method, body });
 const password = (name = 'password', label = tr('密码（12–128 位）', 'Password (12–128 characters)'), required = true) => field(label, name, 'password', '', { minlength: 12, maxlength: 128, autocomplete: name === 'currentPassword' ? 'current-password' : 'new-password', required });
 const identity = () => [field(tr('用户名', 'Username'), 'username', 'text', '', { pattern: '[A-Za-z0-9_]{3,32}', minlength: 3, maxlength: 32, autocomplete: 'username', placeholder: tr('3–32 位字母、数字或下划线', '3–32 letters, numbers or underscores') }), field(tr('昵称', 'Display name'), 'displayName', 'text', '', { maxlength: 60, autocomplete: 'nickname' })];
-export async function refreshAccount() {
+export async function refreshAccount({ notify = true } = {}) {
+  const version=++accountGeneration;
   const r = await api('/api/account');
+  if(version!==accountGeneration)return r;
+  const before=current?.id;
   if (r.ok) current = r.json.user;
+  if(notify&&r.ok&&before!==current?.id)queueMicrotask(()=>appCtx?.onAccountChange?.());
   if (accountButton) accountButton.textContent = current ? `${tr('用户中心', 'Account')} · ${current.displayName}` : tr('登录 / 注册', 'Sign in / Register');
   return r;
 }
@@ -66,7 +71,7 @@ export async function openAccount() {
   if (current) { modal.dialog.classList.add('wide'); return profile(modal); } // 「我的居民」是一张表，要宽一些
   const tabs = h('div', { class: 'subtabs' });
   const pane = h('div');
-  modal.body.append(h('p', { class: 'muted' }, tr('游客可自由观测城市。创建人类用户账号后，可保存个人资料。Agent 入境与造者密钥仍在「入境 / 幕后」中使用；登录状态下入境的居民会关联到账号，可在用户中心查看它们的状态与 token 用量。', 'Guests can observe the city. Human accounts store your profile. Agent entry and owner keys remain available through Enter / Backstage; residents you enter while signed in are linked to your account, where you can see their status and token usage.')), tabs, pane);
+  modal.body.append(h('p', { class: 'muted' }, appCtx?.S?.state?.world?.premise===6 ? tr('登录后可创建、管理与查看自己的居民。', 'Sign in to create, manage and inspect your residents.') : tr('游客可自由观测城市。创建人类用户账号后，可保存个人资料。Agent 入境与造者密钥仍在「入境 / 幕后」中使用；登录状态下入境的居民会关联到账号，可在用户中心查看它们的状态与 token 用量。', 'Guests can observe the city. Human accounts store your profile. Agent entry and owner keys remain available through Enter / Backstage; residents you enter while signed in are linked to your account, where you can see their status and token usage.')), tabs, pane);
   const modes = [['login', tr('登录', 'Sign in')]];
   if (r.json.registrationOpen) modes.push(['register', tr('注册', 'Register')]);
   if (r.json.setupAvailable) modes.push(['setup', tr('初始化管理员', 'Set up administrator')]);
@@ -103,10 +108,10 @@ function profile(modal) {
   const logoutMessage = h('p', { role: 'status', class: 'error' });
   actions.append(button(tr('退出登录', 'Sign out'), async () => {
     const r = await request('/api/account/logout', {});
-    if (r.ok) { current = null; await refreshAccount(); modal.close(); }
+    if (r.ok) { await refreshAccount(); modal.close(); }
     else logoutMessage.textContent = errorText(r, tr('退出失败，请重试。', 'Sign out failed. Please retry.'));
   }));
-  modal.body.append(actions, logoutMessage, accountAgentsPanel({ openBackstage: (key) => { modal.close(); openBackstage(appCtx, key); }, savedOwners }), h('h3', null, tr('个人资料', 'Profile')));
+  modal.body.append(actions, logoutMessage, appCtx?.S?.state?.world?.premise===6 ? h('a',{class:'btn primary',href:'/residents.html'},tr('我的居民','My residents')) : accountAgentsPanel({ openBackstage: (key) => { modal.close(); openBackstage(appCtx, key); }, savedOwners }), h('h3', null, tr('个人资料', 'Profile')));
   modal.body.append(form([field(tr('昵称', 'Display name'), 'displayName', 'text', u.displayName, { maxlength: 60 })], tr('保存资料', 'Save profile'), async (body, msg) => {
     const r = await request('/api/account', body, 'PATCH');
     if (r.ok) { await refreshAccount(); nameHeading.textContent = r.json.user.displayName; msg.textContent = tr('资料已保存。', 'Profile saved.'); }

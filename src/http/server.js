@@ -1,3 +1,8 @@
+import { archiveRoutes } from './archives.js';
+import { residentRoutes } from './residents.js';
+import { PublicRoleService } from '../runner/public-roles.js';
+import { accountWrap } from './accounts.js';
+import { sendJson } from './util.js';
 // SPEC-M1 §13：HTTP 服务。路由、静态文件、限速、CORS、CSP。
 // 只用 Node 内置模块。所有 JSON 响应带 X-Houren-Protocol（第一纪的城为 1，第二纪的城为 2）；请求体上限 64 KB。
 
@@ -44,7 +49,11 @@ const MIME = {
 /** index.html 的内容安全策略：界面脚本只能通过 CSSOM / classList / SVG 属性设置样式（SPEC §13） */
 export const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'";
 
-const ROUTES = [...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
+const roleAdminRoutes = [
+  ['GET','/api/admin/public-model',accountWrap(({res,ctx})=>sendJson(res,200,ctx.publicRoles.view()),{admin:true})],
+  ['POST','/api/admin/public-model',accountWrap(({res,ctx,body})=>{try{sendJson(res,200,ctx.publicRoles.save(body));}catch(e){sendJson(res,400,{error:{code:'invalid_config',message:e.message}});}},{admin:true})],
+];
+const ROUTES = [...archiveRoutes,...residentRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
 
 function match(method, pathname) {
   for (const [m, pattern, handler] of ROUTES) {
@@ -138,6 +147,8 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
   };
 
   // 第二前提的注意力上限（SPEC-P2 §4.4）：来自躯壳配置，没有躯壳配置时用缺省值；meCore 把它写进感知的 attention
+  ctx.runners.ctx = ctx;
+  ctx.publicRoles = new PublicRoleService(ctx);
   rt.agentLoop = (ctx.shells && ctx.shells.config.agentLoop) || DEFAULT_AGENT_LOOP;
   if (agentic(rt.w) && cfg.tickMs < 4 * rt.agentLoop.marginSec * 1000) {
     logger.warn?.(`第二前提：TICK_MS=${cfg.tickMs} 小于 4 × marginSec=${rt.agentLoop.marginSec} 秒，醒来的可用窗口很短；请检查刻长与截止余量。`);
@@ -171,6 +182,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
         return;
       }
       if (pathname.startsWith('/api/')) {
+        if (rt.w.premise === 6 && (/^\/api\/(me(?:\/|$)|owner(?:\/|$))/.test(pathname) || /^\/api\/port\//.test(pathname) && req.method !== 'GET' || pathname === '/api/account/agents' && req.method !== 'GET' || /^\/api\/admin\/agents\/[^/]+\/owner-key$/.test(pathname))) return sendError(res,'zh','unauthorized');
         res.setHeader('X-Houren-Protocol', String(rt.engine.protocol)); // 协议版本随世界的物理（SPEC-E2 §2.1）
         const m = match(req.method, pathname);
         if (!m) return sendError(res, 'zh', 'not_found');
@@ -191,6 +203,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
   server.on('listening', () => {
     const address = server.address();
     const host = address.address === '::' ? '[::1]' : address.address === '0.0.0.0' ? '127.0.0.1' : address.address.includes(':') ? `[${address.address}]` : address.address;
+    ctx.publicRoles.start();
     ctx.runners.activate(`http://${host}:${address.port}`);
     if (ctx.shells) ctx.shells.activate();
   });
@@ -211,6 +224,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     async close() {
       ctx.experiment.close();
       if (ctx.shells) await ctx.shells.close();
+      await ctx.publicRoles.close();
       await ctx.runners.close();
       clearInterval(heartbeat);
       for (const res of ctx.sse.clients) res.end();

@@ -1,3 +1,4 @@
+import { hasCoinInput } from '../p6/coins.js';
 import { materialSummary } from './material-views.js';
 import { requestIdentity, saveRequest } from './act-receipts.js';
 import { materialHandlers } from './actions/materials.js';
@@ -55,7 +56,7 @@ export function registerHandlers(more) {
 }
 
 /** 已注册处理函数的动作（实现进度用；测试会核对它与动作表一致） */
-export const implementedActions = (premise = 0) => tokenized({ premise }) ? actionTable(premise).ORDER.filter(t => HANDLERS[t] || premise === 5 && (materialHandlers[t] || serviceHandlers[t])) : Object.keys(HANDLERS).filter(actionTable(premise).isKnown);
+export const implementedActions = (premise = 0) => tokenized({ premise }) ? actionTable(premise).ORDER.filter(t => HANDLERS[t] || (premise === 5 || premise === 6) && (materialHandlers[t] || serviceHandlers[t])) : Object.keys(HANDLERS).filter(actionTable(premise).isKnown);
 
 export const actionsLeft = (a) => Math.max(0, P.maxActionsPerTick - a.actsThisTick);
 
@@ -203,6 +204,7 @@ export function runActions(w, a, actions, lang = 'zh') {
     a.actsThisTick++;
     const checkpoint = (usesLawSemantics2(w) || tokenized(w)) ? actionCheckpoint(w) : null;
     try {
+      if (w.premise === 6 && hasCoinInput(act)) fail('invalid_args');
       if (!actionTable(w.premise || 0, prayersEnabled(w)).isKnown(type)) fail('invalid_args');
       const { data, spent } = runOne(w, a, type, act, i, lang);
       results.push({ index: i, type, ok: true, cost: spent, data });

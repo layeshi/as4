@@ -1,3 +1,4 @@
+import { residentFlow } from '../p6/journal.js';
 import { fail, needInt, creditEnergy } from './core.js';
 export function controls(w, a, owner) {
   return owner.kind === 'agent'
@@ -49,6 +50,8 @@ export function chooseResearch(w, a, args) {
 }
 export function payResearch(w, a, p) {
   if (!p || !p.policy.fee) return;
+  residentFlow(w,a.id,'payment','research','energy',p.policy.fee);
+  if(p.owner.kind==='agent')residentFlow(w,p.owner.id,'income','research','energy',p.policy.fee);
   a.energy -= p.policy.fee;
   const dest =
     p.owner.kind === 'agent'
