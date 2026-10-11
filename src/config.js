@@ -33,7 +33,7 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
     worldId: env.WORLD_ID || 'baihua',
     seed: env.SEED || null, // 只在创建新世界时生效；未设置则在创建时随机生成
     physics: env.PHYSICS === undefined || env.PHYSICS === '' ? defaultPhysics : num(env.PHYSICS), // 新世界用哪一纪的物理；只在创建新世界时生效
-    map: env.MAP || (Number(env.PREMISE) === 5 ? 'compact-materials-v1' : DEFAULT_MAP), // 新世界用哪张地图（src/map/）；只在创建新世界时生效，之后以快照为准
+    map: env.MAP || ([5, 6].includes(Number(env.PREMISE)) ? 'compact-materials-v1' : DEFAULT_MAP), // 新世界用哪张地图（src/map/）；只在创建新世界时生效，之后以快照为准
     tickMs: num(env.TICK_MS, demo ? 3000 : 300000),
     ticksPerDay: num(env.TICKS_PER_DAY, 12),
     daysPerMonth: num(env.DAYS_PER_MONTH, 24),
@@ -43,7 +43,7 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
     adminKey: env.ADMIN_KEY || null,
     registrationOpen: env.REGISTRATION_OPEN !== '0',
     inviteCode: env.INVITE_CODE || null,
-    weatherMode: env.WEATHER_MODE || 'vote',
+    weatherMode: Number(env.PREMISE) === 6 ? 'random' : env.WEATHER_MODE || 'vote',
     privateDelayTicks: num(env.PRIVATE_DELAY_TICKS, 288),
     sandboxAgents: num(env.SANDBOX_AGENTS, demo ? 16 : 0),
     blocklistFile: env.MODERATION_WORDS_FILE || null,
@@ -67,9 +67,9 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
   if (cfg.tickMs < 1 || cfg.ticksPerDay < 1 || cfg.daysPerMonth < 1 || cfg.monthsPerEpoch < 1) throw new Error('时间参数必须 ≥ 1');
   if (!MAP_IDS.includes(cfg.map) && cfg.map !== 'compact-materials-v1') throw new Error(`MAP 必须是 ${MAP_IDS.join(' / ')} 之一`);
   if (cfg.physics !== null && cfg.physics !== 1 && cfg.physics !== 2) throw new Error('PHYSICS 必须是 1 或 2');
-  if (cfg.premise !== null && cfg.premise !== 0 && cfg.premise !== 1 && cfg.premise !== 2 && cfg.premise !== 4 && cfg.premise !== 5) throw new Error('PREMISE 只能是 0、1、2、4 或 5');
-  if (cfg.premise !== null && cfg.premise >= 1 && cfg.physics !== 2) throw new Error('PREMISE=1、2、4 或 5 只用于第二纪（PHYSICS=2）');
-  if (cfg.physics === 2 && cfg.map !== (cfg.premise === 5 ? 'compact-materials-v1' : 'frontier')) throw new Error('PHYSICS=2 只支持 MAP=frontier（第二纪没有经典地图）');
+  if (cfg.premise !== null && cfg.premise !== 0 && cfg.premise !== 1 && cfg.premise !== 2 && cfg.premise !== 4 && (cfg.premise !== 5 && cfg.premise !== 6)) throw new Error('PREMISE 只能是 0、1、2、4、5 或 6');
+  if (cfg.premise !== null && cfg.premise >= 1 && cfg.physics !== 2) throw new Error('PREMISE=1、2、4、5 或 6 只用于第二纪（PHYSICS=2）');
+  if (cfg.physics === 2 && cfg.map !== ((cfg.premise === 5 || cfg.premise === 6) ? 'compact-materials-v1' : 'frontier')) throw new Error('PHYSICS=2 只支持 MAP=frontier（第二纪没有经典地图）');
   if (cfg.shellTokensPerDay !== null && (!Number.isInteger(cfg.shellTokensPerDay) || cfg.shellTokensPerDay < 1)) throw new Error('SHELL_TOKENS_PER_DAY 必须是正整数');
   if (cfg.shellSlots !== null && (!Number.isInteger(cfg.shellSlots) || cfg.shellSlots < 0)) throw new Error('SHELL_SLOTS 必须是非负整数');
   return cfg;

@@ -176,7 +176,7 @@ export function computeLegacy(w, d) {
   // 旧币：先看是否废弃，再看是否被增发过，再看是否仍在流通
   const minted = Object.values(w.laws).some((x) => x.effects.some((e, i) => e.type === 'mint' && x.results[i] && x.results[i].ok));
   const last5 = recent(5);
-  const abandoned = d >= 5 && last5.length === 5 && last5.every((m) => m.coinVolume === 0);
+  const abandoned = d >= 5 && (last5.length === 5 || last5.length === 6) && last5.every((m) => m.coinVolume === 0);
   const circulating = recent(3).some((m) => m.coinVolume > 0);
   if (abandoned) items.push(entry(w, 'coin', 'coin', {}, 'abandoned', 'coinAbandoned', {}));
   else if (minted) items.push(entry(w, 'coin', 'coin', {}, 'transformed', 'coinMinted', {}));
@@ -205,7 +205,7 @@ export function computeLegacy(w, d) {
   }
   // 人类典籍：最近 3 日有人阅读为「仍被阅读」；第 5 日以后连续 5 日无人阅读为「被遗忘」
   const canonReadRecently = recent(3).some((m) => m.canonReads > 0);
-  const canonForgotten = d >= 5 && last5.length === 5 && last5.every((m) => m.canonReads === 0);
+  const canonForgotten = d >= 5 && (last5.length === 5 || last5.length === 6) && last5.every((m) => m.canonReads === 0);
   if (canonReadRecently) items.push(entry(w, 'canon', 'canon', {}, 'read', 'canonRead', {}));
   else if (canonForgotten) items.push(entry(w, 'canon', 'canon', {}, 'forgotten', 'canonForgotten', {}));
   else items.push(entry(w, 'canon', 'canon', {}, 'untouched', 'canonUntouched', {}));

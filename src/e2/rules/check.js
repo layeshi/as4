@@ -1,3 +1,4 @@
+import { hasCoinInput } from '../p6/coins.js';
 import { MATERIAL_OP_FIELDS } from './material-policy.js';
 // SPEC-E2 §7.3、§7.8：类型检查与静态校验。
 //
@@ -149,7 +150,8 @@ function nameError(n, ctx) {
 }
 
 function fieldType(ot, f, node, ctx) {
-  if(ctx.premise===5 && ((ot===T.AGENT&&f==='materials')||(ot===T.CITY&&['materialsWilds','materialsScrapyard','materialsSolarfield','constructionWork'].includes(f))))return T.INT;
+  if (ctx.premise === 6 && /coin/i.test(f)) abort('unknown_field',node.p,'P6 不提供旧币字段','P6 has no coin fields');
+  if((ctx.premise === 5 || ctx.premise === 6) && ((ot===T.AGENT&&f==='materials')||(ot===T.CITY&&['materialsWilds','materialsScrapyard','materialsSolarfield','constructionWork'].includes(f))))return T.INT;
   if (ot === T.ANY || ot === T.VAR || ot === T.RESULT) return T.ANY;
   if (FIELDS[ot]) {
     const t = FIELDS[ot][f];
@@ -651,7 +653,7 @@ function checkOp(op, rc, path, issues) {
     return null;
   }
   const name = op.op;
-  if (typeof name !== 'string' || !(OP_NAMES.includes(name) || rc.scope.premise===5 && Object.hasOwn(MATERIAL_OP_FIELDS,name))) {
+  if (typeof name !== 'string' || !(OP_NAMES.includes(name) || (rc.scope.premise === 5 || rc.scope.premise === 6) && Object.hasOwn(MATERIAL_OP_FIELDS,name))) {
     issues.push(issue(`${path}.op`, 'op.unknown', typeof name === 'string' ? `不认识的操作「${name}」` : '操作缺少 op 字段', typeof name === 'string' ? `unknown operation "${name}"` : 'the operation has no op field',
       { zh: `可用的操作：${OP_NAMES.join(' ')}`, en: `Available operations: ${OP_NAMES.join(' ')}` }));
     return null;
@@ -949,6 +951,7 @@ function screenStrings(strs, issues, path) {
  */
 export function validateRules(rules, opts = {}) {
   const scope = opts.scope || { kind: 'city' };
+  if (scope.premise === 6 && hasCoinInput(rules)) return { ok:false, issues:[issue('rules','coin_unavailable','P6 不提供旧币或铸币','P6 has no coins or minting')], rules:null };
   const base = opts.path || 'rules';
   const issues = [];
   if (!Array.isArray(rules)) {

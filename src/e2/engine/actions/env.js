@@ -1,3 +1,4 @@
+import { virtualRelic } from '../../p6/canon.js';
 import { ep, K } from '../tokens.js';
 import { rewardRepair } from '../prayer-rewards.js';
 // 环境层的动作（SPEC-E2 §25 第 3 步）：repair draw inscribe explore
@@ -172,7 +173,7 @@ const explore = {
       source(w, 'energy', 'wilds', amount);
     } else if (r < pE + pR) {
       outcome = 'relic';
-      const relic = relicByN(wilds.relicOrder[wilds.relicsFound]);
+      const relic = w.premise === 6 ? virtualRelic(wilds.relicOrder[wilds.relicsFound]) : relicByN(wilds.relicOrder[wilds.relicsFound]);
       wilds.relicsFound++;
       const id = nextId(w, 'd');
       doc = {

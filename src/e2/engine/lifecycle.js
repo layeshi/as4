@@ -1,3 +1,5 @@
+import { residentFlow } from '../p6/journal.js';
+import { manages } from '../p6/access.js';
 import { sweepOrders } from './service-orders.js';
 import { materialsEnabled } from '../world.js';
 import { inheritMaterials } from './materials.js';
@@ -91,6 +93,7 @@ export function makeAgent(w, o) {
     a.tokens = initialTokens();
   }
   if (materialsEnabled(w)) { a.materials=0; a.earmarkedMaterials=[]; a.constructionLoad={tick:w.clock.tick,count:0}; }
+  if (w.premise === 6) { delete a.tokenHash; a.owner = { creatorName: o.owner?.creatorName ?? '' }; a.coins = 0; }
   w.agents[id] = a;
   return a;
 }
@@ -106,7 +109,7 @@ export function checkNameShape(name, field = 'name') {
  */
 export function admitFromPort(w, o) {
   const energy = tokenized(w) ? 0 : endowedEnergy(w, 'port', P.immigrantEnergy);
-  const coins = P.immigrantCoins;
+  const coins = w.premise === 6 ? 0 : P.immigrantCoins;
   const a = makeAgent(w, { ...o, energy, coins, place: 'port' });
   if (tokenized(w)) startSupport(w, a, o.dailyCap);
   else source(w, 'energy', 'immigrant', energy);
@@ -136,8 +139,8 @@ export function register(w, p) {
     const lang = reqLang(p.lang);
     const model = reqText(p.model, { max: LIMITS.model, field: 'model', doScreen: false, oneLine: true });
     const creatorName = reqText(p.creatorName ?? '', { max: LIMITS.creatorName, min: 0, field: 'creatorName', doScreen: false, oneLine: true });
-    const tokenHash = reqHash(p.tokenHash, 'tokenHash');
-    const keyHash = reqHash(p.ownerKeyHash, 'ownerKeyHash');
+    const tokenHash = w.premise === 6 ? null : reqHash(p.tokenHash, 'tokenHash');
+    const keyHash = w.premise === 6 ? null : reqHash(p.ownerKeyHash, 'ownerKeyHash');
     if (isNameTaken(w, name)) return bad('name_taken');
     const a = admitFromPort(w, {
       name, lang, bio, soul, kind: 'free', model, mustSeal: false, owner: { keyHash, creatorName }, tokenHash, ...(tokenized(w) ? { dailyCap: p.dailyCap } : {}),
@@ -224,6 +227,7 @@ export function releaseAgent(w, a) {
 export function distributeEstate(w, a) {
   inheritMaterials(w,a);
   const energy = a.energy;
+  residentFlow(w,a.id,'payment','estate','energy',energy);
   const coins = a.coins;
   a.energy = 0;
   a.coins = 0;
@@ -251,6 +255,7 @@ export function distributeEstate(w, a) {
         if (e > 0 || c > 0) {
           pushInbox(w, heir, 'gift', { from: ref(a), energy: e, coins: c, note: null, inheritance: true });
         }
+        residentFlow(w,heir.id,'income','inheritance','energy',e);
         creditEnergy(w, heir, e, ref(a));
       } else if(materialsEnabled(w)&&w.groups[h.to]&&!w.groups[h.to].dissolved) {
         w.groups[h.to].treasury.energy+=e;w.groups[h.to].treasury.coins+=c;add(h.to,e,c);
@@ -321,12 +326,12 @@ export function retireAgent(w, a, lastWords) {
 }
 
 /** 校验过继载荷里共有的造者字段 */
-function reqOwnerFields(p) {
+function reqOwnerFields(p, w) {
   return {
     model: reqText(p.model, { max: LIMITS.model, field: 'model', doScreen: false, oneLine: true }),
     creatorName: reqText(p.creatorName ?? '', { max: LIMITS.creatorName, min: 0, field: 'creatorName', doScreen: false, oneLine: true }),
-    tokenHash: reqHash(p.tokenHash, 'tokenHash'),
-    keyHash: reqHash(p.ownerKeyHash, 'ownerKeyHash'),
+    tokenHash: w.premise === 6 ? null : reqHash(p.tokenHash, 'tokenHash'),
+    keyHash: w.premise === 6 ? null : reqHash(p.ownerKeyHash, 'ownerKeyHash'),
   };
 }
 
@@ -339,7 +344,7 @@ export function adopt(w, p) {
   if (w.paused && !w.experimentControl?.active) return bad('paused');
   try {
     requireDailyCap(w, p);
-    const f = reqOwnerFields(p);
+    const f = reqOwnerFields(p, w);
     const soul = typeof p.soulId === 'string' && Object.prototype.hasOwnProperty.call(w.souls, p.soulId) ? w.souls[p.soulId] : null;
     if (!soul) return bad('not_found');
     refundSponsors(w, soul);
@@ -371,7 +376,7 @@ export function foster(w, p) {
   if (w.paused && !w.experimentControl?.active) return bad('paused');
   try {
     requireDailyCap(w, p);
-    const f = reqOwnerFields(p);
+    const f = reqOwnerFields(p, w);
     const a = typeof p.agentId === 'string' ? w.agents[p.agentId] : null;
     if (!a || !a.fosterable || !a.owner || (a.status !== 'awake' && a.status !== 'dormant')) return bad('not_found');
     // TODO(spec): Q7 —— 过继后新造者能看到旧造者寄的家书与居民迄今的日记吗？暂行：什么都不隔离（同第一纪）
@@ -395,7 +400,7 @@ export function foster(w, p) {
 /** 造者修改托管模型；只保存模型名及历史，不保存接口或凭据。 */
 export function changeModel(w, p) {
   const a = typeof p.agentId === 'string' ? w.agents[p.agentId] : null;
-  if (!a || typeof p.ownerKeyHash !== 'string' || a.owner?.keyHash !== p.ownerKeyHash) return bad('unauthorized');
+  if (!a || (w.premise === 6 ? !manages(w,p) : typeof p.ownerKeyHash !== 'string' || a.owner?.keyHash !== p.ownerKeyHash)) return bad('unauthorized');
   if (a.status !== 'awake' && a.status !== 'dormant') return bad('not_awake', { status: a.status });
   try {
     const model = reqText(p.model, { max: LIMITS.model, field: 'model', doScreen: false, oneLine: true });

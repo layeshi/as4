@@ -1,3 +1,4 @@
+import { residentFlow, residentRecord } from '../p6/journal.js';
 // SPEC-P4: conversion is world-local; historical worlds retain their exact units.
 import { P } from '../params.js';
 import { tokenized } from '../world.js';
@@ -30,12 +31,14 @@ export function payThinking(w, a, n, day) {
   a.basic -= basic;
   a.energy -= n - basic;
   t.used += n;
+  residentFlow(w,a.id,'expense','thinking','basic',basic);residentFlow(w,a.id,'expense','thinking','energy',n-basic);
   sink(w, 'energy', 'thinking', n);
   return { ok: true, basic, energy: n - basic };
 }
 
 export function expireBasic(w, a) {
   if (a.basic > 0) {
+    residentFlow(w,a.id,'expired','basic_expired','basic',a.basic);
     sink(w, 'energy', 'basic_expired', a.basic);
     w.dayLog.p4.basicExpired += a.basic;
     a.basic = 0;
@@ -44,6 +47,7 @@ export function expireBasic(w, a) {
 export function issueBasic(w, a) {
   if (a.tokens.cap <= 0) return;
   a.basic = w.tokens.basic;
+  residentFlow(w,a.id,'issuance','basic_allotment','basic',a.basic);
   source(w, 'energy', 'basic_allotment', a.basic);
   w.dayLog.p4.basicIssued += a.basic;
 }
@@ -63,6 +67,7 @@ export function settleTokens(w, d) {
     const basic = Math.min(a.basic, paid);
     a.basic -= basic;
     a.energy -= paid - basic;
+    residentFlow(w,a.id,'expense','custody','basic',basic);residentFlow(w,a.id,'expense','custody','energy',paid-basic);
     sink(w, 'energy', 'custody', paid);
     w.dayLog.p4.custody += paid;
     if (paid < need) {
@@ -84,6 +89,7 @@ export function recordThinking(w, a, parts) {
   let total = 0;
   for (const key of ['reread', 'read', 'write']) {
     const n = parts[key] || 0;
+    if(w.premise===6)residentRecord(w,a.id).thinking[key]+=n;
     if (a.tokens.bill) a.tokens.bill[key] += n;
     w.dayLog.p4[key] += n;
     total += n;

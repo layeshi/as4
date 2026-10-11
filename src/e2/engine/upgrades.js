@@ -1,3 +1,4 @@
+import { residentFlow } from '../p6/journal.js';
 // SPEC-P4 §8: upgrade funding is spent on completion; only future output is distributed.
 import { P } from '../params.js';
 import { isAlive } from '../world.js';
@@ -26,6 +27,7 @@ export function payDividends(w, amount) {
       const a = w.agents[id];
       if (id === 'treasury' || !a || !isAlive(a)) continue;
       const n = Math.floor(amount * upgrade.shares[id] / total);
+      residentFlow(w,a.id,'income','well_dividend','energy',n);
       creditEnergy(w, a, n);
       rest -= n;
     }

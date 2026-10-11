@@ -1,5 +1,5 @@
 import { MATERIAL_OP_FIELDS } from '../src/e2/rules/material-policy.js';
-const opFields=premise=>premise===5?{...OP_FIELDS,...MATERIAL_OP_FIELDS}:OP_FIELDS;
+const opFields=premise=>premise===6?Object.fromEntries(Object.entries({...OP_FIELDS,...MATERIAL_OP_FIELDS}).filter(([name])=>name!=='mint').map(([name,fields])=>[name,fields.filter(([field])=>field!=='coins')])):premise===5?{...OP_FIELDS,...MATERIAL_OP_FIELDS}:OP_FIELDS;
 // Opt-in P2 tools. Schemas and local validation share the same action table;
 // conversion never fills a target, changes an amount, or rewrites model text.
 import { tokenized } from '../src/e2/world.js';
@@ -39,7 +39,7 @@ function operationDefinition(name, premise = 2) {
       if (mandatory) required.push(field);
     }
     const schema = obj(properties, required);
-    if (['transfer', 'share', 'fee'].includes(name)) schema.anyOf = [{ required: ['energy'] }, { required: ['coins'] }];
+    if (['transfer', 'share', 'fee'].includes(name)) schema.anyOf = premise===6?[{required:['energy']}]:[{ required: ['energy'] }, { required: ['coins'] }];
     return schema;
 }
 
@@ -56,7 +56,7 @@ function fieldSchema(type, name, kind, premise = 2) {
   if (tokenized({ premise }) && type === 'routine' && name === 'every') return integer(0, 36);
   if (tokenized({ premise }) && type === 'routine' && name === 'brief') return { type: 'string', enum: ['full', 'short'] };
   if (premise === 4 && type === 'initiate' && name === 'owner') return { type: 'string', enum: ['self', 'city'] };
-  if(premise===5) {
+  if((premise === 5 || premise === 6)) {
     if(['criterion','criterionTemplate'].includes(name))return obj({kind:{type:'string',enum:['material_delivery','construction','repair','document','announcement','proposal']},to:str(),quantity:integer(1),place:str(),project:str(),work:integer(1),target:str(),bp:integer(1),publishPlace:str(),audience:{type:'string',enum:['all','place']},class:{type:'string',enum:['ordinary','constitutional']}},['kind']);
     if(name==='targetArgs')return obj(Object.fromEntries(['to','place','project','target','publishPlace','class'].map(k=>[k,str()])));
     if(['agents','groups'].includes(name))return list(str(),100);
@@ -70,7 +70,7 @@ function fieldSchema(type, name, kind, premise = 2) {
   }
   if (type === 'invent' && name === 'ref') return obj({ kind: { type: 'string', enum: ['doc', 'project'] }, id: str() }, ['kind', 'id']);
   if (name === 'successor') return { $ref: '#/$defs/successor' };
-  if (name === 'give' || name === 'want') return obj({ energy: nullable(integer()), coins: nullable(integer()), ...(premise===5?{materials:nullable(integer())}:{}) });
+  if (name === 'give' || name === 'want') return obj({ energy: nullable(integer()), ...(premise===6?{}:{coins: nullable(integer())}), ...((premise === 5 || premise === 6)?{materials:nullable(integer())}:{}) });
   if (name === 'heirs') return list(obj({ to: str(), share: integer(1, 1000000) }, ['to', 'share']), LIMITS.heirs);
   if (name === 'with') return list(str(), P.authorsMax - 1);
   if (name === 'memories') return list(integer(), P.memorySlots);
@@ -82,7 +82,7 @@ function fieldSchema(type, name, kind, premise = 2) {
   if (kind === 'list' || kind === 'obj') throw new Error(`Missing structured action schema: ${type}.${name}`);
   if (name === 'choice') return { type: 'string', enum: ['yes', 'no', 'abstain'] };
   if (name === 'build') return { type: 'string', enum: tokenized({ premise }) ? ['site', 'module', 'road', 'upgrade'] : ['site', 'module', 'road'] };
-  if (name === 'module') return { type: 'string', enum: [...MODULE_TYPES,...(premise===5?['research']:[])] };
+  if (name === 'module') return { type: 'string', enum: [...MODULE_TYPES,...((premise === 5 || premise === 6)?['research']:[])] };
   const lengths = { name: LIMITS.name, soul: LIMITS.soul, bio: LIMITS.bio, purpose: LIMITS.purpose,
     body: LIMITS.docBody, title: type === 'invent' ? 100 : type === 'write' ? LIMITS.docTitle : LIMITS.proposalTitle,
     word: LIMITS.word, meaning: LIMITS.meaning, manifesto: LIMITS.manifesto, note: LIMITS.note,
@@ -151,7 +151,7 @@ export function actionSchema(type, options = {}) { return withDefinitions(buildA
 /** Compact provider envelope; exact action-specific validation is retained below. */
 function compactStandingSchema(premise = 2) {
   const table = tableFor(premise);
-  const types = table.ORDER.filter(type => !['standing', 'retire'].includes(type) && (premise!==5||actionTable(4).isKnown(type)||['gather','claim','construct'].includes(type)));
+  const types = table.ORDER.filter(type => !['standing', 'retire'].includes(type) && ((premise !== 5 && premise !== 6)||actionTable(4).isKnown(type)||['gather','claim','construct'].includes(type)));
   return compactVariants('type', types.map(type => [type, buildActionSchema(type, { action: true, dynamic: true, premise })]));
 }
 
@@ -272,9 +272,9 @@ export function validateAction(action, perception, premise = perception?.premise
   if (!action || !table.isKnown(action.type)) return [problem('args.type', `Unknown action; choose ${table.ORDER.join(', ')}`)];
   const issues = schemaIssues(action, actionSchema(action.type, { action: true, premise }));
   if (!issues.length) {
-    if (['give', 'disburse'].includes(action.type) && !(action.energy > 0 || action.coins > 0)) issues.push(problem('args.energy', 'Give a positive energy or coins amount'));
+    if (['give', 'disburse'].includes(action.type) && !(action.energy > 0 || action.coins > 0 || [5,6].includes(premise)&&action.type==='give'&&action.materials>0)) issues.push(problem('args.energy', premise===6?'Give a positive token or material amount':'Give a positive energy or coins amount'));
     if (action.type === 'offer') {
-      const amounts = ['energy', 'coins'];
+      const amounts = premise===6?['energy','materials']:premise===5?['energy','coins','materials']:['energy','coins'];
       if (!amounts.some(k => action.give[k] > 0 || action.want[k] > 0)) issues.push(problem('args.give', 'An offer must have a positive amount on at least one side'));
       for (const asset of amounts) if (action.give[asset] > 0 && action.want[asset] > 0) issues.push(problem(`args.want.${asset}`, 'The same asset cannot be positive on both sides'));
     }

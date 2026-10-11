@@ -1,3 +1,4 @@
+import { residentFlow } from '../p6/journal.js';
 import { ep } from './tokens.js';
 // SPEC-E2 §7.9：维持费。
 //
@@ -32,6 +33,7 @@ function pay(w, holder, cost, account, d) {
     return true;
   }
   if (account.energy < cost) return false;
+  residentFlow(w,account.id,'expense','rule_upkeep','energy',cost);
   account.energy -= cost;
   sink(w, 'energy', 'rule_upkeep', cost);
   w.dayLog.upkeepPaid += cost;
@@ -75,6 +77,7 @@ function payStanding(w, d) {
     let unpaid = 0;
     for (const o of a.standing) {
       if (a.energy >= ep(w, 'standingUpkeep')) {
+        residentFlow(w,a.id,'expense','standing_upkeep','energy',ep(w,'standingUpkeep'));
         a.energy -= ep(w, 'standingUpkeep');
         sink(w, 'energy', 'standing_upkeep', ep(w, 'standingUpkeep'));
         w.dayLog.p2.standingUpkeep += ep(w, 'standingUpkeep');

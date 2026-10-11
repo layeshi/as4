@@ -20,5 +20,8 @@
   },
   "optionalDependencies": {
     "@anthropic-ai/sdk": "^0.129.0"
+  },
+  "dependencies": {
+    "sharp": "^0.35.5"
   }
 }

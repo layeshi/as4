@@ -1,3 +1,4 @@
+import { residentFlow } from '../p6/journal.js';
 import { materialsEnabled } from '../world.js';
 import { terminateProject } from './material-projects.js';
 import { validateResearchPolicy } from './research.js';
@@ -718,6 +719,8 @@ function opTransfer(w, set, idx, it, run) {
     const avail = transferable(w, it.from);
     moved = { energy: Math.min(it.energy, avail.energy), coins: Math.min(it.coins, avail.coins) };
     if (moved.energy > 0 || moved.coins > 0) {
+      if(it.from.k==='agent')residentFlow(w,it.from.id,'payment','law_transfer','energy',moved.energy);
+      if(it.to.k==='agent')residentFlow(w,it.to.id,'income',it.from.k==='treasury'?'city_transfer':'law_transfer','energy',moved.energy);
       debit(w, it.from, moved.energy, moved.coins);
       credit(w, it.to, moved.energy, moved.coins, { lawId: set.key }, it.from);
       const by = (acct) => acctRef(w, acct);
@@ -743,9 +746,11 @@ function opShare(w, set, idx, it, run) {
     each = { energy: Math.floor(got.energy / n), coins: Math.floor(got.coins / n) };
     const total = { energy: each.energy * n, coins: each.coins * n };
     if (total.energy > 0 || total.coins > 0) {
+      if(it.from.k==='agent')residentFlow(w,it.from.id,'payment','law_share','energy',total.energy);
       debit(w, it.from, total.energy, total.coins);
       notifyTransfer(w, it.from, { law: set.key, energy: total.energy, coins: total.coins, direction: 'out' });
       for (const id of it.among) {
+        residentFlow(w,id,'income',it.from.k==='treasury'?'ration':'law_share','energy',each.energy);
         credit(w, { k: 'agent', id }, each.energy, each.coins, { lawId: set.key }, it.from);
         notifyTransfer(w, { k: 'agent', id }, { law: set.key, energy: each.energy, coins: each.coins, direction: 'in', counterparty: acctRef(w, it.from) });
       }

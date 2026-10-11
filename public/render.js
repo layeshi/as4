@@ -1,3 +1,4 @@
+import { residentAvatar } from './resident-avatar.js';
 // 各页共用的渲染工具：名字链接、事件句子、金额、法律效力的描述、完好度档位。
 // ctx（由 app.js 提供）：{ S, lore, agent(id), agentName(id), placeName(id), groupName(id), openAgent(id), openPlace(id), openDoc(id) }
 
@@ -23,7 +24,7 @@ export const dayTag = (tick) => `D${dayOfTick(tick) + 1}`;
 export function agentLink(ctx, id) {
   const a = ctx.agent(id);
   const name = a ? a.name : String(id);
-  const b = h('button', { class: `link agent-link ${a ? `st-${a.status}` : ''}`.trim(), type: 'button', title: a ? t(`status_${a.status}`) : '' }, name);
+  const b = h('button', { class: `link agent-link ${a ? `st-${a.status}` : ''}`.trim(), type: 'button', title: a ? t(`status_${a.status}`) : '' }, a?.avatar ? residentAvatar(a) : null, name);
   b.addEventListener('click', (ev) => {
     ev.stopPropagation();
     ctx.openAgent(id);

@@ -5,7 +5,7 @@ export function tokenHeadParts({ code, d, you }) {
   return [...(you.materials!==undefined?[`物料 ${n(you.materials)} · 专项 ${n(you.earmarkedMaterials)} · 待领 ${n(you.materialClaims)} · 进行订单 ${n(you.orders?.active)} · 最近期限 ${you.orders?.nextDeadline??'—'}`]:[]),you.name, d.status[you.status] || you.status,
     en ? `tokens ${n(you.energy)} (basic ${n(t.basic)})` : `词元 ${n(you.energy)}（基本额度 ${n(t.basic)}）`,
     en ? `body today ${n(t.usedToday)} / ${n(t.cap)}` : `身体今天 ${n(t.usedToday)} / ${n(t.cap)}`,
-    en ? `keeping ${n(t.custody)}/day` : `保管 ${n(t.custody)}/日`, d.coins(n(you.coins)), d.age(n(you.ageDays))];
+    en ? `keeping ${n(t.custody)}/day` : `保管 ${n(t.custody)}/日`, ...(you.coins===undefined?[]:[d.coins(n(you.coins))]), d.age(n(you.ageDays))];
 }
 export function rhythmText(r, lang) {
   if (lang === 'en') return [r.every === 0 ? 'no scheduled waking' : r.every === 1 ? 'every tick' : `every ${r.every} ticks`, r.called ? 'woken when sought' : 'not woken when sought', r.brief === 'short' ? 'short summary' : 'full summary'].join(', ');

@@ -76,10 +76,11 @@ export function createMap2(svg, deps) {
   const shake = el('g', { class: 'shake' });
   world.append(shake);
   const L = {};
-  for (const name of ['ground', 'water', 'districts', 'wall', 'streets', 'paths', 'roads', 'waste', 'lots', 'places', 'facilities', 'agents', 'weather', 'districtLabels', 'labels', 'fx']) {
+  for (const name of ['roles', 'ground', 'water', 'districts', 'wall', 'streets', 'paths', 'roads', 'waste', 'lots', 'places', 'facilities', 'agents', 'weather', 'districtLabels', 'labels', 'fx']) {
     L[name] = el('g', { class: `layer-${name}` });
     shake.append(L[name]);
   }
+  shake.append(L.roles);
   const hud = el('g', { class: 'hud' });
   svg.append(defs, world, hud);
 
@@ -489,7 +490,12 @@ export function createMap2(svg, deps) {
           ae.pos = target;
         }
         const color = agentColor({ ...(a.profile || {}), status: a.status }, colorMode);
-        ae.g.lastChild.setAttribute('fill', color);
+        ae.g.querySelector('.flame').setAttribute('fill', color);
+        let portrait=ae.g.querySelector('.resident-map-avatar');
+        if(a.profile?.avatar){
+          if(!portrait){portrait=el('image',{class:'resident-map-avatar',x:-9,y:-16,width:18,height:18,preserveAspectRatio:'xMidYMid slice'});portrait.addEventListener('error',()=>portrait.remove());ae.g.append(portrait);}
+          portrait.setAttribute('href',`/api/public/avatars/${a.profile.avatar}`);
+        }else portrait?.remove();
         ae.g.children[1].setAttribute('fill', color);
         ae.g.classList.toggle('dormant', a.status === 'dormant');
         ae.g.classList.toggle('exiled', !!(a.profile && a.profile.tags && a.profile.tags.includes('exiled')));
@@ -553,6 +559,16 @@ export function createMap2(svg, deps) {
     for (const a of s.agents) {
       agents.set(a.id, { profile: a, place: a.place, energy: a.energy, status: a.status });
       if (a.status === 'dead') ensureStar(a.id);
+    }
+    L.roles.textContent='';
+    for(const role of s.publicRoles??[]) {
+      if(!role.place||!xy[role.place])continue;
+      const [x,y]=xy[role.place],index=s.publicRoles.filter(r=>r.place===role.place).findIndex(r=>r.id===role.id);
+      const g=el('g',{class:'public-role-map',role:'button','aria-label':`${role.name} · ${role.duty} · 公共角色`,tabindex:0,transform:`translate(${x-28+index*38},${y+45})`});
+      g.append(el('title',{},`${role.name} · ${role.duty} · 公共角色`),el('image',{href:role.avatar,x:-10,y:-10,width:20,height:20}),el('text',{x:0,y:23,'text-anchor':'middle'},role.name));
+      g.addEventListener('click',()=>deps.onRole?.(role.id));
+      g.addEventListener('keydown',e=>{if(e.key==='Enter')deps.onRole?.(role.id);});
+      L.roles.append(g);
     }
     layoutAgents({ animate: false });
     applyWeather(s.weather && s.weather.active);

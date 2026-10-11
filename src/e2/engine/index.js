@@ -1,3 +1,7 @@
+import { accountCommand } from '../p6/access.js';
+import { coinScratch, stripCoins, hasCoinInput } from '../p6/coins.js';
+import { roleReply, roleActivity } from '../p6/roles.js';
+import { beforeResidents, recordResidents } from '../p6/statistics.js';
 import { meterCommand, capCommand } from './meter.js';
 import { withRecordQueries } from '../../collections.js';
 import { enablePrayers, replyPrayer, reviewInvention } from './prayers.js';
@@ -33,6 +37,8 @@ import './records.js'; // 每日指标、人类遗产存活表、史官（STEPS.
 import '../sandbox/brains.js'; // 沙盘脑 v2：每刻行动（STEPS.sandbox）、沙盘领养（STEPS.sandboxAdopt）与 admin seed_sandbox
 
 const COMMANDS = {
+  account: accountCommand,
+  role_reply: roleReply,
   meter: meterCommand,
   cap: capCommand,
   prayer_enable: (w) => enablePrayers(w),
@@ -173,12 +179,26 @@ function recoverLaw(w) {
 export function prepareCommand(original, cmd) {
   const w = cloneCommandWorld(original);
   w.commandN = cmd.n !== undefined ? cmd.n : w.commandN + 1;
-  const done = out => ({ candidate: w, out });
+  const before = w.premise === 6 ? beforeResidents(w) : null;
+  const done = out => {
+    if (w.premise === 6) {
+      roleActivity(w,out.events); out.events.push(...drainEvents(w)); out.wakes.push(...drainWakes(w));
+      const replayed = cmd.type === 'act' && Object.hasOwn(original.actReceipts, `${cmd.payload?.agentId}:${cmd.payload?.experimentGeneration ?? 0}:${cmd.payload?.requestId}`);
+      recordResidents(w,before,cmd,replayed ? { ...out.result, replayed:true } : out.result,out.events);
+      stripCoins(w); stripCoins(out);
+    }
+    return { candidate: w, out };
+  };
   const maintenance = cmd.type === 'admin' && MAINTENANCE.includes(cmd.payload?.op);
   if (w.lawSemantics?.protection && !maintenance) return done({ result: bad('paused', { reason: 'law_execution_fault', diagnostics: lawProtectionView(w) }), events: drainEvents(w), wakes: [] });
   const handler = COMMANDS[cmd.type];
   if (!handler) return done({ result: bad('invalid_request', { field: 'type' }), events: drainEvents(w), wakes: drainWakes(w) });
   try {
+    if (w.premise === 6) {
+      if (['register','adopt','foster','release','model','letter','weather_vote'].includes(cmd.type)) return done({ result:bad('unauthorized'),events:[],wakes:[] });
+      if (hasCoinInput(cmd.payload)) return done({ result:bad('invalid_request',{field:'coins'}),events:[],wakes:[] });
+      coinScratch(w);
+    }
     if (usesLawVM2(w) && !maintenance) {
       if (w.ruleExecution.protection) return done({ result: bad('paused', { reason: 'law_execution_capacity' }), events: drainEvents(w), wakes: [] });
       const check = capacityCheck(w);

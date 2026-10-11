@@ -63,7 +63,7 @@ export function createClient({ server, token, fetch: fetchImpl = globalThis.fetc
     /** lang 为 en 时动作错误的说明用英文（缺省 zh，请求路径不变）；第二纪里它还进入命令（draft 的说明、read { law } 的读法） */
     act({ thought, actions, lang, wakeId, turn, actionTools, requestId, experimentGeneration = lastExperimentGeneration }) {
       const body = { actions };
-      if(lastPremise===5)body.requestId=requestId??randomUUID();
+      if((lastPremise === 5 || lastPremise === 6))body.requestId=requestId??randomUUID();
       if (wakeId !== undefined) body.wakeId = wakeId;
       if (turn !== undefined) body.turn = turn;
       if (actionTools !== undefined) body.actionTools = actionTools;

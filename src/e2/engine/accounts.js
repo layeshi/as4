@@ -1,3 +1,4 @@
+import { residentFlow } from '../p6/journal.js';
 // SPEC-E2 §7.7：账户——城公库、居民、社群公库、摇篮中的灵魂（为躯壳出资）。
 //
 // 规则引擎的 transfer / share / fee / mint 与动作框架收的费都通过这里入账与出账。账户的形状：
@@ -92,6 +93,8 @@ export function acctRef(w, acct) {
  * fee：{ law, to: acct, energy, coins }；a：执行者。去向的居民收到 transfer 收件。
  */
 export function payFee(w, a, fee) {
+  residentFlow(w,a.id,'payment','law_fee','energy',fee.energy);
+  if(fee.to.k==='agent')residentFlow(w,fee.to.id,'income','law_fee','energy',fee.energy);
   const from = { k: 'agent', id: a.id };
   credit(w, fee.to, fee.energy, fee.coins, ref(a), from);
   // 规则收的费公开记一条 rule_op（scope 与 owner 由 law 字段还原：法律 ID、group:<g>、place:<id>）

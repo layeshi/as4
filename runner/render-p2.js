@@ -459,8 +459,8 @@ export function renderActResult(p, { results, notes = [], arrived = [], moved = 
     if (tokenized(p)) {
       const n = x => Number(x ?? 0).toLocaleString('en-US');
       lines.push(code === 'en'
-        ? `Now: ${y.status}, tokens ${n(y.energy)} (basic ${n(y.basic)}), body today ${n(y.usedToday)} / ${n(y.cap)}, coins ${n(y.coins)}, ${y.actionsLeft} action(s) left, at ${placeText(p)}.`
-        : `此刻：${y.status === 'awake' ? '醒着' : y.status}，词元 ${n(y.energy)}（基本额度 ${n(y.basic)}），身体今天 ${n(y.usedToday)} / ${n(y.cap)}，旧币 ${n(y.coins)}，本刻还可行动 ${y.actionsLeft} 次，在 ${placeText(p)}。`);
+        ? `Now: ${y.status}, tokens ${n(y.energy)} (basic ${n(y.basic)}), body today ${n(y.usedToday)} / ${n(y.cap)}, ${p.premise===6?'':`coins ${n(y.coins)}, `} ${y.actionsLeft} action(s) left, at ${placeText(p)}.`
+        : `此刻：${y.status === 'awake' ? '醒着' : y.status}，词元 ${n(y.energy)}（基本额度 ${n(y.basic)}），身体今天 ${n(y.usedToday)} / ${n(y.cap)}，${p.premise===6?'':`旧币 ${n(y.coins)}，`}本刻还可行动 ${y.actionsLeft} 次，在 ${placeText(p)}。`);
     } else lines.push(res.now({ status: y.status, energy: y.energy, coins: y.coins, actionsLeft: y.actionsLeft, place: placeText(p) }));
   }
   if (fresh) lines.push(...renderArrived(p, arrived, { lang: code }));

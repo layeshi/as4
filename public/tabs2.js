@@ -377,6 +377,10 @@ export function renderWeather(ctx, root) {
     ),
   );
 
+  if(S.world.premise===6){
+    root.append(h('p',{class:'muted'},'天象完全随机：平静400、震80、雾100、蚀60；首月平静，每月最多一次。'),section(t('weatherHistory'),W.history.length?table([t('filterType'),t('col_days')],W.history.slice().reverse().map(x=>[name(x.type),t('fromToDays',{a:x.startDay+1,b:x.endDay+1})])):emptyNote(t('weatherNoHistory'))));
+    return;
+  }
   // 投票
   const month = W.votes.month;
   const votedKey = `houren.voted.${S.world.id}`;

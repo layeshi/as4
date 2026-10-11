@@ -27,7 +27,7 @@ const obligation =
   '固定价报酬全额托管。成本由承接者自付；全部达标才一次付款，部分完成不付款；超时全额退款，已完成工作不逆转。接单不会授予额外产权权限。作品只验交付，不验质量或真伪。';
 export function renderMaterialEnvironment(ctx, root) {
   const s = ctx.S.state;
-  if (s.world.premise !== 5) return;
+  if ((s.world.premise !== 5 && s.world.premise !== 6)) return;
   root.append(
     section(
       '物料',
@@ -97,7 +97,7 @@ export function renderMaterialEnvironment(ctx, root) {
 }
 export function renderMaterialsMarket(ctx, root) {
   const state = ctx.S.state;
-  if (state.world.premise !== 5) return;
+  if ((state.world.premise !== 5 && state.world.premise !== 6)) return;
   const content = h('div'),
     message = h('p', { role: 'status' }),
     token = h('input', {

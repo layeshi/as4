@@ -1,3 +1,4 @@
+import { residentFlow } from '../p6/journal.js';
 import { ep, startSupport } from './tokens.js';
 // SPEC-E2 §11：灵魂与出生——孕育（1–5 位作者）、灵魂、传灯、出生地、领养。
 //
@@ -86,7 +87,7 @@ export function refundSponsors(w, soul, by = null) {
       else g.treasury.energy += amount;
     } else {
       const a = w.agents[key];
-      if (a && isAlive(a)) creditEnergy(w, a, amount, by);
+      if (a && isAlive(a)) {residentFlow(w,a.id,'refund','soul_sponsor','energy',amount);creditEnergy(w,a,amount,by);}
       else w.treasury.energy += amount;
     }
     refunds.push({ to: key, energy: amount });
@@ -127,6 +128,7 @@ export function bornFromSoul(w, soul, o) {
     coins: 0,
     place,
   });
+  residentFlow(w,a.id,'income','birth_endowment','energy',a.energy);
   if (tokenized(w)) startSupport(w, a, o.dailyCap);
   for (const m of soul.inheritedMemories.slice(0, P.memorySlots)) a.memories.push({ day, tick: w.clock.tick, text: m.text, from: m.from, ...(premised(w) ? { origin: m.origin ?? m.from } : {}) });
   // TODO(spec): Q27 — confirmed: fork bookkeeping and its chronicle line land in step 5.

@@ -11,7 +11,7 @@ import { materialConservation } from './materials.js';
 import { agentList, tokenized, materialsEnabled } from '../world.js';
 import { usesLawSemantics2 } from './law-semantics.js';
 
-export const ENERGY_SOURCES = ['well_output', 'draw', 'wilds', 'salvage', 'immigrant', 'admin', 'prayer_aid', 'basic_allotment', 'thinking_refund'];
+export const ENERGY_SOURCES = ['startup_grant', 'well_output', 'draw', 'wilds', 'salvage', 'immigrant', 'admin', 'prayer_aid', 'basic_allotment', 'thinking_refund'];
 export const ENERGY_SINKS = [
   'thinking', 'custody', 'basic_expired',
   'action_cost', 'metabolism', 'decay', 'repair', 'project_built', 'project_abandoned', 'soul_faded', 'cradle_loss',
@@ -22,6 +22,7 @@ export const COIN_SOURCES = ['immigrant', 'mint', 'wilds', 'admin'];
 /** 记一笔来源。kind：energy | coins；n 为整数（admin 可以为负） */
 export function source(w, kind, key, n) {
   if (!n) return;
+  if (w.premise === 6 && kind === "coins") throw new Error("P6 coin issuance is unavailable");
   const bag = w.ledger.src[kind];
   bag[key] = (bag[key] || 0) + n;
 }
@@ -29,6 +30,7 @@ export function source(w, kind, key, n) {
 /** 记一笔去处 */
 export function sink(w, kind, key, n) {
   if (!n) return;
+  if (w.premise === 6 && kind === "coins") throw new Error("P6 coin issuance is unavailable");
   const bag = w.ledger.snk[kind];
   bag[key] = (bag[key] || 0) + n;
 }
@@ -38,7 +40,7 @@ const total = (bag) => Object.values(bag).reduce((s, x) => s + x, 0);
 /** 当前所有持有者手里的能量与旧币合计 */
 export function holdings(w) {
   let energy = w.treasury.energy;
-  let coins = w.treasury.coins;
+  let coins = w.treasury.coins ?? 0;
   if (usesLawSemantics2(w) && w.$feeEscrow) {
     energy += w.$feeEscrow.energy;
     coins += w.$feeEscrow.coins;
@@ -46,16 +48,16 @@ export function holdings(w) {
   for (const a of agentList(w)) {
     energy += a.energy;
     if (tokenized(w)) energy += a.basic;
-    coins += a.coins;
+    coins += a.coins ?? 0;
   }
   for (const g of Object.values(w.groups)) {
     energy += g.treasury.energy;
-    coins += g.treasury.coins;
+    coins += g.treasury.coins ?? 0;
   }
   for (const o of Object.values(w.offers)) {
     if (o.status === 'open') {
       energy += o.give.energy;
-      coins += o.give.coins;
+      coins += o.give.coins ?? 0;
     }
   }
   for (const c of Object.values(w.pacts)) if (c.status === 'open') energy += c.escrow;
@@ -71,7 +73,7 @@ export function checkConservation(w) {
   const L = w.ledger;
   const expected = {
     energy: L.prev.energy + total(L.src.energy) - total(L.snk.energy),
-    coins: L.prev.coins + total(L.src.coins) - total(L.snk.coins),
+    coins: (L.prev.coins ?? 0) + total(L.src.coins ?? {}) - total(L.snk.coins ?? {}),
   };
   return {
     ok: expected.energy === actual.energy && expected.coins === actual.coins && (!materialsEnabled(w) || materialConservation(w).ok),
@@ -89,7 +91,7 @@ export function dayFlows(w) {
   return {
     energyIn: total(w.ledger.src.energy),
     energyOut: total(w.ledger.snk.energy),
-    coinsIn: total(w.ledger.src.coins),
+    coinsIn: total(w.ledger.src.coins ?? {}),
   };
 }
 

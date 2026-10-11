@@ -1,3 +1,4 @@
+import { publicRoles } from '../p6/roles.js';
 import { materialsEnabled } from '../world.js';
 import { materialPublicState, materialSummary } from './material-views.js';
 import { K, capDistribution } from './tokens.js';
@@ -46,6 +47,7 @@ export function publicAgent(w, a) {
   const alive = isAlive(a);
   const out = {
     ...materialSummary(w,a),
+    ...(w.premise === 6 ? { avatar: a.avatar ?? null } : {}),
     id: a.id, name: a.name, lang: a.lang, bio: a.bio, purpose: a.purpose ?? null, purposeHistory: a.purposeHistory.map((h) => ({ ...h })),
     tags: a.tags.slice(), status: a.status,
     generation: a.generation, authors: a.authors.slice(), children: a.children.slice(),
@@ -271,6 +273,7 @@ export function publicState(w, extra = {}) {
       nextTickAt: extra.nextTickAt ?? null, tickMs: P.tickMs,
     },
     ...(prayersEnabled(w) ? { prayers: prayerView(w) } : {}),
+    ...(w.premise === 6 ? { publicRoles: publicRoles(w), startupIssued: Object.keys(w.access.startupClaims).length * 50000 } : {}),
     vars: { ...w.vars },
     procedure: {
       ordinary: { lawId: w.procedure.ordinary, reading: both((lang) => procReading(w, 'ordinary', lang)), ...(usesLawSemantics2(w) ? { health: procedureHealth(w, 'ordinary') } : {}) },
@@ -351,7 +354,7 @@ export function publicWeather(w) {
     types: weatherCodesFor(w).filter((c) => c !== 'calm'),
     active: w.weather.active.map((x) => ({ type: x.type, startDay: x.startDay, endDay: x.endDay, daysLeft: x.endDay - day + 1 })),
     history: w.weather.history.map((h) => ({ ...h, votes: { ...h.votes } })),
-    votes: { month: w.weather.votes.month, tallies: { ...w.weather.votes.tallies } },
+    ...(w.premise === 6 ? { mode: 'random' } : { votes: { month: w.weather.votes.month, tallies: { ...w.weather.votes.tallies } } }),
     omens: visibleOmens(w),
   };
 }

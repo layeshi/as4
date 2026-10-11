@@ -1,3 +1,6 @@
+import { stripCoins } from './p6/coins.js';
+import { VIRTUAL_CANON } from './p6/canon.js';
+import { seedPublicRoles } from './p6/roles.js';
 import { initializeMaterials, validateHiddenPhysics } from './materials-genesis.js';
 // SPEC-E2 §4：第二纪世界的数据模型与创建。世界状态是一个普通的 JSON 对象（整数账本、无 Map/Set/undefined），
 // 可以直接 JSON.stringify 成快照。本文件还负责 ID 生成与查找工具。
@@ -16,8 +19,8 @@ import { mapFor } from './map/index.js';
 import { GENESIS_STEPS } from './genesis.js';
 
 export const WORLD_VERSION = 2;
-export const tokenized = (w) => w.premise === 4 || w.premise === 5;
-export const materialsEnabled = w => w.premise === 5;
+export const tokenized = (w) => w.premise === 4 || (w.premise === 5 || w.premise === 6);
+export const materialsEnabled = w => (w.premise === 5 || w.premise === 6);
 export const premised = (w) => (w.premise || 0) >= 1;
 /** 第二前提（SPEC-P2 §2.2）：设定版本 2，包含设定 1 的全部机制；第二前提的新判断一律用它 */
 export const agentic = (w) => (w.premise || 0) >= 2;
@@ -142,16 +145,16 @@ export function createWorld({
   id = 'baihua', seed, codeVersion = '0.0.0', sandboxAdoption = false, map,
   founders = [], shellModels = [], sandboxShells = false, shellSlots, premise = 0, lawSemanticsVersion, tokens = {}, hiddenPhysics,
 } = {}) {
-  if (premise === 5 && lawSemanticsVersion === undefined) lawSemanticsVersion = 2;
+  if ((premise === 5 || premise === 6) && lawSemanticsVersion === undefined) lawSemanticsVersion = 2;
   if (shellSlots === undefined) shellSlots = tokenized({ premise }) ? 0 : P.shellSlots;
   if (typeof seed !== 'string' || seed === '') throw new Error('createWorld: seed is required');
   if (lawSemanticsVersion !== undefined && lawSemanticsVersion !== 2) throw new Error('createWorld: lawSemanticsVersion must be 2');
-  map ??= premise === 5 ? 'compact-materials-v1' : 'frontier';
-  if (premise === 5) validateHiddenPhysics(hiddenPhysics);
-  if (map !== (premise === 5 ? 'compact-materials-v1' : 'frontier')) throw new Error(`createWorld: 第二纪只支持 frontier 地图，得到 ${map}`);
+  map ??= (premise === 5 || premise === 6) ? 'compact-materials-v1' : 'frontier';
+  if ((premise === 5 || premise === 6)) validateHiddenPhysics(hiddenPhysics);
+  if (map !== ((premise === 5 || premise === 6) ? 'compact-materials-v1' : 'frontier')) throw new Error(`createWorld: 第二纪只支持 frontier 地图，得到 ${map}`);
   if (!Number.isSafeInteger(shellSlots) || shellSlots < 0) throw new Error(`createWorld: shellSlots must be a non-negative integer, got ${shellSlots}`);
 
-  if (premise !== 0 && premise !== 1 && premise !== 2 && premise !== 4 && premise !== 5) throw new Error('PREMISE 只能是 0、1、2 或 4');
+  if (premise !== 0 && premise !== 1 && premise !== 2 && premise !== 4 && (premise !== 5 && premise !== 6)) throw new Error('PREMISE 只能是 0、1、2 或 4');
   if (premise >= 1 && founders.length > shellSlots) throw new Error('设定 1 的世界里，先民不能多于躯壳');
   if (tokenized({ premise }) && (shellSlots !== 0 || founders.length || sandboxShells || sandboxAdoption)) throw new Error('PREMISE=4 requires no shells, founders or sandbox');
   const capacity = tokenized({ premise }) ? tokens.capacity ?? 1100000 : 1100000;
@@ -241,6 +244,11 @@ export function createWorld({
     w.well.drawPoolLeft = ep(w, 'wellDrawPoolPerDay');
   }
 
+  if (premise === 6) {
+    w.access = { residents: {}, startupClaims: {}, requests: {}, transfers: {} };
+    w.residentStats = {};
+    w.weather = { scheduled: null, active: [], history: [] };
+  }
   seedPlaces(w);
   seedCharter(w);
   seedLibrary(w);
@@ -248,6 +256,7 @@ export function createWorld({
   if (materialsEnabled(w)) initializeMaterials(w, hiddenPhysics);
   // 遗法（SPEC-E2 §9）与立法程序等依赖规则引擎的初始化（引擎模块加载时登记在 genesis.js）
   for (const step of GENESIS_STEPS) step(w);
+  if (premise === 6) { seedPublicRoles(w); stripCoins(w); w.legacy = null; }
   return w;
 }
 
@@ -310,6 +319,10 @@ function seedCharter(w) {
 
 /** 档案：致后来者与人类典籍残篇（典籍全城共有，在任何运转中的档案都能读到） */
 function seedLibrary(w) {
+  if (w.premise === 6) {
+    for (const d of VIRTUAL_CANON) w.docs[d.id] = { ...d, kind: 'virtual', lang: 'zh', author: null, source: d.category, ref: { zh: d.body, en: d.en }, tick: 0, reads: 0, readsByDay: {} };
+    return;
+  }
   const letterId = nextId(w, 'd');
   w.docs[letterId] = {
     id: letterId, kind: 'canon', title: LETTER.title, body: LETTER.body, lang: LETTER.lang, author: null, source: LETTER.source,
@@ -330,7 +343,7 @@ function seedWilds(w) {
     if (!def.wild) continue;
     w.regions[def.id] = {
       energy: def.wild.energyMax * K(w),
-      coins: def.wild.coins,
+      ...(w.premise === 6 ? {} : { coins: def.wild.coins }),
       relicOrder: shuffle(w.rng.world, def.wild.relics.map(String)),
       relicsFound: 0,
     };
