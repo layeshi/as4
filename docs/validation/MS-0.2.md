@@ -67,4 +67,3 @@ node --test test/p5-simulation.test.js
 本地界面验收截图（mock 世界）：
 
 ![居民服务已发布并修改为 120 词元](MS-0.2-market.png)
-
