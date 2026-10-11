@@ -4,6 +4,7 @@ import { dirname, join, resolve, parse } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { receiptChecksum } from '../command-receipt.js';
 
 /** POSIX DAC against the service identity, irrespective of the caller's UID. */
 export function posixAccess(stat, identity, mask) {
@@ -133,7 +134,13 @@ export function deployPreflight({ releaseDir, dataDir, worldId, configFiles = []
       let last = 0;
       for (const line of text.split('\n')) {
         if (!line) continue;
-        const row = JSON.parse(line);
+        let row = JSON.parse(line);
+        if (key === 'n' && object(row) && row.format !== undefined) {
+          if (row.format !== 'command-receipt-v1' || !object(row.command) || row.command.receipt?.version !== 1 || row.sha256 !== receiptChecksum(row.command)) {
+            fail(target, 'invalid_receipt'); return null;
+          }
+          row = row.command;
+        }
         if (!object(row) || row[key] !== last + 1 || !integer(row.tick) || typeof row.type !== 'string' || (key === 'n' && !object(row.payload))) { fail(target, 'invalid_continuity'); return null; }
         last = row[key];
       }

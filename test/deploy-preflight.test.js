@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { newWorld } from './e2-helpers.js';
+import { receiptChecksum } from '../src/command-receipt.js';
 const api = await import('../src/tools/deploy-preflight.js').catch(() => ({}));
 const uid = process.getuid();
 const gid = process.getgid();
@@ -68,6 +69,20 @@ test('release mismatch and malformed events are reported only as safe codes', t 
   assert.equal(result.checks.some(c => c.code === 'release_hash_mismatch'), true);
   assert.equal(result.checks.some(c => c.code === 'release_version_mismatch'), true);
   assert.equal(JSON.stringify(result).includes('PRIVATE'), false);
+});
+
+test('preflight accepts checksummed command receipts and rejects tampering without repairs', t => {
+  const { world, options } = fixture(t);
+  const file = join(world, 'commands.jsonl');
+  const command = { n: 1, tick: 0, type: 'admin', payload: { op: 'pause' }, receipt: { version: 1 } };
+  const frame = { format: 'command-receipt-v1', command, sha256: receiptChecksum(command) };
+  writeFileSync(file, JSON.stringify(frame) + '\n');
+  assert.equal(api.deployPreflight(options).ok, true);
+  frame.command.payload.op = 'resume';
+  const tampered = JSON.stringify(frame) + '\n';
+  writeFileSync(file, tampered);
+  assert.equal(api.deployPreflight(options).checks.some(c => c.code === 'invalid_receipt'), true);
+  assert.equal(readFileSync(file, 'utf8'), tampered);
 });
 
 test('CLI checks the named service identity and emits only safe diagnostics', async t => {
