@@ -1,3 +1,4 @@
+import { initializeMaterials, validateHiddenPhysics } from './materials-genesis.js';
 // SPEC-E2 §4：第二纪世界的数据模型与创建。世界状态是一个普通的 JSON 对象（整数账本、无 Map/Set/undefined），
 // 可以直接 JSON.stringify 成快照。本文件还负责 ID 生成与查找工具。
 //
@@ -11,11 +12,12 @@ import { createStreams, shuffle } from '../rng.js';
 import { nameKey, normalizeText, cpLength, textWeight } from '../text.js';
 import { nameShapeOk, LANG_RE } from './names.js';
 import { L, CHARTER, CHARTER_LANGS, charterWallText, CANON, LETTER } from './lore/index.js';
-import { MAP, LOT_IDS } from './map/index.js';
+import { mapFor } from './map/index.js';
 import { GENESIS_STEPS } from './genesis.js';
 
 export const WORLD_VERSION = 2;
-export const tokenized = (w) => w.premise === 4;
+export const tokenized = (w) => w.premise === 4 || w.premise === 5;
+export const materialsEnabled = w => w.premise === 5;
 export const premised = (w) => (w.premise || 0) >= 1;
 /** 第二前提（SPEC-P2 §2.2）：设定版本 2，包含设定 1 的全部机制；第二前提的新判断一律用它 */
 export const agentic = (w) => (w.premise || 0) >= 2;
@@ -137,16 +139,19 @@ export function validateFounders(list, { premise = 0 } = {}) {
 }
 
 export function createWorld({
-  id = 'baihua', seed, codeVersion = '0.0.0', sandboxAdoption = false, map = 'frontier',
-  founders = [], shellModels = [], sandboxShells = false, shellSlots, premise = 0, lawSemanticsVersion, tokens = {},
+  id = 'baihua', seed, codeVersion = '0.0.0', sandboxAdoption = false, map,
+  founders = [], shellModels = [], sandboxShells = false, shellSlots, premise = 0, lawSemanticsVersion, tokens = {}, hiddenPhysics,
 } = {}) {
+  if (premise === 5 && lawSemanticsVersion === undefined) lawSemanticsVersion = 2;
   if (shellSlots === undefined) shellSlots = tokenized({ premise }) ? 0 : P.shellSlots;
   if (typeof seed !== 'string' || seed === '') throw new Error('createWorld: seed is required');
   if (lawSemanticsVersion !== undefined && lawSemanticsVersion !== 2) throw new Error('createWorld: lawSemanticsVersion must be 2');
-  if (map !== 'frontier') throw new Error(`createWorld: 第二纪只支持 frontier 地图，得到 ${map}`);
+  map ??= premise === 5 ? 'compact-materials-v1' : 'frontier';
+  if (premise === 5) validateHiddenPhysics(hiddenPhysics);
+  if (map !== (premise === 5 ? 'compact-materials-v1' : 'frontier')) throw new Error(`createWorld: 第二纪只支持 frontier 地图，得到 ${map}`);
   if (!Number.isSafeInteger(shellSlots) || shellSlots < 0) throw new Error(`createWorld: shellSlots must be a non-negative integer, got ${shellSlots}`);
 
-  if (premise !== 0 && premise !== 1 && premise !== 2 && premise !== 4) throw new Error('PREMISE 只能是 0、1、2 或 4');
+  if (premise !== 0 && premise !== 1 && premise !== 2 && premise !== 4 && premise !== 5) throw new Error('PREMISE 只能是 0、1、2 或 4');
   if (premise >= 1 && founders.length > shellSlots) throw new Error('设定 1 的世界里，先民不能多于躯壳');
   if (tokenized({ premise }) && (shellSlots !== 0 || founders.length || sandboxShells || sandboxAdoption)) throw new Error('PREMISE=4 requires no shells, founders or sandbox');
   const capacity = tokenized({ premise }) ? tokens.capacity ?? 1100000 : 1100000;
@@ -240,6 +245,7 @@ export function createWorld({
   seedCharter(w);
   seedLibrary(w);
   seedWilds(w);
+  if (materialsEnabled(w)) initializeMaterials(w, hiddenPhysics);
   // 遗法（SPEC-E2 §9）与立法程序等依赖规则引擎的初始化（引擎模块加载时登记在 genesis.js）
   for (const step of GENESIS_STEPS) step(w);
   return w;
@@ -251,13 +257,13 @@ export function createWorld({
 function seedPlaces(w) {
   const zh = L('zh');
   const en = L('en');
-  for (const def of MAP.places) {
-    const name = zh.place[def.id].name;
+  for (const def of mapFor(w).places) {
+    const name = def.name ?? zh.place[def.id].name;
     w.places[def.id] = {
       id: def.id,
       name,
-      humanName: { zh: name, en: en.place[def.id].name },
-      description: null,
+      humanName: { zh: name, en: def.id==='workshop'&&def.name?'Research Institute':en.place[def.id].name },
+      description: def.name ? (def.id==='workshop'?'研究所支持全城获授权居民施工与维修；使用当前授权和收费。':`${def.name}。${def.wild?'可探索与采集物料。':def.id==='tenements'||def.id==='temple'?'可修复和改装的空壳；拆解须符合现行法律。':'城市公共设施。'}`) : null,
       origin: 'human',
       district: def.district,
       xy: def.xy.slice(),
@@ -283,7 +289,7 @@ function seedPlaces(w) {
       history: [], // 最近 8 个日终的完好度（观测站的「近 7 日趋势」）
     };
   }
-  for (const id of LOT_IDS) w.lots[id] = { place: null, project: null };
+  for (const id of mapFor(w).lots.map(l => l.id)) w.lots[id] = { place: null, project: null };
 }
 
 /** 宪章：9 条，每条 8 种语言版本；议会墙上的 8 条刻文（SPEC-M1 §5.6，第二纪沿用） */
@@ -320,7 +326,7 @@ function seedLibrary(w) {
 
 /** 荒野五地带的储量与遗物的出现顺序（由 world 流洗牌，按地图顺序） */
 function seedWilds(w) {
-  for (const def of MAP.places) {
+  for (const def of mapFor(w).places) {
     if (!def.wild) continue;
     w.regions[def.id] = {
       energy: def.wild.energyMax * K(w),
@@ -344,6 +350,7 @@ export function genesisOpts(snap) {
     shellModels: g.shellModels,
     sandboxShells: !!snap.sandboxShells,
     premise: g.premise,
+    ...(materialsEnabled(snap) ? { hiddenPhysics: structuredClone(g.hiddenPhysics) } : {}),
     ...(tokenized(snap) ? { tokens: { ...g.tokens } } : {}),
     ...(g.lawSemanticsVersion === 2 ? { lawSemanticsVersion: 2 } : {}),
     shellSlots: g.shellSlots, // 早期的快照没有这一项：undefined → 缺省的 P.shellSlots，与当时的创建一致

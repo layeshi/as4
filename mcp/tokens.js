@@ -5,8 +5,8 @@ const total = bill => (bill?.reread || 0) + (bill?.read || 0) + (bill?.write || 
 const text = (value, isError = false) => ({ content: [{ type: 'text', text: value }], ...(isError ? { isError: true } : {}) });
 
 export function tokenTools(client) {
-  let wakeId, bill = null, you = null, seen = 0;
-  const remember = status => { if (status?.you) you = status.you; };
+  let premise=4, wakeId, bill = null, you = null, seen = 0;
+  const remember = status => { if(status?.premise)premise=status.premise; if (status?.you) you = status.you; };
   const footer = (lang, cost) => !you ? '' : lang === 'en'
     ? `tokens ${you.energy} (basic ${you.basic}) · body today ${you.usedToday} / ${you.cap} · this step ${cost}`
     : `词元 ${you.energy}（基本额度 ${you.basic}）· 身体今天 ${you.usedToday} / ${you.cap} · 这一笔 ${cost}`;
@@ -36,12 +36,12 @@ export function tokenTools(client) {
     if (name === 'houren_look' || name === 'houren_act') {
       const before = total(bill);
       const r = name === 'houren_look'
-        ? await client.look({ wakeId, what: args.what, id: args.id, lang })
+        ? await client.look({ wakeId, what: args.what, id: args.id, lang, kind:args.kind,target:args.target,after:args.after,limit:args.limit,mine:args.mine })
         : await client.act({ wakeId, actions: args.actions, thought: args.thought, lang });
       if (!r.ok) return rejected(r, lang);
       remember(r.json); bill = r.json.bill;
       const cost = Math.max(0, total(bill) - before);
-      const body = name === 'houren_look' ? r.json.text : renderActResult({ protocol: 2, premise: 4, lang, you: r.json.you }, { results: r.json.results || [], lang }) + (r.json.arrived ? `\n${r.json.arrived}` : '');
+      const body = name === 'houren_look' ? r.json.text : renderActResult({ protocol: 2, premise, lang, you: r.json.you }, { results: r.json.results || [], lang }) + (r.json.arrived ? `\n${r.json.arrived}` : '');
       if (r.json.arrivedWithheld !== undefined) wakeId = undefined;
       return finish(body, lang, cost);
     }

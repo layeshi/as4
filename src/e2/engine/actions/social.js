@@ -1,4 +1,4 @@
-import { tokenized } from '../../world.js';
+import { tokenized, materialsEnabled } from '../../world.js';
 import { jsonWeight } from '../tokens.js';
 import { costMultiplierBp } from '../places.js';
 // 社会的动作（SPEC-E2 §25 第 3 步）：
@@ -192,12 +192,12 @@ const disburse = {
 // ── 交易 ───────────────────────────────────────────────────
 
 /** { energy?, coins? } → { energy, coins }（缺省为 0，均为非负整数） */
-function bundle(v) {
+function bundle(v, w) {
   needObject(v);
-  return { energy: optAmount(v.energy), coins: optAmount(v.coins) };
+  return { energy: optAmount(v.energy), coins: optAmount(v.coins), ...(materialsEnabled(w)?{materials:optAmount(v.materials)}:{}) };
 }
 
-const isEmpty = (b) => b.energy === 0 && b.coins === 0;
+const isEmpty = (b) => b.energy === 0 && b.coins === 0 && !b.materials;
 
 /** 公开交易挂在告示板上，只在那里可见、可成交：这里须有运转中的告示板 */
 function needBoard(w, placeId) {
@@ -207,10 +207,11 @@ function needBoard(w, placeId) {
 const offer = {
   validate(ctx, args) {
     const { w, a } = ctx;
-    const give = bundle(args.give);
-    const want = bundle(args.want);
+    const give = bundle(args.give,w);
+    const want = bundle(args.want,w);
     if (isEmpty(give) && isEmpty(want)) fail('invalid_args');
     if ((give.energy > 0 && want.energy > 0) || (give.coins > 0 && want.coins > 0)) fail('invalid_args'); // 不能在同一种资产上两边都非零
+    if(materialsEnabled(w)) {if(give.materials>a.materials)fail('insufficient_materials');if(give.materials&&want.materials)fail('invalid_args');}
     const note = optText(args.note, { max: LIMITS.note }) || null;
     let to = null;
     if (args.to !== undefined && args.to !== null) {
@@ -225,11 +226,12 @@ const offer = {
   apply(ctx, plan) {
     const { w, a } = ctx;
     const { give, want, note, to } = plan;
+    if(materialsEnabled(w))a.materials-=give.materials;
     a.energy -= give.energy;
     a.coins -= give.coins;
     const id = nextId(w, 'o');
     const o = {
-      id, from: a.id, to: to ? to.id : null, give, want, note, board: to ? null : a.place,
+      id, ...(materialsEnabled(w)?{materialPlace:a.place}:{}), from: a.id, to: to ? to.id : null, give, want, note, board: to ? null : a.place,
       openedTick: w.clock.tick, expiresTick: w.clock.tick + P.offerTicks, status: 'open', acceptedBy: null,
     };
     w.offers[id] = o;
@@ -252,6 +254,7 @@ const accept = {
     const o = Object.prototype.hasOwnProperty.call(w.offers, args.offer) ? w.offers[args.offer] : null;
     if (!o || o.status !== 'open') fail('not_found');
     if (o.from === a.id) fail('not_allowed');
+    if(materialsEnabled(w)&&(o.give.materials||o.want.materials)){if(a.place!==o.materialPlace||w.agents[o.from].place!==o.materialPlace)fail('wrong_place');if(a.materials<o.want.materials)fail('insufficient_materials');}
     const isPublic = o.to === null;
     if (!isPublic) {
       if (o.to !== a.id) fail('not_allowed'); // 定向交易只能由 to 接受
@@ -266,6 +269,7 @@ const accept = {
     const { o } = plan;
     const from = w.agents[o.from];
     // 原子交换：接受者付 want，得到托管中的 give
+    if(materialsEnabled(w)){a.materials+=o.give.materials-o.want.materials;from.materials+=o.want.materials;}
     a.energy -= o.want.energy;
     a.coins -= o.want.coins;
     creditEnergy(w, from, o.want.energy, ref(a));

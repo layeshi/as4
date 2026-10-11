@@ -403,6 +403,7 @@ export function secHere(c) {
     if (j.lot) what.push(`${d.on} ${j.lot}`);
     if (j.on) what.push(`${d.on} ${j.on}`);
     if (j.to) what.push(`→ ${j.to}`);
+    if(j.phase)lines.push(`  ${j.id} · ${j.phase} · 词元 ${j.have}/${j.need} · 物料 ${j.haveMaterials}/${j.needMaterials} · 工作 ${j.progress}/${j.needWork}`);
     lines.push(`  ${d.projects}${P.col}[${j.id}] ${what.join(code === 'en' ? ' ' : '')} · ${j.have}/${j.need} · ${d.contributors(j.contributors)} · ${d.dueDay(j.expiresDay + 1)} · ${ownerText(j.owner)}${j.inscription ? `${P.semi}${j.inscription}` : ''}`);
   }
   if (h.roads && h.roads.length) lines.push(`  ${d.roads}${P.col}${h.roads.map((r) => `${r.to}${r.functioning ? '' : `${P.open}${d.notFunctioning}${P.close}`}`).join(P.sep)}`);

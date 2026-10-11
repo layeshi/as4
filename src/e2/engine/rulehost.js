@@ -7,7 +7,7 @@
 // 宿主是一次调用一个：它缓存当次调用里算过的列表，调用结束即丢弃；不改变世界（除 sample 推进给定的随机数流）。
 
 import { P, SEASON_TABLE } from '../params.js';
-import { clockDay, dayOfMonthOf, monthOfDay, findAgent, isAlive } from '../world.js';
+import { materialsEnabled, clockDay, dayOfMonthOf, monthOfDay, findAgent, isAlive } from '../world.js';
 import { agentRef, groupRef, soulRef, isRef } from '../rules/eval.js';
 import { int } from '../../rng.js';
 import { isWeatherActive } from './environment.js';
@@ -31,6 +31,7 @@ export function cityRecord(w) {
   }
   const hist = w.well.outputHistory;
   return {
+    ...(materialsEnabled(w)?{materialsWilds:w.materialZones.wilds.stock,materialsScrapyard:w.materialZones.scrapyard.stock,materialsSolarfield:w.materialZones.solarfield.stock,constructionWork:Object.values(w.projects).reduce((n,j)=>n+j.progress,0)}:{}),
     day,
     dayOfMonth: dom,
     month: monthOfDay(day),
@@ -56,6 +57,7 @@ function agentField(w, a, name) {
     case 'id': return a.id;
     case 'name': return a.name;
     case 'lang': return a.lang;
+    case 'materials': return materialsEnabled(w)?a.materials:undefined;
     case 'energy': return a.energy;
     case 'coins': return a.coins;
     case 'age': return clockDay(w) - a.bornDay;

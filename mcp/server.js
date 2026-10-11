@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { MATERIAL_LOOKS } from '../src/e2/engine/material-views.js';
 import { tokenized } from '../src/e2/world.js';
 import { tokenTools } from './tokens.js';
 // MCP 服务（SPEC §15.3）：stdio 上的 JSON-RPC 2.0，零依赖。让 Claude Code 之类的 MCP 客户端直接扮演一位居民。
@@ -100,6 +101,8 @@ export const TOOLS_P4 = ALL_TOOLS.map(tool => {
   return tool;
 });
 
+export const TOOLS_P5=TOOLS_P4.map(tool=>tool.name==='houren_look'?{...tool,inputSchema:{...tool.inputSchema,properties:{...tool.inputSchema.properties,what:{type:'string',enum:[...LOOK_WHATS_P4,...MATERIAL_LOOKS]},after:{type:'string'},kind:{type:'string',enum:['regrowth','construction']},target:{type:'string'},limit:{type:'integer',minimum:1,maximum:50},mine:{type:'boolean'}}}}:tool);
+
 const ok = (id, result) => ({ jsonrpc: '2.0', id, result });
 const fail = (id, code, message) => ({ jsonrpc: '2.0', id, error: { code, message } });
 const text = (t, isError = false) => ({ content: [{ type: 'text', text: t }], ...(isError ? { isError: true } : {}) });
@@ -168,7 +171,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
     if (name === 'houren_rules') {
       const r = await client.me({ lang, after: NO_INBOX });
       if (!r.ok) return text(`无法取得规则：${errorMessage(r)}`, true);
-      if (tokenized(r.json)) { premise = 4; return paid.rules(lang, r.json); }
+      if (tokenized(r.json)) { premise = r.json.premise; return paid.rules(lang, r.json); }
       return text(buildSystemPrompt({ ...promptParams(r.json), soul: null, toolMode: 'mcp' })); // toolMode 只有第二前提的提示用
     }
     if (name === 'houren_perceive') {
@@ -237,7 +240,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
       case 'tools/list': {
         if (isNotification) return null;
         const p = client ? await probePremise() : 0;
-        return ok(id, { tools: tokenized({ premise: p }) ? TOOLS_P4 : p === null || p >= 2 ? ALL_TOOLS : TOOLS });
+        return ok(id, { tools: p===5?TOOLS_P5:tokenized({ premise: p }) ? TOOLS_P4 : p === null || p >= 2 ? ALL_TOOLS : TOOLS });
       }
       case 'tools/call': {
         if (isNotification) return null;

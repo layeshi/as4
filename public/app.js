@@ -1,3 +1,4 @@
+import { renderMaterialsMarket } from './materials-ui.js';
 import { tokenized } from './e2-strings.js';
 // 观测站主程序：状态、SSE、顶栏、地图、标签页、档案抽屉、弹窗。
 // 首屏用 GET /api/public/state 取全量，之后用 SSE：事件增量追加；tick 事件携带精简状态，
@@ -135,7 +136,7 @@ async function boot() {
 
 /** 读到状态之后，按这座城的纪选择标签页（第二纪多了「摇篮与躯壳」等），并重画标签栏 */
 function chooseTabs() {
-  tabsNow = isE2() ? TABS2 : TABS;
+  tabsNow = isE2() ? [...TABS2,...(S.state.world.premise===5?[['market',renderMaterialsMarket]]:[])] : TABS;
   const first = location.hash.slice(1);
   if (tabsNow.some((x) => x[0] === first)) S.tab = first;
   else if (!tabsNow.some((x) => x[0] === S.tab)) S.tab = 'live';
@@ -514,7 +515,7 @@ function applyState({ force = false } = {}) {
 function renderTabBar() {
   clear(els.tabs);
   tabsNow.forEach(([id]) => {
-    const b = h('button', { class: 'tab', role: 'tab', id: `tab-${id}`, type: 'button', 'aria-selected': String(id === S.tab), 'aria-controls': 'panel', tabindex: id === S.tab ? 0 : -1 }, t(`tab_${id}`));
+    const b = h('button', { class: 'tab', role: 'tab', id: `tab-${id}`, type: 'button', 'aria-selected': String(id === S.tab), 'aria-controls': 'panel', tabindex: id === S.tab ? 0 : -1 }, id==='market'?'交易所':t(`tab_${id}`));
     b.addEventListener('click', () => selectTab(id));
     els.tabs.append(b);
   });

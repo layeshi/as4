@@ -1,3 +1,6 @@
+import { sweepOrders } from './service-orders.js';
+import { materialsEnabled } from '../world.js';
+import { inheritMaterials } from './materials.js';
 import { releaseShares } from './upgrades.js';
 import { initialTokens, requireDailyCap, startSupport, expireBasic } from './tokens.js';
 import { closeResidentPrayers } from './prayer-rewards.js';
@@ -87,6 +90,7 @@ export function makeAgent(w, o) {
     a.routine = { every: 1, called: true, brief: 'full' };
     a.tokens = initialTokens();
   }
+  if (materialsEnabled(w)) { a.materials=0; a.earmarkedMaterials=[]; a.constructionLoad={tick:w.clock.tick,count:0}; }
   w.agents[id] = a;
   return a;
 }
@@ -198,6 +202,7 @@ export function applyDeaths(w, d) {
  * 返回遗产分配 [{ to, energy, coins }]。
  */
 export function releaseAgent(w, a) {
+  sweepOrders(w,a.id);
   closeResidentPrayers(w, a);
   if (tokenized(w)) { expireBasic(w, a); releaseShares(w, a.id); }
   if (premised(w)) a.memoryOffers = [];
@@ -217,6 +222,7 @@ export function releaseAgent(w, a) {
  * 继承人已不存在或已死亡、归隐的份额进入公库；没有遗嘱则全部进入公库。
  */
 export function distributeEstate(w, a) {
+  inheritMaterials(w,a);
   const energy = a.energy;
   const coins = a.coins;
   a.energy = 0;
@@ -246,6 +252,8 @@ export function distributeEstate(w, a) {
           pushInbox(w, heir, 'gift', { from: ref(a), energy: e, coins: c, note: null, inheritance: true });
         }
         creditEnergy(w, heir, e, ref(a));
+      } else if(materialsEnabled(w)&&w.groups[h.to]&&!w.groups[h.to].dissolved) {
+        w.groups[h.to].treasury.energy+=e;w.groups[h.to].treasury.coins+=c;add(h.to,e,c);
       } else {
         w.treasury.energy += e;
         w.treasury.coins += c;

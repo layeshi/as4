@@ -1,3 +1,5 @@
+import { materialsEnabled } from '../../world.js';
+import { addSafe } from '../materials.js';
 import { tokenized } from '../../world.js';
 import { K } from '../tokens.js';
 import { rewardRescue } from '../prayer-rewards.js';
@@ -166,13 +168,16 @@ const give = {
     if (to.kind === 'agent' && to.agent.id === a.id) fail('invalid_args');
     const energy = optAmount(args.energy);
     const coins = optAmount(args.coins);
-    if (energy === 0 && coins === 0) fail('invalid_args');
+    const materials = materialsEnabled(w) ? optAmount(args.materials) : 0;
+    if (materials) { if(to.kind !== 'agent') fail('invalid_args'); if(to.agent.place!==a.place) fail('wrong_place'); if(a.materials<materials)fail('insufficient_materials');addSafe(to.agent.materials,materials); }
+    if (energy === 0 && coins === 0 && materials === 0) fail('invalid_args');
     const note = optText(args.note, { max: LIMITS.note, doScreen: false });
-    return { to, energy, coins, note, cost: ctx.cost(ACTIONS.give.base), reserve: { energy, coins } };
+    return { to, energy, coins, note, ...(materialsEnabled(w)?{materials}:{}), cost: ctx.cost(ACTIONS.give.base), reserve: { energy, coins } };
   },
   apply(ctx, plan) {
     const { w, a } = ctx;
     const { to, energy, coins, note } = plan;
+    if(materialsEnabled(w)){a.materials-=plan.materials;if(plan.materials)to.agent.materials+=plan.materials;}
     a.energy -= energy;
     a.coins -= coins;
     let target;
@@ -193,8 +198,8 @@ const give = {
       target = to.agent.id;
     }
     w.dayLog.coinVolume += coins;
-    emit(w, 'give', { agent: a.id, place: a.place, data: { from: a.id, to: target, energy, coins } });
-    return { to: target, energy, coins };
+    emit(w, 'give', { agent: a.id, place: a.place, data: { from: a.id, to: target, energy, coins, ...(materialsEnabled(w)?{materials:plan.materials}:{}) } });
+    return { to: target, energy, coins, ...(materialsEnabled(w)?{materials:plan.materials}:{}) };
   },
 };
 
@@ -270,6 +275,7 @@ const will = {
       needObject(h);
       const share = needInt(h.share, { min: 1, max: 1_000_000 });
       needId(h.to);
+      if(materialsEnabled(w)&&w.groups[h.to]&&!w.groups[h.to].dissolved)return {to:h.to,share};
       if (h.to === 'treasury') return { to: 'treasury', share };
       const t = findAgent(w, h.to);
       if (!t) fail('not_found');

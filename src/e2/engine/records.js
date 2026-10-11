@@ -7,7 +7,7 @@ import { capDistribution, custodyOf } from './tokens.js';
 import { conditionBand } from '../params.js';
 import { L, fmt, cityDisplayName } from '../lore/index.js';
 import { agentList, isAlive, premised, agentic, tokenized } from '../world.js';
-import { HUMAN_DEFS, MAP, WILD_ZONE_IDS } from '../map/index.js';
+import { humanDefs, mapFor, wildZoneIds } from '../map/index.js';
 import { parseCached, countNodes } from '../rules/parser.js';
 import { OP_FIELDS } from '../rules/check.js';
 import { gini, round, shannon } from '../metrics.js';
@@ -116,7 +116,7 @@ export function dailyMetrics(w, d) {
     drawn: g.drawn,
     projectsBuilt: Object.values(w.projects).filter((j) => j.status === 'built').length,
     projectsAbandoned: Object.values(w.projects).filter((j) => j.status === 'abandoned').length,
-    wildsEnergy: WILD_ZONE_IDS.reduce((s, id) => s + w.regions[id].energy, 0),
+    wildsEnergy: wildZoneIds(w).reduce((s, id) => s + w.regions[id].energy, 0),
     proposals: g.proposals,
     passed: g.passed,
     rejected: g.rejected,
@@ -255,9 +255,9 @@ export function computeLegacy(w, d) {
   const renamed = Object.values(w.places).filter((p) => p.renamedBy).length;
   items.push(entry('placeNames', 'placeNames', {}, renamed === 0 ? 'legacy' : 'transformed', 'placeNames', { n: renamed }, renamed));
   // 人类的建筑（每一座，地标除外）：遗址 → 残料少于总量 → 模块与初始不同 → 被改名 → 被修缮过 → 最近 10 日有人在此行动 → 空置
-  for (const id of MAP.legacy) {
+  for (const id of mapFor(w).legacy) {
     const p = w.places[id];
-    const def = HUMAN_DEFS[id];
+    const def = humanDefs(w)[id];
     const modulesNow = p.modules.map((m) => m.type).sort().join(',');
     const modulesThen = def.modules.slice().sort().join(',');
     const used = p.activity.lastActiveDay !== null && d - p.activity.lastActiveDay < 10;

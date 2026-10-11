@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 // 运行器与 MCP 共用的 HTTP 客户端：GET /api/me、POST /api/me/act。
 // 令牌只放在 Authorization 头里，不进日志、不进错误信息。
 
@@ -9,7 +10,7 @@ const DEFAULT_TIMEOUT_MS = 30000;
  */
 export function createClient({ server, token, fetch: fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS, signal }) {
   const base = String(server).replace(/\/+$/, '');
-  let lastExperimentGeneration;
+  let lastExperimentGeneration, lastPremise;
 
   async function call(path, { method = 'GET', body, timeoutMs: limit = timeoutMs } = {}) {
     const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
@@ -38,13 +39,14 @@ export function createClient({ server, token, fetch: fetchImpl = globalThis.fetc
     base,
     state() { return call('/api/public/state'); },
     rules({ lang = 'zh' } = {}) { return call(`/api/me/rules?${new URLSearchParams({ lang })}`); },
-    wake(body) { return call('/api/me/wake', { method: 'POST', body }); },
+    async wake(body) { const r=await call('/api/me/wake', {method:'POST',body});if(r.ok&&r.json?.premise)lastPremise=r.json.premise;return r; },
     look(body) { return call('/api/me/look', { method: 'POST', body }); },
     /** 感知。after 缺省时由服务器推进收件箱游标；显式给出时不推进（「至少一次」语义） */
     async me({ lang = 'zh', after } = {}) {
       const q = new URLSearchParams({ lang });
       if (after !== undefined && after !== null) q.set('after', String(after));
       const r = await call(`/api/me?${q}`);
+      if(r.ok&&r.json?.premise!==undefined)lastPremise=r.json.premise;
       if (r.ok && r.json?.now) lastExperimentGeneration = r.json.now.experimentGeneration ?? 0;
       return r;
     },
@@ -59,8 +61,9 @@ export function createClient({ server, token, fetch: fetchImpl = globalThis.fetc
       return call(`/api/me/wait?${q}`, { timeoutMs: t + 10000 });
     },
     /** lang 为 en 时动作错误的说明用英文（缺省 zh，请求路径不变）；第二纪里它还进入命令（draft 的说明、read { law } 的读法） */
-    act({ thought, actions, lang, wakeId, turn, actionTools, experimentGeneration = lastExperimentGeneration }) {
+    act({ thought, actions, lang, wakeId, turn, actionTools, requestId, experimentGeneration = lastExperimentGeneration }) {
       const body = { actions };
+      if(lastPremise===5)body.requestId=requestId??randomUUID();
       if (wakeId !== undefined) body.wakeId = wakeId;
       if (turn !== undefined) body.turn = turn;
       if (actionTools !== undefined) body.actionTools = actionTools;

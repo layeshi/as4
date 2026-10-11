@@ -50,7 +50,7 @@ const standing = {
     const orders = [];
     // 表达式的检查问题汇总之后一并返回（rule_invalid，写法同 propose）；其余的不合法立即返回
     const check = (src, expected, path, inbox) => {
-      const r = checkExpression(src, expected, 'standing', { premise: 2, it: inbox ? T.ANY : null });
+      const r = checkExpression(src, expected, 'standing', { premise: w.premise === 5 ? 5 : 2, it: inbox ? T.ANY : null });
       if (!r.ok) for (const i of r.issues) issues.push({ ...i, path });
     };
     raw.forEach((o, i) => {
@@ -67,9 +67,10 @@ const standing = {
         check(cond, T.BOOL, `orders[${i}].if`, inbox);
       }
       if (!Array.isArray(o.do) || o.do.length < 1 || o.do.length > P.standingDoMax) invalidArgs();
-      const table = actionTable(2, prayersEnabled(w));
+      const table = actionTable(w.premise === 5 ? 5 : 2, prayersEnabled(w));
       const acts = o.do.map((act, j) => {
         if (!isObj(act) || typeof act.type !== 'string' || !table.isKnown(act.type) || DO_FORBIDDEN.has(act.type)) invalidArgs();
+        if(w.premise===5&&!actionTable(4).isKnown(act.type)&&!['gather','claim','construct'].includes(act.type))invalidArgs();
         for (const [k, v] of Object.entries(act)) {
           if (k === 'type' || typeof v !== 'string') continue;
           if (v.startsWith('=')) check(sourceOf(v.slice(1)), T.ANY, `orders[${i}].do[${j}].${k}`, inbox);

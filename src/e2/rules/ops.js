@@ -185,6 +185,9 @@ function collectOp(op, ctx, out) {
     case 'repeal':
       out.push({ op: 'repeal', law: op.law });
       return;
+    case 'cancel_project': case 'project_policy': out.push({...op});return;
+    case 'research_policy': out.push({...op,fee:amount(op.fee,ctx,'fee')});return;
+    case 'material_policy': {const restricted=ev(op.restricted);if(typeof restricted!=='boolean')throw typeErr('restricted needs boolean');out.push({op:op.op,restricted});return;}
     case 'fund': {
       const energy = amount(op.energy, ctx, 'energy');
       if (energy > 0) out.push({ op: 'fund', project: op.project, energy });

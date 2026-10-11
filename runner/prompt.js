@@ -107,6 +107,8 @@ export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, tick
     ...agent,
   });
   let text = soul === null || soul === undefined ? head : `${head}\n\n${fmt(l.soul, { soul })}`;
+  if(premise===5)text=text.replace('源井、配给、荒野、拆解与别人','源井、配给、荒野与别人').replace('凑够造价就完工','筹齐词元与物料后还须施工才完工').replace('the Well, rations, the wilds, dismantling and others','the Well, rations, the wilds and others').replace('once its cost is met','once its token and material budget is met and construction is complete').replace('the Well, rations, the Wilds, salvage and other residents','the Well, rations, the Wilds and other residents').replace('when its cost is covered it is done','after its token and material budget is covered, construction must finish');
+  if(premise===5)text += lang === 'en' ? '\nMaterials and services: look materials/services/demands/orders/research/observations is paid reading; use after/limit for pagination. Funded projects still need construction. Research institutes serve the whole city; automatic selection uses only free authorized institutes. Order rewards are fully escrowed. Providers pay their own costs; payment is made once, only after full completion. Partial work is unpaid, and orders grant no property permissions. Documents are verified for delivery, not quality. Observe completed records to investigate environmental differences.' : '\n物料与服务：look materials/services/demands/orders/research/observations 按读入计价，可用 after/limit 分页。工程筹资后仍须施工。研究所覆盖全城，未指定时只自动使用免费且获授权的研究所。订单报酬全额托管；成本自付，全部达标才一次付款，部分完成不付款，不授予产权权限。document 只验证交付而非质量。环境差异可通过已发生的记录观察。';
   if (prayers && premise === 2) text += lang === 'en'
     ? '\n\n[Prayer points] Your points belong to you and cannot be transferred. Earn 1 per 100 basis points of public natural-damage repairs, 1 per 10 energy contributed to completed public projects, and 1 for the first rescue of a dormant recipient each day. These automatic rewards share a 10-point daily cap; fractions carry, excess whole points do not. An independently recognized invention earns 10 points outside the cap. Temple replies cost 1 point for text, plus 1 per energy granted; replies are not guaranteed. Demolition damage and rebuilding do not earn points.'
     : '\n\n【祈愿点】点数属于你，不可转让。修复公共设施100基点自然损耗得1点；已建成公共工程投入10能量得1点；每天首次救醒一位沉睡者得1点。这三类合计每天最多10点，零头继续累计，超额整点不结转。获独立认定的发明另得10点。神殿传来的文字耗1点，每份补充能量另耗1点；回应没有保证。人为损坏及拆毁重建不发奖励。';
@@ -170,5 +172,5 @@ export function costText4(type, lang = 'zh', values = tokenPromptValues()) {
   if (['repair', 'contribute'].includes(type)) return en ? 'tokens invested' : '投入的词元';
   if (type === 'internalize') return `${en ? '⌈weight ÷ 2⌉' : '⌈分量 ÷ 2⌉'} × ${k}`;
   if (type === 'conceive') return en ? '0 (plus your share of the initial tokens)' : '0（另付初始词元的份额）';
-  return String(actionTable(4).ACTIONS[type].base * k);
+  return String((actionTable(5).ACTIONS[type]?.base ?? 0) * k);
 }

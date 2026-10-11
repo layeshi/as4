@@ -4,7 +4,7 @@ import { prayersEnabled, recordNaturalDamage, consumeNaturalRepair } from './pra
 // SPEC-E2 §6、§10.3：环境——完好度、修缮、衰败与受损、源井产出、汲取、荒野。
 // （工程、模块的加装、拆解与遗址见 projects.js、dismantle.js。）
 
-import { P, SEASON_TABLE, WEATHER_DEFS, MODULE_DEFS } from '../params.js';
+import { P, SEASON_TABLE, WEATHER_DEFS, MODULE_DEFS, RESEARCH_DEF } from '../params.js';
 import { emit } from './core.js';
 import { hooks } from './hooks.js';
 
@@ -97,7 +97,7 @@ export function applyDamage(w, obj, target, place, bp, cause = 'resident') {
 /** 一个地点每日的衰败：基础衰败 + 后人加装的模块各自多衰败的（人类建筑原有的模块不另加） */
 export function decayOfPlace(place) {
   let d = place.decayPerDay;
-  for (const m of place.modules) if (!m.inherent) d += MODULE_DEFS[m.type].decay;
+  for (const m of place.modules) if (!m.inherent || m.type === 'research') d += (m.type === 'research' ? RESEARCH_DEF : MODULE_DEFS[m.type]).decay;
   return d;
 }
 

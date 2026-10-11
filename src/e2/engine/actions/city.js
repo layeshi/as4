@@ -6,10 +6,10 @@ import { ep, K } from '../tokens.js';
 // contribute 出工：投入的能量就是代价；凑够造价即建成；一个月内未建成则烂尾，已投入的不退还。
 // dismantle 拆解：回收残料（至多 15），建筑的残料拆尽成为遗址。
 
-import { P, LIMITS, MODULE_DEFS, MODULE_TYPES } from '../../params.js';
+import { P, LIMITS, MODULE_DEFS, MODULE_TYPES, RESEARCH_DEF } from '../../params.js';
 import { ACTIONS } from '../../lore/actions.js';
-import { LOT_DEFS, streetNeighbors } from '../../map/index.js';
-import { clockDay, nextId, tokenized } from '../../world.js';
+import { lotDefs, streetNeighbors } from '../../map/index.js';
+import { clockDay, nextId, tokenized, materialsEnabled } from '../../world.js';
 import { fail, emit, needInt, needId, optText } from '../core.js';
 import { placeNameTaken, moduleOf } from '../places.js';
 import { noteWordUse } from '../society.js';
@@ -57,7 +57,7 @@ function planSite(ctx, args) {
   let wild;
   if (hasLot) {
     needId(args.lot);
-    const lot = Object.prototype.hasOwnProperty.call(LOT_DEFS, args.lot) ? LOT_DEFS[args.lot] : null;
+    const lot = Object.prototype.hasOwnProperty.call(lotDefs(w), args.lot) ? lotDefs(w)[args.lot] : null;
     if (!lot) fail('not_found');
     const state = w.lots[args.lot];
     if (state.place !== null || state.project !== null) fail('lot_taken');
@@ -78,7 +78,7 @@ function planSite(ctx, args) {
 
 function planModule(ctx, args) {
   const { w, a } = ctx;
-  if (typeof args.module !== 'string' || !MODULE_TYPES.includes(args.module)) {
+  if (typeof args.module !== 'string' || !(MODULE_TYPES.includes(args.module) || materialsEnabled(w) && args.module === 'research')) {
     fail('invalid_args', { zh: `module 须是下列之一：${MODULE_TYPES.join(' ')}。`, en: `module must be one of: ${MODULE_TYPES.join(' ')}.` });
   }
   const place = w.places[a.place];
@@ -95,7 +95,7 @@ function planModule(ctx, args) {
   if (moduleOf(place, args.module) || pending.some((j) => j.module === args.module)) fail('already');
   if (place.modules.length + pending.length >= P.modulesPerPlace) fail('limit_reached', { zh: `一座建筑至多 ${P.modulesPerPlace} 个模块。`, en: `A building holds at most ${P.modulesPerPlace} modules.` });
   if (!mayBuildOn(w, a, place)) fail('not_owner');
-  return { module: args.module, inscription, owner: { ...place.owner }, need: MODULE_DEFS[args.module].cost * K(w) };
+  return { module: args.module, inscription, owner: { ...place.owner }, need: (args.module === 'research' ? RESEARCH_DEF : MODULE_DEFS[args.module]).cost * K(w) };
 }
 
 function planRoad(ctx, args) {

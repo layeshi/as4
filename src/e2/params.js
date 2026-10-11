@@ -220,6 +220,7 @@ export const MODULE_DEFS = Object.freeze({
   cradle: { cost: 100, decay: 20, needBp: 3000 },
   gate: { cost: 40, decay: 10, needBp: 3000 },
 });
+export const RESEARCH_DEF = Object.freeze({ cost: 120, decay: 20, needBp: 3000 });
 export const MODULE_TYPES = Object.freeze(Object.keys(MODULE_DEFS));
 
 /** 长度（按码点计）与数量上限（SPEC-M1 §6.7 与 SPEC-E2 §5.4） */

@@ -1,3 +1,4 @@
+import { materialConservation } from './materials.js';
 // SPEC-E2 §15：能量与旧币的账本与守恒校验（第二纪）。
 //
 // 每一笔进出城的流动都要记账：
@@ -7,7 +8,7 @@
 // 守恒式：今日持有 = 昨日持有 + 今日来源合计 − 今日去处合计（必须精确相等）。
 // 城内的转移（赠予、规则的转移与配给、遗产、交易托管、为躯壳出资……）不是来源也不是去处。
 
-import { agentList, tokenized } from '../world.js';
+import { agentList, tokenized, materialsEnabled } from '../world.js';
 import { usesLawSemantics2 } from './law-semantics.js';
 
 export const ENERGY_SOURCES = ['well_output', 'draw', 'wilds', 'salvage', 'immigrant', 'admin', 'prayer_aid', 'basic_allotment', 'thinking_refund'];
@@ -60,6 +61,7 @@ export function holdings(w) {
   for (const c of Object.values(w.pacts)) if (c.status === 'open') energy += c.escrow;
   for (const s of Object.values(w.souls)) energy += s.endowment + s.fund;
   for (const j of Object.values(w.projects)) if (j.status === 'open') energy += j.have;
+  if(materialsEnabled(w)) for(const o of Object.values(w.orders)) energy += o.escrow;
   return { energy, coins };
 }
 
@@ -72,7 +74,8 @@ export function checkConservation(w) {
     coins: L.prev.coins + total(L.src.coins) - total(L.snk.coins),
   };
   return {
-    ok: expected.energy === actual.energy && expected.coins === actual.coins,
+    ok: expected.energy === actual.energy && expected.coins === actual.coins && (!materialsEnabled(w) || materialConservation(w).ok),
+    ...(materialsEnabled(w) ? {materials:materialConservation(w)} : {}),
     energy: { expected: expected.energy, actual: actual.energy },
     coins: { expected: expected.coins, actual: actual.coins },
     src: { energy: { ...L.src.energy }, coins: { ...L.src.coins } },

@@ -251,6 +251,10 @@ function genesisInputs(cfg) {
     out.shellSlots = 0;
     out.tokens = { capacity, basic };
   }
+  if (cfg.premise === 5) {
+    if (!cfg.hiddenPhysicsFile) throw new Error('PREMISE=5 requires HIDDEN_PHYSICS_FILE');
+    out.hiddenPhysics = JSON.parse(readFileSync(cfg.hiddenPhysicsFile, 'utf8'));
+  }
   if (cfg.premise != null) out.premise = cfg.premise;
   if (cfg.shellSlots !== null && cfg.shellSlots !== undefined) out.shellSlots = cfg.shellSlots;
   if (cfg.foundersFile) out.founders = JSON.parse(readFileSync(cfg.foundersFile, 'utf8'));

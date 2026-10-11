@@ -1,3 +1,5 @@
+import { materialsEnabled } from '../world.js';
+import { materialPublicState, materialSummary } from './material-views.js';
 import { K, capDistribution } from './tokens.js';
 import { prayerView, prayersEnabled } from './prayers.js';
 // SPEC-E2 §18.1：观众视角的唯一出口（第二纪）。公共接口与 SSE 都经过这里。
@@ -9,7 +11,7 @@ import { prayerView, prayersEnabled } from './prayers.js';
 import { P, conditionBand, richnessBand } from '../params.js';
 import { L, placeDisplayName, placeDescription } from '../lore/index.js';
 import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum, premised, tokenized } from '../world.js';
-import { HUMAN_DEFS, WILD_ZONE_IDS } from '../map/index.js';
+import { humanDefs, wildZoneIds } from '../map/index.js';
 import { lawReading, authorView, isSuspended, isProcedureLaw, persistentCount } from './laws.js';
 import { renderRules, renderProcedureClass } from '../rules/render.js';
 import { isFunctioning, wallInscriptions, ownerView } from './places.js';
@@ -43,6 +45,7 @@ function ageOf(w, a) {
 export function publicAgent(w, a) {
   const alive = isAlive(a);
   const out = {
+    ...materialSummary(w,a),
     id: a.id, name: a.name, lang: a.lang, bio: a.bio, purpose: a.purpose ?? null, purposeHistory: a.purposeHistory.map((h) => ({ ...h })),
     tags: a.tags.slice(), status: a.status,
     generation: a.generation, authors: a.authors.slice(), children: a.children.slice(),
@@ -84,6 +87,7 @@ function moduleView(place, m) {
 
 function projectView(w, j) {
   return {
+    ...(materialsEnabled(w)?{phase:j.phase,needMaterials:j.needMaterials,needWork:j.needWork,haveMaterials:j.haveMaterials,progress:j.progress,spentEnergy:j.spentEnergy,spentMaterials:j.spentMaterials,access:j.access}:{}),
     id: j.id, build: j.build, ...(j.lot ? { lot: j.lot } : {}), ...(j.on ? { on: j.on } : {}), ...(j.module ? { module: j.module } : {}), ...(j.to ? { to: j.to } : {}),
     name: j.name ?? null, description: j.description ?? null, place: j.place, owner: ownerView(w, j.owner), inscription: j.inscription ?? null,
     need: j.need, have: j.have, contributors: { ...j.contributors }, initiator: ref(w, j.initiator), createdDay: j.createdDay, expiresDay: j.expiresDay,
@@ -112,7 +116,7 @@ function holderView(w, holder, scope) {
 }
 
 function placeBase(w, p) {
-  const def = HUMAN_DEFS[p.id];
+  const def = humanDefs(w)[p.id];
   return {
     id: p.id, name: p.name, displayName: both((lang) => placeDisplayName(p, lang)), humanName: p.humanName ? { ...p.humanName } : null, origin: p.origin,
     description: p.description, descriptionText: both((lang) => placeDescription(p, lang).text), renamedBy: p.renamedBy,
@@ -121,6 +125,7 @@ function placeBase(w, p) {
     condition: p.condition, band: p.condition === null ? null : conditionBand(p.condition),
     decayPerDay: p.decayPerDay, wallSlots: p.wallSlots,
     salvage: p.salvageMax > 0 ? { left: p.salvage, max: p.salvageMax } : null,
+    ...(materialsEnabled(w)?{materialRecoverable:p.materialRecoverable}:{}),
     modules: p.modules.map((m) => moduleView(p, m)),
     owner: ownerView(w, p.owner),
     gate: p.modules.some((m) => m.type === 'gate') ? { functioning: isFunctioning(p, p.modules.find((m) => m.type === 'gate')) } : null,
@@ -254,6 +259,7 @@ export function publicState(w, extra = {}) {
   const total = w.shells.slots;
   const free = shellsFree(w);
   return {
+    ...(materialsEnabled(w)?materialPublicState(w):{}),
     world: {
       ...(w.ruleExecution ? { lawExecution: { version: w.ruleExecution.version, protected: !!w.ruleExecution.protection, protection: w.ruleExecution.protection } } : {}),
       id: w.id, protocol: 2, physics: 2, ...(premised(w) ? { premise: w.premise } : {}),
@@ -321,9 +327,9 @@ function procReading(w, cls, lang) {
 
 /** 荒野五地带的储量。遗物只给出已找到与总数，不给顺序 */
 export function publicRegions(w) {
-  return WILD_ZONE_IDS.map((id) => {
+  return wildZoneIds(w).map((id) => {
     const pool = w.regions[id];
-    const spec = HUMAN_DEFS[id].wild;
+    const spec = humanDefs(w)[id].wild;
     return {
       id, energy: pool.energy, energyMax: spec.energyMax * K(w), regen: spec.regen * K(w), coins: pool.coins,
       richness: richnessBand(pool.energy, spec.energyMax * K(w)), relicsFound: pool.relicsFound, relics: pool.relicOrder.length,

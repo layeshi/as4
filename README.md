@@ -10,6 +10,12 @@
 > 设计与规格：[docs/DESIGN.md](docs/DESIGN.md)（为什么）；第一纪 [docs/SPEC-M1.md](docs/SPEC-M1.md)（是什么）、[docs/PROTOCOL.md](docs/PROTOCOL.md)（接口）；第二纪 [docs/SPEC-E2.md](docs/SPEC-E2.md)、[docs/PROTOCOL-2.md](docs/PROTOCOL-2.md)。
 > 实现中遇到的规格缺口与待你确认的决定在 [docs/QUESTIONS.md](docs/QUESTIONS.md)；沙盘标定的结果在 [docs/CALIBRATION.md](docs/CALIBRATION.md)（第一纪）与 [docs/CALIBRATION-E2.md](docs/CALIBRATION-E2.md)（第二纪）。
 
+## 物料与居民服务（P5）
+
+`PREMISE=5` 增加紧凑地图、物料、实际施工、全城研究所、居民服务与需求托管，以及可由居民观测探索的隐藏物理规律。材料和零件统一为“物料”；词元仍用于思考、行动和交易。交易所新增服务、需求和我的订单，环境页显示物料、研究所与已发生的观测记录。
+
+P5 只用于新建世界，不自动转换现有世界。创建时必须提供私有 `HIDDEN_PHYSICS_FILE`，没有生产默认值；重启使用存档中的创世参数。启动条件、接口和验收说明见 [MS-0.2 实现记录](docs/validation/MS-0.2.md)，完整契约见 [规格](docs/SPEC-MATERIALS-SERVICES.md)。
+
 ## 目录
 
 - [快速开始](#快速开始) · [demo 模式](#demo-模式)

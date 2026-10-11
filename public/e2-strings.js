@@ -98,7 +98,7 @@ export const E2_STR = {
   },
 };
 
-export const tokenized = world => world?.premise === 4;
+export const tokenized = world => (world?.premise === 4 || world?.premise === 5);
 /** Translate system templates before interpolating any resident-authored values. */
 export const tokenTerms = template => template.split(/(\{[^}]*\}|`[^`]*`)/g).map((part, i) => i % 2 ? part : part.replaceAll('能量', '词元').replace(/\bEnergy\b/g, 'Tokens').replace(/\benergy\b/g, 'tokens')).join('');
 export const P4_STR = {

@@ -555,7 +555,7 @@ export const VARS = {
   say: (e) => ({ a: A(e.agent), text: TX(e.data.text), at: PL(e.place) }),
   whisper: (e) => ({ a: A(e.data.from), b: A(e.data.to), text: TX(e.data.text) }),
   broadcast: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
-  give: (e) => ({ a: A(e.data.from), b: WHO(e.data.to), amt: AMT(e.data) }),
+  give: (e) => ({ a: A(e.data.from), b: WHO(e.data.to), amt: AMT(e.data), ...(e.data.materials !== undefined ? {materials:e.data.materials}: {}) }),
   offer_open: (e) => ({ a: A(e.data.from), give: AMT(e.data.give), want: AMT(e.data.want), to: e.data.to ? A(e.data.to) : '' }),
   trade: (e) => ({ a: A(e.data.from), b: A(e.data.to), give: AMT(e.data.give), want: AMT(e.data.want) }),
   offer_close: (e) => ({ a: A(e.agent), id: e.data.offerId, reason: e.data.reason }),
@@ -587,9 +587,9 @@ export const VARS = {
   disburse: (e) => ({ a: A(e.agent), b: A(e.data.to), g: GR(e.data.groupId), amt: AMT(e.data) }),
   dissolve: (e) => ({ name: TX(e.data.name) }),
   explore: (e) => ({ a: A(e.agent), at: PL(e.place || 'wilds'), n: e.data.amount, doc: e.data.docId ? { doc: e.data.docId, title: '' } : '' }),
-  repair: (e) => ({ a: A(e.agent), target: TARGET(e.data.target), n: e.data.spent, from: Math.round(e.data.from / 100), to: Math.round(e.data.to / 100) }),
+  repair: (e) => ({ a: A(e.agent), target: TARGET(e.data.target), n: e.data.spent, from: Math.round(e.data.from / 100), to: Math.round(e.data.to / 100), ...(e.data.materials !== undefined ? {materials:e.data.materials}: {}) }),
   initiate: (e) => ({ a: A(e.agent), name: TX(e.data.name), kind: { facilityType: e.data.type }, need: e.data.need }),
-  contribute: (e) => ({ a: A(e.agent), n: e.data.energy, have: e.data.have, need: e.data.need }),
+  contribute: (e) => ({ a: A(e.agent), n: e.data.energy, have: e.data.have, need: e.data.need, ...(e.data.materials !== undefined ? {materials:e.data.materials}: {}) }),
   built: (e) => ({ name: TX(e.data.name), kind: { facilityType: e.data.type }, at: PL(e.place), k: e.data.contributors }),
   abandoned: (e) => ({ name: TX(e.data.name), at: PL(e.place), have: e.data.have, need: e.data.need }),
   ruin: (e) => ({ target: TARGET(e.data.target) }),
@@ -641,7 +641,7 @@ export const VARS = {
   cede: (e) => ({ place: PL(e.data.place), to: WHO(e.data.to.id) }),
   seize: (e) => ({ place: PL(e.data.place) }),
   draft: (e) => ({ a: A(e.agent) }),
-  dismantle: (e) => ({ a: A(e.agent), at: PL(e.data.place), n: e.data.energy, left: e.data.salvageLeft, module: e.data.module || '' }),
+  dismantle: (e) => ({ a: A(e.agent), at: PL(e.place ?? e.data.place), n: e.data.materials ?? e.data.energy, left: e.data.materialRecoverable ?? e.data.salvageLeft, module: e.data.module || '' }),
   razed: (e) => ({ at: PL(e.data.place), name: TX(e.data.name) }),
   bylaws: (e) => ({ g: GR(e.data.groupId), n: e.data.rules.length }),
   group_procedure: (e) => ({ g: GR(e.data.groupId), proc: e.data.procedure }),
@@ -992,9 +992,52 @@ export const CAT = {
 export const CATEGORIES = ['speech', 'econ', 'polity', 'life', 'know', 'env', 'world', 'admin'];
 
 /** 事件的模板键（有些类型按数据分叉） */
+// P5 records describe completed facts only; no hidden formula or predicted result.
+Object.assign(VARS, {
+  gather: e => ({ a:A(e.agent), at:PL(e.place), n:e.data.materials, stock:e.data.stock }),
+  material_regrowth: e => ({ at:PL(e.data.zone), n:e.data.added, stock:e.data.stockAfterRefill }),
+  construction_observed: e => ({ a:A(e.data.actor), project:e.data.project, n:e.data.workAdded }),
+  service_published: e => ({ a:A(e.agent), title:TX(e.data.title), price:e.data.price }),
+  service_edited: e => ({ title:TX(e.data.title), price:e.data.price }),
+  order_open: e => ({ a:A(e.agent), id:e.data.id, price:e.data.terms.price }),
+  order_accepted: e => ({ a:A(e.agent), id:e.data.order, due:e.data.dueTick }),
+  order_settled: e => ({ id:e.data.order, status:TX(e.data.status), to:A(e.data.to), n:e.data.amount }),
+});
+Object.assign(TPL.zh, {
+  gather:'{a} 在{at}采集了 {n} 物料（余 {stock}）。',
+  material_regrowth:'{at} 补充了 {n} 物料（现存 {stock}）。',
+  construction_observed:'{a} 为工程 {project} 完成了 {n} 工作量。',
+  service_published:'{a} 发布服务「{title}」，固定报酬 {price} 词元。',
+  service_edited:'服务「{title}」已修改，现价 {price} 词元。',
+  order_open:'{a} 创建订单 {id}，托管 {price} 词元。',
+  order_accepted:'{a} 承接订单 {id}，截止 tick {due}。',
+  order_settled:'订单 {id} 已终结（{status}），向 {to} 支付或退还 {n} 词元。',
+  give_materials:'{a} 给了 {b} {amt}，以及 {materials} 物料。',
+  contribute_materials:'{a} 向工程投入 {n} 词元与 {materials} 物料。',
+  repair_materials:'{a} 修缮了{target}（{n} 词元、{materials} 物料，{from}% → {to}%）。',
+  dismantle_materials:'{a} 在{at}拆得 {n} 物料 {module}（余 {left}）。',
+});
+Object.assign(TPL.en, {
+  gather:'{a} gathered {n} materials at {at} ({stock} left).',
+  material_regrowth:'{at} gained {n} materials ({stock} in stock).',
+  construction_observed:'{a} completed {n} work on project {project}.',
+  service_published:'{a} published service “{title}” for {price} tokens.',
+  service_edited:'Service “{title}” was edited; current price: {price} tokens.',
+  order_open:'{a} created order {id}, escrowing {price} tokens.',
+  order_accepted:'{a} accepted order {id}, due at tick {due}.',
+  order_settled:'Order {id} closed ({status}); {n} tokens paid or refunded to {to}.',
+  give_materials:'{a} gave {b} {amt} and {materials} materials.',
+  contribute_materials:'{a} contributed {n} tokens and {materials} materials to a project.',
+  repair_materials:'{a} repaired {target} ({n} tokens, {materials} materials, {from}% → {to}%).',
+  dismantle_materials:'{a} salvaged {n} materials at {at} {module} ({left} left).',
+});
+Object.assign(CAT, {gather:'econ',material_regrowth:'env',construction_observed:'env',service_published:'econ',service_edited:'econ',order_open:'econ',order_accepted:'econ',order_settled:'econ'});
+
 export function templateKey(e) {
   const d = e.data || {};
   switch (e.type) {
+    case 'give': case 'contribute': case 'repair': return d.materials !== undefined ? `${e.type}_materials` : e.type;
+    case 'dismantle': return d.materials !== undefined ? 'dismantle_materials' : 'dismantle';
     case 'procedure_reverted': return d.reason === 'runtime_error' ? 'procedure_reverted_runtime' : 'procedure_reverted';
     case 'offer_open': return d.to ? 'offer_open_to' : 'offer_open';
     case 'offer_close': return `offer_close_${d.reason === 'expired' ? 'expired' : 'cancelled'}`;

@@ -1,3 +1,4 @@
+import { MATERIAL_LOOKS } from '../src/e2/engine/material-views.js';
 import { tokenized } from '../src/e2/world.js';
 import { missedTokensLine, stoppedTokensLine } from './render-p4.js';
 // SPEC-P2 §7：第二前提的工具循环（agent 模式）。
@@ -39,7 +40,7 @@ export function toolDefs(lang, { actionTools, premise = 0, prayers = false } = {
       description: tokenized({ premise }) ? t.look.replace('看不花能量', '看到的文字按读入付词元').replace('looking costs no energy', 'what you see is paid for as reading') : t.look,
       schema: {
         type: 'object',
-        properties: { what: { type: 'string', enum: [...(tokenized({ premise }) ? LOOK_WHATS_P4 : LOOK_WHATS)] }, id: { type: 'string' } },
+        properties: { what: { type: 'string', enum: [...(tokenized({ premise }) ? LOOK_WHATS_P4 : LOOK_WHATS),...(premise===5?MATERIAL_LOOKS:[])] }, id: { type: 'string' },...(premise===5?{kind:{type:'string',enum:['regrowth','construction']},target:{type:'string'},after:{type:'string'},limit:{type:'integer',minimum:1,maximum:50},mine:{type:'boolean'}}:{}) },
         required: ['what'],
         additionalProperties: false,
       },
@@ -239,7 +240,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
     if (S.looks.n >= limits.looks) return { text: res.looksOut };
     if (p4) {
       const id = args.id === undefined || args.id === null || args.id === '' ? undefined : String(args.id);
-      const r = await client.look({ wakeId: tokenWake.wakeId, turn: rec.turns, what: args.what, id, lang });
+      const r = await client.look({ wakeId: tokenWake.wakeId, turn: rec.turns, what: args.what, id, lang, ...(p0.premise===5?{kind:args.kind,target:args.target,after:args.after,limit:args.limit,mine:args.mine}:{}) });
       if (!r.ok) {
         const code = r.json?.error?.code;
         if (r.status === 402) { ended = 'tokens'; tokenEnded = true; return { text: stoppedTokensLine(code, lang), isError: true }; }

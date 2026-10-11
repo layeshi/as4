@@ -6,7 +6,7 @@ import { recordRazed, recordDismantledModule } from './prayer-rewards.js';
 //   拆建筑：完好度下降 ceil(回收量 × 10000 / 残料总量)；降到 0 时成为废墟（可修复，不同于遗址）。
 //   遗址：墙、碑、模块、进行中的工程与告示板上的交易随之消失；地点仍是图上的节点，与它相连的街道、小路与道路照旧。
 
-import { clockDay } from '../world.js';
+import { clockDay, materialsEnabled } from '../world.js';
 import { source } from './ledger.js';
 import { emit, pushInbox, ref } from './core.js';
 import { hooks } from './hooks.js';
@@ -39,6 +39,7 @@ export function razePlace(w, p) {
   p.razed = true;
   p.open = true;
   p.condition = null;
+  if(materialsEnabled(w)){w.materialLedger.lost += p.materialRecoverable + p.modules.reduce((n,m)=>n+m.materialRecoverable,0);p.materialRecoverable=0;}
   p.modules = [];
   p.wallSlots = 0;
   p.rules = null;

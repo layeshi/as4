@@ -1,3 +1,4 @@
+import { MATERIAL_ACTIONS, MATERIAL_OVERRIDES } from './material-actions.js';
 // PROTOCOL-2 §4.2 动作表（数据部分）。
 //
 // 引擎用它校验动作的默认代价与参数；规则语言的类型检查用它校验 `args.<参数>` 的拼写，并给出 `before:` / `after:` 的读法；
@@ -268,7 +269,7 @@ const PRAYER_ACTIONS = Object.freeze({
   invent: { base: 1, place: null, module: null, params: 'title, text, ref, submission?', args: [['title', 'str'], ['text', 'str'], ['ref', 'obj'], ['submission', 'str']], where: null, verb: W('提交发明', 'submits an invention'), desc: W('提交成果名称（至多100字）、说明（至多600字），关联自己的作品或已建成工程：ref={kind:"doc"或"project",id}。获独立认定奖励10祈愿点，驳回后以submission编号补充重提。', 'Submit a title (100 characters), explanation (600), and your own work or completed project: ref={kind:"doc" or "project",id}. Independent recognition awards 10 prayer points once. Revise a rejected submission using its submission ID.') },
 });
 const PRAYER_TABLE = Object.freeze({ ...TABLE2, ACTIONS: PRAYER_ACTIONS, ORDER: Object.freeze([...ACTION_ORDER_P2, 'pray', 'invent']), isKnown: (t) => typeof t === 'string' && Object.hasOwn(PRAYER_ACTIONS, t) });
-export const actionTable = (premise = 0, prayers = false) => tokenized({ premise }) ? TABLE4 : premise >= 2 ? (prayers ? PRAYER_TABLE : TABLE2) : premise >= 1 ? TABLE1 : TABLE0;
+export const actionTable = (premise = 0, prayers = false) => premise === 5 ? TABLE5 : tokenized({ premise }) ? TABLE4 : premise >= 2 ? (prayers ? PRAYER_TABLE : TABLE2) : premise >= 1 ? TABLE1 : TABLE0;
 
 // Fourth premise adds only rhythm and removes shell sponsorship.
 export const TEXT_ONLY_P4 = new Set(['say', 'whisper', 'write', 'define', 'inscribe', 'epitaph', 'declare', 'diary', 'remember', 'vote', 'reveal', 'retire', 'give', 'offer', 'accept', 'cancel', 'will']);
@@ -283,3 +284,6 @@ export const INNER_ACTIONS_P4 = Object.freeze(ACTION_ORDER_P4.filter(t => ACTION
 export const NO_BEFORE_ACTIONS_P4 = Object.freeze(ACTION_ORDER_P4.filter(t => ACTIONS_P4[t].inner || ACTIONS_P4[t].noBefore));
 export const NO_AFTER_ACTIONS_P4 = INNER_ACTIONS_P4;
 export const TABLE4 = Object.freeze({ ACTIONS: ACTIONS_P4, ORDER: ACTION_ORDER_P4, INNER: INNER_ACTIONS_P4, NO_BEFORE: NO_BEFORE_ACTIONS_P4, NO_AFTER: NO_AFTER_ACTIONS_P4, isKnown: t => typeof t === 'string' && Object.hasOwn(ACTIONS_P4, t) });
+
+export const ACTIONS_P5 = Object.freeze({...ACTIONS_P4,...MATERIAL_ACTIONS,...Object.fromEntries(Object.entries(MATERIAL_OVERRIDES).map(([k,v])=>[k,{...ACTIONS_P4[k],params:v.params,args:v.replace??[...ACTIONS_P4[k].args,...v.extra],desc:{zh:v.zh,en:v.zh}}]))});
+export const TABLE5 = Object.freeze({...TABLE4,ACTIONS:ACTIONS_P5,ORDER:Object.freeze([...ACTION_ORDER_P4,...Object.keys(MATERIAL_ACTIONS)]),isKnown:t=>typeof t==='string'&&Object.hasOwn(ACTIONS_P5,t)});

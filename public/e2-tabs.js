@@ -1,3 +1,4 @@
+import { renderMaterialEnvironment } from './materials-ui.js';
 // 第二纪观测站的标签页（SPEC-E2 §21）：法典、居民、社群、环境、摇篮与躯壳、指标。
 // 实况、编年史、典籍、墓园、遗产、天象沿用第一纪的页面（数据形状相同）。每个渲染函数：(ctx, root) → 往 root 里填内容。
 // 所有居民写下的文字（法律的标题与正文、志、介绍、社群的宣言……）一律经 ai() / textContent 渲染，规则的「引擎读法」是系统文本。
@@ -53,7 +54,8 @@ export function signature2(tab, s) {
     case 'laws': return JSON.stringify([s.vars, s.procedure, s.charter, s.laws.map((l) => [l.id, l.status, l.suspendedDays, l.suspended]), s.proposals.map((p) => [p.id, p.status, p.tally, p.votes.length]), s.refounds.map((r) => [r.id, r.status, r.signers.length]), s.groups.map((g) => g.bylaws && g.bylaws.setTick), s.petitions.length, s.world.tick, ...(s.world.lawSemanticsVersion === 2 ? [s.laws.map(l => l.enact), s.proposals.map(p => p.enact), s.groups.map(g => g.bylaws && [g.bylaws.fingerprints, g.bylaws.enact]), s.places.map(p => p.rules && [p.rules.fingerprints, p.rules.enact])] : [])]);
     case 'residents': return JSON.stringify(s.agents.map((a) => [a.id, a.status, a.energy, a.coins, a.place, a.groups.length, a.lastActTick, a.ageDays, a.tags.length, a.purpose]));
     case 'groups': return JSON.stringify(s.groups);
-    case 'environment': return JSON.stringify([s.places.map((p) => [p.id, p.condition, p.salvage && p.salvage.left, p.modules.length, p.owner, p.razed, p.name]), s.lots, s.projects.map((j) => [j.id, j.have]), s.well, s.regions, s.weather.active, s.world.dayOfMonth]);
+    case 'market': return JSON.stringify([s.services,s.demands,s.orders]);
+    case 'environment': return JSON.stringify([...(s.world.premise===5?[s.materials,s.research,s.observations,s.projects]:[]),s.places.map((p) => [p.id, p.condition, p.salvage && p.salvage.left, p.modules.length, p.owner, p.razed, p.name]), s.lots, s.projects.map((j) => [j.id, j.have]), s.well, s.regions, s.weather.active, s.world.dayOfMonth]);
     case 'cradle': return JSON.stringify([s.shells, s.cradle.map((c) => [c.id, c.fund, c.queued, c.queuePosition]), s.unborn.length, s.agents.length]);
     case 'library': return `${s.docs.length}:${s.lexicon.length}:${s.docs.reduce((n, d) => n + d.reads, 0)}`;
     case 'cemetery': return `${s.cemetery.length}:${s.retired.length}:${s.unborn.length}:${s.cemetery.reduce((n, g) => n + g.epitaphs.length, 0)}`;
@@ -448,6 +450,7 @@ function wellPanel2(ctx) {
 }
 
 export function renderEnvironment2(ctx, root) {
+  renderMaterialEnvironment(ctx,root);
   const S = ctx.S.state;
   const lore = ctx.lore;
   root.append(wellPanel2(ctx));
@@ -477,7 +480,7 @@ export function renderEnvironment2(ctx, root) {
           p.condition === null ? '—' : h('span', { class: 'cond' }, conditionBar(p.condition), ` ${pct(p.condition)}`),
           trend(p),
           modulesOf(ctx, p),
-          p.salvage ? h('span', { class: 'cond' }, progressBar(p.salvage.left, p.salvage.max), ` ${p.salvage.left}/${p.salvage.max}`) : '—',
+          p.materialRecoverable!==undefined ? `${p.materialRecoverable} 物料` : p.salvage ? h('span', { class: 'cond' }, progressBar(p.salvage.left, p.salvage.max), ` ${p.salvage.left}/${p.salvage.max}`) : '—',
           p.razed ? '—' : ownerText(ctx, p.owner),
           p.gate ? (p.gate.functioning ? t('gateOn') : t('gateOff')) : '—',
         ]),
@@ -530,7 +533,7 @@ export function renderEnvironment2(ctx, root) {
             detail(j),
             placeLink(ctx, j.place),
             ownerText(ctx, j.owner),
-            h('span', { class: 'cond' }, progressBar(j.have, j.need), ` ${j.have}/${j.need}`),
+            j.phase ? h('span',null,`${j.phase==='funding'?'筹资':'施工'} · 词元 ${j.have}/${j.need} · 物料 ${j.haveMaterials}/${j.needMaterials} · 工作 ${j.progress}/${j.needWork}`) : h('span', { class: 'cond' }, progressBar(j.have, j.need), ` ${j.have}/${j.need}`),
             t('expires', { n: j.expiresDay + 1 }),
           ]),
         )

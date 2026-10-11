@@ -1,3 +1,4 @@
+import { MATERIAL_OP_FIELDS } from './material-policy.js';
 // SPEC-E2 §7.3、§7.8：类型检查与静态校验。
 //
 // 提交（propose / rules / draft / refound）时整体校验，任何一条不合法即整体拒绝（rule_invalid）：
@@ -148,6 +149,7 @@ function nameError(n, ctx) {
 }
 
 function fieldType(ot, f, node, ctx) {
+  if(ctx.premise===5 && ((ot===T.AGENT&&f==='materials')||(ot===T.CITY&&['materialsWilds','materialsScrapyard','materialsSolarfield','constructionWork'].includes(f))))return T.INT;
   if (ot === T.ANY || ot === T.VAR || ot === T.RESULT) return T.ANY;
   if (FIELDS[ot]) {
     const t = FIELDS[ot][f];
@@ -649,7 +651,7 @@ function checkOp(op, rc, path, issues) {
     return null;
   }
   const name = op.op;
-  if (typeof name !== 'string' || !OP_NAMES.includes(name)) {
+  if (typeof name !== 'string' || !(OP_NAMES.includes(name) || rc.scope.premise===5 && Object.hasOwn(MATERIAL_OP_FIELDS,name))) {
     issues.push(issue(`${path}.op`, 'op.unknown', typeof name === 'string' ? `不认识的操作「${name}」` : '操作缺少 op 字段', typeof name === 'string' ? `unknown operation "${name}"` : 'the operation has no op field',
       { zh: `可用的操作：${OP_NAMES.join(' ')}`, en: `Available operations: ${OP_NAMES.join(' ')}` }));
     return null;
@@ -675,7 +677,7 @@ function checkOp(op, rc, path, issues) {
     return null;
   }
 
-  const specs = OP_FIELDS[name];
+  const specs = OP_FIELDS[name] ?? MATERIAL_OP_FIELDS[name];
   const known = new Set(['op', ...specs.map(([n]) => n)]);
   let ok = true;
   for (const k of Object.keys(op)) {
@@ -715,6 +717,9 @@ function checkOp(op, rc, path, issues) {
     }
     const v = op[field];
     switch (kind) {
+      case 'ids': {
+        if(!Array.isArray(v)||v.length>100||v.some(x=>typeof x!=='string'||!x)){issues.push(issue(fp,'shape.bad_type','需要 ID 列表','Expected IDs'));good=false;}else out[field]=[...v];break;
+      }
       case 'acct':
       case 'agent':
       case 'agents':

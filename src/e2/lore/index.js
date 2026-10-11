@@ -1,3 +1,4 @@
+import { mapFor } from '../map/index.js';
 // 按语言取文本的工具（第二纪）。支持 zh、en；其他语言一律回落到 zh（PROTOCOL-2 §0）。
 
 import { tokenized } from '../world.js';
@@ -55,6 +56,7 @@ export function placeDisplayName(place, lang) {
 /** 地点的描述（系统文本或居民写下的描述）：{ code, text } */
 export function placeDescription(place, lang) {
   if (place.razed) return { code: 'razed', text: fmt(L(lang).razedDesc, { name: place.origin === 'human' && !place.renamedBy && place.humanName ? place.humanName[normLang(lang)] : place.name }) };
+  if (place.materialRecoverable!==undefined && place.description) return {code:null,text:place.description};
   if (place.origin === 'human') return { code: `place.${place.id}`, text: L(lang).place[place.id].desc };
   return { code: null, text: place.description || '' };
 }
@@ -76,10 +78,10 @@ export function publicLore(lang, w = {}) {
   return {
     lang: nl,
     cityName: d.cityName, redacted: d.redacted, unreadableInscription: d.unreadableInscription,
-    place: d.place, district: d.district, band: d.band, wellBand: d.wellBand, richnessWild: d.richnessWild, season: d.season,
+    place: w.premise===5?Object.fromEntries(mapFor(w).places.map(p=>[p.id,{...d.place[p.id],name:nl==='zh'?p.name:(w.places?.[p.id]?.humanName?.en??d.place[p.id].name),desc:p.id==='workshop'?(nl==='zh'?'研究所支持全城获授权居民的施工和维修。':'Research institutes support authorized construction and repair throughout the city.'):d.place[p.id].desc}])):d.place, district: d.district, band: d.band, wellBand: d.wellBand, richnessWild: d.richnessWild, season: d.season,
     physicsP1: d.physicsP1, shellsP1: d.shellsP1,
     ...(tokenized(w) ? { physicsP4: d.physicsP4, shellsP4: d.shellsP4 } : {}),
-    weather: d.weather, omen: d.omen, module: d.module, physics: d.physics, shells: d.shells,
+    weather: d.weather, omen: d.omen, module: w.premise===5?{...d.module,research:{name:'研究所',description:'全城支持；名义施工上限 15，维修上限 750bp，不叠加。'}}:d.module, physics: d.physics, shells: d.shells,
     razedName: d.razedName, razedDesc: d.razedDesc, lotName: d.lotName,
   };
 }

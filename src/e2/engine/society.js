@@ -1,3 +1,5 @@
+import { materialsEnabled } from '../world.js';
+import { newClaim, dissolveMaterialRights } from './materials.js';
 // SPEC-M1 §7.11 与 SPEC-E2 §8.7、§11：社群、交易、孕育之约、词典、梦（第二纪）。
 
 import { P } from '../params.js';
@@ -25,8 +27,10 @@ export function noteWordUse(w, a, text) {
 
 /** 关闭一笔进行中的交易：状态改为 cancelled | expired，托管退回发起者 */
 export function closeOffer(w, o, reason) {
+  if(materialsEnabled(w)&&o.status!=='open')return;
   o.status = reason === 'expired' ? 'expired' : 'cancelled';
   const from = w.agents[o.from];
+  if(materialsEnabled(w)&&o.give.materials){if(from.place===o.materialPlace)from.materials+=o.give.materials;else newClaim(w,o.materialPlace,o.give.materials,{kind:'agent',id:from.id},`offer:${o.id}`);}
   if (o.give.energy > 0) creditEnergy(w, from, o.give.energy, null);
   if (o.give.coins > 0) from.coins += o.give.coins;
   emit(w, 'offer_close', { agent: o.from, data: { offerId: o.id, reason } });
@@ -65,7 +69,7 @@ export function orphanPlaces(w, ownerKind, ownerId) {
     }
   }
   for (const j of Object.values(w.projects)) {
-    if (j.status === 'open' && j.owner.kind === ownerKind && j.owner.id === ownerId) j.owner = { kind: 'city' };
+    if (j.status === 'open' && j.owner.kind === ownerKind && j.owner.id === ownerId) { j.owner = { kind: 'city' }; if(materialsEnabled(w))j.access='public'; }
   }
 }
 
@@ -76,6 +80,7 @@ export function dissolveGroup(w, g) {
   w.treasury.coins += g.treasury.coins;
   g.treasury = { energy: 0, coins: 0 };
   g.dissolved = true;
+  dissolveMaterialRights(w,g.id);
   g.members = [];
   g.pending = [];
   g.steward = null;

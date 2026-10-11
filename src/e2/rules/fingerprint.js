@@ -1,3 +1,4 @@
+import { MATERIAL_OP_FIELDS } from './material-policy.js';
 // SPEC-E2 §7.11：指纹。
 //
 // 规范形：键按字母排序；表达式字符串替换为语法树的规范序列化（完全加括号、单空格分隔、字符串用单引号）；
@@ -27,7 +28,7 @@ function canonTemplate(text) {
 }
 
 function fieldKind(op, field) {
-  const hit = (OP_FIELDS[op] || []).find(([n]) => n === field);
+  const hit = (OP_FIELDS[op] || MATERIAL_OP_FIELDS[op] || []).find(([n]) => n === field);
   return hit ? hit[1] : null;
 }
 

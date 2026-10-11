@@ -1,3 +1,6 @@
+import { materialsEnabled } from '../world.js';
+import { terminateProject } from './material-projects.js';
+import { validateResearchPolicy } from './research.js';
 import { ep } from './tokens.js';
 import { prayersEnabled } from './prayer-rewards.js';
 import { usesLawSemantics2 } from './law-semantics.js';
@@ -691,6 +694,7 @@ function applyIntent(w, set, idx, it, run) {
     case 'unprotect': return opProtect(w, set, idx, it, run);
     case 'amend': return opAmend(w, set, idx, it, run);
     case 'repeal': return opRepeal(w, set, idx, it, run);
+    case 'cancel_project': case 'project_policy': case 'research_policy': case 'material_policy': return opMaterialPolicy(w,set,idx,it,run);
     case 'fund': return opFund(w, set, idx, it, run);
     case 'cede': return opCede(w, set, idx, it, run);
     case 'seize': return opSeize(w, set, idx, it, run);
@@ -1000,7 +1004,7 @@ function opFund(w, set, idx, it, run) {
   let amount = 0;
   if (!j || j.status !== 'open') res = fail('target_gone');
   else {
-    amount = Math.min(it.energy, j.need - j.have, w.treasury.energy);
+    amount = materialsEnabled(w)&&j.phase!=='funding'?0:Math.min(it.energy, j.need - j.have, w.treasury.energy);
     if (amount > 0) {
       w.treasury.energy -= amount;
       addToProject(w, j, 'treasury', amount);
@@ -1063,3 +1067,22 @@ installHooks({
 });
 
 STEPS.dailyRules = dailyRules;
+
+function opMaterialPolicy(w,set,idx,it,run){
+ let res=OK;
+ if(!materialsEnabled(w)||set.scopeStr!=='city')res=fail('not_allowed');
+ else if(it.op==='material_policy')w.materialPolicy={cityClaimRestricted:it.restricted};
+ else if(it.op==='research_policy'){
+  const p=w.places[it.place],m=p?.modules?.find(m=>m.type==='research');
+  if(!m||p.owner.kind!=='city')res=fail('not_city_owned');
+  else {try{m.policy=validateResearchPolicy(it);}catch(e){if(e.code)res=fail(e.code);else throw e;}}
+ }else {
+  const j=w.projects[it.project];
+  if(!j||j.status!=='open')res=fail('target_gone');
+  else if(j.owner.kind!=='city')res=fail('not_city_owned');
+  else if(it.op==='cancel_project')terminateProject(w,j);
+  else if(!['public','owner','group'].includes(it.access))res=fail('invalid_args');
+  else j.access=it.access;
+ }
+ opEvent(w,set,idx,it,res,run);return res;
+}

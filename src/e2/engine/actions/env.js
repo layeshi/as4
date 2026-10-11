@@ -6,7 +6,7 @@ import { rewardRepair } from '../prayer-rewards.js';
 import { P, LIMITS } from '../../params.js';
 import { ACTIONS } from '../../lore/actions.js';
 import { relicByN, relicTitle } from '../../lore/index.js';
-import { HUMAN_DEFS } from '../../map/index.js';
+import { humanDefs } from '../../map/index.js';
 import { clockDay, nextId, tokenized } from '../../world.js';
 import { next, int } from '../../../rng.js';
 import { source, sink } from '../ledger.js';
@@ -155,7 +155,7 @@ const explore = {
     const { w, a } = ctx;
     const rng = w.rng.world;
     const wilds = w.regions[a.place];
-    const spec = HUMAN_DEFS[a.place].wild;
+    const spec = humanDefs(w)[a.place].wild;
     const r = next(rng);
     const pE = (P.exploreEnergyP * wilds.energy) / (spec.energyMax * K(w));
     const relicsLeft = wilds.relicsFound < wilds.relicOrder.length;

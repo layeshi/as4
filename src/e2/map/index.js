@@ -8,6 +8,11 @@ import { orderedDistances } from '../../graph-distance.js';
 import { K } from '../engine/tokens.js';
 import { P } from '../params.js';
 import MAP from './frontier-e2.js';
+import COMPACT from './compact-materials.js';
+export const mapFor = w => w.map === COMPACT.id ? COMPACT : MAP;
+export const humanDefs = w => Object.fromEntries(mapFor(w).places.map(p => [p.id,p]));
+export const lotDefs = w => Object.fromEntries(mapFor(w).lots.map(p => [p.id,p]));
+export const wildZoneIds = w => mapFor(w).places.filter(p => p.wild).map(p => p.id);
 
 export { MAP };
 export const MAP_ID = MAP.id;
@@ -32,7 +37,7 @@ function adjacency(w) {
     adj.get(a).push({ to: b, cost });
     adj.get(b).push({ to: a, cost });
   };
-  for (const [a, b, cost = 1] of MAP.streets) add(a, b, cost);
+  for (const [a, b, cost = 1] of mapFor(w).streets) add(a, b, cost);
   for (const p of w.paths) add(p.a, p.b, p.cost);
   for (const r of Object.values(w.roads)) if (roadFunctioning(r)) add(r.a, r.b, 0);
   return adj;
@@ -50,7 +55,7 @@ export function travelCosts(w, from) {
 /** 与一个地点有街道或小路（不含道路）直接相连的地点——遗址上重新开辟时「相邻」的含义 */
 export function streetNeighbors(w, id) {
   const out = new Set();
-  for (const [a, b] of MAP.streets) {
+  for (const [a, b] of mapFor(w).streets) {
     if (a === id) out.add(b);
     else if (b === id) out.add(a);
   }
@@ -65,7 +70,7 @@ export function streetNeighbors(w, id) {
 export const lotOf = (w, id) => (Object.prototype.hasOwnProperty.call(w.lots, id) ? w.lots[id] : null);
 
 /** 与某地点相邻的空地块 ID，按附录 B.2 的顺序 */
-export const lotsNear = (w, placeId) => MAP.lots.filter((l) => l.near.includes(placeId)).map((l) => l.id);
+export const lotsNear = (w, placeId) => mapFor(w).lots.filter((l) => l.near.includes(placeId)).map((l) => l.id);
 
 /**
  * GET /api/public/map：地图的静态数据（给观测站画图）。不含任何世界状态，更不含种子。
@@ -73,17 +78,17 @@ export const lotsNear = (w, placeId) => MAP.lots.filter((l) => l.near.includes(p
  */
 export function publicMap(w = {}) {
   return {
-    id: MAP.id,
-    size: MAP.size.slice(),
+    id: mapFor(w).id,
+    size: mapFor(w).size.slice(),
     distance: true,
-    districts: MAP.districts.slice(),
-    places: MAP.places.map((p) => ({
+    districts: mapFor(w).districts.slice(),
+    places: mapFor(w).places.map((p) => ({
       id: p.id, district: p.district, xy: p.xy.slice(), glyph: p.glyph, landmark: p.landmark, open: p.open,
       wild: p.wild ? { energyMax: p.wild.energyMax * K(w), regen: p.wild.regen * K(w) } : null,
     })),
-    streets: MAP.streets.map(([a, b, cost = 1]) => ({ a, b, cost })),
-    lots: MAP.lots.map((l) => ({ id: l.id, district: l.district, xy: l.xy.slice(), near: l.near.slice(), wild: l.district === 'wilds' })),
-    legacy: MAP.legacy.slice(),
-    terrain: JSON.parse(JSON.stringify(MAP.terrain)),
+    streets: mapFor(w).streets.map(([a, b, cost = 1]) => ({ a, b, cost })),
+    lots: mapFor(w).lots.map((l) => ({ id: l.id, district: l.district, xy: l.xy.slice(), near: l.near.slice(), wild: l.district === 'wilds' })),
+    legacy: mapFor(w).legacy.slice(),
+    terrain: JSON.parse(JSON.stringify(mapFor(w).terrain)),
   };
 }

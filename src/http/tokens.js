@@ -1,7 +1,10 @@
+import { archivedObservations } from './material-observations.js';
+import { requestIdentity } from '../e2/engine/act-receipts.js';
+import { materialLook, MATERIAL_LOOKS, materialSummary } from '../e2/engine/material-views.js';
 // Fourth-premise transport. Render first, commit only integer weights, then release text.
 import { randomBytes } from 'node:crypto';
 import { P } from '../e2/params.js';
-import { clockDay, tokenized } from '../e2/world.js';
+import { clockDay, tokenized, materialsEnabled } from '../e2/world.js';
 import { ep, K, tokenView, rereadCost, activeWaking, jsonWeight } from '../e2/engine/tokens.js';
 import { bodyOf } from '../e2/engine/bodies.js';
 import { textWeight, cpLength } from '../text.js';
@@ -32,10 +35,10 @@ export function tokenStatus(ctx, id, { lang = 'zh' } = {}) {
   const { rt } = ctx, w = rt.w, a = w.agents[id], s = sessionFor(ctx, id);
   const day = clockDay(w), v = tokenView(a);
   return {
-    protocol: 2, premise: 4, lang: normLang(lang),
+    protocol: 2, premise: w.premise, lang: normLang(lang),
     now: { tick: w.clock.tick, day, ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, tickOfDay: w.clock.tick % P.ticksPerDay,
       nextTickAt: rt.nextTickAt, tickMs: P.tickMs, paused: w.paused, ...(w.experimentControl ? { experimentGeneration: w.experimentControl.generation } : {}) },
-    you: { id: a.id, name: a.name, status: a.status, place: a.place, actionsLeft: Math.max(0, P.maxActionsPerTick - a.actsThisTick), maxActionsPerTick: P.maxActionsPerTick,
+    you: { ...materialSummary(w,a), id: a.id, name: a.name, status: a.status, place: a.place, actionsLeft: Math.max(0, P.maxActionsPerTick - a.actsThisTick), maxActionsPerTick: P.maxActionsPerTick,
       energy: v.energy, basic: v.basic, cap: v.cap, usedToday: usedToday(a, earthDayKey(ctx)), routine: v.routine, lastBill: v.lastBill,
       ...(a.status === 'dormant' ? { dormantSinceDay: a.dormantSinceDay, daysUntilDeath: a.dormantSinceDay + P.dormancyGraceDays - day } : {}) },
     waking: s ? { wakeId: s.wakeId, tick: s.tick, kind: s.kind } : null,
@@ -48,7 +51,7 @@ export function rulesCore(ctx, id, lang = 'zh') {
   const w = ctx.rt.w;
   if (!tokenized(w)) return failure(lang, 'not_found');
   lang = normLang(lang);
-  return { status: 200, json: { system: buildSystemPrompt({ protocol: 2, premise: 4, lang,
+  return { status: 200, json: { system: buildSystemPrompt({ protocol: 2, premise: w.premise, lang,
     cityName: cityDisplayName(w.cityName, lang), maxActions: P.maxActionsPerTick,
     ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, memorySlots: P.memorySlots,
     floor: ep(w, 'lawFloor'), soul: null, trained: bodyOf(w, w.agents[id]).trained.map(entry => entry.text),
@@ -66,7 +69,7 @@ function perception(ctx, id, lang) {
 }
 function prompt(ctx, id, p, lang, toolMode = 'native', actionTools = 'legacy', trained = p.you.trained) {
   const w = ctx.rt.w;
-  return buildSystemPrompt({ ...promptParams(p), premise: 4, lang, cityName: cityDisplayName(w.cityName, lang),
+  return buildSystemPrompt({ ...promptParams(p), premise: w.premise, lang, cityName: cityDisplayName(w.cityName, lang),
     toolMode, actionTools, trained, prayers: false, tokenValues: tokenValues(w) });
 }
 export function wakeCore(ctx, id, body, lang) {
@@ -87,7 +90,7 @@ export function wakeCore(ctx, id, body, lang) {
     system: systemWeight, brief: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) }).result;
   if (!result.ok) return failed(lang, result);
   ctx.wakings.set(id, { wakeId, tick: w.clock.tick, kind: body.kind, turn: 1, ctx: systemWeight + textWeight(text), fresh: textWeight(text), requests: 0 });
-  return { status: 200, json: { wakeId, system: prompt(ctx, id, p, lang, body.toolMode ?? 'native', body.actionTools ?? 'legacy'), text,
+  return { status: 200, json: { ...(materialsEnabled(w)?{premise:w.premise}:{}), wakeId, system: prompt(ctx, id, p, lang, body.toolMode ?? 'native', body.actionTools ?? 'legacy'), text,
     bill: result.bill, you: tokenStatus(ctx, id, { lang }).you, attention: { ...limits(ctx) } } };
 }
 function turnFor(s, body) {
@@ -110,7 +113,8 @@ export function lookCore(ctx, id, body, lang) {
   const p = perception(ctx, id, lang), a = ctx.rt.w.agents[id];
   // Keep the inbox line boundaries for delivery accounting after clipping.
   const lines = body.what === 'inbox' ? secInbox(makeCtx(p, { code: lang, level: 0 })) : null;
-  const full = renderLook(p, body.what, body.id, { lang });
+  let full;
+  try { full = materialsEnabled(ctx.rt.w)&&MATERIAL_LOOKS.includes(body.what) ? JSON.stringify(body.what==='observations'?archivedObservations(ctx.rt,body):materialLook(ctx.rt.w,body.what,body,id)) : renderLook(p, body.what, body.id, { lang }); } catch(e) { if(e.code)return failure(lang,e.code);throw e; }
   const text = clipLook(full, limits(ctx).lookChars, lang);
   let delivered = a.delivered;
   if (lines) {
@@ -129,12 +133,17 @@ export function lookCore(ctx, id, body, lang) {
   return { status: 200, json: { text, bill: result.bill, you: tokenStatus(ctx, id, { lang }).you } };
 }
 export function actTokens(ctx, id, body, lang) {
+  if(materialsEnabled(ctx.rt.w)){
+    const identity=requestIdentity(ctx.rt.w,{...body,agentId:id,lang});
+    if(identity.error)return failed(lang,identity.error);
+    if(identity.result)return {status:200,json:identity.result};
+  }
   const s = sessionFor(ctx, id, body.wakeId);
   if (!s || typeof body.wakeId !== 'string') return failure(lang, 'no_waking');
   const next = turnFor(s, body);
   if (!next) return failure(lang, 'invalid_request', { field: 'turn' });
   const w = ctx.rt.w, a = w.agents[id];
-  const result = ctx.rt.exec('act', { agentId: id, actions: body.actions, thought: body.thought ?? undefined, lang,
+  const result = ctx.rt.exec('act', { ...(materialsEnabled(w)?{requestId:body.requestId,requestTurn:body.turn??null,experimentGeneration:body.experimentGeneration??0}:{}), agentId: id, actions: body.actions, thought: body.thought ?? undefined, lang,
     meter: { wakeId: s.wakeId, turn: next.turn, reread: next.reread, day: earthDayKey(ctx) } }).result;
   if (!result.ok) { if (['tokens_exhausted', 'cap_reached'].includes(result.error.code)) ctx.wakings.delete(id); return failed(lang, result); }
   // Successful long outputs enter context at raw weight, not their multiplied
@@ -147,7 +156,7 @@ export function actTokens(ctx, id, body, lang) {
   s.ctx += result.writeWeight + readWeight; s.turn = next.turn; s.requests++;
   if (readWeight) s.fresh = readWeight;
   let bill = result.bill, arrived, arrivedWithheld;
-  if (a.status === 'awake') {
+  if (a.status === 'awake' && !materialsEnabled(w)) {
     const p = perception(ctx, id, lang);
     const moved = result.results.some(r => r.ok && r.type === 'move');
     const text = [...renderArrived(p, p.inbox, { lang }), ...(moved ? renderArrival(p, { lang }) : [])].join('\n');
@@ -157,7 +166,8 @@ export function actTokens(ctx, id, body, lang) {
       else { arrivedWithheld = p.inbox.length; ctx.wakings.delete(id); }
     }
   }
-  const results = result.results.map(r => actionFeedback(r.ok ? r : { ...r, error: errorBody(lang, r.error.code, r.error, 2).error }, lang, { premise: 4, act: body.actions[r.index], tokenValues: tokenValues(w) }));
+  if(materialsEnabled(w))return {status:200,json:result};
+  const results = result.results.map(r => actionFeedback(r.ok ? r : { ...r, error: errorBody(lang, r.error.code, r.error, 2).error }, lang, { premise: w.premise, act: body.actions[r.index], tokenValues: tokenValues(w) }));
   return { status: 200, json: { ok: true, results, you: { ...result.you, ...tokenStatus(ctx, id, { lang }).you }, bill,
     ...(arrived !== undefined ? { arrived } : {}), ...(arrivedWithheld !== undefined ? { arrivedWithheld } : {}) } };
 }

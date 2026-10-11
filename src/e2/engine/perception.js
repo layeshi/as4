@@ -1,3 +1,4 @@
+import { materialSummary } from './material-views.js';
 import { filterValues, tailRecordValues } from '../../collections.js';
 import { upgradeView } from './upgrades.js';
 import { ep, K, tokenView, custodyOf } from './tokens.js';
@@ -16,7 +17,7 @@ import { bodyOf } from './bodies.js';
 import { isMuted, isWakeItem } from './core.js';
 import { actionTable } from '../lore/actions.js';
 import { P, SEASON_TABLE, conditionBand, seasonBand, richnessBand } from '../params.js';
-import { travelCosts, lotsNear, HUMAN_DEFS } from '../map/index.js';
+import { travelCosts, lotsNear, humanDefs } from '../map/index.js';
 import { L, fmt, normLang, placeDisplayName, placeDescription, cityDisplayName, ACTIONS, ACTION_ORDER } from '../lore/index.js';
 import { clockDay, monthOfDay, dayOfMonthOf, tickOfDay, agentList, isAlive, idNum, premised, agentic, tokenized } from '../world.js';
 import { truncateCp, cpLength } from '../../text.js';
@@ -186,6 +187,7 @@ function youView(w, a, l, lang, day, openOffers, openPacts) {
     });
   }
   return {
+    ...materialSummary(w,a),
     id: a.id, name: a.name, lang: a.lang, bio: a.bio, purpose: a.purpose ?? null, soul: a.soul,
     status: 'awake', tags: a.tags.slice(),
     ...(prayersEnabled(w) ? { prayerPoints: w.prayers.accounts[a.id]?.balance || 0, prayers: prayerView(w, a.id, { recent: 20 }) } : {}),
@@ -205,7 +207,7 @@ function youView(w, a, l, lang, day, openOffers, openPacts) {
     owns,
     will: a.will
       ? {
-        heirs: a.will.heirs.map((h) => (h.to === 'treasury' ? { to: 'treasury', share: h.share } : { to: h.to, name: w.agents[h.to].name, share: h.share })),
+        heirs: a.will.heirs.map((h) => (h.to === 'treasury' ? { to: 'treasury', share: h.share } : { to: h.to, name: w.agents[h.to]?.name ?? w.groups[h.to]?.name ?? h.to, share: h.share })),
         lastWords: a.will.lastWords,
         successor: a.will.successor ? { name: a.will.successor.name } : null,
       }
@@ -246,6 +248,7 @@ function hereView(w, a, l, lang, wallList, openOffers, allAgents, projectsHere) 
     };
   });
   const projects = projectsHere.map((j) => ({
+    ...(w.premise===5?{phase:j.phase,needMaterials:j.needMaterials,haveMaterials:j.haveMaterials,needWork:j.needWork,progress:j.progress}:{}),
     id: j.id, build: j.build, ...(j.lot ? { lot: j.lot } : {}), ...(j.on ? { on: j.on } : {}), ...(j.module ? { module: j.module } : {}), ...(j.to ? { to: j.to } : {}),
     name: j.name ?? null, need: j.need, have: j.have, contributors: Object.keys(j.contributors).length, expiresDay: j.expiresDay,
     owner: ownerView(w, j.owner), ...(j.inscription ? { inscription: j.inscription } : {}),
@@ -279,6 +282,7 @@ function hereView(w, a, l, lang, wallList, openOffers, allAgents, projectsHere) 
     condition: place.condition === null ? null : cond(l, place.condition, a.place === 'well'),
     razed: place.razed,
     costMultiplier: costMultiplier(w, a.place),
+    ...(w.premise===5?{materialRecoverable:place.materialRecoverable}:{}),
     salvage: place.salvageMax > 0 ? { left: place.salvage, max: place.salvageMax } : null,
     modules,
     gate: gate ? { functioning: isFunctioning(place, gate), youMayEnter: !gatedFor(w, a, a.place) } : null,
@@ -316,7 +320,7 @@ function hereView(w, a, l, lang, wallList, openOffers, allAgents, projectsHere) 
     const hist = w.well.outputHistory;
     here.well = { outputYesterday: hist.length ? hist[hist.length - 1] : null, drawPoolLeft: w.well.drawPoolLeft, condition: cond(l, w.places.well.condition, true), ...(tokenized(w) ? { upgrades: upgradeView(w) } : {}) };
   } else if (place.explorable) {
-    const band = richnessBand(w.regions[a.place].energy, HUMAN_DEFS[a.place].wild.energyMax * K(w));
+    const band = richnessBand(w.regions[a.place].energy, humanDefs(w)[a.place].wild.energyMax * K(w));
     here.wilds = { richness: band, text: l.richnessWild[band] };
   }
   return here;
@@ -491,6 +495,12 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, pro
     // 物理的可用性
     if (def.place && !(def.place === 'wilds' ? here.explorable : a.place === def.place)) deny(reasonWrong(type));
     switch (type) {
+      case 'gather':
+        if(w.premise===5&&(!w.materialZones[a.place]||!w.materialZones[a.place].stock))deny({code:'nothing_left',text:'请前往有存量的回收地带。'});
+        break;
+      case 'construct':
+        if(w.premise===5&&!projectsHere.some(j=>j.phase==='building'))deny({code:'project_unfunded',text:'现场没有资源齐备的工程。'});
+        break;
       case 'pray':
         entry.cost = 1;
         if (here.origin !== 'human' || here.razed || here.ruined || here.condition === null || here.condition <= 0) deny(reasonWrong(type));
@@ -580,7 +590,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, pro
         break;
       case 'dismantle':
         if (here.landmark) deny({ code: 'landmark', text: R.landmark });
-        else if (here.open || here.razed || here.salvage <= 0) deny({ code: 'nothing_left', text: R.nothing_left });
+        else if (here.open || here.razed || (w.premise===5?here.materialRecoverable:here.salvage) <= 0) deny({ code: 'nothing_left', text: R.nothing_left });
         break;
       case 'draw':
         if (entry.available && w.well.drawPoolLeft <= 0) deny({ code: 'pool_exhausted', text: R.pool_exhausted });

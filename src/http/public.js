@@ -1,3 +1,6 @@
+import { archivedObservations } from './material-observations.js';
+import { materialsEnabled } from '../e2/world.js';
+import { materialLook, MATERIAL_LOOKS } from '../e2/engine/material-views.js';
 // PROTOCOL §9、§10：公共接口（观测站与研究者）。无需鉴权，GET 允许跨域读取。
 // 所有返回都经过 visibility.js：没有模型、人类书写的灵魂、造者署名（谢幕前），没有日记与家书内容；
 // 私语、独白、记忆在一个世界月之后才出现。
@@ -231,6 +234,13 @@ export async function postWeatherVote(req, res, ctx, url) {
 }
 
 export const publicRoutes = [
+  ...MATERIAL_LOOKS.map(what=>['GET',`/api/public/${what}`,async(req,res,ctx,url)=>{
+    const lang=langOf(url.searchParams);
+    if(!materialsEnabled(ctx.rt.w))return sendError(res,lang,'not_found');
+    try {const args=Object.fromEntries([...url.searchParams].map(([k,v])=>[k,k==='limit'?Number(v):v]));
+      sendJson(res,200,what==='observations'?archivedObservations(ctx.rt,args):materialLook(ctx.rt.w,what,args));
+    }catch(e){if(e.code)return sendError(res,lang,e.code);throw e;}
+  }]),
   ['GET', '/api/public/state', getState],
   ['GET', '/api/public/events', getEvents],
   ['GET', '/api/public/stream', stream],

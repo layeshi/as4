@@ -1,3 +1,4 @@
+import { contributeMaterials, terminateProject, projectExpired } from './material-projects.js';
 import { filterValues } from '../../collections.js';
 import { buildUpgrade } from './upgrades.js';
 import { K } from './tokens.js';
@@ -12,9 +13,9 @@ import { rewardProject } from './prayer-rewards.js';
 //   { id, build: 'site' | 'module' | 'road', place（发起与出工的地点）, lot?, on?, module?, inscription?, to?, name?, description?,
 //     owner, need, have, contributors, initiator, createdDay, expiresDay, status: 'open' | 'built' | 'abandoned', result }
 
-import { P, MODULE_DEFS } from '../params.js';
-import { nextId, clockDay, isAlive, tokenized } from '../world.js';
-import { LOT_DEFS } from '../map/index.js';
+import { P, MODULE_DEFS, RESEARCH_DEF } from '../params.js';
+import { nextId, clockDay, isAlive, tokenized, materialsEnabled } from '../world.js';
+import { lotDefs } from '../map/index.js';
 import { sink } from './ledger.js';
 import { emit, pushInbox } from './core.js';
 import { hooks } from './hooks.js';
@@ -91,7 +92,7 @@ function uniqueName(w, name, exceptId = null) {
 
 /** 新地点的记录（开辟与遗址上重新开辟共用的初始状态，SPEC-E2 §10.5） */
 function siteFields(w, j, exceptId = null) {
-  const salvage = Math.floor(j.need / 2);
+  const salvage = materialsEnabled(w) ? 0 : Math.floor(j.need / 2);
   return {
     name: uniqueName(w, j.name, exceptId),
     description: j.description ?? null,
@@ -119,7 +120,7 @@ function siteFields(w, j, exceptId = null) {
 function buildSite(w, j) {
   const day = clockDay(w);
   if (j.lot) {
-    const lot = LOT_DEFS[j.lot];
+    const lot = lotDefs(w)[j.lot];
     const id = nextId(w, 'n');
     const wild = lot.district === 'wilds';
     const fields = siteFields(w, j);
@@ -150,7 +151,7 @@ function buildModule(w, j) {
   const place = w.places[j.place];
   place.modules.push({
     type: j.module,
-    salvage: Math.floor(MODULE_DEFS[j.module].cost * K(w) / 2),
+    salvage: materialsEnabled(w) ? 0 : Math.floor((j.module === 'research' ? RESEARCH_DEF : MODULE_DEFS[j.module]).cost * K(w) / 2),
     builtDay: clockDay(w),
     projectId: j.id,
     inherent: false,
@@ -181,7 +182,7 @@ function buildRoad(w, j) {
 /** 池中能量达到造价时立即建成：池中能量记入去处 project_built，按种类建出结果，释放空地块，记事件 built（触发 on:built） */
 export function buildProject(w, j) {
   j.status = 'built';
-  sink(w, 'energy', 'project_built', j.have);
+  if (!materialsEnabled(w)) sink(w, 'energy', 'project_built', j.have);
   const result = tokenized(w) && j.build === 'upgrade' ? buildUpgrade(w, j) : j.build === 'site' ? buildSite(w, j) : j.build === 'module' ? buildModule(w, j) : buildRoad(w, j);
   j.result = result;
   rewardProject(w, j);
@@ -202,6 +203,7 @@ export function buildProject(w, j) {
  * who：出资者的 ID，或 'treasury'。凑够造价即建成。返回 { built, result }。
  */
 export function addToProject(w, j, who, amount) {
+  if (materialsEnabled(w)) return contributeMaterials(w,j,who,amount,0,who === 'treasury' ? {kind:'city'} : {kind:'agent',id:who});
   j.have += amount;
   j.contributors[who] = (j.contributors[who] || 0) + amount;
   if (j.have >= j.need) return { built: true, result: buildProject(w, j) };
@@ -212,6 +214,7 @@ export function addToProject(w, j, who, amount) {
 
 /** 工程烂尾：池中能量记去处 project_abandoned，释放空地块，记事件 abandoned（触发 on:abandoned） */
 export function abandonProject(w, j, reason = 'expired') {
+  if (materialsEnabled(w)) return terminateProject(w,j,reason);
   j.status = 'abandoned';
   sink(w, 'energy', 'project_abandoned', j.have);
   if (j.lot && w.lots[j.lot] && w.lots[j.lot].project === j.id) w.lots[j.lot].project = null;
@@ -227,7 +230,7 @@ export function abandonProject(w, j, reason = 'expired') {
 /** 每日结算第 8 步：到期仍未建成的工程烂尾（d 为刚结束的那一日） */
 export function abandonExpired(w, d) {
   for (const j of Object.values(w.projects)) {
-    if (j.status === 'open' && d >= j.expiresDay) abandonProject(w, j, 'expired');
+    if (j.status === 'open' && (materialsEnabled(w) ? projectExpired(w,j) : d >= j.expiresDay)) abandonProject(w, j, 'expired');
   }
 }
 

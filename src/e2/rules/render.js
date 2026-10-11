@@ -357,6 +357,10 @@ export function renderOp(op, lang = 'zh', opts = {}) {
       if ('canonical' in op) return op.canonical === null ? o.canonicalNone : o.canonical(langName(op.canonical, lang));
       return o.amend(op.article, langName(op.lang, lang), op.text);
     case 'repeal': return o.repeal(op.law);
+    case 'cancel_project': return `cancel_project ${op.project}`;
+    case 'project_policy': return `project_policy ${op.project}: ${op.access}`;
+    case 'research_policy': return `research_policy ${op.place}: ${op.access}, fee ${arg(op.fee,d)}`;
+    case 'material_policy': return `material_policy: ${arg(op.restricted,d)}`;
     case 'fund': return o.fund(op.project, arg(op.energy, d));
     case 'cede': return o.cede(d.target.place(op.place), arg(op.to, d));
     case 'seize': return o.seize(d.target.place(op.place));

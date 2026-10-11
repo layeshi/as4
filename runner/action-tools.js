@@ -1,3 +1,5 @@
+import { MATERIAL_OP_FIELDS } from '../src/e2/rules/material-policy.js';
+const opFields=premise=>premise===5?{...OP_FIELDS,...MATERIAL_OP_FIELDS}:OP_FIELDS;
 // Opt-in P2 tools. Schemas and local validation share the same action table;
 // conversion never fills a target, changes an amount, or rewrites model text.
 import { tokenized } from '../src/e2/world.js';
@@ -16,17 +18,18 @@ const exactlyOne = (names, nonNull = true) => ({ oneOf: names.map(name => nonNul
 const nullable = schema => schema.type ? { ...schema, type: [...new Set([...(Array.isArray(schema.type) ? schema.type : [schema.type]), 'null'])], ...(schema.enum ? { enum: [...schema.enum, null] } : {}) } : { anyOf: [schema, { type: 'null' }] };
 const tableFor = (premise = 2) => actionTable(premise, true);
 
-function operationSchema(nested = false) {
-  return { anyOf: Object.keys(OP_FIELDS).filter(name => !nested || name !== 'each').map(name => ({ $ref: `#/$defs/op_${name}` })) };
+function operationSchema(nested = false, premise = 2) {
+  return { anyOf: Object.keys(opFields(premise)).filter(name => !nested || name !== 'each').map(name => ({ $ref: `#/$defs/op_${name}` })) };
 }
 
-function operationDefinition(name) {
-    const fields = OP_FIELDS[name];
+function operationDefinition(name, premise = 2) {
+    const fields = opFields(premise)[name];
     const properties = { op: { type: 'string', enum: [name] } };
     const required = ['op'];
     for (const [field, kind, mandatory] of fields) {
       let s;
-      if (kind === 'ops') s = list({ $ref: '#/$defs/operationNested' }, P.opsPerRule, 1);
+      if(kind==='ids')s=list(str(),100);
+      else if (kind === 'ops') s = list({ $ref: '#/$defs/operationNested' }, P.opsPerRule, 1);
       else if (kind === 'reason') s = { anyOf: [str(LIMITS.reason), obj({ zh: str(LIMITS.reason), en: str(LIMITS.reason) }, ['zh', 'en'])] };
       else if (['acct', 'agent', 'agents', 'int', 'bool', 'scalar'].includes(kind)) s = expression;
       else if (kind === 'article') s = integer(1);
@@ -52,7 +55,12 @@ const successorSchema = obj({ name: str(LIMITS.name), soul: str(LIMITS.soul), la
 function fieldSchema(type, name, kind, premise = 2) {
   if (tokenized({ premise }) && type === 'routine' && name === 'every') return integer(0, 36);
   if (tokenized({ premise }) && type === 'routine' && name === 'brief') return { type: 'string', enum: ['full', 'short'] };
-  if (tokenized({ premise }) && type === 'initiate' && name === 'owner') return { type: 'string', enum: ['self', 'city'] };
+  if (premise === 4 && type === 'initiate' && name === 'owner') return { type: 'string', enum: ['self', 'city'] };
+  if(premise===5) {
+    if(['criterion','criterionTemplate'].includes(name))return obj({kind:{type:'string',enum:['material_delivery','construction','repair','document','announcement','proposal']},to:str(),quantity:integer(1),place:str(),project:str(),work:integer(1),target:str(),bp:integer(1),publishPlace:str(),audience:{type:'string',enum:['all','place']},class:{type:'string',enum:['ordinary','constitutional']}},['kind']);
+    if(name==='targetArgs')return obj(Object.fromEntries(['to','place','project','target','publishPlace','class'].map(k=>[k,str()])));
+    if(['agents','groups'].includes(name))return list(str(),100);
+  }
   if (kind === 'bool') return { type: 'boolean' };
   if (kind === 'int') return integer(name === 'energy' && ['repair', 'contribute', 'sponsor', 'dismantle', 'draw'].includes(type) ? 1 : 0, type === 'draw' && !tokenized({ premise }) ? P.drawMaxPerAction : Number.MAX_SAFE_INTEGER);
   if (name === 'rules') return { $ref: '#/$defs/rules' };
@@ -62,7 +70,7 @@ function fieldSchema(type, name, kind, premise = 2) {
   }
   if (type === 'invent' && name === 'ref') return obj({ kind: { type: 'string', enum: ['doc', 'project'] }, id: str() }, ['kind', 'id']);
   if (name === 'successor') return { $ref: '#/$defs/successor' };
-  if (name === 'give' || name === 'want') return obj({ energy: nullable(integer()), coins: nullable(integer()) });
+  if (name === 'give' || name === 'want') return obj({ energy: nullable(integer()), coins: nullable(integer()), ...(premise===5?{materials:nullable(integer())}:{}) });
   if (name === 'heirs') return list(obj({ to: str(), share: integer(1, 1000000) }, ['to', 'share']), LIMITS.heirs);
   if (name === 'with') return list(str(), P.authorsMax - 1);
   if (name === 'memories') return list(integer(), P.memorySlots);
@@ -74,7 +82,7 @@ function fieldSchema(type, name, kind, premise = 2) {
   if (kind === 'list' || kind === 'obj') throw new Error(`Missing structured action schema: ${type}.${name}`);
   if (name === 'choice') return { type: 'string', enum: ['yes', 'no', 'abstain'] };
   if (name === 'build') return { type: 'string', enum: tokenized({ premise }) ? ['site', 'module', 'road', 'upgrade'] : ['site', 'module', 'road'] };
-  if (name === 'module') return { type: 'string', enum: [...MODULE_TYPES] };
+  if (name === 'module') return { type: 'string', enum: [...MODULE_TYPES,...(premise===5?['research']:[])] };
   const lengths = { name: LIMITS.name, soul: LIMITS.soul, bio: LIMITS.bio, purpose: LIMITS.purpose,
     body: LIMITS.docBody, title: type === 'invent' ? 100 : type === 'write' ? LIMITS.docTitle : LIMITS.proposalTitle,
     word: LIMITS.word, meaning: LIMITS.meaning, manifesto: LIMITS.manifesto, note: LIMITS.note,
@@ -94,7 +102,7 @@ function buildActionSchema(type, { action = false, dynamic = false, premise = 2 
   for (const [name, kind] of spec.args) {
     if (type === 'standing' && name === 'count') continue; // derived rule field, not input
     const optional = tokens.includes(`${name}?`) || (type === 'initiate' && name !== 'build') || ['read', 'rules'].includes(type) && ['doc', 'inscription', 'law', 'agent', 'place', 'group'].includes(name);
-    const schema = optional && type !== 'routine' && !(tokenized({ premise }) && type === 'initiate' && name === 'owner') ? nullable(fieldSchema(type, name, kind, premise)) : fieldSchema(type, name, kind, premise);
+    const schema = optional && type !== 'routine' && !(premise === 4 && type === 'initiate' && name === 'owner') ? nullable(fieldSchema(type, name, kind, premise)) : fieldSchema(type, name, kind, premise);
     properties[name] = dynamic ? { anyOf: [schema, { type: 'string', pattern: '^=', maxLength: P.exprChars + 1 }] } : schema;
   }
   const required = spec.params.split(',').map(s => s.trim()).filter(s => s && !s.endsWith('?') && !s.includes('|') && s !== '…');
@@ -125,8 +133,8 @@ function withDefinitions(schema, { compact = false, premise = 2 } = {}) {
       const name = value.$ref.slice('#/$defs/'.length);
       if (!Object.hasOwn(definitions, name)) {
         const shared = { rules: rulesSchema, procedure: procedureSchema, successor: successorSchema,
-          operation: compact ? compactOperationSchema() : operationSchema(), operationNested: compact ? compactOperationSchema(true) : operationSchema(true) };
-        definitions[name] = name.startsWith('op_') ? operationDefinition(name.slice(3)) : name.startsWith('action_') ? buildActionSchema(name.slice(7), { action: true, premise })
+          operation: compact ? compactOperationSchema(false,premise) : operationSchema(false,premise), operationNested: compact ? compactOperationSchema(true,premise) : operationSchema(true,premise) };
+        definitions[name] = name.startsWith('op_') ? operationDefinition(name.slice(3),premise) : name.startsWith('action_') ? buildActionSchema(name.slice(7), { action: true, premise })
           : name.startsWith('dynamic_') ? buildActionSchema(name.slice(8), { action: true, dynamic: true, premise }) : shared[name];
         if (!definitions[name]) throw new Error(`Missing tool definition ${name}`);
         visit(definitions[name]);
@@ -143,13 +151,13 @@ export function actionSchema(type, options = {}) { return withDefinitions(buildA
 /** Compact provider envelope; exact action-specific validation is retained below. */
 function compactStandingSchema(premise = 2) {
   const table = tableFor(premise);
-  const types = table.ORDER.filter(type => !['standing', 'retire'].includes(type));
+  const types = table.ORDER.filter(type => !['standing', 'retire'].includes(type) && (premise!==5||actionTable(4).isKnown(type)||['gather','claim','construct'].includes(type)));
   return compactVariants('type', types.map(type => [type, buildActionSchema(type, { action: true, dynamic: true, premise })]));
 }
 
-function compactOperationSchema(nested = false) {
+function compactOperationSchema(nested = false,premise = 2) {
   if (nested) return { allOf: [{ $ref: '#/$defs/operation' }, { not: { properties: { op: { enum: ['each'] } }, required: ['op'] } }] };
-  return compactVariants('op', Object.keys(OP_FIELDS).filter(name => !nested || name !== 'each').map(name => [name, operationDefinition(name)]));
+  return compactVariants('op', Object.keys(opFields(premise)).filter(name => !nested || name !== 'each').map(name => [name, operationDefinition(name,premise)]));
 }
 
 function compactVariants(discriminator, entries) {

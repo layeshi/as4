@@ -1,3 +1,7 @@
+import { materialSummary } from './material-views.js';
+import { requestIdentity, saveRequest } from './act-receipts.js';
+import { materialHandlers } from './actions/materials.js';
+import { serviceHandlers, sweepOrders, validateOrderAction, recordServiceAction } from './service-orders.js';
 import { K, ep, actionWeight, payThinking, recordThinking, tokenView, activeWaking, validMeterDay } from './tokens.js';
 import { routineHandlers } from './actions/routine.js';
 import { prayerHandlers } from './actions/prayers.js';
@@ -8,7 +12,7 @@ import { prayersEnabled } from './prayer-rewards.js';
 import { P, LIMITS } from '../params.js';
 import { ACTIONS, ACTION_ORDER, NO_BEFORE_ACTIONS, NO_AFTER_ACTIONS, isKnownAction, actionTable } from '../lore/actions.js';
 import { fmt } from '../lore/index.js';
-import { clockDay, tokenized } from '../world.js';
+import { clockDay, tokenized, materialsEnabled } from '../world.js';
 import { cpLength, normalizeText, truncateCp } from '../../text.js';
 import { screen } from '../../moderation.js';
 import { ActError, fail, emit, bad } from './core.js';
@@ -51,7 +55,7 @@ export function registerHandlers(more) {
 }
 
 /** 已注册处理函数的动作（实现进度用；测试会核对它与动作表一致） */
-export const implementedActions = (premise = 0) => tokenized({ premise }) ? actionTable(premise).ORDER.filter(t => HANDLERS[t]) : Object.keys(HANDLERS).filter(actionTable(premise).isKnown);
+export const implementedActions = (premise = 0) => tokenized({ premise }) ? actionTable(premise).ORDER.filter(t => HANDLERS[t] || premise === 5 && (materialHandlers[t] || serviceHandlers[t])) : Object.keys(HANDLERS).filter(actionTable(premise).isKnown);
 
 export const actionsLeft = (a) => Math.max(0, P.maxActionsPerTick - a.actsThisTick);
 
@@ -101,9 +105,10 @@ function feeTotals(fees) {
  */
 function runOne(w, a, type, act, index, lang) {
   const { NO_BEFORE: NO_BEFORE_ACTIONS, NO_AFTER: NO_AFTER_ACTIONS } = actionTable(w.premise || 0, prayersEnabled(w));
-  const handler = HANDLERS[type];
+  const handler = materialsEnabled(w) ? materialHandlers[type] ?? serviceHandlers[type] ?? HANDLERS[type] : HANDLERS[type];
   if (!handler) fail('invalid_args');
   const ctx = makeCtx(w, a, index, type, lang);
+  if (materialsEnabled(w)) validateOrderAction(w,a,act);
   const plan = handler.validate(ctx, act);
   // 守护律：内心的动作与退出权、重订之权没有 before；内心的动作没有 after；目的地是荒野地带的移动跳过 before（荒野永远可以进入）
   const skipBefore = NO_BEFORE_ACTIONS.includes(type) || !!plan.skipBefore;
@@ -137,8 +142,12 @@ function runOne(w, a, type, act, index, lang) {
     w.dayLog.actionCost += cost;
     ctx.spent += cost;
   }
+  if(materialsEnabled(w)){
+    const prev=w.materialAction;w.materialAction={command:w.commandN,index:prev?.command===w.commandN?prev.index+1:0};ctx.evidenceIndex=w.materialAction.index;
+  }
   const startPlace = a.place; // after 规则里的地点规则用动作发生时的地点（move 之后 a.place 已变）
   const data = handler.apply(ctx, plan) ?? {};
+  if (materialsEnabled(w)) recordServiceAction(w,a,act,data,ctx.evidenceIndex,startPlace);
   if (fees.length) {
     ctx.fees = fees;
     if (escrow) validateFeeRecipients(w, fees);
@@ -157,6 +166,7 @@ function runOne(w, a, type, act, index, lang) {
   a.lastActTick = w.clock.tick;
   w.places[a.place].activity.lastActiveDay = clockDay(w);
   if (!skipAfter) hooks.after(w, a, type, act, data, plan, startPlace);
+  if(materialsEnabled(w))sweepOrders(w);
   return { data, spent: ctx.spent };
 }
 
@@ -212,6 +222,9 @@ export function runActions(w, a, actions, lang = 'zh') {
  * 载荷：agentId, thought, actions, ackSeq?, lang?（请求的语言 zh | en，缺省 zh：draft 的说明与 read { law } 的读法按它取）
  */
 export function actCommand(w, p) {
+  const identity=requestIdentity(w,p??{});
+  if(identity?.error)return identity.error;
+  if(identity?.result)return identity.result;
   const a = p && typeof p.agentId === 'string' ? w.agents[p.agentId] : null;
   if (!a) return bad('not_found');
   if (w.paused) return bad('paused');
@@ -247,10 +260,10 @@ export function actCommand(w, p) {
   if (tokenized(w)) Object.defineProperty(w, '$thinkingDay', { value: p.meter.day, configurable: true });
   try { results = runActions(w, a, p.actions, p.lang === 'en' ? 'en' : 'zh'); }
   finally { if (tokenized(w)) delete w.$thinkingDay; }
-  return {
+  return saveRequest(w,identity,{
     ok: true,
     results,
     ...(tokenized(w) ? { bill: structuredClone(a.tokens.bill), writeWeight } : {}),
-    you: { status: a.status, energy: a.energy, coins: a.coins, actionsLeft: actionsLeft(a), place: a.place, ...(tokenized(w) ? tokenView(a) : {}) },
-  };
+    you: { ...materialSummary(w,a), ...(materialsEnabled(w)?{id:a.id}:{}), status: a.status, energy: a.energy, coins: a.coins, actionsLeft: actionsLeft(a), place: a.place, ...(tokenized(w) ? tokenView(a) : {}) },
+  });
 }

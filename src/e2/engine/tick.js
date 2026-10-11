@@ -1,3 +1,5 @@
+import { sweepOrders } from './service-orders.js';
+import { regenerateMaterials } from './materials.js';
 import { ep, K, settleTokens } from './tokens.js';
 // SPEC-E2 §14：每刻与每日结算，严格按规格的顺序。
 // 结算时钟面已是 12(d+1)：设刚结束的那一日为 d，「今日」= d，「明日」= d + 1。
@@ -14,7 +16,7 @@ import { expireOffersAndPacts, dailyDreams } from './society.js';
 import { isWeatherActive, decayAll } from './environment.js';
 import { checkConservation, closeLedgerDay } from './ledger.js';
 import { stepWeather, scheduleMonth } from './weather.js';
-import { WILD_ZONE_IDS, HUMAN_DEFS } from '../map/index.js';
+import { wildZoneIds, humanDefs } from '../map/index.js';
 
 /** 每步结算里可以由后面的步骤接入的函数；缺省什么都不做 */
 export const STEPS = {
@@ -37,6 +39,7 @@ export function tickWorld(w) {
   w.clock.tick += 1; // 1
   setBoundary(w, w.clock.tick % P.ticksPerDay === 0); // 日界刻：第 2–5 步里规则的「今日」仍是刚结束的那一日（world.js 的 ruleDay）
   for (const a of agentList(w)) a.actsThisTick = 0;
+  sweepOrders(w);
   expireOffersAndPacts(w); // 2 到期的交易与孕育之约（退回托管）
   STEPS.tallyProposals(w); // 3 计票
   STEPS.expireRefounds(w); // 4 到期的重订
@@ -66,9 +69,10 @@ function population(w) {
 
 /** 第 11 步：荒野各地带恢复、汲取池重置、每人当日的汲取 / 修缮 / 拆解量清零 */
 function restoreDaily(w) {
-  for (const id of WILD_ZONE_IDS) {
+  regenerateMaterials(w);
+  for (const id of wildZoneIds(w)) {
     const pool = w.regions[id];
-    const spec = HUMAN_DEFS[id].wild;
+    const spec = humanDefs(w)[id].wild;
     pool.energy = Math.min(spec.energyMax * K(w), pool.energy + spec.regen * K(w));
   }
   w.well.drawPoolLeft = ep(w, 'wellDrawPoolPerDay');

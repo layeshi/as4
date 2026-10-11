@@ -5,7 +5,7 @@ import { ep } from './tokens.js';
 // 一座建筑能做什么，只取决于里面装了什么模块（DESIGN §6.3）。模块「运转」的条件：所在地点不是遗址，
 // 且完好度 ≥ 该模块的运转下限（SPEC-E2 §5.3）；空地（广场、荒野地带、遗址）不能装模块。
 
-import { P, MODULE_DEFS } from '../params.js';
+import { P, MODULE_DEFS, RESEARCH_DEF } from '../params.js';
 import { nameKey } from '../../text.js';
 
 /** 地点上装着的某种模块（不论是否运转），没有返回 null */
@@ -14,7 +14,7 @@ export const moduleOf = (place, type) => place.modules.find((m) => m.type === ty
 /** 模块是否运转 */
 export function isFunctioning(place, mod) {
   if (!place || place.razed || place.open || place.condition === null) return false;
-  return place.condition >= MODULE_DEFS[mod.type].needBp;
+  return place.condition >= (mod.type === 'research' ? RESEARCH_DEF : MODULE_DEFS[mod.type]).needBp;
 }
 
 /** 地点上运转中的某种模块，没有返回 null */

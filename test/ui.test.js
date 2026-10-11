@@ -300,15 +300,18 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
     for (const p of used) {
       const path = p.replace(/\/$/, '');
       if (path === '/api/public/agents' || path === '/api/public/docs') continue; // 带 id 的接口，下面单独试
+      if (path === '/api/public') continue; // Dynamic P5 collection names are covered by p5-http.test.js.
       if (path === '/api/public/stream') continue; // SSE，长连接
       if (path === '/api/account/prayers') { // 插值的祈祷编号：实际入口是带会话的 POST，而非集合 GET。
         const reply = await env.call('/api/account/prayers/pr1/reply', { method: 'POST', body: { text: 'reply' }, headers: { 'X-Houren-Request': '1' } });
         assert.equal(reply.status, 401, '回应路由存在且要求登录会话');
         continue;
       }
+      if (path === '/api/me/wake') { assert.equal((await env.call(path, { method: 'POST', body: {} })).status, 404); continue; } // P4/P5-only wake; covered by token HTTP tests.
       if (path === '/api/owner/cap') { assert.equal((await env.call(path, { method: 'POST', body: {} })).status, 404); continue; } // SPEC-P4 T22: P4-only, tested separately.
+      if (['materials','services','demands','orders','research','observations'].some(k => path === `/api/public/${k}`)) { assert.equal((await env.call(path)).status, 404); continue; } // P5-only endpoints are exercised by p5-http.test.js.
       if (path === '/api/public/attention') { assert.equal((await env.call(path)).status, 404); continue; } // Q43 A：只在第二前提存在，由 T15 验证。
-      const method = ['/api/admin/pause', '/api/admin/resume', '/api/admin/law-recover', '/api/account/logout', '/api/port/register', '/api/port/adopt', '/api/port/foster', '/api/owner/letter', '/api/owner/release', '/api/public/weather/vote'].includes(path) ? 'POST' : 'GET';
+      const method = ['/api/me/wake', '/api/me/act', '/api/admin/pause', '/api/admin/resume', '/api/admin/law-recover', '/api/account/logout', '/api/port/register', '/api/port/adopt', '/api/port/foster', '/api/owner/letter', '/api/owner/release', '/api/public/weather/vote'].includes(path) ? 'POST' : 'GET';
       const r = await env.call(path, method === 'POST' ? { method, body: {} } : {});
       assert.notEqual(r.status, 404, `${method} ${path} 不存在`);
     }
