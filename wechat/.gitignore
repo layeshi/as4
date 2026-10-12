@@ -1,0 +1,9 @@
+node_modules/
+build/
+evidence/
+screenshots/
+project.private.config.json
+*.key
+*.pem
+.env
+.env.*
