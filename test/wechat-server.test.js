@@ -112,3 +112,61 @@ test('HTTP exchange issues a revocable cookie, existing account binding requires
     assert.equal((await e.call('/api/wechat/status', { headers: { Cookie: cookie } })).json.verified, false);
   } finally { await e.close(); }
 });
+
+test('miniGame projection shows operator text and engine enums at once, hides uploaded avatars and counts withheld text', async () => {
+  const { WechatProjection, PENDING_TEXT } = await import('../src/wechat/projection.js');
+  const quiet = '本刻公共事件：arrive（事件 12）；built（事件 15）。请核查原始记录。';
+  const projection = new WechatProjection({ requireIdentity() { throw Error(); } }, { systemTexts: () => ({ texts: new Set(['港口']), patterns: [/^本刻公共事件：[a-z_]+（事件 \d+）(?:；[a-z_]+（事件 \d+）)*。请核查原始记录。$/] }) });
+  const meta = { pending: 0 };
+  const out = projection.filter({ name: '港口', outcome: 'energy', zone: 'scrapyard', origin: 'human', band: 'pristine', agent: 'a5', text: quiet,
+    note: '本刻公共事件：居民写的话（事件 1）。请核查原始记录。', bio: 'resident prose', avatar: 'a'.repeat(64), roles: [{ avatar: '/roles/guide.svg' }], choice: '同意' }, null, '', meta);
+  assert.deepEqual([out.name, out.outcome, out.zone, out.origin, out.band, out.agent, out.text], ['港口', 'energy', 'scrapyard', 'human', 'pristine', 'a5', quiet]);
+  assert.equal(out.note, PENDING_TEXT); assert.equal(out.bio, PENDING_TEXT); assert.equal(out.choice, PENDING_TEXT, 'prose under an enum key is still moderated');
+  assert.equal(out.avatar, null); assert.equal(out.roles[0].avatar, '/roles/guide.svg');
+  assert.equal(meta.pending, 3);
+});
+
+test('miniGame moderation results survive a restart and expired results are dropped', async () => {
+  const { WechatProjection } = await import('../src/wechat/projection.js');
+  const dir = mkdtempSync(join(tmpdir(), 'houren-wechat-cache-'));
+  try {
+    const file = join(dir, 'wechat-moderation.json');
+    const first = new WechatProjection({ requireIdentity() {} }, { file });
+    first.save(first.key('approved resident text'), true, 60000);
+    first.save(first.key('refused resident text'), false, 60000);
+    first.results.set(first.key('stale text'), { allowed: true, until: Date.now() - 1 });
+    first.flush();
+    assert.ok(!readFileSync(file, 'utf8').includes('approved resident text'), 'only digests are stored');
+    const second = new WechatProjection({ requireIdentity() { throw Error(); } }, { file });
+    assert.equal(second.filter({ text: 'approved resident text' }, null).text, 'approved resident text');
+    assert.equal(second.filter({ text: 'refused resident text' }, null).text, '内容审核中');
+    assert.equal(second.results.has(second.key('stale text')), false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('P6 anonymous miniGame state shows place, role, law and canon text, withholds resident text with a pending count and no avatar', async () => {
+  const { boot } = await import('./http-helpers.js');
+  const { writeFileSync } = await import('node:fs');
+  const dir = mkdtempSync(join(tmpdir(), 'houren-wx-system-')), file = join(dir, 'physics.json');
+  writeFileSync(file, JSON.stringify({ version: 1, regrowth: { baseByZone: { wilds: 20, scrapyard: 15, solarfield: 10 }, thresholdByZone: { wilds: 30, scrapyard: 25, solarfield: 15 }, factorPermille: 500 }, construction: { fullActionsPerTick: 2, factorPermille: 500 } }));
+  const e = await boot({ ...cfg, physics: 2, premise: 6, shellSlots: 0, hiddenPhysicsFile: file, map: 'compact-materials-v1' }, { dir });
+  try {
+    const person = await e.app.ctx.accounts.create({ username: 'wx_system_maker', password: 'long-maker-password' });
+    const token = e.app.ctx.accounts.issue(person.id);
+    const created = await e.call('/api/account/residents', { method: 'POST', body: { name: '未审居民', bio: '还没有送审的简介', soul: '一段灵魂', lang: 'zh', dailyCap: 18000, requestId: 'wx-system-1' }, headers: { 'X-Houren-Request': '1', Cookie: 'houren_session=' + token } });
+    assert.equal(created.status, 201, created.text);
+    e.rt.w.agents[created.json.agentId].avatar = 'b'.repeat(64);
+    const state = (await e.call('/api/wechat/public/state')).json;
+    const port = state.places.find(p => p.id === 'port');
+    assert.equal(port.displayName.zh, '港口'); assert.equal(port.origin, 'human'); assert.equal(port.description, '港口。城市公共设施。');
+    assert.equal(state.world.cityName, '无名之城');
+    const guide = state.publicRoles.find(r => r.id === 'guide');
+    assert.deepEqual([guide.name, guide.duty, guide.avatar], ['引舟', '接引员', '/roles/guide.svg']);
+    assert.equal(state.laws.find(l => l.id === 'l3').title, '基本配给');
+    assert.equal(state.docs.find(d => d.id === 'v6-letter').title, '致后来者');
+    const resident = state.agents.find(a => a.id === created.json.agentId);
+    assert.equal(resident.name, '内容审核中'); assert.equal(resident.avatar, null); assert.equal(resident.place, 'port');
+    assert.ok(state.moderation.pending >= 2);
+    assert.equal((await e.call('/api/public/state')).json.moderation, undefined, 'the website response is unchanged');
+  } finally { await e.close(); }
+});

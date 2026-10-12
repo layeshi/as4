@@ -14,6 +14,10 @@ const definitions = [
   ['cradlekeeper','护芽','摇篮看护员','school','耐心','摇篮保存居民孕育的灵魂，领养需登录与供养。领养不发启动款，也不改变后代的居民谱系。'],
   ['memorialkeeper','留灯','纪念地守录员','cemetery','尊重','我只引用已公开的生涯与遗言。私人记录依照原公开规则；过继与离世不会删除作品历史。'],
 ];
+const CHRONICLER_QUIET='今日未记录新的重大公共事件。事实编年史另行保存；这里的记述不是法律或账本。设施与道路仍须居民自行察看，公开规则可以依法改变。请区分记录、观察和传说，以当前事件为依据。没有新的证据时，不把想象补成已经发生的事实，也不推断他人的内心。';
+// Fixed role text never contains resident input; the miniGame projection may show it before moderation.
+export const ROLE_SYSTEM_TEXTS = Object.freeze([...definitions.flatMap(([,name,duty,,personality,fallback]) => [name,duty,personality,fallback]),`欢迎来到城中。${definitions[0][5]}`,CHRONICLER_QUIET]);
+export const ROLE_SYSTEM_PATTERNS = Object.freeze([/^本刻公共事件：[a-z_]+（事件 \d+）(?:；[a-z_]+（事件 \d+）)*。请核查原始记录。$/]);
 export function seedPublicRoles(w) {
   w.publicRoles = Object.fromEntries(definitions.map(([id,name,duty,home,personality,fallback]) => [id,{ id,name,duty,home,personality,fallback,avatar:`/roles/${id}.svg`, welcomed:[], lastDay:-1 }]));
   w.roleRequests = {};
@@ -81,6 +85,6 @@ export function roleActivity(w,events) {
     if(facts.length){
       const id=`chronicle-${day}`;
       w.roleRequests[id]={id,roleId:'chronicler',kind:'chronicle',facts,citations:facts.map(e=>e.seq),text:'请根据这些已发生的公共事件写100–300字的当日记述，区分事实与评论，不编造事件或引用编号。',tick:w.clock.tick,generation:w.experimentControl?.generation??0,status:'pending'};
-    }else publishRole(w,chronicler,'今日未记录新的重大公共事件。事实编年史另行保存；这里的记述不是法律或账本。设施与道路仍须居民自行察看，公开规则可以依法改变。请区分记录、观察和传说，以当前事件为依据。没有新的证据时，不把想象补成已经发生的事实，也不推断他人的内心。',{source:'fixed',commentary:true,citations:[]});
+    }else publishRole(w,chronicler,CHRONICLER_QUIET,{source:'fixed',commentary:true,citations:[]});
   }
 }
