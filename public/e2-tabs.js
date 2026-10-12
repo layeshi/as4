@@ -1,3 +1,4 @@
+import { projectAccessText, projectAudit } from './project-ui.js';
 import { renderMaterialEnvironment } from './materials-ui.js';
 // 第二纪观测站的标签页（SPEC-E2 §21）：法典、居民、社群、环境、摇篮与躯壳、指标。
 // 实况、编年史、典籍、墓园、遗产、天象沿用第一纪的页面（数据形状相同）。每个渲染函数：(ctx, root) → 往 root 里填内容。
@@ -530,7 +531,7 @@ export function renderEnvironment2(ctx, root) {
           projects.slice().sort((a, b) => a.build.localeCompare(b.build) || a.id.localeCompare(b.id)).map((j) => [
             j.name ? ai(j.name) : j.module ? ((lore.module[j.module] && lore.module[j.module].name) || j.module) : '—',
             t(`build_${j.build}`),
-            detail(j),
+            j.phase ? h('div',null,detail(j),h('p',null,projectAccessText(j.access)),projectAudit(ctx,j.id)) : detail(j),
             placeLink(ctx, j.place),
             ownerText(ctx, j.owner),
             j.phase ? h('span',null,`${j.phase==='funding'?'筹资':'施工'} · 词元 ${j.have}/${j.need} · 物料 ${j.haveMaterials}/${j.needMaterials} · 工作 ${j.progress}/${j.needWork}`) : h('span', { class: 'cond' }, progressBar(j.have, j.need), ` ${j.have}/${j.need}`),

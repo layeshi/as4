@@ -1,3 +1,4 @@
+import { projectAccessText, projectAudit } from './project-ui.js';
 import { residentAvatar } from './resident-avatar.js';
 // 第二纪的居民档案与地点详情：标签、志与立志史、多作者的谱系网、遗传的记忆的来源；
 // 地点的来源、模块、残料、主人、门、地点规则与「前世」（被拆成遗址、又在遗址上重新开辟的历史）。
@@ -204,7 +205,7 @@ export function openPlace2(ctx, id) {
     p.projects.length
       ? section(t('projects'), table(
         [t('col_name'), t('filterType'), t('progress')],
-        p.projects.map((j) => [j.name ? ai(j.name) : j.module ? moduleName(j.module) : '—', t(`build_${j.build}`), `${j.have}/${j.need}`]),
+        p.projects.map((j) => [j.phase ? h('div',null,j.name ? ai(j.name) : j.module ? moduleName(j.module) : '—',h('p',null,projectAccessText(j.access)),projectAudit(ctx,j.id)) : j.name ? ai(j.name) : j.module ? moduleName(j.module) : '—', t(`build_${j.build}`), j.phase ? `${j.phase} · ${j.have}/${j.need} · ${j.haveMaterials}/${j.needMaterials} · ${j.progress}/${j.needWork}` : `${j.have}/${j.need}`]),
       ))
       : null,
     p.incarnations && p.incarnations.length > 1 || (p.incarnations && p.incarnations.some((x) => x.toDay !== null))

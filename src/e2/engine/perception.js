@@ -1,3 +1,4 @@
+import { projectParticipation } from './project-views.js';
 import { publicRoles } from '../p6/roles.js';
 import { stripCoins } from '../p6/coins.js';
 import { materialSummary } from './material-views.js';
@@ -255,7 +256,7 @@ function hereView(w, a, l, lang, wallList, openOffers, allAgents, projectsHere) 
     };
   });
   const projects = projectsHere.map((j) => ({
-    ...((w.premise === 5 || w.premise === 6)?{phase:j.phase,needMaterials:j.needMaterials,haveMaterials:j.haveMaterials,needWork:j.needWork,progress:j.progress}:{}),
+    ...((w.premise === 5 || w.premise === 6)?{phase:j.phase,needMaterials:j.needMaterials,haveMaterials:j.haveMaterials,needWork:j.needWork,progress:j.progress,access:j.access,participation:projectParticipation(w,j,a)}:{}),
     id: j.id, build: j.build, ...(j.lot ? { lot: j.lot } : {}), ...(j.on ? { on: j.on } : {}), ...(j.module ? { module: j.module } : {}), ...(j.to ? { to: j.to } : {}),
     name: j.name ?? null, need: j.need, have: j.have, contributors: Object.keys(j.contributors).length, expiresDay: j.expiresDay,
     owner: ownerView(w, j.owner), ...(j.inscription ? { inscription: j.inscription } : {}),
@@ -506,7 +507,11 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, pro
         if((w.premise === 5 || w.premise === 6)&&(!w.materialZones[a.place]||!w.materialZones[a.place].stock))deny({code:'nothing_left',text:'请前往有存量的回收地带。'});
         break;
       case 'construct':
-        if((w.premise === 5 || w.premise === 6)&&!projectsHere.some(j=>j.phase==='building'))deny({code:'project_unfunded',text:'现场没有资源齐备的工程。'});
+        if (w.premise === 5 || w.premise === 6) {
+          const funded = projectsHere.filter(j => j.phase === 'building');
+          if (!funded.length) deny({code:'project_unfunded',text:lang === 'en' ? 'No funded project at this site.' : '现场没有资源齐备的工程。'});
+          else if (!funded.some(j => projectParticipation(w,j,a).authorized)) deny({code:'not_allowed',text:lang === 'en' ? 'No funded project here permits your participation; inspect project access.' : '现场资源齐备的工程均未授权你施工；请核对参与权限。'});
+        }
         break;
       case 'pray':
         entry.cost = 1;

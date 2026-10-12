@@ -136,7 +136,7 @@ export function actTokens(ctx, id, body, lang) {
   if(materialsEnabled(ctx.rt.w)){
     const identity=requestIdentity(ctx.rt.w,{...body,agentId:id,lang});
     if(identity.error)return failed(lang,identity.error);
-    if(identity.result)return {status:200,json:identity.result};
+    if(identity.result)return {status:200,json:materialActResponse(identity.result,body,lang,ctx.rt.w.premise)};
   }
   const s = sessionFor(ctx, id, body.wakeId);
   if (!s || typeof body.wakeId !== 'string') return failure(lang, 'no_waking');
@@ -166,8 +166,16 @@ export function actTokens(ctx, id, body, lang) {
       else { arrivedWithheld = p.inbox.length; ctx.wakings.delete(id); }
     }
   }
-  if(materialsEnabled(w))return {status:200,json:result};
+  if(materialsEnabled(w))return {status:200,json:materialActResponse(result,body,lang,w.premise)};
   const results = result.results.map(r => actionFeedback(r.ok ? r : { ...r, error: errorBody(lang, r.error.code, r.error, 2).error }, lang, { premise: w.premise, act: body.actions[r.index], tokenValues: tokenValues(w) }));
   return { status: 200, json: { ok: true, results, you: { ...result.you, ...tokenStatus(ctx, id, { lang }).you }, bill,
     ...(arrived !== undefined ? { arrived } : {}), ...(arrivedWithheld !== undefined ? { arrivedWithheld } : {}) } };
+}
+
+// Presentation is applied to both new and cached receipts, never stored in the world.
+export function materialActResponse(result, body, lang, premise) {
+  if (!result.ok || !Array.isArray(result.results)) return result;
+  return { ...result, results: result.results.map(r => r.ok ? r : actionFeedback(
+    { ...r, error: errorBody(lang, r.error.code, r.error, 2).error },
+    lang, { premise, act: body.actions[r.index] })) };
 }

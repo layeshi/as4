@@ -404,7 +404,15 @@ export function secHere(c) {
     if (j.lot) what.push(`${d.on} ${j.lot}`);
     if (j.on) what.push(`${d.on} ${j.on}`);
     if (j.to) what.push(`→ ${j.to}`);
-    if(j.phase)lines.push(`  ${j.id} · ${j.phase} · 词元 ${j.have}/${j.need} · 物料 ${j.haveMaterials}/${j.needMaterials} · 工作 ${j.progress}/${j.needWork}`);
+    if (j.phase) {
+      const en = code === 'en';
+      const access = (en ? {owner:'owner/steward only',group:'owning group members',public:'public participation'} : {owner:'仅业主／管事',group:'所属社群成员',public:'公开参与'})[j.access] ?? j.access;
+      const reasons = (j.participation?.reasons ?? []).map(r => (en
+        ? {project_closed:'closed',wrong_place:'not at site',project_unfunded:'still funding',not_allowed:'not authorized'}
+        : {project_closed:'已关闭',wrong_place:'不在现场',project_unfunded:'尚在筹资',not_allowed:'未获授权'})[r] ?? r);
+      lines.push(`  ${j.id} · ${j.phase} · ${en ? 'tokens' : '词元'} ${j.have}/${j.need} · ${en ? 'materials' : '物料'} ${j.haveMaterials}/${j.needMaterials} · ${en ? 'work' : '工作'} ${j.progress}/${j.needWork}`);
+      lines.push(`  ${en ? 'Participation' : '参与权限'}：${access} · ${reasons.length ? reasons.join(' / ') : en ? 'basic conditions met; law, budget and services still checked' : '基础条件满足，仍需校验法律、额度与服务'} · look project {id:"${j.id}"}`);
+    }
     lines.push(`  ${d.projects}${P.col}[${j.id}] ${what.join(code === 'en' ? ' ' : '')} · ${j.have}/${j.need} · ${d.contributors(j.contributors)} · ${d.dueDay(j.expiresDay + 1)} · ${ownerText(j.owner)}${j.inscription ? `${P.semi}${j.inscription}` : ''}`);
   }
   if (h.roads && h.roads.length) lines.push(`  ${d.roads}${P.col}${h.roads.map((r) => `${r.to}${r.functioning ? '' : `${P.open}${d.notFunctioning}${P.close}`}`).join(P.sep)}`);

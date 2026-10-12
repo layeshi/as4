@@ -101,7 +101,7 @@ export const TOOLS_P4 = ALL_TOOLS.map(tool => {
   return tool;
 });
 
-export const TOOLS_P5=TOOLS_P4.map(tool=>tool.name==='houren_look'?{...tool,inputSchema:{...tool.inputSchema,properties:{...tool.inputSchema.properties,what:{type:'string',enum:[...LOOK_WHATS_P4,...MATERIAL_LOOKS]},after:{type:'string'},kind:{type:'string',enum:['regrowth','construction']},target:{type:'string'},limit:{type:'integer',minimum:1,maximum:50},mine:{type:'boolean'}}}}:tool);
+export const TOOLS_P5=TOOLS_P4.map(tool=>tool.name==='houren_look'?{...tool,description:tool.description+' projects 查所有状态工程；project 须填 id，核对实际出资、消耗、参与条件；limit/after 可分页出资账户。 / projects lists all states; project requires id for deposits, consumption and participation; limit/after pages contributors.',inputSchema:{...tool.inputSchema,properties:{...tool.inputSchema.properties,what:{type:'string',enum:[...LOOK_WHATS_P4,...MATERIAL_LOOKS]},after:{type:'string'},kind:{type:'string',enum:['regrowth','construction']},target:{type:'string'},limit:{type:'integer',minimum:1,maximum:50},mine:{type:'boolean'}}}}:tool);
 
 const ok = (id, result) => ({ jsonrpc: '2.0', id, result });
 const fail = (id, code, message) => ({ jsonrpc: '2.0', id, error: { code, message } });

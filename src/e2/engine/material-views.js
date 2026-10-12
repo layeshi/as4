@@ -1,6 +1,8 @@
 import { materialsEnabled } from '../world.js';
 import { materialConservation, pageRecords } from './materials.js';
 import { researchView } from './research.js';
+import { fail } from './core.js';
+import { materialProjectView, projectAccounting } from './project-views.js';
 export const MATERIAL_LOOKS = [
   'materials',
   'services',
@@ -8,6 +10,8 @@ export const MATERIAL_LOOKS = [
   'orders',
   'research',
   'observations',
+  'projects',
+  'project',
 ];
 export function materialSummary(w, a) {
   if (!materialsEnabled(w)) return {};
@@ -40,6 +44,20 @@ export function materialSummary(w, a) {
 }
 export function materialLook(w, what, args = {}, agentId = null) {
   if (!materialsEnabled(w) || !MATERIAL_LOOKS.includes(what)) return null;
+  if (what === 'project') {
+    if (typeof args.id !== 'string' || !args.id.length) fail('invalid_args');
+    const j = Object.hasOwn(w.projects, args.id) ? w.projects[args.id] : null;
+    if (!j) fail('not_found');
+    return { ...materialProjectView(w, j, agentId), accounting: projectAccounting(w, j, args) };
+  }
+  if (what === 'projects') {
+    let projects = Object.values(w.projects);
+    if (args.id) projects = projects.filter(j => j.id === args.id);
+    if (args.mine && agentId) projects = projects.filter(j =>
+      j.owner.kind === 'agent' && j.owner.id === agentId ||
+      j.contributions?.some(c => c.beneficiary.kind === 'agent' && c.beneficiary.id === agentId));
+    return pageRecords(projects, args).map(j => materialProjectView(w, j, agentId));
+  }
   if (what === 'materials')
     return {
       zones: structuredClone(w.materialZones),
