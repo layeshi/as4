@@ -1,6 +1,6 @@
 import { requestIdentity } from '../e2/engine/act-receipts.js';
 import { activeWaking } from '../e2/engine/tokens.js';
-import { tokenStatus, rulesCore, wakeCore, lookCore, actTokens } from './tokens.js';
+import { tokenStatus, rulesCore, wakeCore, lookCore, actTokens, materialActResponse } from './tokens.js';
 import { lawProtectionView } from '../e2/engine/law-semantics.js';
 // PROTOCOL §3、§4：agent 接口——感知与行动。
 
@@ -78,7 +78,7 @@ export function actCore(ctx, id, body, lang) {
   }
   const w = rt.w;
   const a = w.agents[id];
-  if((w.premise === 5 || w.premise === 6)){const identity=requestIdentity(w,{...body,agentId:id,lang});if(identity?.error)return {status:identity.error.error.code==='conflict'?409:400,json:identity.error};if(identity?.result)return {status:200,json:identity.result};}
+  if((w.premise === 5 || w.premise === 6)){const identity=requestIdentity(w,{...body,agentId:id,lang});if(identity?.error)return {status:identity.error.error.code==='conflict'?409:400,json:identity.error};if(identity?.result)return {status:200,json:materialActResponse(identity.result,body,lang,w.premise)};}
   if (w.paused) return fail('paused', lawProtectionView(w) ? { reason: 'law_execution_fault', diagnostics: lawProtectionView(w) } : {});
   if ((w.experimentControl || body.experimentGeneration !== undefined) && (!Number.isSafeInteger(body.experimentGeneration) || body.experimentGeneration !== (w.experimentControl?.generation ?? 0))) {
     return { status: 409, json: { error: { code: 'stale_perception', message: lang === 'en' ? 'The experiment was paused. Read a fresh perception before acting.' : '实验曾被暂停，请重新感知后行动。' } } };

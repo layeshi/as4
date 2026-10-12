@@ -1,3 +1,4 @@
+import { renderProjectHistory } from './project-ui.js';
 import { h, clear, ai } from './dom.js';
 import { api, errorText } from './api.js';
 import { section, table, placeLink } from './render.js';
@@ -54,6 +55,7 @@ export function renderMaterialEnvironment(ctx, root) {
       )
     )
   );
+  renderProjectHistory(ctx, root);
   const records = h('div'),
     more = h('button', { class: 'btn small' }, '下一页');
   let after;
