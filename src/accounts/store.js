@@ -121,6 +121,39 @@ export class AccountStore {
       return publicUser(u);
     });
   }
+  /** Verified WeChat identity only; never link by username or client-supplied OpenID. */
+  async wechatLogin(identity, { registrationOpen = true, bindId = null, authorize = () => {} } = {}) {
+    if (typeof identity !== 'string' || !/^[a-f0-9]{64}$/.test(identity)) fail(400, 'invalid_identity', '微信身份无效。');
+    const existing = this.data.users.find(u => u.wechatIdentity === identity);
+    if (existing) {
+      authorize();
+      if (existing.status !== 'active') fail(401, 'unauthorized', '账号已停用。');
+      if (bindId && existing.id !== bindId) fail(409, 'identity_linked', '此微信已关联其他账号，请退出网站账号后使用微信登录。');
+      return existing;
+    }
+    if (!bindId && !registrationOpen) fail(403, 'registration_closed', '公开注册已关闭，请登录已有账号后关联微信。');
+    const encoded = bindId ? null : await this.expensive(() => passwordHash(randomBytes(48).toString('hex')));
+    authorize();
+    return this.commit(users => {
+      const current = users.find(u => u.wechatIdentity === identity);
+      if (current) {
+        if (current.status !== 'active' || bindId && current.id !== bindId) fail(409, 'identity_linked', '微信关联已变化，请重新登录。');
+        return current;
+      }
+      if (bindId) {
+        const user = users.find(u => u.id === bindId && u.status === 'active');
+        if (!user || user.wechatIdentity) fail(409, 'identity_linked', '账号已经关联微信或不可用。');
+        user.wechatIdentity = identity;
+        return user;
+      }
+      const now = new Date().toISOString();
+      // Random account name prevents a pre-registered name from hijacking this identity.
+      let name;
+      do { name = 'wx_' + randomBytes(12).toString('hex'); } while (users.some(u => u.username === name));
+      const user = { id: randomUUID(), username: name, displayName: '微信访客', passwordHash: encoded, wechatIdentity: identity, role: 'user', status: 'active', revision: 1, createdAt: now, updatedAt: now };
+      users.push(user); return user;
+    });
+  }
   async login(body) {
     const name = typeof body.username === 'string' ? body.username.toLowerCase() : '';
     const before = this.data.users.find((u) => u.username === name);
@@ -138,7 +171,7 @@ export class AccountStore {
     }
     return u;
   }
-  issue(id) {
+  issue(id, metadata = {}) {
     const u = this.get(id);
     if (!u || u.status !== 'active') fail(401, 'unauthorized', '请重新登录。');
     for (const [key, s] of this.sessions) if (s.expires <= Date.now()) this.sessions.delete(key);
@@ -147,8 +180,12 @@ export class AccountStore {
     for (const [key] of own.slice(0, Math.max(0, own.length - 9))) this.sessions.delete(key);
     if (this.sessions.size >= 10000) this.sessions.delete(this.sessions.keys().next().value);
     const token = randomBytes(32).toString('hex');
-    this.sessions.set(hash(token), { userId: id, revision: u.revision, expires: Date.now() + TTL });
+    this.sessions.set(hash(token), { userId: id, revision: u.revision, expires: Date.now() + TTL, wechat: metadata.wechat });
     return token;
+  }
+  sessionMetadata(token) {
+    if (!this.session(token)) return null;
+    return this.sessions.get(hash(token));
   }
   logout(token) { if (token) this.sessions.delete(hash(token)); }
   async update(id, body, { admin = false, authorize = () => {} } = {}) {

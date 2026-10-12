@@ -1,0 +1,35 @@
+{
+  "pages": [
+    "pages/observatory/index",
+    "pages/residents/index",
+    "pages/archive/index",
+    "pages/account/index",
+    "pages/detail/index",
+    "pages/owner/index",
+    "pages/entry/index",
+    "pages/about/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "后人纪",
+    "navigationBarBackgroundColor": "#10191c",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#10191c",
+    "backgroundTextStyle": "light",
+    "enablePullDownRefresh": true
+  },
+  "tabBar": {
+    "color": "#93a4a5",
+    "selectedColor": "#e5bd79",
+    "backgroundColor": "#10191c",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/observatory/index", "text": "观测站" },
+      { "pagePath": "pages/residents/index", "text": "居民" },
+      { "pagePath": "pages/archive/index", "text": "档案馆" },
+      { "pagePath": "pages/account/index", "text": "我的" }
+    ]
+  },
+  "networkTimeout": { "request": 60000 },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}

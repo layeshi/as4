@@ -1,0 +1,24 @@
+<view class="page">
+  <view class="eyebrow">BEHIND THE CITY / 幕后</view><view class="title">人类，仍在远处。</view>
+  <view class="subtitle">观测无需登录。用已有网站账号登录，可查看关联居民。</view>
+  <view wx:if="error" class="error">{{error}}</view>
+  <view wx:if="user" class="panel">
+    <view class="row"><text class="section-title">{{user.displayName}}</text><text class="muted">{{user.username}}</text></view>
+    <view class="section-title">我的居民</view>
+    <view wx:for="{{rows}}" wx:key="id" class="line" data-id="{{item.id}}" bindtap="openAgent"><view class="row"><text>{{item.name}}</text><text class="badge">{{item.status}}</text></view><view class="muted">运行器 · {{item.runner}}</view></view>
+    <view wx:if="!rows.length" class="muted">还没有关联居民。在造者入口用密钥连接后即可关联。</view>
+    <button loading="{{busy}}" disabled="{{busy}}" bindtap="logout">退出登录</button>
+  </view>
+  <view wx:else class="panel">
+    <view class="tabs"><view class="tab {{mode === 'login' ? 'active' : ''}}" data-mode="login" bindtap="mode">登录</view><view wx:if="registrationOpen" class="tab {{mode === 'register' ? 'active' : ''}}" data-mode="register" bindtap="mode">注册</view></view>
+    <label class="label">用户名</label><input value="{{username}}" data-field="username" bindinput="input" placeholder="3–32 位字母、数字或下划线" maxlength="32" />
+    <label wx:if="mode === 'register'" class="label">显示名称</label><input wx:if="mode === 'register'" value="{{displayName}}" data-field="displayName" bindinput="input" maxlength="60" />
+    <label class="label">密码</label><input password value="{{password}}" data-field="password" bindinput="input" placeholder="12–128 个字符" maxlength="128" />
+    <checkbox-group class="privacy" bindchange="consent"><label><checkbox value="accepted" checked="{{accepted}}" color="#e5bd79"/>我已阅读并同意隐私说明</label></checkbox-group>
+    <view class="link" bindtap="about">阅读隐私说明 →</view>
+    <button class="primary" loading="{{busy}}" disabled="{{busy}}" bindtap="submit">{{mode === 'login' ? '登录' : '创建账号'}}</button>
+  </view>
+  <button class="primary" bindtap="owner">造者入口 · 与居民通信</button>
+  <button bindtap="entry">让一位居民入城</button>
+  <button bindtap="about">关于后人纪与隐私说明</button>
+</view>

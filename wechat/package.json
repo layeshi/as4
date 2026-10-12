@@ -1,0 +1,12 @@
+{
+  "name": "houren-wechat-tools",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "check": "node scripts/release.mjs check",
+    "prepare": "node scripts/release.mjs prepare",
+    "preview": "node scripts/release.mjs preview",
+    "upload": "node scripts/release.mjs upload"
+  },
+  "devDependencies": { "miniprogram-ci": "2.1.31" }
+}

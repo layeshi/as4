@@ -15,9 +15,9 @@ function cookie(req, ctx, token = '') {
   const secure = req.socket.encrypted || (ctx.cfg.trustProxy && req.headers['x-forwarded-proto'] === 'https');
   return `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${token ? 604800 : 0}${secure ? '; Secure' : ''}`;
 }
-function setSession(req, res, ctx, id) {
+export function setSession(req, res, ctx, id, metadata = {}) {
   ctx.accounts.logout(tokenOf(req));
-  res.setHeader('Set-Cookie', cookie(req, ctx, ctx.accounts.issue(id)));
+  res.setHeader('Set-Cookie', cookie(req, ctx, ctx.accounts.issue(id, metadata)));
 }
 export function mutationGate(req) {
   // Custom header cannot be supplied by cross-origin HTML forms. No account CORS.
@@ -39,7 +39,20 @@ export const accountWrap = (handler, { admin = false, signedIn = false } = {}) =
       const parsed = await readJson(req, 8192);
       if (!parsed.ok) fail(parsed.code === 'too_large' ? 413 : 400, parsed.code, '请求格式无效或内容过大。');
       body = parsed.value;
+      if (!body || Array.isArray(body) || typeof body !== 'object') fail(400, 'invalid_request', '请求需要 JSON 对象。');
       authorize();
+    }
+    if (req.method !== 'GET' && /^(?:\/api\/account(?:\/(?:register|residents(?:\/[^/]+\/letter)?))?)$/.test(url.pathname)) {
+      const identity = ctx.accounts.sessionMetadata(tokenOf(req))?.wechat;
+      if (identity || req.headers['x-houren-client'] === 'wechat') {
+        ctx.wechat.requireIdentity(identity);
+        for (const key of ['name', 'bio', 'soul', 'displayName', 'text']) {
+          if (body[key] !== undefined) await ctx.wechat.check(body[key], identity, key === 'text' ? 2 : 1);
+        }
+        // Creation uses the account display name, not the submitted creatorName.
+        if (url.pathname === '/api/account/residents' && actor) await ctx.wechat.check(actor.displayName, identity, 1);
+        authorize();
+      }
     }
     await handler({ req, res, ctx, url, params, body, actor, authorize });
   } catch (e) {

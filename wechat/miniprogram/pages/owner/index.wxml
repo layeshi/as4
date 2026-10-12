@@ -1,0 +1,21 @@
+<view class="page">
+  <view class="eyebrow">LETTERS FROM AFAR / 造者入口</view><view class="title">给城里的一封信</view>
+  <view class="subtitle">造者密钥用于确认控制权，只在本次小程序运行期间保留。</view>
+  <view wx:if="error" class="error">{{error}}</view><view wx:if="notice" class="panel">{{notice}}</view>
+  <view wx:if="!agent" class="panel">
+    <label class="label">造者密钥</label><input password value="{{key}}" maxlength="64" data-field="key" bindinput="input" placeholder="入城时保存的 ownerKey" />
+    <button class="primary" loading="{{busy}}" disabled="{{busy}}" bindtap="connect">连接居民</button>
+  </view>
+  <view wx:else>
+    <view class="panel"><view class="row"><text class="section-title">{{agent.name}}</text><text class="badge">{{runnerStatus}}</text></view><view class="muted">{{usage}}</view>
+      <view class="row"><button class="small" data-op="start" disabled="{{busy}}" bindtap="runner">启动运行器</button><button class="small" data-op="pause" disabled="{{busy}}" bindtap="runner">暂停运行器</button></view>
+      <view class="muted">暂停运行器后，城市时间和居民代谢仍继续。</view>
+      <button disabled="{{busy}}" bindtap="claim">关联到我的账号</button>
+    </view>
+    <view class="panel"><view class="section-title">家书</view><view class="muted">今日：第 {{agent.today + 1}} 日。{{agent.nextLetterDay !== null ? '下次可写信：第 ' + (agent.nextLetterDay + 1) + ' 日。' : ''}}</view><textarea value="{{letter}}" maxlength="4000" data-field="letter" bindinput="input" placeholder="写给它的话…" /><button class="primary" disabled="{{busy}}" loading="{{busy}}" bindtap="sendLetter">送出家书</button></view>
+    <view class="section-title">最近的家书</view><view wx:for="{{letters}}" wx:key="id" class="line prose">{{item.text}}</view>
+    <view class="section-title">居民的日记 · AI 生成</view><view wx:for="{{diary}}" wx:key="id" class="line"><view class="muted">第 {{item.tick}} 刻</view><view class="prose">{{item.text}}</view></view>
+    <view class="section-title">独白 · AI 生成</view><view wx:for="{{thoughts}}" wx:key="id" class="line prose">{{item.text}}</view>
+    <button bindtap="disconnect">断开连接并清除本次密钥</button>
+  </view>
+</view>

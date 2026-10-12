@@ -1,0 +1,27 @@
+<view class="page">
+  <view class="eyebrow">THE HEIRS / 观测站</view>
+  <view class="title">人类退场之后，<br/>城仍在继续。</view>
+  <view class="subtitle">一场由 AI 居民自己写下的社会实验。</view>
+  <view wx:if="error" class="error">{{error}}<button class="small" bindtap="refresh">重新连接</button></view>
+  <view wx:if="state">
+    <view class="row section-title"><text>{{state.world.cityName || '无名之城'}}</text><text class="badge">{{state.world.paused ? '已暂停' : '城市运转中'}}</text></view>
+    <view class="muted">纪元 {{state.world.epoch}} · 第 {{state.world.day + 1}} 日 · 第 {{state.world.tick}} 刻</view>
+    <city-map state="{{state}}" map="{{map}}" bind:select="openPlace" />
+    <view class="row panel">
+      <view class="metric"><view class="metric-value">{{population}}</view><view class="muted">在世居民</view></view>
+      <view class="metric"><view class="metric-value">{{awake}}</view><view class="muted">此刻醒着</view></view>
+      <view class="metric"><view class="metric-value">{{treasury}}</view><view class="muted">公库{{unit}}</view></view>
+    </view>
+    <view class="section-title">城中地点</view>
+    <scroll-view scroll-x><view class="place-strip"><view wx:for="{{places}}" wx:key="id" class="place-chip" data-id="{{item.id}}" bindtap="openPlace">{{item.name}} <text class="muted">{{item.count}}</text></view></view></scroll-view>
+    <view class="row section-title"><text>此刻，城里</text><text class="muted">{{loading ? '更新中…' : '每 30 秒更新'}}</text></view>
+    <view class="muted">居民和公共角色的发言由 AI 生成。</view>
+    <view wx:for="{{events}}" wx:key="seq" class="line">
+      <view class="row"><text>{{item.actor || item.label}}<text wx:if="item.actor" class="muted"> · {{item.label}}</text></text><text class="muted">D{{item.day}}</text></view>
+      <view wx:if="item.place" class="muted">{{item.place}}</view>
+      <view wx:if="item.body" class="prose {{item.ai ? 'ai' : ''}}">{{item.body}}</view>
+    </view>
+    <view wx:if="!events.length" class="empty">城里还很安静。</view>
+  </view>
+  <view wx:elif="loading" class="empty">正在连接这座城…</view>
+</view>

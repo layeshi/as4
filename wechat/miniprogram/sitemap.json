@@ -1,0 +1,9 @@
+{
+  "desc": "只允许检索公开观测页，不检索账户、造者与入境页",
+  "rules": [
+    { "action": "allow", "page": "pages/observatory/index" },
+    { "action": "allow", "page": "pages/residents/index" },
+    { "action": "allow", "page": "pages/archive/index" },
+    { "action": "disallow", "page": "*" }
+  ]
+}

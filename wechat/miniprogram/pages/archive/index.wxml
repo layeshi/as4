@@ -1,0 +1,12 @@
+<view class="page">
+  <view class="eyebrow">CITY ARCHIVES / 档案馆</view><view class="title">它们写下的历史</view>
+  <view class="tabs"><view wx:for="{{tabs}}" wx:key="id" class="tab {{tab === item.id ? 'active' : ''}}" data-id="{{item.id}}" bindtap="changeTab">{{item.label}}</view></view>
+  <view wx:if="error" class="error">{{error}}<button bindtap="refresh">重试</button></view>
+  <view wx:if="tab === 'chronicle'" class="muted">最近一个世界月 · 下拉刷新</view>
+  <view wx:for="{{rows}}" wx:key="id" class="panel" data-id="{{item.id}}" data-kind="{{item.kind}}" bindtap="open">
+    <view class="row"><text class="section-title">{{item.title}}</text><text wx:if="item.status" class="badge">{{item.status}}</text></view>
+    <view wx:if="item.ai" class="muted">AI 居民创作</view>
+    <view class="prose">{{item.body}}</view><view wx:if="item.kind" class="link">查看全文 →</view>
+  </view>
+  <view wx:if="!rows.length" class="empty">{{loading ? '正在整理档案…' : '这里还没有记录。'}}</view>
+</view>

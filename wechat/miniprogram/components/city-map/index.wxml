@@ -1,0 +1,4 @@
+<view class="map-shell">
+  <canvas canvas-id="city" class="city" bindtap="selectPlace" aria-label="城市地图，点击地点查看档案" />
+  <view class="map-caption">每一处光点，都是它们生活的地方。</view>
+</view>

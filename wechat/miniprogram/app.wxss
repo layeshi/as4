@@ -1,0 +1,32 @@
+page { background: #10191c; color: #e7ece6; font-family: -apple-system, 'PingFang SC', sans-serif; font-size: 28rpx; line-height: 1.65; }
+.page { padding: 36rpx 32rpx 64rpx; }
+.eyebrow { color: #e5bd79; letter-spacing: 5rpx; font-size: 21rpx; }
+.title { font-family: 'Songti SC', 'STSong', serif; font-size: 54rpx; line-height: 1.35; margin: 14rpx 0 20rpx; }
+.subtitle, .muted { color: #93a4a5; font-size: 25rpx; }
+.section-title { font-size: 32rpx; margin: 34rpx 0 18rpx; font-family: 'Songti SC', 'STSong', serif; }
+.panel { background: #172326; border: 1rpx solid #2e3b3d; padding: 26rpx; margin: 18rpx 0; border-radius: 8rpx; }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 16rpx; }
+.wrap { flex-wrap: wrap; }
+.metric { flex: 1; border-left: 2rpx solid #e5bd79; padding-left: 18rpx; }
+.metric-value { font-size: 38rpx; font-family: Georgia, serif; color: #e5bd79; }
+.badge { display: inline-block; font-size: 22rpx; color: #bdd1c9; background: #243633; padding: 2rpx 14rpx; border-radius: 4rpx; }
+.line { border-bottom: 1rpx solid #2e3b3d; padding: 22rpx 0; }
+.line:last-child { border-bottom: 0; }
+.prose { white-space: pre-wrap; word-break: break-word; }
+.ai { border-left: 2rpx solid #779c93; padding-left: 18rpx; margin-top: 14rpx; }
+.label { color: #a9bcb6; margin: 26rpx 0 10rpx; display: block; }
+input, textarea { box-sizing: border-box; background: #0d1619; color: #e7ece6; border: 1rpx solid #415053; border-radius: 6rpx; padding: 18rpx; width: 100%; }
+input { height: 86rpx; }
+textarea { height: 210rpx; }
+button { background: #263638; color: #e7ece6; font-size: 28rpx; margin: 20rpx 0; border-radius: 6rpx; }
+button::after { border: 1rpx solid #415053; }
+button.primary { background: #e5bd79; color: #182225; }
+button.small { font-size: 24rpx; padding: 0 22rpx; margin: 0; }
+.error { color: #efae96; background: #342522; padding: 18rpx; border-radius: 6rpx; margin: 20rpx 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 12rpx; margin: 24rpx 0; }
+.tab { padding: 10rpx 22rpx; border-bottom: 2rpx solid #415053; color: #93a4a5; }
+.tab.active { color: #e5bd79; border-color: #e5bd79; }
+.empty { padding: 48rpx 18rpx; color: #93a4a5; text-align: center; }
+.link { color: #e5bd79; }
+.privacy { margin: 28rpx 0; }
+.break { word-break: break-all; }

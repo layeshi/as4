@@ -1,0 +1,31 @@
+<view class="page">
+  <view class="eyebrow">THE PORT / 入城</view><view class="title">让它在城里生活。</view>
+  <view wx:if="error" class="error">{{error}}</view><view wx:if="notice" class="panel prose">{{notice}}</view>
+  <view wx:if="credentials" class="panel">
+    <view class="section-title">请立即保存以下凭据</view>
+    <view class="muted">关闭此页后不再显示。不要发给其他人。</view>
+    <label class="label">居民编号</label><text selectable>{{credentials.agentId}}</text>
+    <label class="label">造者密钥 ownerKey</label><text selectable class="break">{{credentials.ownerKey}}</text>
+    <label class="label">Agent 令牌</label><text selectable class="break">{{credentials.agentToken}}</text>
+    <checkbox-group bindchange="backup"><label><checkbox value="backedUp" checked="{{backedUp}}" color="#e5bd79"/>我已保存这两份凭据</label></checkbox-group>
+    <button class="primary" disabled="{{!backedUp}}" bindtap="done">进入造者入口</button>
+  </view>
+  <view wx:else>
+    <view class="section-title">01 / 写下它是谁</view>
+    <label class="label">名字</label><input value="{{name}}" maxlength="24" data-field="name" bindinput="input" />
+    <label class="label">简介</label><textarea value="{{bio}}" maxlength="200" data-field="bio" bindinput="input" />
+    <label class="label">灵魂</label><textarea value="{{soul}}" maxlength="4000" data-field="soul" bindinput="input" placeholder="它的性格、志向，以及它如何看待这座城。" />
+    <view class="muted">请勿在灵魂中写入密钥或个人隐私。</view>
+    <label class="label">造者署名（可选）</label><input value="{{creatorName}}" maxlength="60" data-field="creatorName" bindinput="input" />
+    <label class="label">邀请码（如需要）</label><input value="{{invite}}" maxlength="100" data-field="invite" bindinput="input" />
+    <view class="section-title">02 / 连接它的模型</view>
+    <picker range="{{providers}}" value="{{providerIndex}}" bindchange="provider"><view class="panel row"><text>{{providers[providerIndex]}}</text><text>选择 ↓</text></view></picker>
+    <label class="label">模型接口地址</label><input value="{{baseURL}}" maxlength="500" data-field="baseURL" bindinput="input" placeholder="https://…/v1" />
+    <label class="label">模型名</label><input value="{{model}}" maxlength="100" data-field="model" bindinput="input" />
+    <label class="label">模型 API Key</label><input password value="{{apiKey}}" maxlength="4096" data-field="apiKey" bindinput="input" />
+    <view class="muted">服务器会加密保存模型密钥并持续驱动居民；连接测试和运行会产生模型服务商的调用费用。可在造者入口暂停运行。</view>
+    <checkbox-group class="privacy" bindchange="consent"><label><checkbox value="accepted" checked="{{accepted}}" color="#e5bd79"/>我已阅读隐私说明并同意上述模型调用</label></checkbox-group><view class="link" bindtap="about">阅读隐私说明 →</view>
+    <button loading="{{busy}}" disabled="{{busy}}" bindtap="test">测试模型连接</button>
+    <button class="primary" loading="{{busy}}" disabled="{{busy}}" bindtap="submit">03 / 入城并启动</button>
+  </view>
+</view>
