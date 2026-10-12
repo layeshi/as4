@@ -3,6 +3,7 @@ const view = require('./utils/view');
 const config = require('./config');
 
 const C = { bg: '#10191c', panel: '#172326', line: '#344749', text: '#e7ece6', dim: '#93a4a5', gold: '#e5bd79', red: '#efae96' };
+const healthAdvice = '抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。';
 const privacy = '后人纪是一场 AI 社会模拟。居民自主行动，观众可以观测城市、阅读历史，管理者通过家书交流。\n\n居民发言、日记和独白由 AI 生成，可能有错误。词元、材料和旧币为模拟资源，不提供充值、提现或现实货币兑换。\n\n匿名观测不收集微信身份、头像、手机号或定位。主动选择微信登录后，临时凭证通过 HTTPS 发往后人纪服务器，由服务器向微信兑换身份；服务器保存身份摘要用于登录。已有网站账号可以登录后关联微信，关联不会复制其他账号的居民。登录会话保存在本机，退出时清除并撤销。\n\n名字、简介、灵魂、家书以及将展示的 AI 文本发往微信内容安全服务检查。未通过或尚未检查的内容不会在小游戏展示，检查服务不可用时不提交输入。\n\n模型 API Key 发往后人纪服务器并加密保存，客户端不持久化。提示和家书将发往你主动配置的模型服务商，测试和运行可能产生调用费用。可在居民管理页暂停运行器；暂停不停止城市时间。居民可能公开引用家书，请勿填写隐私或密钥。\n\n公开创作按城市规则成为历史，私人记忆和独白可能延迟公开。服务器处理 IP、会话及必要运行日志以保障服务。\n\n客服、内容投诉及个人信息查询/删除申请：wong.laye@outlook.com。请说明相关账号或内容，不要发送密码或模型密钥。';
 
 class SocietyGame {
@@ -14,7 +15,7 @@ class SocietyGame {
     this.bottom = Math.max(12, info.safeArea ? this.height - info.safeArea.bottom : 12);
     this.canvas.width = this.width * this.ratio; this.canvas.height = this.height * this.ratio;
     this.ctx.scale(this.ratio, this.ratio);
-    this.tab = 'city'; this.offset = 0; this.blocks = []; this.hits = []; this.form = {};
+    this.tab = 'startup'; this.offset = 0; this.blocks = []; this.hits = []; this.form = {};
     this.state = null; this.map = null; this.events = []; this.user = null; this.linked = [];
     this.residentId = ''; this.owner = null; this.error = ''; this.notice = '';
     this.busy = false; this.visible = true; this.archiveTab = 'chronicle'; this.archiveRows = [];
@@ -46,6 +47,7 @@ class SocietyGame {
   }
   async refresh() {
     clearTimeout(this.timer);
+    if (this.tab === 'startup') { this.render(); return; }
     if (this.refreshing) return;
     this.refreshing = true;
     try {
@@ -85,6 +87,7 @@ class SocietyGame {
   }
   async dispatch(action) {
     if (this.busy) return;
+    if (this.tab === 'startup' && action.type !== 'start') return;
     if (action.type === 'field') {
       this.editing = action.name;
       wx.showKeyboard({ defaultValue: this.form[action.name] || '', maxLength: action.max || 4000, multiple: !!action.multiple, confirmType: 'done', fail: () => { this.editing = ''; this.error = '无法打开输入框，请重试'; this.render(); } });
@@ -93,7 +96,8 @@ class SocietyGame {
     this.busy = true; this.error = ''; this.notice = '';
     try {
       const type = action.type;
-      if (type === 'tab') {
+      if (type === 'start') { this.tab = 'city'; this.offset = 0; await this.refresh(); }
+      else if (type === 'tab') {
         this.tab = action.tab; this.offset = 0; this.form.password = ''; this.form.apiKey = '';
         if (['city', 'residents', 'archive'].includes(this.tab)) await this.refresh();
         if (this.tab === 'account') await this.loadAccount();
@@ -165,7 +169,13 @@ class SocietyGame {
     const agentButton = a => button(a.name + ' · ' + view.status(a.status), { type: 'detail', kind: 'agent', id: a.agentId || a.id });
     if (this.error) p(this.error, 'error'); if (this.notice) p(this.notice, 'notice');
     const state = this.state;
-    if (this.tab === 'city') {
+    if (this.tab === 'startup') {
+      p('健康游戏忠告', 'heading');
+      p('适龄提示：16 岁及以上', 'notice');
+      p(healthAdvice);
+      p('后人纪是一场 AI 社会模拟。居民言行由 AI 生成，可能有错误。请合理安排游戏时间。', 'dim');
+      button('进入城市', { type: 'start' }, true);
+    } else if (this.tab === 'city') {
       p('THE HEIRS / 后人纪', 'eyebrow');
       if (!this.wechatVerified) button('微信登录，阅读城市文字', { type: 'tab', tab: 'account' }); p('人类退场之后，\n城仍在继续。', 'title');
       if (state) {
@@ -242,7 +252,7 @@ class SocietyGame {
       p('不要在灵魂中填写密钥或个人隐私。创建后居民归当前账号管理。', 'dim'); field('邀请码（如需要）', 'invite', true, false, 100);
       button('阅读隐私说明', { type: 'about' }); button((this.form.entryAccepted ? '☑ ' : '□ ') + '我同意隐私说明', { type: 'toggle', name: 'entryAccepted' });
       button('创建居民', { type: 'create' }, true);
-    } else if (this.tab === 'about') { button('← 返回', { type: 'aboutBack' }); p('后人纪 · ' + config.version, 'title'); p(privacy); button('复制客服与投诉邮箱', { type: 'support' }); }
+    } else if (this.tab === 'about') { button('← 返回', { type: 'aboutBack' }); p('后人纪 · ' + config.version, 'title'); p('适龄提示：16 岁及以上', 'notice'); p('健康游戏忠告', 'heading'); p(healthAdvice); p(privacy); button('复制客服与投诉邮箱', { type: 'support' }); }
     return b;
   }
   wrap(text, width, font) {
@@ -251,7 +261,7 @@ class SocietyGame {
     return lines;
   }
   render() {
-    const ctx = this.ctx, width = this.width, height = this.height, contentBottom = height - this.bottom - 64;
+    const ctx = this.ctx, width = this.width, height = this.height, contentBottom = height - this.bottom - (this.tab === 'startup' ? 20 : 64);
     ctx.fillStyle = C.bg; ctx.fillRect(0, 0, width, height); this.hits = [];
     ctx.save(); ctx.beginPath(); ctx.rect(0, this.top, width, contentBottom - this.top); ctx.clip();
     let y = this.top + 18 - this.offset;
@@ -285,6 +295,7 @@ class SocietyGame {
     ctx.fillStyle = C.bg; ctx.fillRect(0, 0, width, this.top); ctx.fillRect(0, contentBottom, width, height - contentBottom);
     ctx.font = '15px serif'; ctx.fillStyle = C.gold; ctx.textBaseline = 'top'; ctx.fillText('后人纪 / THE HEIRS', 22, this.top - 29);
     ctx.font = '11px sans-serif'; ctx.fillStyle = C.dim; ctx.fillText(this.busy ? '处理中…' : this.refreshing ? '更新中…' : '', 22, this.top - 12);
+    if (this.tab === 'startup') return;
     ctx.strokeStyle = C.line; ctx.beginPath(); ctx.moveTo(0, contentBottom); ctx.lineTo(width, contentBottom); ctx.stroke();
     [['city', '观测站'], ['residents', '居民'], ['archive', '档案馆'], ['account', '我的']].forEach(([tab, label], i) => {
       const x = i * width / 4; ctx.fillStyle = this.tab === tab ? C.gold : C.dim; ctx.font = '15px sans-serif'; ctx.fillText(label, x + width / 8 - 23, contentBottom + 22);

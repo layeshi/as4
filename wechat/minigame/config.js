@@ -1,1 +1,1 @@
-module.exports = { apiBase: 'https://www.heirscity.site', pollMs: 30000, version: '0.2.0' };
+module.exports = { apiBase: 'https://www.heirscity.site', pollMs: 30000, version: '0.2.1' };

@@ -1,58 +1,48 @@
 # 后人纪 · 微信小游戏
 
-面向 AppID `wx216f3fb724629f67`（个人主体）的 Canvas 小游戏客户端。默认工程类型为 `game`，入口为 `minigame/game.js`，复用现有生产 HTTPS API；不会部署或替换生产引擎与世界数据。
+AppID `wx216f3fb724629f67`，个人主体；默认工程类型 `game`，入口 `minigame/game.js`。0.2.1 使用生产 HTTPS 服务的 P6 账户接口和微信登录/文本审核接口。当前开发版本已上传，尚未提审或正式发布；0.2.1 首次预览曾遇连接超时，HTTPS/SSH 恢复后用户复测确认正常；最新证据和待办见 [上线记录](RELEASE-STATUS.md)。
 
-## 功能
+## 功能与数据处理
 
-城市实况、可点选地图、居民搜索与墓园、居民及地点档案、编年史、法典、典籍、社群与摇篮；网站账号注册/登录/退出；造者密钥连接、家书、运行器启动/暂停、账号关联；模型连接测试、托管入城和一次性凭据复制。当前版本没有充值、支付或真实货币兑换。网页管理界面、完整用量图表、领养/过继、天象投票尚未移植。
+城市地图和实况、居民/地点档案、编年史、法典与典籍；微信登录、已有网站账户验证后关联、管理自己的居民、创建居民、家书、模型配置测试/保存与运行器启动/暂停。没有充值、支付或真实货币兑换。保存模型配置不会自动启动运行器。
 
-线上运行词元/材料版本，客户端同时兼容本地两代引擎。公开实况每 30 秒刷新，进入后台停止轮询。网站会话按现有 Cookie 协议处理；造者密钥仅留内存，模型 API Key 不写入本地存储，切入后台清除输入中的密码和模型密钥。
+冷启动先显示 16+ 提示及全文健康游戏忠告，点击“进入城市”后才连接服务器。这不替代微信平台实名防沉迷系统。
 
-## 构建与验证
+“我的”页提供隐私说明和客服/投诉邮箱 `wong.laye@outlook.com`。登录前可查看结构信息，未经审核的文字隐藏。服务端检查用户文本及小游戏展示的 AI 文本，检查不可用或未通过时不提交/不展示；展示投影不改写城市历史。网站原公开接口保持原有行为。
 
-Node.js ≥ 20；在本目录执行：
+会话 Cookie 保存在客户端，OpenID 和 AppSecret 不返回客户端；原始 OpenID 仅用于服务器内存会话，身份摘要用于账户关联。模型密钥和密码输入不写入本地存储，页面离开或进入后台时清除。每 30 秒刷新，进入后台停止轮询。
+
+## 构建、预览与上传
+
+Node.js ≥ 20，在 `wechat/` 执行：
 
 ```bash
 npm ci --ignore-scripts
 npm run check
 npm run prepare
-```
-
-微信开发者工具导入 `wechat/build/`。源码位于 `wechat/minigame/`，当前约 33 KiB；源文件大小不代表微信编译后的包大小。`prepare` 同步公共 API/显示模块，输出独立工程，不包含世界数据、模型配置或上传凭据。`check` 验证 JSON、JavaScript 语法、模块引用及只读生产接口；离线检查用 `node scripts/release.mjs check --offline`。结构与 HTTP 检查不替代微信编译、真机测试或审核。2026-10-11 微信官方 CI 编译、预览生成与开发版本 0.1.0 上传成功，后台显示上传时间 19:46:13；用户已扫码确认真机预览正常。服务类目已通过并进入审核流程，当前平台拦截为“缺少资质材料”；尚未提交版本审核或正式发布。
-
-仓库根目录执行接口及客户端测试：
-
-```bash
-node --test test/wechat.test.js test/accounts.test.js test/account-agents.test.js test/managed-runner.test.js
-```
-
-2026-10-11：30 项通过，包括小游戏 Canvas 导航、真实本地 HTTP 会话、造者私有数据隔离、家书、托管入口、秘密不持久化、后台轮询停止和线上响应兼容性。
-
-## 上传
-
-使用官方 `miniprogram-ci`，按 `miniGame` 上传。私钥必须位于源码和构建目录之外，不放入 Git，也不要通过聊天发送。
-
-```bash
 WECHAT_PRIVATE_KEY_PATH=/绝对路径/private.wx216f3fb724629f67.key npm run preview
 WECHAT_PRIVATE_KEY_PATH=/绝对路径/private.wx216f3fb724629f67.key npm run upload
 ```
 
-默认版本 `0.1.0`，可用 `WECHAT_VERSION` 覆盖。通过 `WECHAT_APPID`、`WECHAT_API_BASE` 可生成其他账号/域名工程。当前登录复用网站账号，不需要 AppSecret。CI 需要代码上传密钥和允许上传的出口 IP；也可在微信开发者工具登录上传。工具只上传开发版本，不自动提审或发布。
+微信开发者工具导入 `wechat/build/`。`prepare` 仅同步公共显示模块；小游戏 API 模块包含独立的微信路由及登录逻辑。上传包只含客户端，不含世界数据、服务器环境或私钥。`check` 检查语法、JSON、模块边界和公开 HTTPS 响应；`--offline` 可跳过网络检查。这些检查不替代微信编译和真机验收。
 
-## 后台状态与上线步骤
+默认版本由 `minigame/config.js` 的 `version` 指定，目前 0.2.1；`WECHAT_VERSION` 可覆盖。`WECHAT_APPID` / `WECHAT_API_BASE` 可切换账户/域名。代码上传密钥须位于工程和构建目录外，仅用于官方 CI，工具不会自动提审或发布。
 
-2026-10-11 通过管理员扫码实际核验：AppID 与个人主体正确；名称「后人纪之词元本位」审核中；服务类目「游戏 → 其他游戏」已添加并显示已通过。`request` 合法域名已成功保存 `https://www.heirscity.site`，保留原有 `https://api.deepseek.com`。代码上传密钥已在明确授权后生成并存放于本机工程外，上传 IP 白名单已添加本机出口 `219.236.8.200`，白名单校验保持开启。
+配套后端位于仓库的 `src/http/wechat.js` 和 `src/wechat/`，通过账户模块提供微信身份关联和会话撤销。服务端 `WECHAT_APPID` / `WECHAT_APP_SECRET` 使用工程外的受限配置，客户端只包含公开 AppID。部署时保留现有世界、账户和运行器配置；提交源码不代表执行生产部署。
 
-介绍已更新为实际 AI 社会模拟游戏。名称、游戏资质、备案、隐私/UGC 和适龄提示仍需完成或核验。微信授权登录与内容安全集成尚需补齐，详见 [上线记录](RELEASE-STATUS.md)。首页显示未备案；用户隐私保护指引已更新但内容尚待逐项核对，UGC 未声明，适龄提示未设置。不能把域名配置成功、上传成功或审核提交当作正式上线。
+从仓库根目录执行微信专项验证：
 
-上线顺序：微信编译与预览 → 真机验收 → 开发版本上传 → 完善基础资料、备案、真实隐私与内容声明 → 提交微信审核 → 审核通过后发布 → 微信扫码核验正式版本。运营者身份、证件、真实联系方式及备案承诺由运营者填写/确认，不编造信息。涉及创建居民或模型调用的验收使用独立测试世界。
+```bash
+node --test test/wechat-server.test.js test/wechat-client.test.js
+npm test
+```
 
-普通原生小程序源码保留于 `miniprogram/`，备用工程为 `project.miniprogram.config.json`。只有使用真正的普通小程序账号时，才通过 `WECHAT_TARGET=miniprogram WECHAT_APPID=wx真实AppID npm run prepare` 构建该版本。
+微信专项覆盖真实本地 P6 HTTP/Canvas 登录、创建/家书幂等、私人数据权限、退出撤销、展示审核、身份关联防劫持、秘密不持久化与审核失败关闭；官方上游响应在本地测试中模拟。Linux 发布环境专项 6 项通过，完整测试 1508 通过、0 失败、1 跳过。真实微信登录和居民名称/档案文字展示已由用户确认正常；私人管理写入流程尚未在生产真机执行。
 
-参考：[微信官方 CI 仓库](https://github.com/wechat-miniprogram/miniprogram-ci-dist)、[微信网络配置文档](https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html)、[微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/devtools.html)。账号限制及审核以实际微信后台为准。
+## 发布流程
 
-## 0.2.0 配套后端
+微信编译与预览 → 真机验收 → 开发版本上传 → 基础资料/真实隐私/UGC/适龄与资质 → 提交审核 → 审核通过后发布 → 正式版本扫码核验。资质法律责任声明须由运营者核实并明确确认；身份资料和证件由运营者在微信平台填写。不要给审核人员提供真实用户或模型密钥。
 
-新版小游戏需要隔离工作树 `/Users/mac/.codex/worktrees/wechat-auth/as4` 的微信服务端集成。服务端通过受限配置读取 `WECHAT_APPID` 和 `WECHAT_APP_SECRET`，客户端不得包含 AppSecret。微信后台隐私指引需同步客服邮箱 `wong.laye@outlook.com` 与微信身份、文本审核数据流。
+普通小程序备用工程 `miniprogram/` / `project.miniprogram.config.json` 必须使用另一个真实普通小程序 AppID。当前账号按小游戏发布。
 
-P6 使用账号居民管理；0.2.0 取消旧的造者密钥、港口注册和一次性凭据入口。0.1.0 已上传，不含这次集成；0.2.0 必须先完成后端部署和真实联调，再上传并提审。
+官方依据：[CI](https://github.com/wechat-miniprogram/miniprogram-ci-dist)、[wx.login](https://developers.weixin.qq.com/minigame/dev/api/open-api/login/wx.login.html)、[code2Session](https://developers.weixin.qq.com/miniprogram/dev/server/API/user-login/api_code2session.html)、[内容检查](https://developers.weixin.qq.com/miniprogram/dev/server/API/sec-center/sec-check/api_msgseccheck.html)。账号条件以实际微信后台为准。

@@ -64,7 +64,14 @@ test('P6 miniGame integration: WeChat login, creation, private authorization, le
   const env = await boot({ physics: 2, premise: 6, shellSlots:0, hiddenPhysicsFile:file, map: 'compact-materials-v1', wechatAppId: 'wx216f3fb724629f67', wechatAppSecret: 'test-server-secret' }, {dir}); t.after(() => env.close());
   env.app.ctx.wechat.fetcher = async url => ({ok:true,json:async()=>url.pathname === '/sns/jscode2session' ? {openid:'test-openid-123456'} : url.pathname === '/cgi-bin/token' ? {access_token:'test-token',expires_in:7200} : {errcode:0,result:{suggest:'pass'}}});
   const c = client(env.base), g = c.game();
-  await g.start(); assert.equal(g.state.world.premise, 6); assert.ok(g.hits.some(h=>h.action.kind==='place'));
+  await g.start();
+  assert.equal(g.tab,'startup'); assert.equal(c.requests.length,0); assert.equal(c.timers.size,0);
+  assert.ok(g.blocks.some(b=>b.text==='适龄提示：16 岁及以上'));
+  assert.ok(g.blocks.some(b=>b.text==='抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。'));
+  assert.ok(!g.hits.some(h=>h.action.type==='tab'));
+  c.wx.emitHide(); c.wx.emitShow(); assert.equal(g.tab,'startup'); assert.equal(c.requests.length,0);
+  await g.dispatch({type:'tab',tab:'account'}); assert.equal(g.tab,'startup'); assert.equal(c.requests.length,0);
+  await g.dispatch({type:'start'}); assert.equal(g.state.world.premise, 6); assert.ok(g.hits.some(h=>h.action.kind==='place'));
   c.wx.emitHide(); assert.equal(c.timers.size,0);
   await g.dispatch({type:'tab',tab:'account'}); await g.dispatch({type:'wechatLogin'}); assert.match(g.error,/隐私/);
   g.form.accepted=true; await g.dispatch({type:'wechatLogin'}); assert.equal(g.error,''); assert.equal(g.user.role,'user'); assert.equal(g.wechatVerified,true);
