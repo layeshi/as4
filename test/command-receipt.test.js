@@ -43,3 +43,25 @@ test('receipt path changes split aliases without changing other JSON paths', () 
   applyReceipt(target, { n: 2, receipt: makeReceipt(candidate, next, {}) });
   assert.equal(stateHash(target), stateHash(next));
 });
+
+test('growing history receipts store new entries without copying the entire prefix', () => {
+  const before = { commandN: 0, history: Array.from({ length: 5000 }, (_, n) => ({ n, text: 'x'.repeat(128) })) };
+  const after = structuredClone(before); after.commandN++; after.history.push({ n: 5000, text: 'new record' });
+  const receipt = JSON.parse(JSON.stringify(makeReceipt(before, after, {})));
+  assert.ok(JSON.stringify(receipt).length < 2000, 'receipt must be bounded by the append, not history length');
+  applyReceipt(before, { n: 1, receipt }); assert.equal(stateHash(before), stateHash(after));
+});
+
+test('index deltas cover edits, appends, nested shortening and undefined entries', () => {
+  const before = { commandN: 0, rows: [{ values: [1, 2, 3], discard: true }, ['old'], null] };
+  const after = { commandN: 1, rows: [{ values: [1] }, ['old', 'new'], undefined, { nested: [1] }] };
+  const receipt = JSON.parse(JSON.stringify(makeReceipt(before, after, {})));
+  applyReceipt(before, { n: 1, receipt }); assert.equal(stateHash(before), stateHash(after));
+});
+
+test('shrinking arrays retain whole-value v1 patches and are reversible', () => {
+  const before = { commandN: 0, rows: [1, 2, 3] }, after = { commandN: 1, rows: [1] };
+  const receipt = makeReceipt(before, after, {});
+  assert.deepEqual(receipt.changes.find(c => c.path.join('.') === 'rows').value, [1]);
+  applyReceipt(before, { n: 1, receipt }); assert.equal(stateHash(before), stateHash(after));
+});

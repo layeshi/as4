@@ -48,12 +48,17 @@ function errorFeedback(r, lang, act, premise) {
       research_unavailable: en ? 'The selected research service is missing, damaged, unauthorized, or above maxResearchFee; inspect research access and fees.' : '指定研究服务不存在、受损、未授权或收费超过 maxResearchFee；请核对研究所权限与收费。',
     };
     let reason = reasons[e.code];
+    if (r.type === 'repair' && e.reason === 'repair_input') reason = e.code === 'insufficient_materials'
+      ? (en ? `Repair needs a positive material input; offered ${e.offered}, minimum ${e.minimum}. Tokens cannot replace materials.` : `维修需要投入物料；本次提供 ${e.offered}，至少需要 ${e.minimum}。词元不能替代物料。`)
+      : (en ? `The token input cannot produce any repair; offered ${e.offered}, minimum ${e.minimum}.` : `本次词元投入不足以产生维修量；提供 ${e.offered}，至少需要 ${e.minimum}。`);
     if (e.code === 'already' && r.type === 'contribute') reason = en
       ? 'The project has left the funding phase. This does not mean you previously contributed; verify the recorded deposits.'
       : '工程已离开筹资阶段。这不代表你已经出资；请核对实际出资记录。';
     if (e.code === 'already' && r.type === 'repair') reason = en
       ? 'No repair can be performed with these inputs. Inspect condition and token/material inputs; this code alone does not prove the target is fully repaired.'
       : '当前条件与投入无法产生维修量；请核对完好度及词元、物料投入，不能仅凭此错误认定已完全修复。';
+    if (e.code === 'already' && r.type === 'repair' && e.reason === 'repair_full') reason = en
+      ? 'The target is already fully repaired.' : '目标已完全修复，无需继续维修。';
     if (e.code === 'not_allowed') reason = r.type === 'construct'
       ? (en ? 'Construction participation is denied by owner/group/public access. Ask the owner or steward to change project_policy if appropriate.' : 'owner/group/public 施工参与权限不允许你施工；可请业主或管事按需调整 project_policy。')
       : (en ? 'The target or earmarked material owner does not permit this use. Inspect ownership and material claims.' : '目标或代管物料的归属不允许本次用途；请核对产权与物料领取记录。');

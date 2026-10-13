@@ -43,11 +43,25 @@ export function commitCommandCandidate(target, source) {
   for (const key of ['$lawMeter', '$ruling', '$settling', '$boundary']) delete target[key];
 }
 function diff(before, after, path = [], changes = []) {
+  // Index paths are already supported by v1 readers. Growing arrays therefore
+  // need only their changed entries, rather than another copy of all history.
+  if (Array.isArray(before) && Array.isArray(after) && after.length >= before.length) {
+    if (JSON.stringify(before) === JSON.stringify(after)) return changes;
+    for (let i = 0; i < after.length; i++) {
+      const old = before[i] ?? null, value = after[i] ?? null;
+      if (i < before.length && JSON.stringify(old) === JSON.stringify(value)) continue;
+      const nextPath = [...path, String(i)];
+      if (i >= before.length) changes.push({ path: nextPath, value });
+      else if (value && old && typeof value === 'object' && typeof old === 'object' && Array.isArray(value) === Array.isArray(old) && (!Array.isArray(value) || value.length >= old.length)) diff(old, value, nextPath, changes);
+      else if (JSON.stringify(old) !== JSON.stringify(value)) changes.push({ path: nextPath, value });
+    }
+    return changes;
+  }
   for (const key of Object.keys(before)) if (before[key] !== undefined && (!Object.hasOwn(after, key) || after[key] === undefined)) changes.push({ path: [...path, key], remove: true });
   for (const [key, value] of Object.entries(after)) {
     if (value === undefined) continue;
     const old = Object.hasOwn(before, key) ? before[key] : undefined, nextPath = [...path, key];
-    if (value && old && typeof value === 'object' && typeof old === 'object' && !Array.isArray(value) && !Array.isArray(old)) diff(old, value, nextPath, changes);
+    if (value && old && typeof value === 'object' && typeof old === 'object' && Array.isArray(value) === Array.isArray(old) && (!Array.isArray(value) || value.length >= old.length)) diff(old, value, nextPath, changes);
     else if (JSON.stringify(old) !== JSON.stringify(value)) changes.push({ path: nextPath, value });
   }
   return changes;
