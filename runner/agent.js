@@ -208,6 +208,11 @@ export async function runAgent(cfg, deps = {}) {
         if (waking.stop) { stopped = waking.stop; break; }
       }
       if (signal?.aborted) break;
+      if (p.premise === 6) {
+        const every = current.you.routine.every;
+        const wakeEvery = every > 0 ? Math.max(every, cfg.actEveryTicks || 1) : 0;
+        report({ wakeEvery, nextWakeTick: wakeEvery ? Math.max(current.now.tick + 1, S.lastMain === undefined ? current.now.tick + 1 : S.lastMain + wakeEvery) : null });
+      }
       const waited = await waitTickOrWake(S, current, 1);
       acted += waited.acted;
       cursor = S.cursor;

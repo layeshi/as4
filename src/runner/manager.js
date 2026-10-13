@@ -245,6 +245,7 @@ export class RunnerManager {
     if (!this.serverURL || this.rt.w.paused) return this.view(id);
     const controller = new AbortController();
     const state = { ...this.states.get(id), status: 'starting', lastError: null, logs: [] };
+    if (this.rt.w.premise === 6) { delete state.nextWakeTick; delete state.wakeEvery; }
     this.states.set(id, state);
     const log = makeLogger(id, { secrets: [r.token, r.config.apiKey], quiet: true, out: () => {}, err: () => {} });
     const promise = Promise.resolve().then(async () => {

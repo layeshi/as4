@@ -14,6 +14,7 @@ import { involves } from '../events.js';
 import { sendJson, clientIp } from './util.js';
 import { runnerConfig, RunnerError } from '../runner/manager.js';
 import { earthDayKey, usedToday } from './tokens.js';
+import { P } from '../e2/params.js';
 
 function p6(ctx) { if(ctx.rt.w.premise!==6)fail(404,'not_found','此世界不提供账号居民管理。'); }
 function owned(ctx,actor,id) {
@@ -28,8 +29,26 @@ function command(ctx,actor,body) {
   return result;
 }
 const wrap=fn=>accountWrap(async args=>{p6(args.ctx);try{await fn(args);}catch(e){if(e instanceof RunnerError)fail(e.status,'runner_config',e.message);throw e;}},{signedIn:true});
-function row(ctx,id) {
-  const a=ctx.rt.w.agents[id];return {...ctx.rt.engine.publicAgent(ctx.rt.w,a),agentId:id,runnerStatus:ctx.runners.view(id).status};
+// Owner-only projection: runner telemetry is process-local and may outlive a stopped job.
+function nextWake(ctx,a,runner) {
+  const w=ctx.rt.w,called=!!a.routine.called;
+  if(['dead','retired','dormant'].includes(a.status))return {state:a.status};
+  if(w.paused)return {state:'experiment_paused'};
+  if(['unconfigured','paused','stopped','error'].includes(runner.status))return {state:runner.status};
+  const job=ctx.runners.jobs.get(a.id);
+  if(!ctx.runners.valid(a.id)||!ctx.runners.records[a.id]?.enabled||!job||job.controller.signal.aborted)return {state:'stopped'};
+  if(runner.wakeEvery===0)return {state:'off',called};
+  if(!Number.isInteger(runner.nextWakeTick)||!Number.isInteger(runner.wakeEvery)||runner.wakeEvery<=0)return {state:'unknown'};
+  const tick=Math.max(w.clock.tick+1,runner.nextWakeTick),blockedBy=[];
+  if(usedToday(a,earthDayKey(ctx))>=a.tokens.cap||runner.status==='cap_reached')blockedBy.push('cap_reached');
+  if(a.energy+a.basic<=0||runner.status==='tokens_exhausted')blockedBy.push('tokens_exhausted');
+  return {state:'scheduled',tick,at:ctx.rt.nextTickAt===null?null:ctx.rt.nextTickAt+(tick-w.clock.tick-1)*P.tickMs,
+    every:runner.wakeEvery,called,day:Math.floor(tick/P.ticksPerDay)+1,tickOfDay:tick%P.ticksPerDay+1,blockedBy};
+}
+function row(ctx,id,managed=false) {
+  const a=ctx.rt.w.agents[id],runner=ctx.runners.view(id),out={...ctx.rt.engine.publicAgent(ctx.rt.w,a),agentId:id,runnerStatus:runner.status};
+  if(managed){const {every,day,tickOfDay,...compact}=nextWake(ctx,a,runner);out.nextWake=compact;}
+  return out;
 }
 export async function residentEvents(ctx,id,query,authorize) {
   const w=ctx.rt.w,limit=Math.max(1,Math.min(200,Number(query.get('limit'))||50));
@@ -61,12 +80,13 @@ export async function residentEvents(ctx,id,query,authorize) {
 function detail(ctx,id) {
   const w=ctx.rt.w,a=w.agents[id];
   const assets=assetPosition(w,a),escrow=assets.escrow;
-  return {resident:row(ctx,id),overview:{assets,energy:a.energy,basic:a.basic,materials:a.materials,escrow,dailyCap:a.tokens.cap,usedToday:usedToday(a,earthDayKey(ctx)),routine:a.routine,model:a.body.model,runner:ctx.runners.view(id),nextTickAt:ctx.rt.nextTickAt},statistics:w.residentStats[id]??null,usage:ctx.runners.usageView(id)};
+  const runner=ctx.runners.view(id);
+  return {resident:row(ctx,id),overview:{assets,energy:a.energy,basic:a.basic,materials:a.materials,escrow,dailyCap:a.tokens.cap,usedToday:usedToday(a,earthDayKey(ctx)),routine:a.routine,model:a.body.model,runner,nextWake:nextWake(ctx,a,runner),nextTickAt:ctx.rt.nextTickAt},statistics:w.residentStats[id]??null,usage:ctx.runners.usageView(id)};
 }
 export const residentRoutes=[
   ['GET','/api/account/residents',wrap(({res,ctx,actor})=>{
     const rows=Object.entries(ctx.rt.w.access.residents);
-    sendJson(res,200,{world:ctx.rt.w.id,managed:rows.filter(([,r])=>r.managerAccountId===actor.id).map(([id])=>row(ctx,id)),created:rows.filter(([,r])=>r.creatorAccountId===actor.id).map(([id])=>row(ctx,id)),startupAvailable:!Object.hasOwn(ctx.rt.w.access.startupClaims,actor.id)});
+    sendJson(res,200,{world:ctx.rt.w.id,managed:rows.filter(([,r])=>r.managerAccountId===actor.id).map(([id])=>row(ctx,id,true)),created:rows.filter(([,r])=>r.creatorAccountId===actor.id).map(([id])=>row(ctx,id)),startupAvailable:!Object.hasOwn(ctx.rt.w.access.startupClaims,actor.id)});
   })],
   ['POST','/api/account/residents',wrap(({req,res,ctx,actor,body})=>{
     if(!ctx.limits.port.take(clientIp(req,ctx.cfg.trustProxy)))fail(429,'rate_limited','创建过于频繁，请稍后重试。');
