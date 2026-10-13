@@ -105,10 +105,16 @@ export async function getAgent(req, res, ctx, url, params) {
     .map((e) => publicEvent(rt.w, e, { released: true }))
     .filter(Boolean)
     .map((e) => ({ tick: e.tick, text: e.redacted ? null : e.data.text, redacted: !!e.redacted }));
+  // Use the existing place projection so redaction and history have the same meaning in both views.
+  const inscriptionPlaces = new Set(Object.values(rt.w.inscriptions || {}).filter(i => i.author === a.id).map(i => i.place));
+  const inscriptions = [...inscriptionPlaces]
+    .flatMap(id => rt.engine.publicPlace(rt.w, id)?.inscriptions || [])
+    .filter(i => i.author?.id === a.id);
   sendJson(res, 200, {
     agent: publicAgent(rt.w, a),
     memories: publicMemories(rt.w, a),
     thoughts,
+    inscriptions,
     events: rt.events.forAgent(a.id, 100).map((e) => publicEvent(rt.w, e, { released: e.released === true })).filter(Boolean),
   });
 }

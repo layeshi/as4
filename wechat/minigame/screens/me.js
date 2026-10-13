@@ -40,7 +40,7 @@ function account(app, W) {
       N.text(iw, '为一位居民写下灵魂，接入你自己的模型，看它在城里怎样生活。', { style: 'action', color: C.text2 }),
       steps(iw),
       N.node(36, (g, x, y) => { P.fillRound(g.ctx, x, y, iw, 36, 12, 'rgba(242,182,94,0.10)'); P.icon(g.ctx, 'token', x + 10, y + 10, 16, C.token, 2); P.text(g.ctx, T.ellipsize(g.ctx, '首次创建居民，账号得 5 万启动词元', iw - 44, font(13, {})), x + 34, y + 18, font(13, {}), C.token); }),
-      N.button(iw, app.user ? '关联微信' : '微信一键登录', { type: 'wechatLogin' }, { variant: 'primary', size: 'large' }),
+      N.button(iw, app.user ? app.needsWechatLogin ? '重新微信登录' : '关联微信' : '微信一键登录', { type: 'wechatLogin' }, { variant: 'primary', size: 'large' }),
       N.checkbox(iw, '我已阅读并同意', !!f.accepted, { type: 'toggle', name: 'accepted' }, privacyLink),
       app.user ? N.text(iw, `已登录网站账号「${app.user.displayName}」。关联微信后可在这里管理居民。`, { style: 'caption', color: C.text3 })
         : N.button(iw, '已有网站账号？登录后关联微信', { type: 'linkAccount' }, { variant: 'text', size: 'small' }),
@@ -52,6 +52,12 @@ function account(app, W) {
       P.text(g.ctx, app.user.displayName || '造者', x + 66, y + 16, font(17, { bold: true }), C.text);
       P.text(g.ctx, '微信已关联' + (app.user.username ? ' · ' + app.user.username : ''), x + 66, y + 38, font(13, {}), C.text3);
     })], { pad: 16 }));
+    if (app.needsWechatLogin) nodes.push(N.card(W, iw => [
+      N.text(iw, '微信访问记录需要更新', { style: 'heading', bold: true }),
+      N.text(iw, '微信要求重新登录后检查内容。当前账号和居民仍可保留。', { style: 'meta', color: C.text2 }),
+      N.button(iw, '重新微信登录', { type: 'wechatLogin' }, { variant: 'primary' }),
+      N.checkbox(iw, '我已阅读并同意', !!f.accepted, { type: 'toggle', name: 'accepted' }, privacyLink),
+    ], { pad: 16, gap: 10 }));
     nodes.push(N.section(W, '我的居民', { small: true, sub: app.linked.length ? `${app.linked.length} 位` : '' }));
     if (!app.linked.length) nodes.push(N.text(W, '你还没有管理中的居民。', { style: 'meta', color: C.text3 }));
     else nodes.push(N.stack(app.linked.map(a => N.listRow(W, { avatar: { id: a.agentId || a.id, name: a.name, avatar: a.avatar }, title: usable(a.name) ? a.name : '我的居民',
@@ -74,14 +80,29 @@ function link(app, W) {
     N.button(W, '登录', { type: 'auth' }, { variant: 'primary' }),
   ] };
 }
+function modelFields(app, W) {
+  const f = app.form, presets = app.modelPresets || [];
+  const p = presets.find(p => p.id === f.presetId), v = p && (p.variants.find(v => v.id === f.presetVariant) || p.variants[0]);
+  const nodes = [N.text(W, '模型服务商', { style: 'meta', color: C.text2 }),
+    N.chips(W, presets.map(p => ({ label: p.name, action: { type: 'preset', id: p.id }, selected: f.presetId === p.id })))];
+  if (p && p.variants.length > 1) nodes.push(N.segmented(W, p.variants.map(v => ({ label: v.name, action: { type: 'preset', id: p.id, variant: v.id }, selected: v.id === f.presetVariant }))));
+  if (p?.hint) nodes.push(N.text(W, p.hint, { style: 'caption', color: C.text3 }));
+  if (!p || p.id === 'custom') nodes.push(N.chips(W, ['OpenAI 兼容', 'OpenAI Responses', 'Anthropic'].map((label, i) => ({ label, action: { type: 'provider', index: i }, selected: (f.providerIndex || 0) === i }))));
+  else nodes.push(N.text(W, '接口：' + ['OpenAI 兼容', 'OpenAI Responses', 'Anthropic'][f.providerIndex || 0], { style: 'caption', color: C.text3 }));
+  nodes.push(N.field(W, '接口地址（HTTPS）', f.baseURL || '', { type: 'field', name: 'baseURL', max: 500 }, { placeholder: 'https://…', mono: true }));
+  if (v?.models.length) nodes.push(N.chips(W, v.models.map(model => ({ label: model, action: { type: 'modelChoice', model }, selected: f.model === model }))));
+  nodes.push(N.field(W, '模型 ID（可手填）', f.model || '', { type: 'field', name: 'model', max: 100 }));
+  return nodes;
+}
 function owner(app, W) {
   const a = app.owner, f = app.form;
   if (!a) return { top: { kind: 'back', title: '管理居民' }, nodes: [N.empty(W, '正在读取…')], tabbar: false };
   const runner = a.runner || {}, running = runner.status === 'running';
+  const name = usable(a.name) ? a.name : '我的居民';
   const nodes = [N.node(60, (g, x, y) => {
     N.paintAvatar(g, { id: a.agentId, name: a.name, avatar: a.avatar }, x + 30, y + 30, 60);
-    const nf = font(22, { bold: true, serif: true, text: a.name || '' });
-    P.text(g.ctx, a.name || '我的居民', x + 74, y + 18, nf, C.text);
+    const nf = font(22, { bold: true, serif: true, text: name });
+    P.text(g.ctx, name, x + 74, y + 18, nf, C.text);
     P.text(g.ctx, `持有 ${compact(a.energy)} 词元 · 物料 ${compact(a.materials || 0)}`, x + 74, y + 44, font(13, {}), C.text3);
   })];
   nodes.push(N.card(W, iw => [
@@ -100,12 +121,9 @@ function owner(app, W) {
     N.text(iw, '居民可能在公开行动中引用家书，请勿写入隐私或密钥。', { style: 'caption', color: C.text3 }),
     N.button(iw, '送出家书', { type: 'letter' }, { variant: 'primary' }),
   ], { pad: 14, gap: 10 }));
-  const providers = ['OpenAI 兼容', 'OpenAI Responses', 'Anthropic'];
   nodes.push(N.card(W, iw => [
     N.text(iw, '模型', { style: 'heading', bold: true }),
-    N.chips(iw, providers.map((l, i) => ({ label: l, action: { type: 'provider', index: i }, selected: (f.providerIndex || 0) === i }))),
-    N.field(iw, '接口地址（HTTPS）', f.baseURL || '', { type: 'field', name: 'baseURL', max: 500 }, { placeholder: 'https://…', mono: true }),
-    N.field(iw, '模型 ID', f.model || '', { type: 'field', name: 'model', max: 100 }),
+    ...modelFields(app, iw),
     N.field(iw, 'API Key', f.apiKey || '', { type: 'field', name: 'apiKey', max: 4096 }, { secret: true, placeholder: '只在服务器加密保存，手机上不留存' }),
     N.checkbox(iw, '我同意模型调用说明：测试和运行会向所选服务商产生费用', !!f.modelAccepted, { type: 'toggle', name: 'modelAccepted' }, privacyLink),
     N.buttonRow(iw, [{ label: '测试连接', action: { type: 'modelTest' }, variant: 'secondary' }, { label: '保存配置', action: { type: 'modelSave' }, variant: 'primary' }]),
@@ -128,6 +146,7 @@ function entry(app, W) {
     N.field(W, '简介', f.bio || '', { type: 'field', name: 'bio', multiple: true, max: 200 }, { multiline: true, lines: 3, counter: 200 }),
     N.field(W, '灵魂', f.soul || '', { type: 'field', name: 'soul', multiple: true, max: 4000 }, { multiline: true, lines: 8, counter: 4000, placeholder: '它是谁、在意什么、怎样与人相处' }),
     N.field(W, '邀请码（如需要）', f.invite || '', { type: 'field', name: 'invite', max: 100 }, { secret: true }),
+    N.card(W, iw => [N.text(iw, '选择模型服务', { style: 'heading', bold: true }), ...modelFields(app, iw), N.text(iw, '创建后再填写 API Key、测试并保存。选择服务商不会自动发起模型调用。', { style: 'caption', color: C.text3 })], { pad: 14, gap: 10 }),
     N.text(W, '不要在灵魂中填写密钥或个人隐私。提交前会经过微信内容安全检查。', { style: 'caption', color: C.text3 }),
     N.checkbox(W, '我同意', !!f.entryAccepted, { type: 'toggle', name: 'entryAccepted' }, privacyLink),
     N.button(W, '创建居民', { type: 'create' }, { variant: 'primary', size: 'large' }),
@@ -147,7 +166,7 @@ function settings(app, W) {
 }
 function about(app, W) {
   return { top: { kind: 'back', title: '关于后人纪' }, tabbar: false, nodes: [
-    N.text(W, '后人纪 · ' + config.version, { style: 'title', bold: true, serif: true }),
+    N.text(W, copy.GAME_NAME + ' · ' + config.version, { style: 'title', bold: true, serif: true }),
     N.node(46, (g, x, y) => { P.fillRound(g.ctx, x, y, 44, 44, 10, '#E9A93B'); P.text(g.ctx, '16+', x + 22, y + 22, font(17, { bold: true }), '#3A2604', 'center'); P.text(g.ctx, copy.AGE, x + 56, y + 22, font(14, {}), C.text2); }),
     N.card(W, iw => [N.text(iw, '健康游戏忠告', { style: 'meta', color: C.text3, align: 'center' })].concat(copy.HEALTH_LINES.map(l => N.text(iw, l, { style: 'action', align: 'center', line: 25 }))), { pad: 18, gap: 2 }),
     N.section(W, '隐私说明', { small: true }),

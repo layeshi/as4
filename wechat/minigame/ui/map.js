@@ -2,11 +2,11 @@
 const { C, font } = require('./theme');
 const P = require('./paint');
 const T = require('./text');
+const { usable } = require('../utils/feed');
 
 // 与引擎创世规则一致：tenements、temple 是「可修复和改装的空壳」（src/e2/world.js）。
 const SHELLS = new Set(['tenements', 'temple']);
 const DISTRICT_TINT = { harbor: '#7FB2FF', oldtown: '#B79CFF', commons: '#5CC8A0', waterworks: '#5FD0D8', east: '#7FB2FF' };
-const PENDING = '内容审核中';
 
 function kindOf(p) {
   if (p.wild) return 'wild';
@@ -16,7 +16,7 @@ function kindOf(p) {
 }
 function placeLabel(p) {
   const name = p.displayName && typeof p.displayName === 'object' ? p.displayName.zh : p.displayName || p.name;
-  return typeof name === 'string' && name !== PENDING ? name : '';
+  return usable(name) ? name : '地名暂未显示';
 }
 
 class CityMap {
@@ -132,7 +132,7 @@ class CityMap {
       const c = coords[placeId]; if (!c) continue;
       list.slice(0, 3).forEach((a, i) => {
         const ax = c.x + 13 + i * 15, ay = c.y - 12;
-        const ch = Array.from(String(a.name && a.name !== PENDING ? a.name : '居'))[0];
+        const ch = Array.from(usable(a.name) ? a.name : '居')[0];
         const image = a.avatar && avatar ? avatar(a.avatar) : null;
         if (image) P.avatarImage(ctx, image, ax, ay, 20);
         else P.seal(ctx, ax, ay, 20, ch, { id: a.id, font: font(10, { serif: true, text: ch }) });
@@ -145,18 +145,26 @@ class CityMap {
         P.text(ctx, '+' + (list.length - 3), bx, by, font(10, { bold: true }), C.text, 'center');
       }
     }
-    // 标签：下、上、右、左依次尝试，避开已放的标签、标记和头像；放不下就不画。
+    // 标签先贴近标记；拥挤时向外寻找空位，用引线保持地点对应关系。
     const labelFont = font(11, {}), placed = occupied.slice();
     nodes.forEach(n => placed.push({ x: n.x - 6, y: n.y - 6, w: 12, h: 12 }));
     const order = nodes.slice().sort((a, b) => (residents[b.id] ? 1 : 0) - (residents[a.id] ? 1 : 0));
     ctx.font = labelFont;
     for (const n of order) {
-      const label = placeLabel(places[n.id]); if (!label) continue;
+      const label = T.ellipsize(ctx, placeLabel(places[n.id]), Math.min(w - 4, Math.max(80, w * 0.3)), labelFont);
       const lw = T.measure(ctx, labelFont, label), lh = 14;
       const tries = [[n.x - lw / 2, n.y + 9], [n.x - lw / 2, n.y - 9 - lh], [n.x + 10, n.y - lh / 2], [n.x - 10 - lw, n.y - lh / 2]];
+      const extra = [];
+      for (let y = 2; y + lh <= h - 2; y += lh + 3) {
+        for (let x = 2; x + lw <= w - 2; x += 8) extra.push([x, y]);
+      }
+      extra.sort((a, b) => Math.hypot(a[0] + lw / 2 - n.x, a[1] + lh / 2 - n.y) - Math.hypot(b[0] + lw / 2 - n.x, b[1] + lh / 2 - n.y));
+      tries.push(...extra);
       const spot = tries.find(([x, y]) => x >= 2 && y >= 2 && x + lw <= w - 2 && y + lh <= h - 2 && !placed.some(r => x < r.x + r.w && x + lw > r.x && y < r.y + r.h && y + lh > r.y));
       if (!spot) continue;
       placed.push({ x: spot[0], y: spot[1], w: lw, h: lh });
+      const tx = Math.max(spot[0], Math.min(spot[0] + lw, n.x)), ty = Math.max(spot[1], Math.min(spot[1] + lh, n.y));
+      if (Math.hypot(tx - n.x, ty - n.y) > 12) P.line(ctx, n.x, n.y, tx, ty, C.map.wall, 0.7);
       ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.strokeStyle = C.map.land; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       if (ctx.strokeText) ctx.strokeText(label, spot[0], spot[1] + lh / 2);
       ctx.fillStyle = '#C9D2DA'; ctx.fillText(label, spot[0], spot[1] + lh / 2);

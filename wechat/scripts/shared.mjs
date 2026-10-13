@@ -31,6 +31,7 @@ export async function buildSharedModule() {
   const i18n = await import(pathToFileURL(i18nPath).href);
   const strings = await import(pathToFileURL(join(repo, 'public', 'e2-strings.js')).href);
   const outcome = await import(pathToFileURL(join(repo, 'public', 'law-outcome.js')).href);
+  const presets = await import(pathToFileURL(join(repo, 'public', 'model-presets.js')).href);
   const lore = (await import(pathToFileURL(join(repo, 'src', 'e2', 'lore', 'index.js')).href)).publicLore('zh');
   const vars = Object.entries(i18n.VARS).map(([type, fn]) => {
     const body = fn.toString();
@@ -41,6 +42,7 @@ export async function buildSharedModule() {
   });
   const names = obj => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, typeof v === 'object' && v ? v.name : v]));
   const data = {
+    MODEL_PRESETS: presets.MODEL_PRESETS,
     TPL: i18n.TPL.zh,
     CAT: i18n.CAT,
     CATEGORIES: i18n.CATEGORIES,
@@ -79,7 +81,7 @@ function describe(e, premise) {
   if (template === undefined) return { key, template: '{type}', vars: { type: e.type } };
   return e.data && e.data.enact ? { key, template: template + ' {enact}', vars: Object.assign({}, vars, { enact: enactText(e.data.enact, 'zh') }) } : { key, template, vars };
 }
-module.exports = { describe, CAT: DATA.CAT, CATEGORIES: DATA.CATEGORIES, CATEGORY_LABELS: DATA.CATEGORY_LABELS, LORE: DATA.LORE, tokenized, tokenTerms };
+module.exports = { describe, CAT: DATA.CAT, CATEGORIES: DATA.CATEGORIES, CATEGORY_LABELS: DATA.CATEGORY_LABELS, LORE: DATA.LORE, MODEL_PRESETS: DATA.MODEL_PRESETS, tokenized, tokenTerms };
 `;
 }
 

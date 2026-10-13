@@ -11,12 +11,14 @@ const { buildFeed } = require('./utils/feed');
 const { parseChronicle } = require('./utils/chronicle');
 const screens = require('./screens/index');
 const serifChars = require('./ui/serif-chars');
+const modelPresets = require('./utils/model-presets');
+const { GAME_NAME } = require('./copy');
 const { C, font } = theme;
 
 const TABS = [['city', '观测', 'city'], ['residents', '居民', 'residents'], ['archive', '档案', 'archive'], ['account', '我的', 'me']];
 const TAB_IDS = TABS.map(t => t[0]);
 // 不访问网络、也不改数据的动作，处理中也可以点。
-const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider']);
+const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider', 'preset', 'modelChoice']);
 const PREFS_KEY = 'houren.prefs';
 const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null;
 const caf = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
@@ -25,7 +27,7 @@ class SocietyGame {
   constructor() {
     this.canvas = wx.createCanvas(); this.ctx = this.canvas.getContext('2d');
     this.measure();
-    this.tab = 'startup'; this.stack = []; this.page = null; this.dirty = true;
+    this.tab = 'startup'; this.entered = false; this.stack = []; this.page = null; this.dirty = true;
     this.blocks = []; this.hits = []; this.form = {}; this.scrollers = {};
     this.state = null; this.map = null; this.events = []; this.user = null; this.linked = []; this.created = [];
     this.residentId = ''; this.owner = null; this.detail = null; this.detailKind = ''; this.profile = null;
@@ -34,7 +36,11 @@ class SocietyGame {
     this.sheet = null; this.toast = null; this.error = ''; this.notice = '';
     this.busy = false; this.refreshing = false; this.visible = true; this.pressed = null; this.editing = '';
     this.pendingCount = 0; this.quickTries = 0; this.mapVersion = 0; this.dismissed = {};
+    this.moderation = {}; this.loginRequired = {};
+    this.navigation = 0; this.readVersions = {};
+    this.modelPresets = modelPresets.bundled;
     this.cityMap = new CityMap(() => wx.createCanvas());
+    this.filterScroller = new Scroller(); this.horizontalAreas = [];
     this.images = new Map();
     this.prefs = this.loadPrefs();
     theme.setFontScale(this.prefs.largeText);
@@ -49,7 +55,7 @@ class SocietyGame {
     if (!menu || !menu.width) menu = { top: status + 6, height: 32, left: this.width - 94, right: this.width - 7, bottom: status + 38, width: 87 };
     this.menu = menu; this.navTop = status; this.navH = Math.max(40, (menu.top - status) * 2 + menu.height);
     this.bottomInset = info.safeArea ? Math.max(0, this.height - info.safeArea.bottom) : 0;
-    this.tabH = 50 + this.bottomInset;
+    this.tabH = 66 + this.bottomInset;
     this.canvas.width = Math.round(this.width * this.ratio); this.canvas.height = Math.round(this.height * this.ratio);
     if (this.ctx.setTransform) this.ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, 0); else this.ctx.scale(this.ratio, this.ratio);
   }
@@ -66,7 +72,7 @@ class SocietyGame {
     wx.onTouchStart(e => this.touchStart(e));
     wx.onTouchMove(e => this.touchMove(e));
     wx.onTouchEnd(e => this.touchEnd(e));
-    if (wx.onTouchCancel) wx.onTouchCancel(() => { this.touch = null; this.pressed = null; this.render(); });
+    if (wx.onTouchCancel) wx.onTouchCancel(() => { this.scroller().dragging = false; this.filterScroller.dragging = false; this.touch = null; this.pressed = null; this.render(); });
     wx.onHide(() => this.hide());
     wx.onShow(() => { this.visible = true; this.refresh(); });
     if (wx.onWindowResize) wx.onWindowResize(() => { this.measure(); this.invalidate(); this.render(); });
@@ -86,52 +92,111 @@ class SocietyGame {
     this.visible = false;
     clearTimeout(this.timer); this.timer = null;
     clearTimeout(this.toastTimer); this.toastTimer = null; this.toast = null;
+    clearTimeout(this.clockTimer); this.clockTimer = null;
     if (this.frame) { if (raf && caf) caf(this.frame); else clearTimeout(this.frame); this.frame = null; }
     this.animating = false;
+    this.clearSecrets();
+  }
+  clearSecrets() {
+    this.editing = '';
     delete this.form.apiKey; delete this.form.password;
+    if (wx.hideKeyboard) wx.hideKeyboard();
+    this.invalidate();
+  }
+  rememberModeration(scope, ...responses) {
+    this.moderation[scope] = responses.reduce((n, r) => n + (r?.moderation?.pending || 0), 0);
+    this.loginRequired[scope] = responses.reduce((n, r) => n + (r?.moderation?.loginRequired || 0), 0);
+    this.updatePending();
+  }
+  get needsWechatLogin() { return Object.values(this.loginRequired).some(count => count > 0); }
+  updatePending() {
+    const pagePending = this.tab === 'archive' && this.archiveTab !== 'chronicle' ? 0 : this.moderation[this.tab] || 0;
+    this.pendingCount = (this.moderation.state || 0) + (this.moderation.events || 0) + (this.moderation.map || 0) + pagePending;
+  }
+  beginRead(scope) {
+    const version = (this.readVersions[scope] || 0) + 1;
+    this.readVersions[scope] = version;
+    return { version, navigation: this.navigation };
+  }
+  readCurrent(scope, ticket) {
+    return this.readVersions[scope] === ticket.version && this.navigation === ticket.navigation;
+  }
+  async loadModelPresets() {
+    if (!this.presetLoad) this.presetLoad = api.request('/api/wechat/model-presets').then(data => {
+      const presets = modelPresets.normalize(data.presets);
+      if (presets) this.modelPresets = presets;
+    }).catch(() => { /* The same operator catalog is bundled for older/offline servers. */ });
+    await this.presetLoad;
+  }
+  selectPreset(id, variantId) {
+    const preset = this.modelPresets.find(p => p.id === id);
+    if (!preset) return;
+    const variant = preset.variants.find(v => v.id === variantId) || preset.variants[0];
+    this.clearSecrets();
+    Object.assign(this.form, { presetId: id, presetVariant: variant.id, providerIndex: modelPresets.PROVIDERS.indexOf(variant.provider), baseURL: variant.baseURL, model: variant.models[0] || '', modelAccepted: false });
   }
 
   // ── 数据 ──
   async refresh(opts = {}) {
     clearTimeout(this.timer); this.timer = null;
-    if (this.tab === 'startup') { this.render(); return; }
+    if (!this.entered) { this.render(); return; }
     if (this.refreshing) return;
+    const ticket = this.beginRead('refresh');
     this.refreshing = true; this.render();
     try {
       const events = await api.request('/api/public/events?recent=1&limit=60');
+      if (!this.readCurrent('refresh', ticket)) return;
       const newest = events.events.length ? events.events[events.events.length - 1].seq : 0;
       const world = this.state && this.state.world;
       const stale = opts.full || !this.state || newest !== this.lastSeq || !world || !world.nextTickAt || Date.now() >= world.nextTickAt || this.pendingCount;
       const state = stale ? await api.request('/api/public/state') : this.state;
+      if (!this.readCurrent('refresh', ticket)) return;
       const mapChanged = !this.map || (this.state && (this.state.world.id !== state.world.id || this.state.world.map !== state.world.map));
-      if (mapChanged) this.map = await api.request('/api/public/map');
+      if (mapChanged || this.moderation.map) {
+        const map = await api.request('/api/public/map');
+        if (!this.readCurrent('refresh', ticket)) return;
+        this.map = map; this.rememberModeration('map', this.map);
+      }
       this.state = state; this.events = events.events; this.lastSeq = newest;
-      this.pendingCount = ((state.moderation && state.moderation.pending) || 0) + ((events.moderation && events.moderation.pending) || 0);
+      this.rememberModeration('state', state); this.rememberModeration('events', events);
       this.mapVersion++;
       if (this.tab === 'account') await this.loadAccount();
-      if (this.tab === 'archive') await this.loadArchive();
+      else if (this.tab === 'archive') await this.loadArchive();
+      else if (this.tab === 'resident' && this.profile?.id) await this.loadProfile(this.profile.id, { refresh: true });
+      else if (this.tab === 'detail' && this.detailId) await this.loadDetail(this.detailKind, this.detailId, { refresh: true });
+      else if (this.tab === 'owner' && this.residentId) await this.loadOwner();
+      if (!this.readCurrent('refresh', ticket)) return;
       this.error = '';
     } catch (error) {
+      if (!this.readCurrent('refresh', ticket)) return;
       this.error = error.message;
       if (opts.pull || !this.state) this.showToast(error.message, 'error');
     } finally {
-      this.refreshing = false; this.invalidate(); this.render(); this.schedule();
+      if (this.readVersions.refresh === ticket.version) {
+        this.refreshing = false; this.invalidate(); this.render(); this.schedule();
+      }
     }
   }
   schedule() {
     clearTimeout(this.timer); this.timer = null;
-    if (!this.visible || this.tab === 'startup') return;
+    if (!this.visible || !this.entered) return;
+    this.updatePending();
+    if (!this.pendingCount) this.quickTries = 0;
     // 登录用户看到审核中的文字：几秒后再取，最多连续三次。
     const quick = this.pendingCount > 0 && this.wechatVerified && this.quickTries < 3;
-    this.quickTries = quick ? this.quickTries + 1 : this.pendingCount > 0 ? this.quickTries : 0;
     if (!quick && !this.prefs.autoRefresh) return;
-    this.timer = setTimeout(() => this.refresh(), quick ? 4000 : config.pollMs);
+    this.timer = setTimeout(() => { if (quick) this.quickTries++; return this.refresh(); }, quick ? 4000 : config.pollMs);
   }
   async loadAccount() {
-    const result = await api.request('/api/account'); this.user = result.user; this.registrationOpen = result.registrationOpen;
-    const status = await api.request('/api/wechat/status'); this.wechatEnabled = status.enabled; this.wechatVerified = status.verified;
-    if (this.user) { const mine = await api.request('/api/account/residents'); this.linked = mine.managed || []; this.created = mine.created || []; }
-    else { this.linked = []; this.created = []; }
+    const ticket = this.beginRead('account');
+    const result = await api.request('/api/account');
+    const status = await api.request('/api/wechat/status');
+    const mine = result.user ? await api.request('/api/account/residents') : null;
+    if (!this.readCurrent('account', ticket)) return;
+    this.user = result.user; this.registrationOpen = result.registrationOpen;
+    this.wechatEnabled = status.enabled; this.wechatVerified = status.verified;
+    this.linked = mine?.managed || []; this.created = mine?.created || [];
+    this.rememberModeration('account', mine);
   }
   async loadArchive() {
     if (!this.state) return;
@@ -139,37 +204,51 @@ class SocietyGame {
     const perMonth = this.state.world.daysPerMonth || 24, current = Math.floor(this.state.world.day / perMonth);
     if (this.chronicleMonth === null || this.chronicleMonth > current) this.chronicleMonth = current;
     const from = this.chronicleMonth * perMonth;
+    const month = this.chronicleMonth, ticket = this.beginRead('archive');
     const result = await api.request('/api/public/chronicle?lang=zh&from=' + from);
+    if (!this.readCurrent('archive', ticket) || this.archiveTab !== 'chronicle' || this.chronicleMonth !== month) return;
+    this.rememberModeration('archive', result);
     this.chronicle = (result.chronicle || []).filter(c => c.day < from + perMonth).slice().reverse().map(parseChronicle);
   }
   async loadOwner() {
-    const path = '/api/account/residents/' + encodeURIComponent(this.residentId);
+    const id = this.residentId, ticket = this.beginRead('owner');
+    const path = '/api/account/residents/' + encodeURIComponent(id);
     const [detail, privateData] = await Promise.all([api.request(path), api.request(path + '/private')]);
-    this.owner = Object.assign({}, detail.resident, privateData, detail.overview, { agentId: this.residentId, usage: detail.usage });
+    if (!this.readCurrent('owner', ticket) || this.residentId !== id) return false;
+    this.owner = Object.assign({}, detail.resident, privateData, detail.overview, { agentId: id, usage: detail.usage });
+    this.rememberModeration('owner', detail, privateData);
+    return true;
   }
-  async loadDetail(kind, id) {
+  async loadDetail(kind, id, { refresh = false } = {}) {
     const routes = { place: 'places', law: 'laws', doc: 'docs' };
     if (!routes[kind]) throw new Error('档案类型无效');
-    this.detail = await api.request('/api/public/' + routes[kind] + '/' + encodeURIComponent(id));
-    this.detailKind = kind; this.push('detail');
+    const ticket = this.beginRead('detail');
+    const data = await api.request('/api/public/' + routes[kind] + '/' + encodeURIComponent(id));
+    if (!this.readCurrent('detail', ticket) || (refresh && (this.tab !== 'detail' || this.detailId !== id || this.detailKind !== kind))) return;
+    this.detail = data;
+    this.detailKind = kind; this.detailId = id;
+    this.rememberModeration('detail', this.detail);
+    if (!refresh) this.push('detail');
   }
-  async loadProfile(id) {
-    this.profile = { id, loading: true };
-    this.push('resident'); this.render();
+  async loadProfile(id, { refresh = false } = {}) {
+    if (!refresh) { this.profile = { id, loading: true }; this.push('resident'); this.render(); }
+    const ticket = this.beginRead('resident');
     const data = await api.request('/api/public/agents/' + encodeURIComponent(id));
-    this.profile = Object.assign({ id, tab: 'events' }, data);
+    if (!this.readCurrent('resident', ticket) || this.tab !== 'resident' || this.profile?.id !== id) return;
+    this.profile = Object.assign({ id, tab: this.profile.tab || 'events' }, data);
+    this.rememberModeration('resident', data);
   }
 
   // ── 导航 ──
-  push(page) { if (this.tab !== page) this.stack.push(this.tab); this.tab = page; this.scroller(page).reset(); this.invalidate(); }
-  back() { this.tab = this.stack.pop() || 'city'; this.invalidate(); }
+  push(page) { if (this.tab !== page) { this.clearSecrets(); this.stack.push(this.tab); } this.navigation++; this.tab = page; this.quickTries = 0; this.scroller(page).reset(); this.invalidate(); }
+  back() { this.clearSecrets(); this.navigation++; this.tab = this.stack.pop() || (this.entered ? 'city' : 'startup'); this.quickTries = 0; this.invalidate(); }
   scroller(page = this.tab) { return this.scrollers[page] || (this.scrollers[page] = new Scroller()); }
   invalidate() { this.dirty = true; }
 
   async dispatch(action) {
     if (!action) return;
     if (this.busy && !UI_ONLY.has(action.type)) return;
-    if (this.tab === 'startup' && action.type !== 'start') return;
+    if (!this.entered && !['about', 'back'].includes(action.type) && !(this.tab === 'startup' && action.type === 'start')) return;
     if (action.type === 'field') {
       this.editing = action.name; this.invalidate(); this.render();
       wx.showKeyboard({ defaultValue: this.form[action.name] || '', maxLength: action.max || 4000, multiple: !!action.multiple, confirmHold: false, confirmType: 'done',
@@ -179,17 +258,20 @@ class SocietyGame {
     const network = !UI_ONLY.has(action.type);
     if (network) { this.busy = true; this.error = ''; this.notice = ''; }
     try { await this.handle(action); }
-    catch (error) { this.error = error.message || '操作失败，请重试'; this.showToast(this.error, 'error'); }
-    finally { if (network) this.busy = false; this.invalidate(); this.render(); }
+    catch (error) {
+      if (error.status === 401 && error.code === 'wechat_login_required' && error.sessionCurrent !== false) this.loginRequired[action.type] = 1;
+      this.error = error.message || '操作失败，请重试'; this.showToast(this.error, 'error');
+    }
+    finally { if (network) this.busy = false; this.invalidate(); this.render(); this.schedule(); }
   }
   async handle(a) {
     const f = this.form;
     switch (a.type) {
-      case 'start': this.tab = 'city'; this.stack = []; await Promise.all([this.refresh({ full: true }), this.loadAccount().catch(() => {})]); break;
+      case 'start': this.entered = true; this.tab = 'city'; this.stack = []; await Promise.all([this.refresh({ full: true }), this.loadAccount().catch(() => {})]); break;
       case 'tab':
         if (!TAB_IDS.includes(a.tab)) return;
         if (this.tab === a.tab && !this.stack.length) { this.scroller().scrollTo(0); break; }
-        this.tab = a.tab; this.stack = []; this.sheet = null; f.password = ''; f.apiKey = '';
+        this.clearSecrets(); this.navigation++; this.tab = a.tab; this.stack = []; this.sheet = null; this.quickTries = 0;
         if (a.tab === 'account') await this.loadAccount();
         if (a.tab === 'archive') await this.loadArchive();
         if (!this.state) await this.refresh({ full: true });
@@ -231,15 +313,37 @@ class SocietyGame {
       case 'linkAccount': this.push('link'); break;
       case 'wechatLogin':
         if (!f.accepted) throw new Error('请先阅读并同意隐私说明');
-        await api.loginWeChat(!!this.user); await this.loadAccount(); this.map = null; await this.refresh({ full: true });
+        await api.loginWeChat(!!this.user);
+        this.navigation++; // Old readers must not restore a previous login's moderation state.
+        this.refreshing = false; // A fresh read may replace an outstanding read from the previous login.
+        this.moderation = {}; this.loginRequired = {}; this.updatePending();
+        await this.loadAccount(); this.map = null; await this.refresh({ full: true });
         this.notice = '微信登录成功'; this.showToast('微信登录成功', 'ok');
         break;
       case 'logout':
-        await api.request('/api/account/logout', { method: 'POST', data: {} }); api.clearSession();
+        this.clearSecrets(); this.navigation++;
+        // request captures the existing credential synchronously; local privacy never waits for the network.
+        const revocation = api.request('/api/account/logout', { method: 'POST', data: {} });
+        api.clearSession();
         this.user = null; this.owner = null; this.linked = []; this.created = []; this.wechatVerified = false;
+        this.loginRequired = {};
+        this.form = {}; this.residentId = ''; this.letterDraft = ''; this.createDraft = ''; this.letterRequestId = null; this.createRequestId = null;
+        this.stack = []; this.sheet = null; this.tab = 'account'; this.moderation.owner = 0; this.moderation.account = 0;
+        this.updatePending(); this.invalidate(); this.render();
+        try { const result = await revocation; if (result.ok !== true) throw new Error('Unconfirmed revocation'); }
+        catch (_) { throw new Error('本机已退出，服务器会话撤销未确认。'); }
+        this.notice = '已退出登录';
         this.showToast('已退出登录', 'ok');
         break;
-      case 'owner': this.residentId = a.id; await this.loadOwner(); if (this.tab !== 'owner') this.push('owner'); break;
+      case 'owner': {
+        const navigation = this.navigation;
+        if (this.residentId !== a.id) this.clearSecrets(); this.residentId = a.id;
+        await this.loadModelPresets();
+        if (this.navigation !== navigation || this.residentId !== a.id) break;
+        if (!f.presetId && !f.baseURL) this.selectPreset('deepseek');
+        if (await this.loadOwner() && this.tab !== 'owner') this.push('owner');
+        break;
+      }
       case 'letter': {
         const text = (f.letter || '').trim(); if (!text) throw new Error('请先写下家书');
         if (this.letterDraft !== text) { this.letterRequestId = api.requestId(); this.letterDraft = text; }
@@ -253,8 +357,16 @@ class SocietyGame {
         await this.loadOwner(); this.showToast(a.op === 'start' ? '运行器已启动' : '运行器已暂停', 'ok');
         break;
       case 'disconnect': this.owner = null; f.letter = ''; f.apiKey = ''; this.back(); break;
-      case 'entry': if (!this.user || !this.wechatVerified) throw new Error('请先使用微信登录'); this.push('entry'); break;
+      case 'entry': {
+        const navigation = this.navigation;
+        if (!this.user || !this.wechatVerified) throw new Error('请先使用微信登录');
+        await this.loadModelPresets(); if (this.navigation !== navigation) break;
+        if (!f.presetId && !f.baseURL) this.selectPreset('deepseek');
+        this.push('entry'); break;
+      }
       case 'provider': f.providerIndex = a.index !== undefined ? a.index : ((f.providerIndex || 0) + 1) % 3; f.apiKey = ''; break;
+      case 'preset': this.selectPreset(a.id, a.variant); break;
+      case 'modelChoice': f.model = a.model; break;
       case 'modelTest': case 'modelSave': await this.configureRunner(a.type === 'modelTest'); break;
       case 'create': await this.enter(); break;
       case 'support':
@@ -274,7 +386,7 @@ class SocietyGame {
     try {
       const result = await api.request('/api/account/residents', { method: 'POST', timeout: 60000, data: { name: f.name.trim(), bio: f.bio || '', soul: f.soul.trim(), lang: 'zh', dailyCap: 18000, invite: (f.invite || '').trim(), requestId: this.createRequestId } });
       this.residentId = result.agentId; this.createRequestId = null; f.soul = ''; f.name = ''; f.bio = '';
-      this.stack = ['account']; this.tab = 'owner'; this.scroller('owner').reset();
+      this.clearSecrets(); this.navigation++; this.stack = ['account']; this.tab = 'owner'; this.scroller('owner').reset();
       await this.loadOwner(); this.notice = '居民已创建，请配置模型后启动'; this.showToast('居民已创建', 'ok');
     } catch (error) { if (!error.status) throw new Error('结果未确认。保留原提交编号，再次提交不会重复创建居民。'); throw error; }
   }
@@ -309,13 +421,15 @@ class SocietyGame {
 
   // ── 触摸 ──
   contentTop() { return this.page && this.page.fullscreen ? 0 : this.navTop + this.navH; }
-  contentBottom() { const p = this.page || {}; return this.height - (p.tabbar ? this.tabH : p.footer ? p.footer.height + 16 + this.bottomInset : this.bottomInset); }
+  contentBottom() { const p = this.page || {}; return this.height - (p.tabbar ? this.tabH : p.footer ? p.footer.height + 16 + this.bottomInset : this.bottomInset + 16); }
   hitAt(x, y) { for (let i = this.hits.length - 1; i >= 0; i--) { const h = this.hits[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) return h; } return null; }
   touchStart(e) {
     const t = e.touches && e.touches[0]; if (!t) return;
     const now = Date.now();
     if (this.frame) { if (raf && caf) caf(this.frame); else clearTimeout(this.frame); this.frame = null; this.animating = false; }
     this.touch = { x: t.clientX, y: t.clientY, moved: false, scroll: !this.sheet && t.clientY >= this.contentTop() && t.clientY <= this.contentBottom() };
+    const area = this.horizontalAreas.find(h => t.clientX >= h.x && t.clientX <= h.x + h.w && t.clientY >= h.y && t.clientY <= h.y + h.h);
+    if (area && this.touch.scroll) { this.touch.horizontal = area.scroller; area.scroller.start(t.clientX, now); }
     const hit = this.hitAt(t.clientX, t.clientY);
     this.pressed = hit ? hit.action : null;
     if (this.touch.scroll) this.scroller().start(t.clientY, now);
@@ -323,8 +437,15 @@ class SocietyGame {
   }
   touchMove(e) {
     const t = e.touches && e.touches[0]; if (!t || !this.touch) return;
-    if (!this.touch.moved && Math.abs(t.clientY - this.touch.y) + Math.abs(t.clientX - this.touch.x) > 8) { this.touch.moved = true; this.pressed = null; }
-    if (this.touch.scroll && this.touch.moved) this.scroller().move(t.clientY, Date.now());
+    const dx = Math.abs(t.clientX - this.touch.x), dy = Math.abs(t.clientY - this.touch.y);
+    if (!this.touch.moved && dx + dy > 8) {
+      this.touch.moved = true; this.pressed = null;
+      this.touch.axis = this.touch.horizontal && dx > dy ? 'horizontal' : 'vertical';
+    }
+    if (this.touch.scroll && this.touch.moved) {
+      if (this.touch.axis === 'horizontal') this.touch.horizontal.move(t.clientX, Date.now());
+      else this.scroller().move(t.clientY, Date.now());
+    }
     this.render();
   }
   touchEnd() {
@@ -332,15 +453,18 @@ class SocietyGame {
     if (!touch) return;
     const action = touch.moved ? null : this.pressed;
     this.pressed = null;
-    if (touch.scroll) { const pull = this.scroller().end(Date.now()); if (pull && this.page && this.page.pull && !this.refreshing) this.dispatch({ type: 'refresh', pull: true }); }
+    const horizontal = touch.axis === 'horizontal', sc = horizontal ? touch.horizontal : this.scroller();
+    if (touch.horizontal && !horizontal) touch.horizontal.dragging = false;
+    if (horizontal) this.scroller().dragging = false;
+    if (touch.scroll) { const pull = sc.end(Date.now()); if (!horizontal && pull && this.page && this.page.pull && !this.refreshing) this.dispatch({ type: 'refresh', pull: true }); }
     if (action) { this.haptic(); this.dispatch(action); }
-    this.kick();
+    this.kick(sc);
   }
-  kick() {
+  kick(scroller = this.scroller()) {
     if (this.animating) return;
     let last = Date.now();
     const step = () => {
-      const now = Date.now(), moving = this.scroller().step(now - last); last = now;
+      const now = Date.now(), moving = scroller.step(now - last); last = now;
       this.render();
       if (moving && this.visible) { this.animating = true; this.frame = raf ? raf(step) : setTimeout(step, 16); }
       else { this.animating = false; this.frame = null; }
@@ -364,6 +488,7 @@ class SocietyGame {
     return {
       ctx: this.ctx, editing: this.editing,
       hit: (x, y, w, h, action) => { if (blocked || !action) return; const t = Math.max(top, y), b = Math.min(bottom, y + h); if (b > t) this.hits.push({ x, y: t, w, h: b - t, action }); },
+      horizontal: (x, y, w, h, scroller) => { if (blocked) return; const t = Math.max(top, y), b = Math.min(bottom, y + h); if (b > t) this.horizontalAreas.push({ x, y: t, w, h: b - t, scroller }); },
       pressed: a => !!a && a === this.pressed,
       avatar: hash => this.avatarImage(hash),
     };
@@ -372,7 +497,7 @@ class SocietyGame {
     if (!this.ctx) return;
     if (this.dirty || !this.page) this.build();
     const ctx = this.ctx, page = this.page;
-    this.hits = [];
+    this.hits = []; this.horizontalAreas = [];
     ctx.fillStyle = C.bg; ctx.fillRect(0, 0, this.width, this.height);
     const top = this.contentTop(), bottom = this.contentBottom(), sc = this.scroller();
     sc.setMax(page.height - (bottom - top));
@@ -388,7 +513,16 @@ class SocietyGame {
     if (!page.fullscreen) this.paintNav(page, chrome);
     if (page.tabbar) this.paintTabs(chrome);
     if (this.sheet) this.paintSheet();
+    if (!page.footer) P.text(ctx, GAME_NAME, this.width / 2, this.height - this.bottomInset - 8, font(10, {}), C.text3, 'center');
     if (this.toast) this.paintToast();
+    this.scheduleClock();
+  }
+  scheduleClock() {
+    const w = this.state?.world;
+    if (!this.visible || !this.entered || this.tab !== 'city' || w?.paused || !w?.nextTickAt || !Number.isFinite(new Date(w.nextTickAt).getTime())) {
+      clearTimeout(this.clockTimer); this.clockTimer = null; return;
+    }
+    if (!this.clockTimer) this.clockTimer = setTimeout(() => { this.clockTimer = null; this.render(); }, 1000);
   }
   paintPull(top, sc) {
     const pull = sc.pull;

@@ -86,7 +86,7 @@ async function prepare(checked) {
   await rm(build, { recursive: true, force: true });
   await mkdir(build, { recursive: true });
   await cp(source, join(build, project.miniprogramRoot), { recursive: true });
-  await writeFile(join(build, project.miniprogramRoot, 'config.js'), 'module.exports = ' + JSON.stringify({ ...checked.config, apiBase: checked.apiBase }, null, 2) + ';\n');
+  await writeFile(join(build, project.miniprogramRoot, 'config.js'), 'module.exports = ' + JSON.stringify({ ...checked.config, version: process.env.WECHAT_VERSION || checked.config.version, apiBase: checked.apiBase }, null, 2) + ';\n');
   await writeFile(join(build, 'project.config.json'), JSON.stringify({ ...project, appid }, null, 2) + '\n');
   console.log('开发者工具导入目录：' + build);
   return appid;

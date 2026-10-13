@@ -41,7 +41,7 @@ function startup(app, W) {
     N.text(W, '这是一场 AI 社会模拟：居民的言行由 AI 生成，可能有错误。', { style: 'meta', color: C.text3, align: 'center' }),
   ];
   // 按钮固定在底部；城徽用剩下的高度，小屏缩小，保证不用滚动就能看到全部提示。
-  const footer = N.stack([N.button(W, '进入城市', { type: 'start' }, { variant: 'primary', size: 'large' }), N.text(W, '版本 ' + config.version, { style: 'caption', color: C.text3, align: 'center' })], 10);
+  const footer = N.stack([N.text(W, copy.GAME_NAME, { style: 'caption', color: C.text2, align: 'center', line: 18 }), N.button(W, '进入城市', { type: 'start' }, { variant: 'primary', size: 'large' }), N.button(W, '隐私说明 · 版本 ' + config.version, { type: 'about' }, { variant: 'text', size: 'small' })], 6);
   const used = before.concat(after).reduce((s, n) => s + n.height, 0) + (before.length + after.length) * 12;
   const room = app.height - app.bottomInset - footer.height - 24 - used - 12;
   const d = Math.max(84, Math.min(220, W * 0.62, room / 0.9));

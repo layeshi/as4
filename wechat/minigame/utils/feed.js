@@ -2,7 +2,12 @@
 const shared = require('./shared-text');
 const { compact, num, dayTick } = require('./format');
 const PENDING = '内容审核中';
-const usable = v => typeof v === 'string' && v.trim() !== '' && v !== PENDING;
+const MODERATION = { '内容审核中': 'pending', '内容未通过安全检查': 'rejected', '内容暂不可用': 'unavailable', '请微信登录后阅读': 'loginRequired', '内容暂未展示': 'withheld' };
+const moderationState = v => typeof v === 'string' && Object.prototype.hasOwnProperty.call(MODERATION, v) ? MODERATION[v] : null;
+const usable = v => typeof v === 'string' && v.trim() !== '' && !moderationState(v);
+function moderationNotice(reason) {
+  return { pending: '审核中，稍后自动刷新', rejected: '这段内容未通过安全检查', unavailable: '内容暂不可用，请稍后刷新', loginRequired: '微信登录后可阅读这段内容', withheld: '这段内容暂未展示' }[reason] || '这段内容暂未展示';
+}
 const MERGEABLE = new Set(['econ', 'life', 'env']);
 const ICON = { speech: 'speech', econ: 'gather', polity: 'law', life: 'life', know: 'know', env: 'build', world: 'sun', admin: 'info' };
 const TYPE_ICON = { explore: 'explore', move: 'move', give: 'give', gather: 'gather', weather_start: 'weather', weather_end: 'weather' };
@@ -16,7 +21,8 @@ function directory(state) {
   (state.publicRoles || []).forEach(r => { dir.roles[r.id] = r; });
   return dir;
 }
-function agentName(dir, id) { const a = dir.agents[id]; return a && usable(a.name) ? a.name : '一位居民'; }
+function pendingName(id) { return /^a\d+$/.test(id || '') ? '居民 ' + Number(id.slice(1)) : '未显示名字的居民'; }
+function agentName(dir, id) { const a = dir.agents[id]; return a && usable(a.name) ? a.name : pendingName(id); }
 function placeName(dir, id) {
   const p = dir.places[id];
   if (!p) return '某处';
@@ -27,7 +33,7 @@ function placeName(dir, id) {
 function ref(v, dir) {
   if (v === null || v === undefined || v === '') return [];
   if (typeof v === 'number') return [{ text: compact(v), role: 'number' }];
-  if (typeof v === 'string') return [{ text: v }];
+  if (typeof v === 'string') return [{ text: moderationState(v) ? moderationNotice(moderationState(v)) : v }];
   if (v.agent !== undefined) return v.agent ? [{ text: agentName(dir, v.agent), role: 'agent', action: { type: 'resident', id: v.agent } }] : [];
   if (v.place !== undefined) return [{ text: placeName(dir, v.place), role: 'place', action: { type: 'sheet', kind: 'place', id: v.place } }];
   if (v.group !== undefined) { const g = dir.groups[v.group]; return [{ text: g && usable(g.name) ? g.name : '一个社群' }]; }
@@ -35,7 +41,7 @@ function ref(v, dir) {
     const d = dir.docs[v.doc], title = v.title || (d && d.title);
     return [{ text: usable(title) ? `《${title}》` : '一篇典籍', role: 'doc', action: v.doc ? { type: 'detail', kind: 'doc', id: v.doc } : null }];
   }
-  if (v.text !== undefined) { const t = String(v.text); return [{ text: t === PENDING ? '（审核中）' : t, role: 'ai' }]; }
+  if (v.text !== undefined) { const t = String(v.text); return [{ text: moderationState(t) ? '（' + moderationNotice(moderationState(t)) + '）' : t, role: 'ai' }]; }
   if (v.amount) {
     const parts = [];
     if (v.amount.energy) parts.push(compact(v.amount.energy) + ' 词元');
@@ -81,14 +87,14 @@ function describeOne(e, state, dir) {
     const text = textRef ? String(textRef.text) : '';
     return Object.assign(base, { kind: 'bubble', actor: { id: role.id || e.data.publicRoleId, name, role: role.id || e.data.publicRoleId },
       header: [{ text: name, role: 'agent' }, { text: '  ' + [usable(role.duty) ? role.duty : '公共角色', placeName(dir, e.place)].filter(Boolean).join(' · ') }],
-      text: usable(text) ? text : '', locked: !usable(text), ai: !!(e.data && e.data.source === 'model'), roleBadge: true });
+      text: usable(text) ? text : '', locked: !usable(text), moderation: moderationState(text), ai: !!(e.data && e.data.source === 'model'), roleBadge: true });
   }
   if (textRef && QUOTED_TEXT.test(d.template) && cat === 'speech' || textRef && ['inscribe', 'epitaph', 'petition', 'refound_open', 'announce'].includes(e.type)) {
     const text = String(textRef.text || '');
     let header;
     if (e.type === 'say') header = [].concat(ref(d.vars.a, dir), d.vars.at ? [{ text: ' 在 ' }].concat(ref(d.vars.at, dir)) : [], [{ text: ' 说' }]);
     else header = fill(d.template.replace(QUOTED_TEXT, ''), d.vars, dir).map(s => Object.assign({}, s, { text: s.text.replace(/[：:]$/, '') }));
-    return Object.assign(base, { kind: 'bubble', actor, header, text: usable(text) ? text : '', locked: !usable(text), ai: true });
+    return Object.assign(base, { kind: 'bubble', actor, header, text: usable(text) ? text : '', locked: !usable(text), moderation: moderationState(text), ai: true });
   }
   return Object.assign(base, { kind: 'action', actor, icon: TYPE_ICON[e.type] || ICON[cat] || 'info',
     sentence: fill(d.template, d.vars, dir), rest: actor ? fill(d.template, d.vars, dir, ['a']) : null, ai: false });
@@ -163,4 +169,4 @@ function summarize(it, dir) {
   it.count = ev.length;
   it.lines = ev.map(x => x.rest && x.rest.length ? x.rest : x.sentence);
 }
-module.exports = { buildFeed, describeOne, directory, agentName, placeName, PENDING, usable };
+module.exports = { buildFeed, describeOne, directory, agentName, pendingName, placeName, PENDING, usable, moderationState, moderationNotice };

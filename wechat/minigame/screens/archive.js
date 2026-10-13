@@ -3,13 +3,13 @@ const N = require('../ui/nodes');
 const P = require('../ui/paint');
 const T = require('../ui/text');
 const { C, font, size, STATUS_COLOR } = require('../ui/theme');
-const { usable } = require('../utils/feed');
+const { usable, moderationState, moderationNotice } = require('../utils/feed');
 const { compact, pct } = require('../utils/format');
 const shared = require('../utils/shared-text');
 const view = require('../utils/view');
 
 const textOf = v => { const t = view.text(v); return usable(t) ? t : ''; };
-const LOCKED = '审核中，登录后或稍后刷新可读';
+const contentOf = v => { const t = view.text(v), reason = moderationState(t); return reason ? moderationNotice(reason) : t; };
 
 function numbersAmber(line) {
   return line.split(/(\d[\d.,]*(?:万|亿)?)/).filter(Boolean).map(part => ({ text: part, color: /^\d/.test(part) ? C.token : C.text2, bold: /^\d/.test(part) }));
@@ -17,7 +17,7 @@ function numbersAmber(line) {
 function dayEntry(app, W, d, first) {
   const indent = 30, iw = W - indent;
   const parts = [N.text(iw, d.title, { style: 'title', bold: true, serif: true, line: 30 })];
-  if (d.locked) parts.push(N.text(iw, LOCKED, { style: 'meta', color: C.text3 }));
+  if (d.locked) parts.push(N.text(iw, moderationNotice(d.moderation), { style: 'meta', color: C.text3 }));
   if (d.stats) parts.push(N.rich(iw, numbersAmber(d.stats), { style: 'action' }));
   d.items.forEach(it => parts.push(N.rich(iw, [{ text: it.text, color: C.text }].concat(it.count > 1 ? [{ text: ` ×${it.count}`, color: C.text3 }] : []), { style: 'feed' })));
   d.quotes.forEach((q, i) => {
@@ -109,7 +109,7 @@ function detail(app, W) {
   const nodes = [N.text(W, usable(title) ? title : '档案', { style: 'title', bold: true, serif: true, line: 32 })];
   if (kind === 'law') {
     nodes.push(N.text(W, [view.status(item.status), item.author === 'humans' ? '遗法 · 人类留下' : '居民制定'].join(' · '), { style: 'meta', color: C.text3 }));
-    const body = textOf(item.i18n && item.i18n.zh ? item.i18n.zh.text : item.text);
+    const body = contentOf(item.i18n && item.i18n.zh ? item.i18n.zh.text : item.text);
     if (body) nodes.push(N.text(W, body, { style: 'body' }));
     const reading = view.reading(item);
     if (reading) nodes.push(N.section(W, '规则实际执行的含义', { small: true }), N.card(W, iw => [N.text(iw, reading, { style: 'meta', color: C.text2 })], { pad: 14 }));
@@ -117,10 +117,10 @@ function detail(app, W) {
     const by = item.author && usable(item.author.name) ? item.author.name : textOf(item.source);
     if (by) nodes.push(N.text(W, by, { style: 'meta', color: C.text3 }));
     if (item.kind === 'agent') nodes.push(N.text(W, '居民的著述由 AI 生成，可能有错误。', { style: 'caption', color: C.ai }));
-    const body = textOf(item.body) || textOf(item.ref);
+    const body = contentOf(item.body) || contentOf(item.ref);
     nodes.push(N.text(W, body || (item.redacted ? '此篇已被遮盖。' : '这篇典籍需要在档案馆里阅读，暂不公开全文。'), { style: 'body', color: body ? C.text : C.text3 }));
   } else if (kind === 'place') {
-    const desc = textOf(item.descriptionText && item.descriptionText.zh) || textOf(item.description);
+    const desc = contentOf(item.descriptionText && item.descriptionText.zh) || contentOf(item.description);
     nodes.push(N.text(W, [shared.LORE.district[item.district], item.wild ? '回收地' : item.origin === 'agent' ? '居民所建' : '城市设施'].filter(Boolean).join(' · '), { style: 'meta', color: C.text3 }));
     if (desc) nodes.push(N.text(W, desc, { style: 'body', color: C.text2 }));
     if (item.condition !== null && item.condition !== undefined) nodes.push(N.text(W, `完好度 ${pct(item.condition, 1)}` + (shared.LORE.band[item.band] ? ' · ' + shared.LORE.band[item.band] : ''), { style: 'meta' }), N.progress(W, item.condition / 10000, C.moon));
@@ -128,7 +128,7 @@ function detail(app, W) {
     if (modules.length) nodes.push(N.text(W, '设施：' + modules.join('、'), { style: 'meta', color: C.text2 }));
     (item.projects || []).forEach(j => nodes.push(N.card(W, iw => [N.text(iw, '工程：' + (textOf(j.name) || j.id), { style: 'heading', bold: true }), N.text(iw, `已筹 ${compact(j.have || 0)} / ${compact(j.need || 0)} 词元`, { style: 'meta', color: C.text2 }), N.progress(iw, j.need ? (j.have || 0) / j.need : 0, C.token)], { pad: 14, gap: 6 })));
     const ins = item.inscriptions || [];
-    if (ins.length) { nodes.push(N.section(W, '铭刻', { small: true })); ins.slice(-20).reverse().forEach(r => nodes.push(N.card(W, iw => [N.text(iw, view.text(r.text, '碑文已无法辨认'), { style: 'feed' }), N.text(iw, 'AI 生成', { style: 'caption', color: C.ai })], { pad: 12, gap: 4 }))); }
+    if (ins.length) { nodes.push(N.section(W, '铭刻', { small: true })); ins.slice(-20).reverse().forEach(r => nodes.push(N.card(W, iw => [N.text(iw, contentOf(r.text) || '碑文已无法辨认', { style: 'feed' }), N.text(iw, 'AI 生成', { style: 'caption', color: C.ai })], { pad: 12, gap: 4 }))); }
   }
   return { top: { kind: 'back', title: kind === 'law' ? '法典' : kind === 'doc' ? '典籍' : '地点' }, nodes, tabbar: false };
 }

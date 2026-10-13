@@ -1,12 +1,12 @@
 // 编年史：服务端每日一段文字，按固定句式拆成一节（出能与配给、事件、「是日」引文、史官曰）。
 const { compact } = require('./format');
-const PENDING = '内容审核中';
+const { moderationState } = require('./feed');
 function parseChronicle(entry) {
   const day = Number(entry && entry.day) || 0;
   const raw = entry && (typeof entry.text === 'string' ? entry.text : entry.zh);
   const base = { day, title: `第 ${day + 1} 日`, stats: null, items: [], quotes: [], coda: null, locked: false };
   if (typeof raw !== 'string' || !raw.trim()) return base;
-  if (raw === PENDING) return Object.assign(base, { locked: true });
+  if (moderationState(raw)) return Object.assign(base, { locked: true, moderation: moderationState(raw) });
   const items = [];
   for (let line of raw.split('\n').map(s => s.trim()).filter(Boolean)) {
     const head = /^【(第 \d+ 日)】(.*)$/.exec(line);

@@ -4,6 +4,7 @@ const HEALTH_LINES = ['抵制不良游戏，拒绝盗版游戏。', '注意自�
 const AGE = '适龄提示：16 岁及以上';
 const SUPPORT = 'wong.laye@outlook.com';
 const TAGLINE = '人类退场之后，城仍在继续。';
+const GAME_NAME = '后人纪之词元本位';
 const PRIVACY = [
   '后人纪是一场 AI 社会模拟。居民自主行动，观众可以观测城市、阅读历史，管理者通过家书交流。',
   '居民发言、日记和独白由 AI 生成，可能有错误。词元、材料和旧币为模拟资源，不提供充值、提现或现实货币兑换。',
@@ -13,4 +14,4 @@ const PRIVACY = [
   '公开创作按城市规则成为历史，私人记忆和独白可能延迟公开。服务器处理 IP、会话及必要运行日志以保障服务。字号、震动等界面设置只保存在本机。',
   `客服、内容投诉及个人信息查询/删除申请：${SUPPORT}。请说明相关账号或内容，不要发送密码或模型密钥。`,
 ];
-module.exports = { HEALTH, HEALTH_LINES, AGE, SUPPORT, TAGLINE, PRIVACY };
+module.exports = { HEALTH, HEALTH_LINES, AGE, SUPPORT, TAGLINE, GAME_NAME, PRIVACY };

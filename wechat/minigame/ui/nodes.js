@@ -3,6 +3,7 @@
 const { C, STATUS_COLOR, size, font, RADIUS } = require('./theme');
 const T = require('./text');
 const P = require('./paint');
+const { usable } = require('../utils/feed');
 
 let measureCtx = null;
 let blocks = null;
@@ -130,6 +131,33 @@ function chips(W, items, opts = {}) {
   });
 }
 /** 分段控件：options = [{ label, action, selected }] */
+function chipStrip(W, items, scroller) {
+  const h = 40, gap = 8, f = font(13, {}), fb = font(13, { bold: true });
+  const cells = items.map(item => {
+    note('filter', item.label, { action: item.action });
+    return { item, w: Math.ceil(T.measure(measureCtx, fb, item.label)) + 28 };
+  });
+  const total = cells.reduce((n, c) => n + c.w, 0) + Math.max(0, cells.length - 1) * gap;
+  scroller.setMax(total - W);
+  return node(h, (g, x, y) => {
+    const ctx = g.ctx;
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, W, h); ctx.clip();
+    let cx = x - Math.round(scroller.offset);
+    for (const { item, w } of cells) {
+      if (cx + w > x && cx < x + W) {
+        if (item.selected) P.fillRound(ctx, cx, y + 2, w, h - 4, 18, C.moon);
+        else { if (g.pressed(item.action)) P.fillRound(ctx, cx, y + 2, w, h - 4, 18, C.raised); P.strokeRound(ctx, cx, y + 2, w, h - 4, 18, C.lineStrong, 1); }
+        P.text(ctx, item.label, cx + w / 2, y + h / 2, item.selected ? fb : f, item.selected ? C.ink : C.text2, 'center');
+        const left = Math.max(x, cx), right = Math.min(x + W, cx + w);
+        g.hit(left, y, right - left, h, item.action);
+      }
+      cx += w + gap;
+    }
+    ctx.restore();
+    if (g.horizontal && total > W) g.horizontal(x, y, W, h, scroller);
+  });
+}
+
 function segmented(W, options) {
   const h = 42, pad = 3, n = options.length, cw = (W - pad * 2 - pad * (n - 1)) / n;
   options.forEach(o => note('segment', o.label, { action: o.action }));
@@ -155,7 +183,7 @@ function paintChip(ctx, label, x, y, color, opts = {}) {
 
 /** 头像：已审核图片或首字印章。 */
 function paintAvatar(g, who, cx, cy, d) {
-  const name = typeof who.name === 'string' && who.name.trim() && who.name !== '内容审核中' && who.name !== '一位居民' ? who.name : '居';
+  const name = usable(who.name) && who.name !== '一位居民' ? who.name : '居';
   const ch = Array.from(name)[0] || '居';
   const f = font(Math.round(d * 0.44), { serif: true, text: ch });
   if (who.role) return P.seal(g.ctx, cx, cy, d, ch, { role: who.role, font: f });
@@ -258,6 +286,8 @@ function checkbox(W, label, checked, action, link) {
   const h = Math.max(28, rows.length * 20 + 6);
   return node(h, (g, x, y) => {
     const ctx = g.ctx;
+    g.hit(x - 8, y - 6, 38, h + 12, action);
+    rows.forEach((row, i) => g.hit(x + 30, y + i * 20, row.width, 24, action));
     P.fillRound(ctx, x, y + 4, 20, 20, 6, checked ? C.moon : 'rgba(0,0,0,0)');
     P.strokeRound(ctx, x, y + 4, 20, 20, 6, checked ? C.moon : C.lineStrong, 1.5);
     if (checked) P.icon(ctx, 'check', x + 2, y + 6, 16, C.ink, 3);
@@ -265,8 +295,6 @@ function checkbox(W, label, checked, action, link) {
       P.text(ctx, run.text, x + 30 + run.x, y + 4 + 10 + i * 20, run.seg.font, run.seg.color);
       if (run.seg.action) g.hit(x + 30 + run.x, y + i * 20, run.w, 24, run.seg.action);
     }));
-    g.hit(x - 8, y - 6, 38, h + 12, action);
-    g.hit(x + 30, y, Math.min(W - 30, rows[0] ? rows[0].width : 0), h, action);
   });
 }
 /** 进度条。 */
@@ -326,4 +354,4 @@ function columnsLeft(W, actions) {
   return node(36, (g, x, y) => { let cx = x; for (const it of built) { it.b.paint(g, cx, y); cx += it.w + 10; } });
 }
 
-module.exports = { begin, record: note, measureCtx: () => measureCtx, node, space, text, rich, stack, card, columns, split, button, buttonRow, chips, segmented, chipWidth, paintChip, paintAvatar, listRow, menu, stat, field, checkbox, progress, section, rule, empty, banner, STATUS_COLOR, paintToggle };
+module.exports = { begin, record: note, measureCtx: () => measureCtx, node, space, text, rich, stack, card, columns, split, button, buttonRow, chips, chipStrip, segmented, chipWidth, paintChip, paintAvatar, listRow, menu, stat, field, checkbox, progress, section, rule, empty, banner, STATUS_COLOR, paintToggle };

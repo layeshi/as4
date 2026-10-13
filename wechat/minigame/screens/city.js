@@ -3,8 +3,8 @@ const N = require('../ui/nodes');
 const P = require('../ui/paint');
 const T = require('../ui/text');
 const { C, font, size } = require('../ui/theme');
-const { buildFeed, PENDING, usable } = require('../utils/feed');
-const { compact, num, pct, dayTick } = require('../utils/format');
+const { buildFeed, usable, moderationNotice } = require('../utils/feed');
+const { compact, num, pct, dayTick, countdown } = require('../utils/format');
 const shared = require('../utils/shared-text');
 const view = require('../utils/view');
 
@@ -19,10 +19,10 @@ function segs(list, extra = {}) { return (list || []).map(s => Object.assign({ t
 
 function liveRow(app, W) {
   const w = app.state.world;
-  const next = w.nextTickAt ? new Date(w.nextTickAt) : null;
-  const clock = next ? `下一刻 ${String(next.getHours()).padStart(2, '0')}:${String(next.getMinutes()).padStart(2, '0')}` : '';
   return N.node(22, (g, x, y) => {
     const ctx = g.ctx, f = font(13, {}), cy = y + 11;
+    const remaining = w.nextTickAt ? new Date(w.nextTickAt).getTime() - Date.now() : NaN;
+    const clock = Number.isFinite(remaining) ? remaining > 0 ? '距下一刻 ' + countdown(remaining) : countdown(remaining) : '';
     P.circle(ctx, x + 4, cy, 4, w.paused ? C.dormant : C.awake);
     P.text(ctx, w.paused ? '已暂停' : '实况', x + 14, cy, f, w.paused ? C.dormant : C.awake);
     P.text(ctx, dayTick(w.day, w.tick, w.ticksPerDay || 12), x + 14 + T.measure(ctx, f, w.paused ? '已暂停' : '实况') + 10, cy, f, C.text2);
@@ -77,8 +77,8 @@ function filters(app, W, items) {
   const present = new Set();
   for (const it of buildFeed(app.events, app.state, 'all')) { if (it.cat) present.add(it.cat); if (it.events) it.events.forEach(e => present.add(e.cat)); }
   const cats = shared.CATEGORIES.filter(c => c !== 'admin' && (present.has(c) || c === app.feedFilter));
-  return N.chips(W, [{ label: '全部', action: { type: 'filter', value: 'all' }, selected: app.feedFilter === 'all' }]
-    .concat(cats.map(c => ({ label: shared.CATEGORY_LABELS[c], action: { type: 'filter', value: c }, selected: app.feedFilter === c }))));
+  return N.chipStrip(W, [{ label: '全部', action: { type: 'filter', value: 'all' }, selected: app.feedFilter === 'all' }]
+    .concat(cats.map(c => ({ label: shared.CATEGORY_LABELS[c], action: { type: 'filter', value: c }, selected: app.feedFilter === c }))), app.filterScroller);
 }
 
 function avatarOf(app, actor) {
@@ -91,9 +91,8 @@ function bubble(app, W, it) {
   const av = 36, bw = W - av - 10, inner = bw - 24;
   const header = N.rich(bw - 34, segs(it.header).map((s, i) => i ? Object.assign(s, { color: s.action ? C.label : C.text3 }) : s), { style: 'meta', maxLines: 2 });
   let body, more = null;
-  const anon = !app.wechatVerified;
   if (it.locked) {
-    const label = anon ? '登录后阅读这段发言' : '审核中，稍后自动刷新';
+    const label = moderationNotice(it.moderation);
     body = N.node(40, (g, x, y) => {
       const ctx = g.ctx;
       if (ctx.setLineDash) ctx.setLineDash([4, 3]);
@@ -101,7 +100,7 @@ function bubble(app, W, it) {
       if (ctx.setLineDash) ctx.setLineDash([]);
       P.icon(ctx, 'lock', x + 12, y + 12, 16, C.text3, 2);
       P.text(ctx, label, x + 34, y + 20, font(13, {}), C.text3);
-      if (anon) g.hit(x, y, bw, 40, { type: 'tab', tab: 'account' });
+      if (it.moderation === 'loginRequired') g.hit(x, y, bw, 40, { type: 'tab', tab: 'account' });
     });
   } else {
     const f = size('feed'), bf = font(f.size, {});
@@ -176,6 +175,7 @@ function city(app, W) {
   }
   const nodes = [];
   if (!app.wechatVerified && !app.dismissed.login) nodes.push(loginBanner(app, W));
+  if ((s.agents || []).some(a => !usable(a.name))) nodes.push(N.text(W, '部分居民名字暂未展示，暂用居民编号区分。', { style: 'caption', color: C.text3 }));
   nodes.push(liveRow(app, W), mapCard(app, W), legend(W), stats(app, W));
   const count = app.events.length;
   nodes.push(N.section(W, '此刻', { sub: count ? `最近 ${count} 条公开记录` : '' }), filters(app, W));
