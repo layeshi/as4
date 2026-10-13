@@ -34,7 +34,7 @@ function nextWake(ctx,a,runner) {
   const w=ctx.rt.w,called=!!a.routine.called;
   if(['dead','retired','dormant'].includes(a.status))return {state:a.status};
   if(w.paused)return {state:'experiment_paused'};
-  if(['unconfigured','paused','stopped','error'].includes(runner.status))return {state:runner.status};
+  if(['unconfigured','paused','stopped','error','hosted_unavailable'].includes(runner.status))return {state:runner.status};
   const job=ctx.runners.jobs.get(a.id);
   if(!ctx.runners.valid(a.id)||!ctx.runners.records[a.id]?.enabled||!job||job.controller.signal.aborted)return {state:'stopped'};
   if(runner.wakeEvery===0)return {state:'off',called};
@@ -42,6 +42,7 @@ function nextWake(ctx,a,runner) {
   const tick=Math.max(w.clock.tick+1,runner.nextWakeTick),blockedBy=[];
   if(usedToday(a,earthDayKey(ctx))>=a.tokens.cap||runner.status==='cap_reached')blockedBy.push('cap_reached');
   if(a.energy+a.basic<=0||runner.status==='tokens_exhausted')blockedBy.push('tokens_exhausted');
+  if(runner.status==='hosted_balance_low')blockedBy.push('hosted_balance_low');
   return {state:'scheduled',tick,at:ctx.rt.nextTickAt===null?null:ctx.rt.nextTickAt+(tick-w.clock.tick-1)*P.tickMs,
     every:runner.wakeEvery,called,day:Math.floor(tick/P.ticksPerDay)+1,tickOfDay:tick%P.ticksPerDay+1,blockedBy};
 }

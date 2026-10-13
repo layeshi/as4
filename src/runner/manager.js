@@ -275,7 +275,7 @@ export class RunnerManager {
             balanceLow = true; state.status = 'hosted_balance_low';
             return { ok: false, status: 409, json: { error: { code: 'hosted_balance_low' } } };
           }
-          balanceLow = false; state.status = 'running';
+          balanceLow = false; state.status = 'waiting';
           return wake(args);
         };
       }

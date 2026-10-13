@@ -308,6 +308,14 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
         assert.equal(reply.status, 401, '回应路由存在且要求登录会话');
         continue;
       }
+      if (['/api/account/hosted/requests', '/api/admin/hosted/requests', '/api/admin/hosted/config', '/api/admin/hosted/test', '/api/admin/hosted/adjust'].includes(path)) {
+        const routes = path === '/api/account/hosted/requests' ? [path, `${path}/req1/cancel`] : path === '/api/admin/hosted/requests' ? [`${path}/req1/approve`, `${path}/req1/reject`] : [path];
+        for (const route of routes) {
+          const reply = await env.call(route, { method: 'POST', body: {}, headers: { 'X-Houren-Request': '1' } });
+          assert.equal(reply.status, 401, `${route} 路由存在且要求登录会话`);
+        }
+        continue;
+      }
       if (path === '/api/admin/support/qr') { // 插值的收款方式：实际入口是 POST / DELETE /api/admin/support/qr/:kind，要求管理员会话。
         const removed = await env.call('/api/admin/support/qr/wechat', { method: 'DELETE', body: {}, headers: { 'X-Houren-Request': '1' } });
         assert.equal(removed.status, 401, '收款码路由存在且要求登录会话');

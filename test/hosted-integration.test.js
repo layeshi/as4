@@ -171,6 +171,8 @@ test('zero balance emits no world command and recovers at a later routine tick a
   e.ctx.runners.activate('http://unused.invalid'); e.ctx.runners.start(id);
   await eventually(() => e.ctx.runners.view(id).status === 'hosted_balance_low');
   assert.equal(e.rt.w.commandN, before); assert.equal(e.calls.length, 0); assert.equal(e.rt.w.agents[id].energy + e.rt.w.agents[id].basic, tokens);
+  // The owner's next-wake estimate flags the low balance instead of promising a normal waking.
+  await eventually(async () => (await e.call(`/api/account/residents/${id}`)).json?.overview?.nextWake?.blockedBy?.includes('hosted_balance_low'));
   const job = e.ctx.runners.jobs.get(id); e.fund(); e.rt.nextTickAt = Date.now() + 4000; e.rt.exec('tick');
   await eventually(() => e.calls.length > 0);
   assert.equal(e.ctx.runners.jobs.get(id), job); assert.notEqual(e.ctx.runners.view(id).status, 'hosted_balance_low');
@@ -198,6 +200,7 @@ test('admin save restarts running hosted residents, uses new prices/model, and d
   const replacement = e.ctx.runners.jobs.get(id); assert.notEqual(replacement, original); assert.equal(original.controller.signal.aborted, true);
   assert.equal(e.factories.at(-1).model, 'replacement'); assert.equal(e.rt.w.agents[id].body.model, modelConfig.model);
   await e.saveConfig({ enabled: false }); assert.equal(e.ctx.runners.jobs.size, 0); assert.equal(e.ctx.runners.view(id).status, 'hosted_unavailable');
+  assert.equal((await e.call(`/api/account/residents/${id}`)).json.overview.nextWake.state, 'hosted_unavailable');
   const restored = new RunnerManager(e.rt, e.cfg); restored.ctx = e.ctx; restored.activate('http://unused.invalid');
   assert.equal(restored.view(id).status, 'hosted_unavailable'); assert.equal(restored.jobs.size, 0); await restored.close();
   await e.saveConfig({ enabled: true }); assert.equal(e.ctx.runners.jobs.size, 1);

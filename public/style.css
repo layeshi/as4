@@ -887,3 +887,6 @@ ul.reading { list-style: none; padding-left: 0; }
   .support-header, .support-main { padding: 20px 16px; }
   .support-qr-card { padding: 16px; }
 }
+
+.account-modal .account-summary + .form-actions { flex-wrap: wrap; }
+.account-modal .account-summary + .form-actions > .btn { white-space: nowrap; flex-shrink: 0; }
