@@ -47,7 +47,8 @@ function client(base, { intercept } = {}) {
     return instance;
   }
   function game() {
-    const ctx = { scale() {}, fillRect() {}, strokeRect() {}, save() {}, restore() {}, beginPath() {}, rect() {}, clip() {}, moveTo() {}, lineTo() {}, stroke() {}, arc() {}, fill() {}, fillText() {}, measureText(text) { return { width: Array.from(text).length * 8 }; } };
+    // Any drawing call is accepted; only text measurement matters for layout.
+    const ctx = new Proxy({ measureText(text) { return { width: Array.from(text).length * 8 }; } }, { get: (target, key) => key in target ? target[key] : () => {}, set: () => true });
     wx.createCanvas = () => ({ getContext: () => ctx }); wx.getWindowInfo = () => ({ windowWidth: 375, windowHeight: 812, pixelRatio: 2, statusBarHeight: 28, safeArea: { bottom: 790 } });
     for (const name of ['TouchStart', 'TouchMove', 'TouchEnd', 'Hide', 'Show', 'WindowResize', 'KeyboardConfirm', 'KeyboardComplete', 'ShareAppMessage']) wx['on' + name] = fn => { wx['emit' + name] = fn; };
     wx.login = options => options.success({code:'test-wechat-code'}); wx.showKeyboard = () => {}; wx.hideKeyboard = () => {}; wx.showShareMenu = () => {};

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小游戏预览</title>
+<style>
+  body { margin: 0; min-height: 100vh; background: #202126; color: #ddd; font: 13px/1.5 -apple-system, "PingFang SC", sans-serif; display: flex; flex-direction: column; align-items: center; }
+  .bar { display: flex; gap: 12px; align-items: center; padding: 10px; flex-wrap: wrap; justify-content: center; }
+  .bar select, .bar button { font: inherit; padding: 4px 8px; }
+  .phone { position: relative; margin: 6px 0 24px; border-radius: 28px; overflow: hidden; box-shadow: 0 0 0 10px #0d0e11, 0 0 0 11px #3a3c44; }
+  .phone canvas { display: block; touch-action: none; }
+  .kb { position: absolute; left: 0; right: 0; bottom: 0; background: #d1d4db; padding: 8px; display: none; gap: 8px; align-items: flex-end; }
+  .kb.open { display: flex; }
+  .kb textarea { flex: 1; min-height: 36px; max-height: 160px; font: 15px/1.4 -apple-system, "PingFang SC", sans-serif; border-radius: 8px; border: 1px solid #aaa; padding: 6px; resize: none; }
+  .kb button { height: 36px; padding: 0 14px; border-radius: 8px; border: 0; background: #07c160; color: #fff; font: inherit; }
+  .note { color: #888; max-width: 520px; text-align: center; padding: 0 16px 16px; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <label>机型 <select id="device"><option value="iphone15">iPhone 15（390×844）</option><option value="se">iPhone SE（375×667）</option><option value="android">安卓（393×851）</option></select></label>
+  <label>数据 <select id="data"><option value="approved">文字已审核</option><option value="anon">未登录投影</option></select></label>
+  <button id="reload" type="button">重新载入</button>
+</div>
+<div class="phone" id="phone">
+  <div class="kb" id="kb"><textarea id="kbInput" rows="1"></textarea><button id="kbDone" type="button">完成</button></div>
+</div>
+<p class="note">预览只读：只转发 GET 请求到线上接口，登录与写操作会被拒绝。字体、触摸和键盘是模拟的，最终以微信开发者工具和真机为准。</p>
+<script src="/tools/preview/preview.js"></script>
+</body>
+</html>

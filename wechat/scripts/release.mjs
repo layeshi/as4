@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { Script } from 'node:vm';
 import { isIP } from 'node:net';
+import { buildSharedModule, SHARED_TARGET } from './shared.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const build = join(root, 'build');
@@ -53,6 +54,7 @@ async function check() {
     for (const name of ['view']) {
       if ((await readFile(join(source, 'utils', name + '.js'), 'utf8')) !== (await readFile(join(root, 'miniprogram', 'utils', name + '.js'), 'utf8'))) throw new Error('小游戏公共模块待同步，请运行 prepare');
     }
+    if ((await readFile(join(source, SHARED_TARGET), 'utf8')) !== await buildSharedModule()) throw new Error('小游戏句式模块与网站 public/i18n.js 不一致，请运行 prepare');
   } else {
     const app = JSON.parse(await readFile(join(source, 'app.json'), 'utf8'));
     for (const page of app.pages) for (const ext of ['.js', '.json', '.wxml']) await stat(join(source, page + ext));
@@ -84,7 +86,7 @@ async function prepare(checked) {
   await rm(build, { recursive: true, force: true });
   await mkdir(build, { recursive: true });
   await cp(source, join(build, project.miniprogramRoot), { recursive: true });
-  await writeFile(join(build, project.miniprogramRoot, 'config.js'), 'module.exports = ' + JSON.stringify({ ...checked.config, apiBase: checked.apiBase }, null, 2) + ';\n');
+  await writeFile(join(build, project.miniprogramRoot, 'config.js'), 'module.exports = ' + JSON.stringify({ ...checked.config, version: process.env.WECHAT_VERSION || checked.config.version, apiBase: checked.apiBase }, null, 2) + ';\n');
   await writeFile(join(build, 'project.config.json'), JSON.stringify({ ...project, appid }, null, 2) + '\n');
   console.log('开发者工具导入目录：' + build);
   return appid;
@@ -93,6 +95,7 @@ async function main() {
   if (!['check', 'prepare', 'preview', 'upload'].includes(mode)) throw new Error('操作应为 check / prepare / preview / upload');
   if (game && mode !== 'check') {
     for (const name of ['view']) await cp(join(root, 'miniprogram', 'utils', name + '.js'), join(source, 'utils', name + '.js'));
+    await writeFile(join(source, SHARED_TARGET), await buildSharedModule());
   }
   const checked = await check();
   if (mode === 'check') return;

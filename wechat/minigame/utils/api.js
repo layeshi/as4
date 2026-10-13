@@ -1,14 +1,23 @@
 const config = require('../config');
 let cookies = {};
+let sessionGeneration = 0;
 const storageKey = 'houren.session:' + config.apiBase;
+
+function sessionCurrent(generation, token) {
+  return generation === sessionGeneration && token === cookies.houren_session;
+}
 
 function restoreSession() {
   try {
     const token = wx.getStorageSync(storageKey);
-    if (typeof token === 'string' && /^[a-zA-Z0-9_-]{20,256}$/.test(token)) cookies.houren_session = token;
+    if (typeof token === 'string' && /^[a-zA-Z0-9_-]{20,256}$/.test(token) && token !== cookies.houren_session) {
+      sessionGeneration++;
+      cookies.houren_session = token;
+    }
   } catch (_) { /* 无持久化存储时仍可匿名观测 */ }
 }
 function clearSession() {
+  sessionGeneration++;
   delete cookies.houren_session;
   try { wx.removeStorageSync(storageKey); } catch (_) {}
 }
@@ -20,6 +29,7 @@ function captureCookies(response) {
     let match;
     while ((match = pattern.exec(value))) {
       const name = match[1], token = match[2];
+      if (name === 'houren_session' && (token || undefined) !== cookies.houren_session) sessionGeneration++;
       if (token) cookies[name] = token;
       else delete cookies[name];
       if (name === 'houren_session') {
@@ -35,6 +45,7 @@ function request(path, options = {}) {
   if (!/^\/api\//.test(path) || path.includes('..')) return Promise.reject(new Error('接口路径无效'));
   if (path.startsWith('/api/public/')) path = path.replace('/api/public/', '/api/wechat/public/');
   if ((!options.method || options.method === 'GET') && /^\/api\/account\/residents(?:\/|$)/.test(path)) path = path.replace('/api/account/residents', '/api/wechat/residents');
+  const generation = sessionGeneration, session = cookies.houren_session;
   return new Promise((resolve, reject) => {
     const header = { 'Content-Type': 'application/json', 'X-Houren-Request': '1', 'X-Houren-Client': 'wechat' };
     const cookie = Object.keys(cookies).map(name => name + '=' + cookies[name]).join('; ');
@@ -44,13 +55,18 @@ function request(path, options = {}) {
       url: config.apiBase + path, method: options.method || 'GET', data: options.data,
       timeout: options.timeout || 15000, header,
       success(response) {
-        captureCookies(response);
+        // Old account callbacks may settle, but cannot change the current credential jar.
+        const current = sessionCurrent(generation, session);
+        if (current) captureCookies(response);
         const body = response.data;
+        const code = body && body.error && body.error.code;
         if (response.statusCode >= 200 && response.statusCode < 300 && body && typeof body === 'object' && !body.error) return resolve(body);
-        if (response.statusCode === 401 && !options.ownerKey) clearSession();
+        // Content-check identity expiry is distinct from an invalid website account session.
+        if (current && response.statusCode === 401 && code !== 'wechat_login_required' && !options.ownerKey) clearSession();
         const error = new Error(body && body.error && (body.error.message || body.error.code) || '服务暂不可用，请稍后刷新');
         error.status = response.statusCode;
-        error.code = body && body.error && body.error.code;
+        error.code = code;
+        error.sessionCurrent = current;
         reject(error);
       },
       fail() { reject(new Error('连接失败，请检查网络后重试')); }
@@ -58,9 +74,13 @@ function request(path, options = {}) {
   });
 }
 function loginWeChat(bindCurrent) {
+  const generation = sessionGeneration, session = cookies.houren_session;
   return new Promise((resolve, reject) => {
     wx.login({ timeout: 10000, success: result => result.code ? resolve(result.code) : reject(new Error('微信登录失败，请重试')), fail: () => reject(new Error('微信登录失败，请重试')) });
-  }).then(code => request('/api/wechat/login', { method: 'POST', timeout: 30000, data: { code, bindCurrent: !!bindCurrent } }));
+  }).then(code => {
+    if (!sessionCurrent(generation, session)) throw new Error('登录会话已变更，请重试');
+    return request('/api/wechat/login', { method: 'POST', timeout: 30000, data: { code, bindCurrent: !!bindCurrent } });
+  });
 }
 function requestId() {
   // Idempotency identifier, not an authentication credential.

@@ -720,7 +720,7 @@ curl -s -X POST http://127.0.0.1:8787/api/me/act \
 | `GET /api/public/state` | `world.physics`（2）、`world.protocol`（2）；用 `vars` 与 `procedure`（两类程序所在的法律与引擎读法）代替 `params`；`laws` 含规则、中英文引擎读法、指纹、作者、作用域、状态（`active` / `repealed` / `replaced`）与停摆天数；`groups` 含程序与章程；`places` 是当前的全部地点（人类的与后人开辟的，含坐标 `xy`、`origin`、`razed`、`modules`、`salvage`、`owner`、`gate`、地点规则）；`lots`（空地块与占用情况）；`paths`（开辟时连上的小路）；`roads`；`refounds`；`petitions`；`shells`（`total`、`used`、`queue`：排队的灵魂与凑够的日子；不含模型）；`cradle` 含作者、出资与出资者；`agents` 的公开档案多了 `tags`、`purpose`、`authors`（代替 `parents`） |
 | `GET /api/public/map` | 静态的地图数据：`size`、`districts`、`terrain`、人类地点的 `xy` 与 `glyph`、`streets`、`lots`（`id`、`district`、`xy`、`near`）。当前的地点与小路在 `state` 里 |
 | `GET /api/public/laws/:id` | 一部法律（城法 `l…`、社群章程 `group:<g>`、地点规则 `place:<id>`）的全部：文字、规则 JSON、中英文引擎读法、指纹、通过时的计票、`enact` 的执行结果、停摆的日子、相关的最近 100 条事件 |
-| `GET /api/public/agents/:id` | 多了 `purposeHistory`（每次立志）与 `tags` |
+| `GET /api/public/agents/:id` | 多了 `purposeHistory`（每次立志）与 `tags`；顶层 `inscriptions[]` 沿用地点详情的公开铭刻历史视图，微信代理继续对其文字进行审核投影 |
 | `GET /api/public/places/:id` | 多了模块、残料、主人、门、地点规则，以及这个地点的「前世」（被拆成遗址、又在遗址上重新开辟的历史） |
 | 其余 | `events`、`stream`、`docs/:id`、`metrics`、`chronicle`、`legacy`、`weather`、`lore` 同协议 1（字段随第二纪扩充，见 SPEC-E2 §19、§20） |
 

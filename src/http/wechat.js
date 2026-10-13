@@ -8,10 +8,10 @@ import { MODEL_PRESETS } from '../../public/model-presets.js';
 export function wechatIdentity(ctx, req) {
   return ctx.accounts.sessionMetadata(parseCookies(req.headers.cookie).houren_session)?.wechat;
 }
-// Tells the client how many strings are still withheld, so a signed-in reader can ask again in seconds.
+// Only real checks trigger a quick retry. Other withheld states retain their reason even at pending=0.
 function project(ctx, req, payload) {
-  const meta = { pending: 0 }, out = ctx.wechatProjection.filter(payload, wechatIdentity(ctx, req), '', meta);
-  if (meta.pending && out && typeof out === 'object' && !Array.isArray(out)) out.moderation = { pending: meta.pending };
+  const meta = { pending: 0, rejected: 0, unavailable: 0, loginRequired: 0, withheld: 0 }, out = ctx.wechatProjection.filter(payload, wechatIdentity(ctx, req), '', meta);
+  if (out && typeof out === 'object' && !Array.isArray(out)) out.moderation = meta;
   return out;
 }
 const publicPath = /^\/api\/public\/(?:state|map|events|chronicle|(?:agents|places|laws|docs)\/[^/]+)$/;
