@@ -1,10 +1,10 @@
 // Read-only deployment gate. Do not import Runtime: opening a world repairs logs.
-import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { dirname, join, resolve, parse } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { receiptChecksum } from '../command-receipt.js';
+import { iterateCommands } from '../commands.js';
 
 /** POSIX DAC against the service identity, irrespective of the caller's UID. */
 export function posixAccess(stat, identity, mask) {
@@ -129,23 +129,29 @@ export function deployPreflight({ releaseDir, dataDir, worldId, configFiles = []
     const path = join(world, name);
     if (!readable(path, target, { writable: true, owned: true })) return null;
     try {
+      if (key === 'n') {
+        const size = statSync(path).size, fd = openSync(path, 'r'), tail = Buffer.alloc(1);
+        try { if (size) readSync(fd, tail, 0, 1, size - 1); } finally { closeSync(fd); }
+        if (size && tail[0] !== 10) { fail(target, 'truncated_tail'); return null; }
+        const info = {}; let last = 0;
+        for (const row of iterateCommands(path, { info })) {
+          if (!object(row) || row.n !== last + 1 || !integer(row.tick) || typeof row.type !== 'string' || !object(row.payload)) { fail(target, 'invalid_continuity'); return null; }
+          last = row.n;
+        }
+        if (info.truncateTo !== null) { fail(target, 'invalid_jsonl'); return null; }
+        return last;
+      }
       const text = readFileSync(path, 'utf8');
       if (text && !text.endsWith('\n')) { fail(target, 'truncated_tail'); return null; }
       let last = 0;
       for (const line of text.split('\n')) {
         if (!line) continue;
         let row = JSON.parse(line);
-        if (key === 'n' && object(row) && row.format !== undefined) {
-          if (row.format !== 'command-receipt-v1' || !object(row.command) || row.command.receipt?.version !== 1 || row.sha256 !== receiptChecksum(row.command)) {
-            fail(target, 'invalid_receipt'); return null;
-          }
-          row = row.command;
-        }
         if (!object(row) || row[key] !== last + 1 || !integer(row.tick) || typeof row.type !== 'string' || (key === 'n' && !object(row.payload))) { fail(target, 'invalid_continuity'); return null; }
         last = row[key];
       }
       return last;
-    } catch { fail(target, 'invalid_jsonl'); return null; }
+    } catch (error) { fail(target, /回执|Unsupported command receipt/.test(error.message) ? 'invalid_receipt' : /不连续/.test(error.message) ? 'invalid_continuity' : 'invalid_jsonl'); return null; }
   }
   const commands = logTail('commands.jsonl', 'commands', 'n');
   const events = logTail('events.jsonl', 'events', 'seq');

@@ -255,11 +255,15 @@ const repair = {
       fail('wrong_place');
     const research = chooseResearch(w, a, args),
       rate = obj.condition < 1000 ? 5 : 10;
+    const materialsOffered = amount(args.materials), energyOffered = amount(args.energy);
+    if (obj.condition >= 10000) fail('already', null, { reason: 'repair_full' });
+    if (!materialsOffered) fail('insufficient_materials', null, { reason: 'repair_input', offered: materialsOffered, minimum: 1 });
+    if (energyOffered < K(w)) fail('insufficient_energy', null, { reason: 'repair_input', offered: energyOffered, minimum: K(w) });
     const bp = Math.min(
       10000 - obj.condition,
       research ? 750 : 500,
-      amount(args.materials) * 100,
-      Math.floor(amount(args.energy) / K(w)) * rate
+      materialsOffered * 100,
+      Math.floor(energyOffered / K(w)) * rate
     );
     if (!bp) fail('already');
     const materials = Math.ceil(bp / 100),

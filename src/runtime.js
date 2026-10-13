@@ -9,7 +9,7 @@ import { tokenized } from './e2/facade.js';
 import { usesLawSemantics2 } from './e2/engine/law-semantics.js';
 import { commitCommandCandidate, makeReceipt } from './command-receipt.js';
 import { engineOf, engineForPhysics } from './engines.js';
-import { CommandLog, readCommands, repairCommandLog } from './commands.js';
+import { CommandLog, iterateCommands } from './commands.js';
 import { EventStore } from './events.js';
 import { randomSeed } from './config.js';
 import {
@@ -61,7 +61,6 @@ export class Runtime {
       engine = engineOf(w);
       if (cfg.premise != null && cfg.premise !== (w.premise || 0)) logger.warn?.(`PREMISE 只在创建世界时生效；这座城是设定 ${w.premise || 0}`);
       if (w.codeVersion !== version) logger.warn?.(`世界创建时的代码版本是 ${w.codeVersion}，当前是 ${version}：回放可能不一致`);
-      repairCommandLog(cmdFile);
     } else {
       if (existsSync(cmdFile)) throw new Error(`${cmdFile} 存在但没有快照：数据目录不完整，请检查或用 --reset 重建`);
       const seed = cfg.seed || randomSeed();
@@ -73,20 +72,24 @@ export class Runtime {
       writeSnapshot(dir, w);
       created = true;
     }
+    // Validate/repair commands before touching events; retain only sequence
+    // metadata, then stream recovery instead of retaining a second full log.
+    const log = new CommandLog(cmdFile, { repair: !created });
+    if (log.n < w.commandN) throw new Error(`命令日志（${log.n} 条）比快照（commandN = ${w.commandN}）还短：数据已损坏`);
     // 事件：快照之后产生的事件由回放重新产生，所以先截掉
     events.load({ keepSeq: w.counters.event, tick: w.clock.tick });
-    const rt = new Runtime({ cfg, w, engine, log: new CommandLog(cmdFile), events, dir, version, logger });
-    if (rt.log.n < w.commandN) throw new Error(`命令日志（${rt.log.n} 条）比快照（commandN = ${w.commandN}）还短：数据已损坏`);
-    const tail = readCommands(cmdFile, { fromN: w.commandN });
-    for (const cmd of tail) {
+    const rt = new Runtime({ cfg, w, engine, log, events, dir, version, logger });
+    let recovered = 0;
+    for (const cmd of iterateCommands(cmdFile, { fromN: w.commandN })) {
       if (cmd.receipt) rt.receiptEventsPending = true;
       const { events: evs } = engine.applyCommand(w, cmd);
       events.append(evs, { silent: true, tick: w.clock.tick });
       if (cmd.type === 'tick') events.release(w.clock.tick, { silent: true });
+      recovered++;
     }
     rt.remainingMs = w.paused && w.experimentControl?.active ? w.experimentControl.remainingMs : cfg.tickMs;
-    if (tail.length) {
-      logger.log?.(`已从崩溃中恢复：回放了 ${tail.length} 条命令`);
+    if (recovered) {
+      logger.log?.(`已从崩溃中恢复：回放了 ${recovered} 条命令`);
       rt.snapshot();
     }
     // Replay historical commands with the feature disabled, then log the migration.

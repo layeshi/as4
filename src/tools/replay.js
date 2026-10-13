@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { engineOf, createWorldFromSnapshot } from '../engines.js';
-import { readCommands } from '../commands.js';
+import { iterateCommands } from '../commands.js';
 import { readSnapshot, commandsPath, worldDir, stateHash, firstDiff } from '../store.js';
 import { loadConfig, applyConfig } from '../config.js';
 
@@ -27,13 +27,13 @@ export function replayDir(dir, { toN, currentVersion } = {}) {
   // 快照里没有 map 字段的是经典地图（M1 以来的旧世界）；第二纪另需先民名单与躯壳模型（w.genesis）
   const w = createWorldFromSnapshot(snap);
   const engine = engineOf(snap);
-  const cmds = readCommands(commandsPath(dir), { toN: limit });
-  for (const cmd of cmds) engine.applyCommand(w, cmd);
+  let applied = 0;
+  for (const cmd of iterateCommands(commandsPath(dir), { toN: limit })) { engine.applyCommand(w, cmd); applied++; }
   const hash = stateHash(w);
-  if (toN !== undefined && toN !== snap.commandN) return { ok: null, hash, snapshotHash: null, diff: null, applied: cmds.length, warnings, world: w };
+  if (toN !== undefined && toN !== snap.commandN) return { ok: null, hash, snapshotHash: null, diff: null, applied, warnings, world: w };
   const snapshotHash = stateHash(snap);
   const diff = hash === snapshotHash ? null : firstDiff(w, snap) || '（哈希不同但找不到差异的路径）';
-  return { ok: hash === snapshotHash, hash, snapshotHash, diff, applied: cmds.length, warnings, world: w };
+  return { ok: hash === snapshotHash, hash, snapshotHash, diff, applied, warnings, world: w };
 }
 
 function main() {
