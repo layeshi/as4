@@ -81,7 +81,7 @@ export async function adminHosted(){
     const r=await api('/api/admin/hosted');if(!modal.body.isConnected)return;
     if(!r.ok)throw Error(errorText(r,'无法读取托管管理信息'));
     const d=r.json,c=d.config,today=d.stats.today;clear(pane);notice.textContent='';
-    pane.append(h('p',null,d.available?'平台托管已开放':'平台托管暂未开放'),d.storageFault?h('p',{class:'error'},'托管账本暂不可用，入账与调整已暂停。'):null);
+    pane.append(h('p',null,d.available?'平台托管已开放':'平台托管暂未开放'));if(d.storageFault)pane.append(h('p',{class:'error'},'托管账本暂不可用，入账与调整已暂停。'));
     const enabled=h('input',{name:'enabled',type:'checkbox',checked:c.enabled}),clearKey=h('input',{name:'clearApiKey',type:'checkbox'});
     const fields=[h('label',{class:'check'},enabled,'开放'),field('接口地址','baseURL',c.baseURL,'url',{required:true}),field('模型 ID','model',c.model),field(c.hasApiKey?'API Key（已配置，留空保留）':'API Key（留空保留）','apiKey','','password',{autocomplete:'off'}),h('label',{class:'check'},clearKey,'清除 API Key'),h('label',{class:'field'},h('span',null,'思考模式'),h('select',{name:'thinking'},[['default','默认'],['enabled','开启'],['disabled','关闭']].map(([value,label])=>h('option',{value,selected:c.thinking===value},label)))),field('单次最大输出 token','maxOutputTokens',c.maxOutputTokens,'number',{min:256,max:32000,required:true}),...priceLabels.map(([key,label])=>moneyField(`${label}（元 / 百万 token）`,key,c.pricesMicro?microYuan(c.pricesMicro[key],6):'',{required:false}))];
     const config=b=>{

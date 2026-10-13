@@ -101,7 +101,7 @@ test('模型表单：已有托管预选，关闭说明及公共角色模型保�
 test('管理面板：入账、拒绝、调整、配置和测试提交精确金额并刷新',async()=>{
   start(req=>reply(req.method==='GET'?admin():req.url.endsWith('/test')?{ok:true,model:'deepseek-chat'}:{}));
   const modal=await adminHosted(),root=modal.body;
-  assert.match(root.textContent,/今日扣费¥0.3000/);assert.match(root.textContent,/账号余额与累计用量/);
+  assert.match(root.textContent,/今日扣费¥0.3000/);assert.match(root.textContent,/账号余额与累计用量/);assert.doesNotMatch(root.textContent,/null/);
   let f=formFor(root,'确认入账');assert.equal(input(f,'credit').value,'1.230000');await submit(f,{credit:'1.000001',note:'实收'});
   assert.deepEqual(posts().at(-1).body,{creditMicro:1000001,note:'实收'});assert.equal(posts().at(-1).url,'/api/admin/hosted/requests/req1/approve');
   await submit(formFor(root,'确认拒绝'),{note:'未查到付款'});assert.equal(posts().at(-1).url,'/api/admin/hosted/requests/req1/reject');assert.deepEqual(posts().at(-1).body,{note:'未查到付款'});
