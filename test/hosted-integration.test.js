@@ -96,6 +96,21 @@ test('hosted endpoints enforce sessions, admin role, CSRF, ownership and pending
   }
 });
 
+test('admin view keeps recent processed and cancelled requests so any submitted request can be traced', async t => {
+  const e = await setup(t), { call } = e;
+  const submit = (requestId, as = 'alice') => call('/api/account/hosted/requests', { as, body: { amountMicro: 1000000, note: requestId, requestId } }).then(r => r.json.request);
+  const [approved, rejected, cancelled, waiting] = [await submit('h-approve'), await submit('h-reject'), await submit('h-cancel'), await submit('h-wait', 'bob')];
+  await call(`/api/admin/hosted/requests/${approved.id}/approve`, { as: 'admin', body: { creditMicro: 1000000, note: '已核对' } });
+  await call(`/api/admin/hosted/requests/${rejected.id}/reject`, { as: 'admin', body: { note: '未到账' } });
+  await call(`/api/account/hosted/requests/${cancelled.id}/cancel`, { body: {} });
+  const view = (await call('/api/admin/hosted', { as: 'admin' })).json;
+  assert.deepEqual(view.requests.map(r => [r.id, r.username]), [[waiting.id, 'bobby']], 'pending list stays pending-only');
+  assert.deepEqual(view.history.map(r => [r.id, r.status, r.username]), [[cancelled.id, 'cancelled', 'alice'], [rejected.id, 'rejected', 'alice'], [approved.id, 'approved', 'alice']], 'newest change first');
+  assert.equal(view.history[2].deciderName, 'chief'); assert.equal(view.history[2].creditMicro, 1000000); assert.equal(view.history[1].adminNote, '未到账'); assert.equal(view.history[0].deciderName, null);
+  for (let i = 0; i < 60; i++) { const r = await submit(`h-many-${i}`, 'bob'); await call(`/api/account/hosted/requests/${r.id}/cancel`, { as: 'bob', body: {} }); if (i % 9 === 8) e.ctx.hosted.billing.now = (now => () => now)(Date.now() + 3600001 * (i + 1)); }
+  assert.equal((await call('/api/admin/hosted', { as: 'admin' })).json.history.length, 50, 'history is capped');
+});
+
 test('HTTP request limits, amount precision, notes, idempotency and view windows', async t => {
   const e = await setup(t), { call } = e;
   const submit = (i, extra = {}) => call('/api/account/hosted/requests', { body: { amountMicro: 1000000, requestId: `id-${i}`, ...extra } });

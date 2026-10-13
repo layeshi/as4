@@ -58,11 +58,12 @@
     hostedResidents            // 有效托管配置的居民数，含已暂停的
   },
   requests: [{ ...Request, username }], // 全部 pending
+  history: [{ ...Request, username, deciderName }], // 已入账 / 已拒绝 / 已撤回的最近 50 笔，按 updatedAt 新的在前
   accounts: [{ accountId, username, balanceMicro, reservedMicro, total: Usage }]
 }
 ```
 
-`accounts` 包括余额非零或曾有成功用量的账号；已不存在账号的用户名为 `null`。
+`accounts` 包括余额非零或曾有成功用量的账号；已不存在账号的用户名为 `null`。`history` 让管理员查到不再待处理的申请（用户撤回或已被处理）；`deciderName` 是处理管理员的用户名，撤回的申请为 `null`。管理后台的「充值审核」每 30 秒重读一次本接口：有新申请且管理员没在填写表单时直接更新，正在填写时只提示；各会员页顶栏的「管理后台」也按同样间隔显示待处理笔数。
 
 ### POST /api/admin/hosted/config
 

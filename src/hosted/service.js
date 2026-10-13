@@ -91,9 +91,15 @@ export class HostedService {
     const today = emptyUsage();
     for (const d of b.data.daily) if (d.day === b.day()) addUsage(today, d);
     const accounts = Object.entries(b.data.accounts).filter(([, a]) => a.balanceMicro !== 0 || a.total.calls > 0).map(([accountId, a]) => ({ accountId, username: this.ctx.accounts.get(accountId)?.username ?? null, balanceMicro: a.balanceMicro, reservedMicro: b.reserved(accountId), total: structuredClone(a.total) }));
+    const named = r => ({ ...r, username: this.ctx.accounts.get(r.accountId)?.username ?? null });
     return { config: this.configView(), available: this.available(), storageFault: b.fault, timezone: b.timezone, day: b.day(),
       stats: { balanceMicro: Object.values(b.data.accounts).reduce((n, a) => n + a.balanceMicro, 0), reservedMicro: b.reserved(), today: { ...today, tokens: today.input + today.output },
         hostedResidents: Object.keys(this.ctx.runners.records).filter(id => this.ctx.runners.records[id].config.hosted && this.ctx.runners.valid(id)).length },
-      requests: b.data.requests.filter(r => r.status === 'pending').map(r => ({ ...r, username: this.ctx.accounts.get(r.accountId)?.username ?? null })), accounts };
+      requests: b.data.requests.filter(r => r.status === 'pending').map(named),
+      // 已处理与已撤回的最近 50 笔（按最后变更时间，新的在前）：用户说「我提交过」时，管理员能查到它后来怎样了
+      history: b.data.requests.map((r, i) => [r, i]).filter(([r]) => r.status !== 'pending')
+        .sort(([x, i], [y, j]) => Date.parse(y.updatedAt) - Date.parse(x.updatedAt) || j - i).slice(0, 50)
+        .map(([r]) => ({ ...named(r), deciderName: r.decider ? this.ctx.accounts.get(r.decider)?.username ?? null : null })),
+      accounts };
   }
 }
