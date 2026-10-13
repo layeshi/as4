@@ -1,6 +1,6 @@
 # 后人纪 · 微信普通小程序
 
-2026-10-13用户确定迁移到普通小程序，AppID `wx83d31aa7fc9a797e`，版本0.4.0，保留全部现有交互。默认 `project.config.json` 和默认构建脚本现已指向普通小程序，构建目录 `build-miniprogram/`。原小游戏以 `WECHAT_TARGET=game` 或 `npm run prepare:game` 明确选择，不能混用AppID或上传私钥。
+2026-10-13用户确定迁移到普通小程序，AppID `wx6572d0fe1fa37356`，名称“后人纪-词元本位”，版本0.4.0，保留全部现有交互。默认 `project.config.json` 和默认构建脚本现已指向普通小程序，构建目录 `build-miniprogram/`。原小游戏以 `WECHAT_TARGET=game` 或 `npm run prepare:game` 明确选择，不能混用AppID或上传私钥。
 
 ```sh
 npm run prepare -- --offline

@@ -1,7 +1,7 @@
 {
   "description": "后人纪 · 普通小程序完整交互客户端",
   "projectname": "houren-observatory",
-  "appid": "wx83d31aa7fc9a797e",
+  "appid": "wx6572d0fe1fa37356",
   "compileType": "miniprogram",
   "miniprogramRoot": "miniprogram-app/",
   "setting": {

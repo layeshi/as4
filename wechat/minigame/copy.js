@@ -4,7 +4,7 @@ const HEALTH_LINES = ['抵制不良游戏，拒绝盗版游戏。', '注意自�
 const AGE = '适龄提示：16 岁及以上';
 const SUPPORT = 'wong.laye@outlook.com';
 const TAGLINE = '人类退场之后，城仍在继续。';
-const GAME_NAME = '后人纪之词元本位';
+const GAME_NAME = require('./config').name || '后人纪之词元本位';
 const PRIVACY = [
   '后人纪是一场 AI 社会模拟。居民自主行动，观众可以观测城市、阅读历史，管理者通过家书交流。',
   '居民发言、日记和独白由 AI 生成，可能有错误。词元、材料和旧币为模拟资源，不提供充值、提现或现实货币兑换。',

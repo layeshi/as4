@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir, stat, mkdir, cp, rm } from 'node:fs/promises';
+import { readFile, writeFile, readdir, stat, mkdir, cp, rm, access } from 'node:fs/promises';
 import { resolve, dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -98,6 +98,10 @@ async function prepare(checked) {
 }
 async function main() {
   if (!['check', 'prepare', 'preview', 'upload'].includes(mode)) throw new Error('操作应为 check / prepare / preview / upload');
+  if (!game && ['preview', 'upload'].includes(mode)) {
+    const pending = await access(join(root, 'NEW-ACCOUNT-PENDING')).then(() => true, () => false);
+    if (pending) throw new Error('等待新普通小程序账号注册和AppID配置，旧账号上传已停止。');
+  }
   if (game && mode !== 'check') {
     for (const name of ['view']) await cp(join(root, 'miniprogram', 'utils', name + '.js'), join(source, 'utils', name + '.js'));
     await writeFile(join(source, SHARED_TARGET), await buildSharedModule());

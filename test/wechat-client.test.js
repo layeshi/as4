@@ -64,7 +64,7 @@ function client(base, { intercept, miniprogram = false } = {}) {
 for (const miniprogram of [false, true]) test('P6 ' + (miniprogram ? 'Mini Program' : 'miniGame') + ' integration: WeChat login, creation, private authorization, letters and logout', async t => {
   const dir=mkdtempSync(resolve(tmpdir(),'houren-wx-p6-')), file=resolve(dir,'physics.json');
   writeFileSync(file, JSON.stringify({version:1,regrowth:{baseByZone:{wilds:20,scrapyard:15,solarfield:10},thresholdByZone:{wilds:30,scrapyard:25,solarfield:15},factorPermille:500},construction:{fullActionsPerTick:2,factorPermille:500}}));
-  const env = await boot({ physics: 2, premise: 6, shellSlots:0, hiddenPhysicsFile:file, map: 'compact-materials-v1', wechatAppId: 'wx216f3fb724629f67', wechatAppSecret: 'test-server-secret', wechatMiniprogramAppId: 'wx83d31aa7fc9a797e', wechatMiniprogramAppSecret: 'test-miniprogram-secret' }, {dir}); t.after(() => env.close());
+  const env = await boot({ physics: 2, premise: 6, shellSlots:0, hiddenPhysicsFile:file, map: 'compact-materials-v1', wechatAppId: 'wx216f3fb724629f67', wechatAppSecret: 'test-server-secret', wechatMiniprogramAppId: 'wx6572d0fe1fa37356', wechatMiniprogramAppSecret: 'test-miniprogram-secret' }, {dir}); t.after(() => env.close());
   env.app.ctx.wechat.fetcher = async url => ({ok:true,json:async()=>url.pathname === '/sns/jscode2session' ? {openid:'test-openid-123456'} : url.pathname === '/cgi-bin/token' ? {access_token:'test-token',expires_in:7200} : {errcode:0,result:{suggest:'pass'}}});
   const c = client(env.base, { miniprogram }), g = c.game();
   await g.start();
@@ -78,7 +78,7 @@ for (const miniprogram of [false, true]) test('P6 ' + (miniprogram ? 'Mini Progr
   c.wx.emitHide(); assert.equal(c.timers.size,0);
   await g.dispatch({type:'tab',tab:'account'}); await g.dispatch({type:'wechatLogin'}); assert.match(g.error,/隐私/);
   g.form.accepted=true; await g.dispatch({type:'wechatLogin'}); assert.equal(g.error,''); assert.equal(g.user.role,'user'); assert.equal(g.wechatVerified,true);
-  if (miniprogram) assert.equal(c.requests.find(r => r.url.endsWith('/api/wechat/login')).data.appid, 'wx83d31aa7fc9a797e');
+  if (miniprogram) assert.equal(c.requests.find(r => r.url.endsWith('/api/wechat/login')).data.appid, 'wx6572d0fe1fa37356');
   await g.dispatch({type:'entry'}); Object.assign(g.form,{name:'小游戏居民',soul:'独立观察这座城市',entryAccepted:true});
   await g.dispatch({type:'create'}); assert.equal(g.error,''); assert.ok(g.residentId); assert.equal(g.tab,'owner');
   const id=g.residentId, relation=env.rt.w.access.residents[id]; assert.equal(relation.managerAccountId,g.user.id);
