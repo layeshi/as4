@@ -4,11 +4,19 @@ import { accountWrap, accountFor, setSession } from './accounts.js';
 import { fail, publicUser } from '../accounts/store.js';
 import { clientIp, parseCookies, sendJson } from './util.js';
 import { identityHash } from '../wechat/service.js';
+import { MODEL_PRESETS } from '../../public/model-presets.js';
 export function wechatIdentity(ctx, req) {
   return ctx.accounts.sessionMetadata(parseCookies(req.headers.cookie).houren_session)?.wechat;
 }
+// Tells the client how many strings are still withheld, so a signed-in reader can ask again in seconds.
+function project(ctx, req, payload) {
+  const meta = { pending: 0 }, out = ctx.wechatProjection.filter(payload, wechatIdentity(ctx, req), '', meta);
+  if (meta.pending && out && typeof out === 'object' && !Array.isArray(out)) out.moderation = { pending: meta.pending };
+  return out;
+}
 const publicPath = /^\/api\/public\/(?:state|map|events|chronicle|(?:agents|places|laws|docs)\/[^/]+)$/;
 export const wechatRoutes = [
+  ['GET', '/api/wechat/model-presets', accountWrap(({ res }) => sendJson(res, 200, { presets: MODEL_PRESETS }))],
   ['GET', /^\/api\/wechat\/public\/(.+)$/, accountWrap(async ({ req, res, ctx, url }) => {
     const target = '/api/public/' + url.pathname.slice('/api/wechat/public/'.length);
     if (!publicPath.test(target)) fail(404, 'not_found', '接口不存在。');
@@ -29,7 +37,7 @@ export const wechatRoutes = [
     await matched(req, capture, ctx, originalUrl, params);
     if (!status || !payload) fail(503, 'unavailable', '内容暂不可用。');
     // The raw public response never reaches this client. Checks run outside the world log.
-    sendJson(res, status, ctx.wechatProjection.filter(payload, wechatIdentity(ctx, req)));
+    sendJson(res, status, project(ctx, req, payload));
   })],
   ['GET', /^\/api\/wechat\/residents(?:\/([^/]+)(?:\/(private))?)?$/, accountWrap(async ({ req, res, ctx, url }) => {
     const target = '/api/account/residents' + url.pathname.slice('/api/wechat/residents'.length);
@@ -46,7 +54,7 @@ export const wechatRoutes = [
     await matched(req, capture, ctx, originalUrl, params);
     if (!status || !payload) fail(503, 'unavailable', '内容暂不可用。');
     if (status >= 400) return sendJson(res, status, payload);
-    sendJson(res, status, ctx.wechatProjection.filter(payload, wechatIdentity(ctx, req)));
+    sendJson(res, status, project(ctx, req, payload));
   }, { signedIn: true })],
   ['GET', '/api/wechat/status', accountWrap(({ req, res, ctx }) => {
     const identity = wechatIdentity(ctx, req);

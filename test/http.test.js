@@ -759,7 +759,8 @@ test('GET /api/public/agents/:id | places/:id | docs/:id：公开档案与详情
     await act(env, a.agentToken, [{ type: 'remember', text: '一段记忆' }, { type: 'say', text: '你好' }], { thought: '一个念头' });
     const r = await env.call('/api/public/agents/a1');
     assert.equal(r.status, 200);
-    assert.deepEqual(Object.keys(r.json), ['agent', 'memories', 'thoughts', 'events']);
+    assert.deepEqual(Object.keys(r.json), ['agent', 'memories', 'thoughts', 'inscriptions', 'events']);
+    assert.ok(Array.isArray(r.json.inscriptions));
     assert.equal(r.json.agent.name, '青禾');
     assert.deepEqual(r.json.memories, []); // 记忆延迟公开
     assert.deepEqual(r.json.thoughts, []);

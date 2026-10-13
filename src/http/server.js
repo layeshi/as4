@@ -1,5 +1,6 @@
 import { WechatProjection } from '../wechat/projection.js';
 import { WechatService } from '../wechat/service.js';
+import { systemTextSource } from '../wechat/system-texts.js';
 import { wechatRoutes } from './wechat.js';
 import { archiveRoutes } from './archives.js';
 import { residentRoutes } from './residents.js';
@@ -151,7 +152,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
   };
 
   // 第二前提的注意力上限（SPEC-P2 §4.4）：来自躯壳配置，没有躯壳配置时用缺省值；meCore 把它写进感知的 attention
-  ctx.wechatProjection = new WechatProjection(ctx.wechat);
+  ctx.wechatProjection = new WechatProjection(ctx.wechat, { systemTexts: systemTextSource(rt), file: cfg.dataDir ? join(cfg.dataDir, 'wechat-moderation.json') : null });
   ctx.runners.ctx = ctx;
   ctx.publicRoles = new PublicRoleService(ctx);
   rt.agentLoop = (ctx.shells && ctx.shells.config.agentLoop) || DEFAULT_AGENT_LOOP;
@@ -231,6 +232,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
       if (ctx.shells) await ctx.shells.close();
       await ctx.publicRoles.close();
       await ctx.runners.close();
+      ctx.wechatProjection.flush();
       clearInterval(heartbeat);
       for (const res of ctx.sse.clients) res.end();
       ctx.sse.clients.clear();
