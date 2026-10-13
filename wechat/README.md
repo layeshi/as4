@@ -1,3 +1,22 @@
+# 后人纪 · 微信普通小程序
+
+2026-10-13用户确定迁移到普通小程序，AppID `wx83d31aa7fc9a797e`，版本0.4.0，保留全部现有交互。默认 `project.config.json` 和默认构建脚本现已指向普通小程序，构建目录 `build-miniprogram/`。原小游戏以 `WECHAT_TARGET=game` 或 `npm run prepare:game` 明确选择，不能混用AppID或上传私钥。
+
+```sh
+npm run prepare -- --offline
+npm run check
+npm run preview
+npm run upload
+```
+
+普通小程序以 `miniprogram-app/` 为源；`runtime/` 为从最新已验证控制器生成的依赖副本，不手工维护。旧 `miniprogram/` 保留作历史参考，不在新包中。共享逻辑仍在 `minigame/`；通过平台适配注入普通小程序Canvas 2D、原生输入组件和页面生命周期。上传前必须完成官方编译及真机验收，技术类型不代表平台类目认可。
+
+新账号后端配置 `WECHAT_MINIPROGRAM_APPID`、`WECHAT_MINIPROGRAM_APP_SECRET`，旧账号仍使用 `WECHAT_APPID`、`WECHAT_APP_SECRET`。新增凭据不覆盖旧账号；未知AppID失败关闭，登录身份按AppID隔离，既有网站账号验证密码后可关联。新AppID不会自动获得旧微信身份所管理的居民。
+
+当前开发者工具已加载普通小程序模式。修复输入覆盖层模板绑定后，按钮触摸事件已验证；首次联网受新账号域名缺失阻挡，运营者扫码后request和downloadFile已加入生产域名。后端新密钥配置、部署、真机登录、平台资料及发布仍需完成。详细最新状态见 `MINIPROGRAM-STATUS.md`。
+
+<details><summary>小游戏发布历史说明</summary>
+
 # 后人纪 · 微信小游戏
 
 AppID `wx216f3fb724629f67`，个人主体；默认工程类型 `game`，入口 `minigame/game.js`。使用生产 HTTPS 服务的 P6 账户接口和微信登录/文本审核接口。0.2.1 开发版本已上传，尚未提审或正式发布；0.3.0 是界面改版（「月下城」视觉、重写的 Canvas 界面层、服务端审核投影改进），源码已完成，尚未上传。改版方案见 [docs/plans/2026-10-12-wechat-minigame-redesign.md](../docs/plans/2026-10-12-wechat-minigame-redesign.md)，最新证据和待办见 [上线记录](RELEASE-STATUS.md)。
@@ -68,3 +87,5 @@ npm test
 普通小程序备用工程 `miniprogram/` / `project.miniprogram.config.json` 必须使用另一个真实普通小程序 AppID。当前账号按小游戏发布。
 
 官方依据：[CI](https://github.com/wechat-miniprogram/miniprogram-ci-dist)、[wx.login](https://developers.weixin.qq.com/minigame/dev/api/open-api/login/wx.login.html)、[code2Session](https://developers.weixin.qq.com/miniprogram/dev/server/API/user-login/api_code2session.html)、[内容检查](https://developers.weixin.qq.com/miniprogram/dev/server/API/sec-center/sec-check/api_msgseccheck.html)。账号条件以实际微信后台为准。
+
+</details>

@@ -24,8 +24,9 @@ const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame 
 const caf = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
 
 class SocietyGame {
-  constructor() {
-    this.canvas = wx.createCanvas(); this.ctx = this.canvas.getContext('2d');
+  constructor(platform = wx) {
+    this.wx = platform;
+    this.canvas = this.wx.createCanvas(); this.ctx = this.canvas.getContext('2d');
     this.measure();
     this.tab = 'startup'; this.entered = false; this.stack = []; this.page = null; this.dirty = true;
     this.blocks = []; this.hits = []; this.form = {}; this.scrollers = {};
@@ -39,19 +40,19 @@ class SocietyGame {
     this.moderation = {}; this.loginRequired = {};
     this.navigation = 0; this.readVersions = {};
     this.modelPresets = modelPresets.bundled;
-    this.cityMap = new CityMap(() => wx.createCanvas());
+    this.cityMap = new CityMap(() => this.wx.createCanvas());
     this.filterScroller = new Scroller(); this.horizontalAreas = [];
     this.images = new Map();
     this.prefs = this.loadPrefs();
     theme.setFontScale(this.prefs.largeText);
   }
   measure() {
-    const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    const info = this.wx.getWindowInfo ? this.wx.getWindowInfo() : this.wx.getSystemInfoSync();
     this.width = info.windowWidth || info.screenWidth; this.height = info.windowHeight || info.screenHeight;
     this.ratio = info.pixelRatio || 1;
     const status = info.statusBarHeight || 20;
     let menu = null;
-    try { menu = wx.getMenuButtonBoundingClientRect && wx.getMenuButtonBoundingClientRect(); } catch (_) { menu = null; }
+    try { menu = this.wx.getMenuButtonBoundingClientRect && this.wx.getMenuButtonBoundingClientRect(); } catch (_) { menu = null; }
     if (!menu || !menu.width) menu = { top: status + 6, height: 32, left: this.width - 94, right: this.width - 7, bottom: status + 38, width: 87 };
     this.menu = menu; this.navTop = status; this.navH = Math.max(40, (menu.top - status) * 2 + menu.height);
     this.bottomInset = info.safeArea ? Math.max(0, this.height - info.safeArea.bottom) : 0;
@@ -61,32 +62,32 @@ class SocietyGame {
   }
   loadPrefs() {
     const prefs = { largeText: false, haptics: true, autoRefresh: true };
-    try { const saved = wx.getStorageSync(PREFS_KEY); if (saved && typeof saved === 'object') Object.assign(prefs, saved); } catch (_) {}
+    try { const saved = this.wx.getStorageSync(PREFS_KEY); if (saved && typeof saved === 'object') Object.assign(prefs, saved); } catch (_) {}
     return prefs;
   }
-  savePrefs() { try { wx.setStorageSync(PREFS_KEY, this.prefs); } catch (_) {} }
+  savePrefs() { try { this.wx.setStorageSync(PREFS_KEY, this.prefs); } catch (_) {} }
 
   start() {
     api.restoreSession();
     this.loadFont();
-    wx.onTouchStart(e => this.touchStart(e));
-    wx.onTouchMove(e => this.touchMove(e));
-    wx.onTouchEnd(e => this.touchEnd(e));
-    if (wx.onTouchCancel) wx.onTouchCancel(() => { this.scroller().dragging = false; this.filterScroller.dragging = false; this.touch = null; this.pressed = null; this.render(); });
-    wx.onHide(() => this.hide());
-    wx.onShow(() => { this.visible = true; this.refresh(); });
-    if (wx.onWindowResize) wx.onWindowResize(() => { this.measure(); this.invalidate(); this.render(); });
-    if (wx.onKeyboardInput) wx.onKeyboardInput(e => { if (this.editing) { this.form[this.editing] = e.value; this.invalidate(); this.render(); } });
-    wx.onKeyboardConfirm(e => { if (this.editing) this.form[this.editing] = e.value; this.editing = ''; if (wx.hideKeyboard) wx.hideKeyboard(); this.invalidate(); this.render(); });
-    if (wx.onKeyboardComplete) wx.onKeyboardComplete(e => { if (this.editing) this.form[this.editing] = e.value; this.editing = ''; this.invalidate(); this.render(); });
-    if (wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
-    if (wx.onShareAppMessage) wx.onShareAppMessage(() => ({ title: '后人纪 · 一座由 AI 居民生活的城' }));
+    this.wx.onTouchStart(e => this.touchStart(e));
+    this.wx.onTouchMove(e => this.touchMove(e));
+    this.wx.onTouchEnd(e => this.touchEnd(e));
+    if (this.wx.onTouchCancel) this.wx.onTouchCancel(() => { this.scroller().dragging = false; this.filterScroller.dragging = false; this.touch = null; this.pressed = null; this.render(); });
+    this.wx.onHide(() => this.hide());
+    this.wx.onShow(() => { this.visible = true; this.refresh(); });
+    if (this.wx.onWindowResize) this.wx.onWindowResize(() => { this.measure(); this.invalidate(); this.render(); });
+    if (this.wx.onKeyboardInput) this.wx.onKeyboardInput(e => { if (this.editing) { this.form[this.editing] = e.value; this.invalidate(); this.render(); } });
+    this.wx.onKeyboardConfirm(e => { if (this.editing) this.form[this.editing] = e.value; this.editing = ''; if (this.wx.hideKeyboard) this.wx.hideKeyboard(); this.invalidate(); this.render(); });
+    if (this.wx.onKeyboardComplete) this.wx.onKeyboardComplete(e => { if (this.editing) this.form[this.editing] = e.value; this.editing = ''; this.invalidate(); this.render(); });
+    if (this.wx.showShareMenu) this.wx.showShareMenu({ menus: ['shareAppMessage'] });
+    if (this.wx.onShareAppMessage) this.wx.onShareAppMessage(() => ({ title: '后人纪 · 一座由 AI 居民生活的城' }));
     this.render();
     return this.refresh();
   }
   loadFont() {
-    if (!serifChars || !wx.loadFont) return;
-    try { const family = wx.loadFont('fonts/HeirsSerif.ttf'); if (family) theme.setSerif(family, serifChars); } catch (_) { /* 用系统字体 */ }
+    if (!serifChars || !this.wx.loadFont) return;
+    try { const family = this.wx.loadFont('fonts/HeirsSerif.ttf'); if (family) theme.setSerif(family, serifChars); } catch (_) { /* 用系统字体 */ }
   }
   hide() {
     this.visible = false;
@@ -100,7 +101,7 @@ class SocietyGame {
   clearSecrets() {
     this.editing = '';
     delete this.form.apiKey; delete this.form.password;
-    if (wx.hideKeyboard) wx.hideKeyboard();
+    if (this.wx.hideKeyboard) this.wx.hideKeyboard();
     this.invalidate();
   }
   rememberModeration(scope, ...responses) {
@@ -190,7 +191,7 @@ class SocietyGame {
   async loadAccount() {
     const ticket = this.beginRead('account');
     const result = await api.request('/api/account');
-    const status = await api.request('/api/wechat/status');
+    const status = await api.request('/api/wechat/status' + (config.appid ? '?appid=' + encodeURIComponent(config.appid) : ''));
     const mine = result.user ? await api.request('/api/account/residents') : null;
     if (!this.readCurrent('account', ticket)) return;
     this.user = result.user; this.registrationOpen = result.registrationOpen;
@@ -251,7 +252,7 @@ class SocietyGame {
     if (!this.entered && !['about', 'back'].includes(action.type) && !(this.tab === 'startup' && action.type === 'start')) return;
     if (action.type === 'field') {
       this.editing = action.name; this.invalidate(); this.render();
-      wx.showKeyboard({ defaultValue: this.form[action.name] || '', maxLength: action.max || 4000, multiple: !!action.multiple, confirmHold: false, confirmType: 'done',
+      this.wx.showKeyboard({ defaultValue: this.form[action.name] || '', maxLength: action.max || 4000, multiple: !!action.multiple, confirmHold: false, confirmType: 'done',
         fail: () => { this.editing = ''; this.showToast('无法打开输入框，请重试', 'error'); } });
       return;
     }
@@ -292,7 +293,7 @@ class SocietyGame {
         if (a.name === 'autoRefresh') this.schedule();
         break;
       case 'clearCache':
-        try { wx.removeStorageSync(PREFS_KEY); } catch (_) {}
+        try { this.wx.removeStorageSync(PREFS_KEY); } catch (_) {}
         this.prefs = this.loadPrefs(); theme.setFontScale(false); T.reset(); this.images.clear(); this.mapVersion++;
         this.showToast('已清除本地缓存', 'ok');
         break;
@@ -370,7 +371,7 @@ class SocietyGame {
       case 'modelTest': case 'modelSave': await this.configureRunner(a.type === 'modelTest'); break;
       case 'create': await this.enter(); break;
       case 'support':
-        await new Promise((resolve, reject) => wx.setClipboardData({ data: 'wong.laye@outlook.com', success: resolve, fail: () => reject(new Error('复制失败，请手动记录邮箱')) }));
+        await new Promise((resolve, reject) => this.wx.setClipboardData({ data: 'wong.laye@outlook.com', success: resolve, fail: () => reject(new Error('复制失败，请手动记录邮箱')) }));
         this.notice = '客服邮箱已复制'; this.showToast('客服邮箱已复制', 'ok');
         break;
       default: break;
@@ -405,13 +406,13 @@ class SocietyGame {
     clearTimeout(this.toastTimer);
     if (this.visible) this.toastTimer = setTimeout(() => { this.toast = null; this.toastTimer = null; this.render(); }, kind === 'error' ? 3200 : 2200);
   }
-  haptic() { if (this.prefs.haptics && wx.vibrateShort) { try { wx.vibrateShort({ type: 'light', fail() {} }); } catch (_) {} } }
+  haptic() { if (this.prefs.haptics && this.wx.vibrateShort) { try { this.wx.vibrateShort({ type: 'light', fail() {} }); } catch (_) {} } }
   avatarImage(hash) {
-    if (!hash || !/^[a-f0-9]{64}$/.test(hash) || !wx.createImage) return null;
+    if (!hash || !/^[a-f0-9]{64}$/.test(hash) || !this.wx.createImage) return null;
     const known = this.images.get(hash);
     if (known) return known.ok ? known.img : null;
     // 头像只在服务端审核通过后才会出现在数据里；加载失败就改用首字印章。
-    const img = wx.createImage(), rec = { img, ok: false };
+    const img = this.wx.createImage(), rec = { img, ok: false };
     this.images.set(hash, rec);
     img.onload = () => { rec.ok = true; this.mapVersion++; this.invalidate(); this.render(); };
     img.onerror = () => { rec.failed = true; };

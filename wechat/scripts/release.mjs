@@ -4,14 +4,15 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { Script } from 'node:vm';
 import { isIP } from 'node:net';
+import { syncMiniprogram } from './miniprogram.mjs';
 import { buildSharedModule, SHARED_TARGET } from './shared.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const build = join(root, 'build');
+const build = join(root, process.env.WECHAT_TARGET === 'game' ? 'build' : 'build-miniprogram');
 const require = createRequire(import.meta.url);
 const mode = process.argv[2] || 'check';
 const offline = process.argv.includes('--offline');
-const projectConfig = JSON.parse(await readFile(join(root, process.env.WECHAT_TARGET === 'miniprogram' ? 'project.miniprogram.config.json' : 'project.config.json'), 'utf8'));
+const projectConfig = JSON.parse(await readFile(join(root, process.env.WECHAT_TARGET === 'game' ? 'project.game.config.json' : 'project.config.json'), 'utf8'));
 const game = projectConfig.compileType === 'game';
 const source = resolve(root, projectConfig.miniprogramRoot);
 
@@ -38,6 +39,9 @@ async function check() {
     const body = await readFile(path, 'utf8');
     if (/\.(key|pem|zip|enc)$/i.test(path)) throw new Error('代码目录包含私钥或数据文件');
     if (path.endsWith('.json')) JSON.parse(body);
+    if (path.endsWith('.wxml')) for (const match of body.matchAll(/wx:(?:if|elif)="([^"]*)"/g)) {
+      if (!/^\{\{.+\}\}$/.test(match[1])) throw new Error('条件渲染必须绑定表达式，不能使用恒真的字符串：' + relative(root, path));
+    }
     if (path.endsWith('.js')) {
       new Script('(function(require,module,exports){\n' + body + '\n})', { filename: path });
       for (const match of body.matchAll(/require\(['"]([^'"]+)['"]\)/g)) {
@@ -58,7 +62,7 @@ async function check() {
   } else {
     const app = JSON.parse(await readFile(join(source, 'app.json'), 'utf8'));
     for (const page of app.pages) for (const ext of ['.js', '.json', '.wxml']) await stat(join(source, page + ext));
-    for (const tab of app.tabBar.list) if (!app.pages.includes(tab.pagePath)) throw new Error('底部导航指向不存在的页面');
+    for (const tab of app.tabBar?.list || []) if (!app.pages.includes(tab.pagePath)) throw new Error('底部导航指向不存在的页面');
     pageCount = app.pages.length;
   }
   const config = require(join(source, 'config.js'));
@@ -86,7 +90,8 @@ async function prepare(checked) {
   await rm(build, { recursive: true, force: true });
   await mkdir(build, { recursive: true });
   await cp(source, join(build, project.miniprogramRoot), { recursive: true });
-  await writeFile(join(build, project.miniprogramRoot, 'config.js'), 'module.exports = ' + JSON.stringify({ ...checked.config, version: process.env.WECHAT_VERSION || checked.config.version, apiBase: checked.apiBase }, null, 2) + ';\n');
+  await writeFile(join(build, project.miniprogramRoot, 'config.js'), 'module.exports = ' + JSON.stringify({ ...checked.config, ...(!game ? { appid } : {}), version: process.env.WECHAT_VERSION || checked.config.version, apiBase: checked.apiBase }, null, 2) + ';\n');
+  if (!game) await cp(join(build, project.miniprogramRoot, 'config.js'), join(build, project.miniprogramRoot, 'runtime/config.js'));
   await writeFile(join(build, 'project.config.json'), JSON.stringify({ ...project, appid }, null, 2) + '\n');
   console.log('开发者工具导入目录：' + build);
   return appid;
@@ -97,6 +102,7 @@ async function main() {
     for (const name of ['view']) await cp(join(root, 'miniprogram', 'utils', name + '.js'), join(source, 'utils', name + '.js'));
     await writeFile(join(source, SHARED_TARGET), await buildSharedModule());
   }
+  if (!game) await syncMiniprogram(root);
   const checked = await check();
   if (mode === 'check') return;
   const appid = await prepare(checked);
@@ -111,7 +117,7 @@ async function main() {
   const project = new ci.Project({ appid, type: game ? 'miniGame' : 'miniProgram', projectPath: build, privateKeyPath: keyPath, ignores: ['node_modules/**/*'] });
   const options = { project, version: process.env.WECHAT_VERSION || checked.config.version, desc: '后人纪 · AI 社会模拟、城市实况、档案与造者入口', setting: { useProjectConfig: true }, robot: 1 };
   if (mode === 'preview') {
-    await ci.preview({ ...options, qrcodeFormat: 'image', qrcodeOutputDest: join(build, 'preview.png'), ...(game ? {} : { pagePath: 'pages/observatory/index' }) });
+    await ci.preview({ ...options, qrcodeFormat: 'image', qrcodeOutputDest: join(build, 'preview.png'), ...(game ? {} : { pagePath: 'pages/society/index' }) });
     console.log('预览码：' + join(build, 'preview.png'));
   } else {
     await ci.upload(options);

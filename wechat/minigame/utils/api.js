@@ -1,7 +1,7 @@
 const config = require('../config');
 let cookies = {};
 let sessionGeneration = 0;
-const storageKey = 'houren.session:' + config.apiBase;
+const storageKey = 'houren.session:' + (config.appid ? config.appid + ':' : '') + config.apiBase;
 
 function sessionCurrent(generation, token) {
   return generation === sessionGeneration && token === cookies.houren_session;
@@ -79,7 +79,7 @@ function loginWeChat(bindCurrent) {
     wx.login({ timeout: 10000, success: result => result.code ? resolve(result.code) : reject(new Error('微信登录失败，请重试')), fail: () => reject(new Error('微信登录失败，请重试')) });
   }).then(code => {
     if (!sessionCurrent(generation, session)) throw new Error('登录会话已变更，请重试');
-    return request('/api/wechat/login', { method: 'POST', timeout: 30000, data: { code, bindCurrent: !!bindCurrent } });
+    return request('/api/wechat/login', { method: 'POST', timeout: 30000, data: { code, bindCurrent: !!bindCurrent, ...(config.appid ? { appid: config.appid } : {}) } });
   });
 }
 function requestId() {

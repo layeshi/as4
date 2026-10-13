@@ -6,9 +6,11 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { boot } from './http-helpers.js';
+import { syncMiniprogram } from '../wechat/scripts/miniprogram.mjs';
+await syncMiniprogram(fileURLToPath(new URL('../wechat/', import.meta.url)));
 
 const source = fileURLToPath(new URL('../wechat/miniprogram/', import.meta.url));
-function client(base, { intercept } = {}) {
+function client(base, { intercept, miniprogram = false } = {}) {
   const storage = new Map(), modules = new Map(), requests = [], timers = new Map();
   const app = { globalData: { ownerKey: '', ownerAgent: null } };
   let pageDefinition, timerId = 0;
@@ -53,22 +55,22 @@ function client(base, { intercept } = {}) {
     for (const name of ['TouchStart', 'TouchMove', 'TouchEnd', 'Hide', 'Show', 'WindowResize', 'KeyboardConfirm', 'KeyboardComplete', 'ShareAppMessage']) wx['on' + name] = fn => { wx['emit' + name] = fn; };
     wx.login = options => options.success({code:'test-wechat-code'}); wx.showKeyboard = () => {}; wx.hideKeyboard = () => {}; wx.showShareMenu = () => {};
     wx.setClipboardData = options => { wx.copied = options.data; options.success({}); };
-    const { SocietyGame } = load(resolve(source, '../minigame/society.js'));
+    const { SocietyGame } = load(resolve(source, miniprogram ? '../miniprogram-app/runtime/society.js' : '../minigame/society.js'));
     return new SocietyGame();
   }
   return { api: load(resolve(source, '../minigame/utils/api.js')), view: load(resolve(source, 'utils/view.js')), page, game, wx, app, storage, requests, timers };
 }
 
-test('P6 miniGame integration: WeChat login, creation, private authorization, letters and session logout', async t => {
+for (const miniprogram of [false, true]) test('P6 ' + (miniprogram ? 'Mini Program' : 'miniGame') + ' integration: WeChat login, creation, private authorization, letters and logout', async t => {
   const dir=mkdtempSync(resolve(tmpdir(),'houren-wx-p6-')), file=resolve(dir,'physics.json');
   writeFileSync(file, JSON.stringify({version:1,regrowth:{baseByZone:{wilds:20,scrapyard:15,solarfield:10},thresholdByZone:{wilds:30,scrapyard:25,solarfield:15},factorPermille:500},construction:{fullActionsPerTick:2,factorPermille:500}}));
-  const env = await boot({ physics: 2, premise: 6, shellSlots:0, hiddenPhysicsFile:file, map: 'compact-materials-v1', wechatAppId: 'wx216f3fb724629f67', wechatAppSecret: 'test-server-secret' }, {dir}); t.after(() => env.close());
+  const env = await boot({ physics: 2, premise: 6, shellSlots:0, hiddenPhysicsFile:file, map: 'compact-materials-v1', wechatAppId: 'wx216f3fb724629f67', wechatAppSecret: 'test-server-secret', wechatMiniprogramAppId: 'wx83d31aa7fc9a797e', wechatMiniprogramAppSecret: 'test-miniprogram-secret' }, {dir}); t.after(() => env.close());
   env.app.ctx.wechat.fetcher = async url => ({ok:true,json:async()=>url.pathname === '/sns/jscode2session' ? {openid:'test-openid-123456'} : url.pathname === '/cgi-bin/token' ? {access_token:'test-token',expires_in:7200} : {errcode:0,result:{suggest:'pass'}}});
-  const c = client(env.base), g = c.game();
+  const c = client(env.base, { miniprogram }), g = c.game();
   await g.start();
   assert.equal(g.tab,'startup'); assert.equal(c.requests.length,0); assert.equal(c.timers.size,0);
-  assert.ok(g.blocks.some(b=>b.text==='适龄提示：16 岁及以上'));
-  assert.ok(g.blocks.some(b=>b.text==='抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。'));
+  assert.equal(g.blocks.some(b=>b.text==='适龄提示：16 岁及以上'), !miniprogram);
+  if (!miniprogram) assert.ok(g.blocks.some(b=>b.text==='抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。'));
   assert.ok(!g.hits.some(h=>h.action.type==='tab'));
   c.wx.emitHide(); c.wx.emitShow(); assert.equal(g.tab,'startup'); assert.equal(c.requests.length,0);
   await g.dispatch({type:'tab',tab:'account'}); assert.equal(g.tab,'startup'); assert.equal(c.requests.length,0);
@@ -76,6 +78,7 @@ test('P6 miniGame integration: WeChat login, creation, private authorization, le
   c.wx.emitHide(); assert.equal(c.timers.size,0);
   await g.dispatch({type:'tab',tab:'account'}); await g.dispatch({type:'wechatLogin'}); assert.match(g.error,/隐私/);
   g.form.accepted=true; await g.dispatch({type:'wechatLogin'}); assert.equal(g.error,''); assert.equal(g.user.role,'user'); assert.equal(g.wechatVerified,true);
+  if (miniprogram) assert.equal(c.requests.find(r => r.url.endsWith('/api/wechat/login')).data.appid, 'wx83d31aa7fc9a797e');
   await g.dispatch({type:'entry'}); Object.assign(g.form,{name:'小游戏居民',soul:'独立观察这座城市',entryAccepted:true});
   await g.dispatch({type:'create'}); assert.equal(g.error,''); assert.ok(g.residentId); assert.equal(g.tab,'owner');
   const id=g.residentId, relation=env.rt.w.access.residents[id]; assert.equal(relation.managerAccountId,g.user.id);

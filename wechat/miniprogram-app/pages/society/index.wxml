@@ -1,0 +1,10 @@
+<canvas type="2d" id="society" class="canvas" disable-scroll="true" bindtouchstart="touchStart" catchtouchmove="touchMove" bindtouchend="touchEnd" bindtouchcancel="touchCancel" />
+<view wx:if="{{error}}" class="failure">{{error}}<button bindtap="retry">重试</button></view>
+<view wx:if="{{editing}}" class="editor-mask" catchtouchmove="noop">
+  <view class="editor">
+    <view class="editor-title">{{inputLabel}}</view>
+    <textarea wx:if="{{multiple}}" value="{{inputValue}}" maxlength="{{maxLength}}" focus="{{editing}}" bindinput="input" bindconfirm="confirmInput" adjust-position="true" show-confirm-bar="true" />
+    <input wx:else value="{{inputValue}}" password="{{secret}}" maxlength="{{maxLength}}" focus="{{editing}}" bindinput="input" bindconfirm="confirmInput" adjust-position="true" confirm-type="done" />
+    <button bindtap="confirmInput">完成</button>
+  </view>
+</view>

@@ -14,7 +14,7 @@ function moreMenu(app, W) {
   return N.menu(W, [
     { label: '设置', hint: '字号、震动、刷新', icon: 'settings', action: { type: 'settings' } },
     { label: '隐私说明', icon: 'shield', action: { type: 'about' } },
-    { label: '健康游戏忠告', hint: '16+', icon: 'heart', action: { type: 'health' } },
+    { label: config.clientType === 'miniprogram' ? '使用说明' : '健康游戏忠告', hint: config.clientType === 'miniprogram' ? 'AI 社会模拟' : '16+', icon: 'heart', action: { type: 'health' } },
     { label: '客服与投诉', hint: '复制邮箱', icon: 'mail', action: { type: 'support' } },
     { label: '关于后人纪', hint: config.version, icon: 'info', action: { type: 'about' } },
   ]);
@@ -167,8 +167,8 @@ function settings(app, W) {
 function about(app, W) {
   return { top: { kind: 'back', title: '关于后人纪' }, tabbar: false, nodes: [
     N.text(W, copy.GAME_NAME + ' · ' + config.version, { style: 'title', bold: true, serif: true }),
-    N.node(46, (g, x, y) => { P.fillRound(g.ctx, x, y, 44, 44, 10, '#E9A93B'); P.text(g.ctx, '16+', x + 22, y + 22, font(17, { bold: true }), '#3A2604', 'center'); P.text(g.ctx, copy.AGE, x + 56, y + 22, font(14, {}), C.text2); }),
-    N.card(W, iw => [N.text(iw, '健康游戏忠告', { style: 'meta', color: C.text3, align: 'center' })].concat(copy.HEALTH_LINES.map(l => N.text(iw, l, { style: 'action', align: 'center', line: 25 }))), { pad: 18, gap: 2 }),
+    ...(config.clientType === 'miniprogram' ? [] : [N.node(46, (g, x, y) => { P.fillRound(g.ctx, x, y, 44, 44, 10, '#E9A93B'); P.text(g.ctx, '16+', x + 22, y + 22, font(17, { bold: true }), '#3A2604', 'center'); P.text(g.ctx, copy.AGE, x + 56, y + 22, font(14, {}), C.text2); }),
+    N.card(W, iw => [N.text(iw, '健康游戏忠告', { style: 'meta', color: C.text3, align: 'center' })].concat(copy.HEALTH_LINES.map(l => N.text(iw, l, { style: 'action', align: 'center', line: 25 }))), { pad: 18, gap: 2 })]),
     N.section(W, '隐私说明', { small: true }),
     ...copy.PRIVACY.map(t => N.text(W, t, { style: 'action', color: C.text2 })),
     N.button(W, '复制客服与投诉邮箱', { type: 'support' }, { variant: 'secondary', icon: 'copy' }),

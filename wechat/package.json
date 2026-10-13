@@ -6,7 +6,17 @@
     "check": "node scripts/release.mjs check",
     "prepare": "node scripts/release.mjs prepare",
     "preview": "node scripts/release.mjs preview",
-    "upload": "node scripts/release.mjs upload"
+    "upload": "node scripts/release.mjs upload",
+    "check:miniprogram": "WECHAT_TARGET=miniprogram node scripts/release.mjs check",
+    "prepare:miniprogram": "WECHAT_TARGET=miniprogram node scripts/release.mjs prepare",
+    "preview:miniprogram": "WECHAT_TARGET=miniprogram node scripts/release.mjs preview",
+    "upload:miniprogram": "WECHAT_TARGET=miniprogram node scripts/release.mjs upload",
+    "check:game": "WECHAT_TARGET=game node scripts/release.mjs check",
+    "prepare:game": "WECHAT_TARGET=game node scripts/release.mjs prepare",
+    "preview:game": "WECHAT_TARGET=game node scripts/release.mjs preview",
+    "upload:game": "WECHAT_TARGET=game node scripts/release.mjs upload"
   },
-  "devDependencies": { "miniprogram-ci": "2.1.31" }
+  "devDependencies": {
+    "miniprogram-ci": "2.1.31"
+  }
 }

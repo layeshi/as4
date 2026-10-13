@@ -1,8 +1,13 @@
 {
-  "description": "后人纪 · 普通小程序备选工程，需使用普通小程序 AppID",
+  "description": "后人纪 · 普通小程序完整交互客户端",
   "projectname": "houren-observatory",
-  "appid": "touristappid",
+  "appid": "wx83d31aa7fc9a797e",
   "compileType": "miniprogram",
-  "miniprogramRoot": "miniprogram/",
-  "setting": { "urlCheck": true, "es6": true, "enhance": true, "minified": true }
+  "miniprogramRoot": "miniprogram-app/",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "minified": true
+  }
 }
