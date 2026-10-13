@@ -14,6 +14,7 @@ import { checkBackstage } from '../backstage.js';
 import http from 'node:http';
 import { ExperimentControl } from '../experiment-control.js';
 import { AccountStore } from '../accounts/store.js';
+import { ServerStatusSampler, registeredUserCounts } from '../server-status.js';
 import { accountRoutes, accountLimits } from './accounts.js';
 import { prayerRoutes } from './prayers.js';
 import { RunnerManager } from '../runner/manager.js';
@@ -54,6 +55,7 @@ const MIME = {
 export const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'";
 
 const roleAdminRoutes = [
+  ['GET','/api/admin/server-status',accountWrap(({res,ctx})=>sendJson(res,200,{...ctx.serverStatus.view(),users:registeredUserCounts(ctx.accounts.data.users)}),{admin:true})],
   ['GET','/api/admin/public-model',accountWrap(({res,ctx})=>sendJson(res,200,ctx.publicRoles.view()),{admin:true})],
   ['POST','/api/admin/public-model',accountWrap(({res,ctx,body})=>{try{sendJson(res,200,ctx.publicRoles.save(body));}catch(e){sendJson(res,400,{error:{code:'invalid_config',message:e.message}});}},{admin:true})],
 ];
@@ -206,6 +208,9 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
       else res.end();
     }
   });
+  ctx.serverStatus = new ServerStatusSampler();
+  ctx.serverStatus.start();
+  server.on('close', () => ctx.serverStatus.close());
   server.on('listening', () => {
     const address = server.address();
     const host = address.address === '::' ? '[::1]' : address.address === '0.0.0.0' ? '127.0.0.1' : address.address.includes(':') ? `[${address.address}]` : address.address;
@@ -228,6 +233,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     server,
     ctx,
     async close() {
+      ctx.serverStatus.close();
       ctx.experiment.close();
       if (ctx.shells) await ctx.shells.close();
       await ctx.publicRoles.close();

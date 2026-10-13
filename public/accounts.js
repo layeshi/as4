@@ -102,6 +102,7 @@ function profile(modal) {
   const actions = h('div', { class: 'form-actions' });
   if (u.role === 'admin') actions.append(button(tr('用户管理', 'Manage users'), openUsers, true), button(tr('世界快照', 'World snapshots'), openSnapshots));
   if (u.role === 'admin') actions.append(button(tr('托管用量', 'Hosted usage'), openAdminUsage));
+  if (u.role === 'admin') actions.append(button(tr('服务器状态', 'Server status'), openServerStatus));
   if (u.role === 'admin') actions.append(button(tr('实验运行', 'Experiment'), openExperiment));
   if (u.role === 'admin') actions.append(button(tr('发明认定', 'Invention review'), () => openModal(tr('发明认定', 'Invention review'), 'wide').body.append(adminInventionsPanel())));
   actions.append(button(tr('我的祈愿操作记录', 'My prayer actions'), () => openModal(tr('我的祈愿操作记录', 'My prayer actions'), 'wide').body.append(prayerAuditPanel())));
@@ -132,6 +133,55 @@ function openExperiment() {
 }
 function openAdminUsage() {
   adminUsageView(openModal(tr('托管用量', 'Hosted usage'), 'wide').body);
+}
+function openServerStatus() {
+  const modal = openModal(tr('服务器状态', 'Server status'), 'wide');
+  const values = h('div', null, h('p', { class: 'muted' }, tr('正在加载…', 'Loading…')));
+  const error = h('p', { class: 'error', role: 'alert' });
+  modal.body.append(values, error);
+  const bytes = (value, rate = false) => {
+    if (value === null) return tr('采样中…', 'Sampling…');
+    const units = rate ? ['B/s', 'KiB/s', 'MiB/s', 'GiB/s'] : ['B', 'KiB', 'MiB', 'GiB'];
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+    return `${value.toFixed(unit ? 1 : 0)} ${units[unit]}`;
+  };
+  const duration = seconds => {
+    if (seconds === null) return tr('不可用', 'Unavailable');
+    const days = Math.floor(seconds / 86400), hours = Math.floor(seconds / 3600) % 24, minutes = Math.floor(seconds / 60) % 60;
+    return tr(`${days} 天 ${hours} 小时 ${minutes} 分 ${Math.floor(seconds) % 60} 秒`, `${days}d ${hours}h ${minutes}m ${Math.floor(seconds) % 60}s`);
+  };
+  const row = (label, value) => h('p', null, h('strong', null, `${label} · `), value);
+  async function refresh() {
+    if (!modal.body.isConnected) return;
+    const r = await api('/api/admin/server-status');
+    if (!modal.body.isConnected) return;
+    if (!r.ok) error.textContent = errorText(r, tr('刷新失败，请稍后重试。', 'Refresh failed. Please try again.'));
+    else {
+      error.textContent = '';
+      const { cpu, memory, network, uptime, users, sampledAt } = r.json;
+      clear(values).append(
+        h('article', { class: 'card' }, h('h3', null, tr('服务器负载', 'Server load')),
+          row('CPU', `${cpu.busyPercent === null ? tr('采样中…', 'Sampling…') : `${cpu.busyPercent.toFixed(1)}%`} · ${cpu.cores} ${tr('核', 'cores')}`),
+          row(tr('平均负载（1 / 5 / 15 分钟）', 'Load average (1 / 5 / 15 min)'), cpu.loadavg.map(n => n.toFixed(2)).join(' / ')),
+          row(tr('内存', 'Memory'), `${bytes(memory.usedBytes)} / ${bytes(memory.totalBytes)} (${memory.usedPercent.toFixed(1)}%)`),
+          row(tr('服务进程 RSS', 'Server process RSS'), bytes(memory.rss)),
+          row(tr('网络', 'Network'), network.available ? `↓ ${tr('接收', 'Receive')} ${bytes(network.receiveBytesPerSecond, true)} · ↑ ${tr('发送', 'Transmit')} ${bytes(network.transmitBytesPerSecond, true)}` : tr('不可用', 'Unavailable')),
+          row(tr('系统运行时间', 'System uptime'), duration(uptime.systemSeconds)),
+          row(tr('服务进程运行时间', 'Server process uptime'), duration(uptime.processSeconds))),
+        h('article', { class: 'card' }, h('h3', null, tr('注册用户', 'Registered users')),
+          row(tr('总数', 'Total'), String(users.total)),
+          row(tr('启用 / 停用', 'Active / Disabled'), `${users.active} / ${users.disabled}`),
+          row(tr('管理员', 'Administrators'), String(users.admins)),
+          row(tr('已关联微信', 'WeChat-linked'), String(users.wechatLinked)),
+          row(tr('最近 24 小时 / 7 天注册', 'Created in the last 24 hours / 7 days'), `${users.createdLast24Hours} / ${users.createdLast7Days}`)),
+        h('p', { class: 'muted' }, `${tr('采样时间', 'Sample time')} · ${new Date(sampledAt).toLocaleString(getLang() === 'en' ? 'en-US' : 'zh-CN')} · ${tr('每 10 秒刷新', 'Refreshes every 10 seconds')}`),
+      );
+    }
+    // 弹窗关闭后，下一次定时检查即结束；不再发送请求，也不启动重叠刷新。
+    if (modal.body.isConnected) setTimeout(refresh, 10000);
+  }
+  refresh();
 }
 async function openUsers() {
   const modal = openModal(tr('用户管理', 'User management'), 'wide');
