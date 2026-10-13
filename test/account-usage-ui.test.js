@@ -258,12 +258,14 @@ function installFakeRoot(env) {
   return env.dom.root;
 }
 
-test('用户中心把两块接上了：所有登录用户有「我的居民」，只有管理员有「托管用量」入口', () => {
+test('用户中心接上「我的居民」；「托管用量」在管理后台，用户中心只给管理员一个后台入口', () => {
   const src = readFileSync(new URL('../public/accounts.js', import.meta.url), 'utf8');
-  assert.match(src, /import \{[^}]*accountAgentsPanel[^}]*adminUsageView[^}]*\} from '\.\/account-usage-ui\.js'/);
+  assert.match(src, /import \{[^}]*accountAgentsPanel[^}]*\} from '\.\/account-usage-ui\.js'/);
   assert.ok(src.includes('accountAgentsPanel({ openBackstage: (key) => { modal.close(); openBackstage(appCtx, key); }, savedOwners })'), '「我的居民」：进入幕后时先关掉用户中心、带上应用上下文，并传入已保存的密钥');
-  assert.match(src, /if \(u\.role === 'admin'\) actions\.append\(button\(tr\('托管用量', 'Hosted usage'\), openAdminUsage\)\)/, '只有管理员有入口');
-  assert.match(src, /function openAdminUsage\(\) \{\s*adminUsageView\(/);
+  assert.match(src, /if \(u\.role === 'admin'\) links\.push\(\['\/admin\.html'/, '只有管理员有后台入口');
+  assert.doesNotMatch(src, /adminUsageView|openUsers|openServerStatus|openSupportQr/, '管理功能不在用户中心');
+  const admin = readFileSync(new URL('../public/admin.js', import.meta.url), 'utf8');
+  assert.match(admin, /\['usage', tr\('托管用量', 'Hosted usage'\)[^\n]*adminUsageView\(root\)/);
   assert.match(src, /initAccounts\(btn, ctx\)/);
   assert.match(readFileSync(new URL('../public/app.js', import.meta.url), 'utf8'), /initAccounts\(document\.getElementById\('btn-account'\), ctx\)/);
 });

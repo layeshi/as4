@@ -18,7 +18,7 @@ import { openEntry, openBackstage, openModal } from './modals.js';
 import { TABS2, signature2, updateTokenCity } from './e2-tabs.js';
 import { createMap2 } from './e2-map.js';
 import { renderProfile2, openPlace2 } from './e2-profile.js';
-import { pct, bandText, conditionBar, statusChip, section, table, clockConfig, SEASON_TABLE } from './render.js';
+import { pct, bandText, conditionBar, statusChip, section, table, clockConfig, SEASON_TABLE, topTitle } from './render.js';
 
 const TABS = [
   ['live', renderLive], ['chronicle', renderChronicle], ['laws', renderLaws], ['residents', renderResidents], ['groups', renderGroups],
@@ -161,7 +161,7 @@ function showStatus(text, retry) {
 }
 
 function wireStatic() {
-  els['btn-enter'].addEventListener('click', () => S.state?.world.premise===6 ? location.assign('/residents.html') : openEntry(ctx));
+  els['btn-enter'].addEventListener('click', () => S.state?.world.premise===6 ? location.assign('/residents.html#create') : openEntry(ctx));
   els['btn-back'].addEventListener('click', () => S.state?.world.premise===6 ? location.assign('/residents.html') : openBackstage(ctx));
   els['btn-lang'].addEventListener('click', async () => {
     setLang(getLang() === 'zh' ? 'en' : 'zh');
@@ -408,10 +408,10 @@ function renderTopbar() {
   if (!s) return;
   const w = s.world;
   const lore = ctx.lore;
-  const city = ctx.cityName();
-  els.city.textContent = city;
-  els.city.title = w.cityName === w.humanCityName.zh ? '' : t('humanCalled', { name: w.humanCityName[getLang()] });
-  document.title = `${t('title')} · ${city}`;
+  const title = topTitle(w, ctx.cityName());
+  els.city.textContent = title.heading;
+  els.city.title = title.tooltip;
+  document.title = title.document;
   const tick = S.tick ? S.tick.tick : w.tick;
   const day = Math.floor(tick / w.ticksPerDay);
   els.clock.textContent = t('clock', { epoch: w.epoch, month: Math.floor(day / w.daysPerMonth) + 1, day: (day % w.daysPerMonth) + 1, tick: (tick % w.ticksPerDay) + 1 });

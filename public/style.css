@@ -866,16 +866,8 @@ ul.reading { list-style: none; padding-left: 0; }
 
 .resident-avatar{width:28px;height:28px;object-fit:cover;border-radius:50%;vertical-align:middle;margin-right:8px}.resident-avatar.large{width:80px;height:80px}.public-role-map text{font-size:12px;fill:#d3d8b2;paint-order:stroke;stroke:#172527;stroke-width:3px}.resident-map-avatar{clip-path:circle(9px at 0px -7px)}
 
-/* Voluntary support page and administrator QR previews. */
+/* Voluntary support page (console.css lays it out) and administrator QR previews. */
 .foot a[href="/support.html"] { color: var(--accent); }
-.support-header, .support-main { width: min(100%, 960px); margin: 0 auto; padding: 24px; }
-.support-header, .support-header nav { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
-.support-header { justify-content: space-between; border-bottom: 1px solid var(--line); }
-.support-page a { color: var(--accent); }
-.support-main { padding-top: 40px; padding-bottom: 64px; }
-.support-main h1 { font-size: clamp(24px, 5vw, 36px); }
-.support-statement { max-width: 76ch; margin: 24px 0 32px; font-size: 16px; line-height: 1.9; }
-.support-statement p + p { margin-top: 20px; }
 .support-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 24px; }
 .support-qr-card { min-width: 0; margin: 0; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
 .support-qr-image { display: block; width: auto; max-width: min(100%, 320px); height: auto; margin: 0 auto; }
@@ -884,9 +876,20 @@ ul.reading { list-style: none; padding-left: 0; }
 .support-qr-preview { margin: 16px 0; }
 .support-qr-card input[type="file"] { width: 100%; min-width: 0; }
 @media (max-width: 480px) {
-  .support-header, .support-main { padding: 20px 16px; }
   .support-qr-card { padding: 16px; }
 }
 
-.account-modal .account-summary + .form-actions { flex-wrap: wrap; }
-.account-modal .account-summary + .form-actions > .btn { white-space: nowrap; flex-shrink: 0; }
+/* 用户中心：身份与去往各功能区的入口（观测站弹窗与会员页顶栏共用字标） */
+.account-initial { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 600; }
+.account-modal .account-summary { display: flex; align-items: center; gap: 12px; }
+.account-modal .account-summary .account-initial { width: 44px; height: 44px; font-size: 18px; }
+.account-modal .account-summary h3 { margin: 0; font-size: 17px; }
+.account-modal .account-summary p { margin: 2px 0 0; }
+.hub-links { display: grid; gap: 8px; margin: 4px 0 16px; }
+.hub-link { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 12px 40px 12px 14px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; color: var(--text); text-decoration: none; }
+.hub-link::after { content: "→"; position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.hub-link:hover { border-color: var(--accent); }
+.hub-link:hover::after { color: var(--accent); }
+.hub-link span { font-size: 12px; }
+.hub-link .hub-alert { color: var(--warn); font-weight: 600; }
+.hub-actions { justify-content: flex-end; margin-top: 12px; }

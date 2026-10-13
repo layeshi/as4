@@ -1,0 +1,232 @@
+/* 会员页与管理后台：我的居民、余额与充值、账户设置、管理后台、支持页。
+   沿用 style.css 的颜色变量（深浅色跟随系统），和观测站是同一套纸页与墨色。不依赖 style 属性（CSP）。 */
+
+.console-page { --radius: 12px; display: flex; flex-direction: column; min-height: 100vh; }
+.console-page a { color: var(--accent); }
+.console-page a.btn { color: var(--text); text-decoration: none; display: inline-block; }
+.console-page a.btn.primary { color: var(--accent-ink); }
+.console-page h1 { font-size: 28px; line-height: 1.25; letter-spacing: 0.02em; }
+.console-page h2 { font-size: 16px; margin: 0 0 12px; }
+.console-page h3 { font-size: 15px; }
+
+/* ── 顶栏：品牌、导航、账户 ── */
+.console-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px 20px;
+  min-height: 56px;
+  padding: 8px max(16px, calc((100vw - 1168px) / 2));
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.console-brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; color: var(--text) !important; text-decoration: none; font-size: 16px; font-weight: 600; letter-spacing: 0.08em; }
+.console-brand img { width: 28px; height: 28px; }
+.console-nav { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.console-nav::-webkit-scrollbar { display: none; }
+.console-link { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 8px; color: var(--muted) !important; text-decoration: none; white-space: nowrap; }
+.console-link:hover { color: var(--text) !important; background: var(--panel-2); }
+.console-link[aria-current="page"] { color: var(--text) !important; background: var(--panel-2); box-shadow: inset 0 -2px 0 var(--accent); font-weight: 600; }
+.console-account { position: relative; flex-shrink: 0; margin-left: auto; }
+
+.account-menu > summary { list-style: none; display: flex; align-items: center; gap: 8px; max-width: 14rem; padding: 3px 12px 3px 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); cursor: pointer; }
+.account-menu > summary::-webkit-details-marker { display: none; }
+.account-menu > summary:hover, .account-menu[open] > summary { border-color: var(--accent); }
+.account-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-menu-panel { position: absolute; right: 0; top: calc(100% + 8px); width: 240px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); z-index: 30; }
+.account-menu-who { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line-soft); overflow-wrap: anywhere; }
+.menu-item { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text) !important; text-align: left; text-decoration: none; cursor: pointer; }
+.menu-item:hover { background: var(--panel-2); }
+.account-menu-panel .error:empty { display: none; }
+
+/* ── 主体与页头 ── */
+.console-main { flex: 1; width: min(100%, 1168px); margin: 0 auto; padding: 28px 24px 64px; }
+.back-link { display: inline-block; margin-bottom: 10px; color: var(--muted) !important; text-decoration: none; }
+.back-link:hover { color: var(--text) !important; }
+.page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; margin-bottom: 20px; }
+.page-title { min-width: 0; }
+.page-title-row { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.page-title-row .resident-avatar.large { width: 72px; height: 72px; margin: 0; flex-shrink: 0; }
+.eyebrow { margin: 0 0 6px; color: var(--accent); font-size: 12px; letter-spacing: 0.16em; }
+.lead { margin: 8px 0 0; color: var(--muted); max-width: 72ch; }
+.lead-chips .chip { margin-left: 0; }
+.page-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.page-message:empty { display: none; }
+.page-message { margin: 0 0 16px; padding: 10px 14px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); }
+.console-foot { padding: 20px 24px 28px; color: var(--muted); font-size: 12px; text-align: center; }
+
+/* ── 卡片与布局 ── */
+.page-body > * + *, .panel-stack > * + *, .billing-area > * + *, .tab-pane > * + * { margin-top: 16px; }
+.card-panel { min-width: 0; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.card-panel > h2 { margin: 0 0 12px; }
+.card-note { margin: -6px 0 14px; font-size: 13px; }
+.card-panel section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+.card-panel > section:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; }
+.stack-list { display: flex; flex-direction: column; gap: 8px; }
+.list-item { padding: 10px 14px; background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 10px; }
+.list-item > summary { cursor: pointer; font-weight: 600; }
+.list-item[open] > summary { margin-bottom: 8px; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 12px 0; }
+.panel-toolbar { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+.empty-state { padding: 36px 24px; text-align: center; background: var(--panel); border: 1px dashed var(--line); border-radius: var(--radius); }
+.empty-state h2 { font-size: 18px; margin-bottom: 6px; }
+.empty-state .form-actions { justify-content: center; margin-top: 16px; }
+.card-panel .empty-state { background: var(--panel-2); border-color: var(--line-soft); }
+.callout { padding: 12px 16px; border: 1px solid var(--line); border-left: 4px solid var(--muted); border-radius: 8px; background: var(--panel-2); }
+.callout a { margin-left: 8px; font-weight: 600; }
+.callout.good { border-left-color: var(--good); }
+.callout.warn { border-left-color: var(--warn); }
+.callout.bad { border-left-color: var(--bad); color: var(--text); }
+.small { font-size: 12px; }
+
+/* ── 数字块与概览 ── */
+.resident-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.resident-metric { min-width: 0; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.card-panel .resident-metric { background: var(--panel-2); border-color: var(--line-soft); }
+.resident-metric strong { display: block; margin-top: 6px; color: var(--text); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.summary-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.summary-stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; color: var(--muted) !important; text-decoration: none; }
+.summary-stat strong { color: var(--text); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.summary-stat small { font-size: 12px; }
+a.summary-stat:hover { border-color: var(--accent); }
+a.summary-stat small { color: var(--accent); }
+.summary-stat.warn strong { color: var(--warn); }
+
+/* ── 表格 ── */
+.console-page .scroll-table { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 10px; }
+.console-page .scroll-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.console-page .scroll-table th { background: var(--panel-2); color: var(--muted); font-weight: 500; white-space: nowrap; }
+.console-page .scroll-table th, .console-page .scroll-table td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line-soft); }
+.console-page .scroll-table tbody tr:last-child td { border-bottom: 0; }
+.console-page .scroll-table td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.console-page .scroll-table td.wrap { white-space: normal; min-width: 14em; overflow-wrap: anywhere; }
+.console-page .scroll-table td.empty { text-align: center; padding: 18px; }
+
+/* ── 表单 ── */
+.console-page .form { display: flex; flex-direction: column; gap: 14px; max-width: 560px; }
+.console-page .form > p[role="status"]:empty { display: none; }
+.console-page .modal .form { max-width: none; }
+.console-page .field { gap: 6px; }
+.console-page .field input, .console-page .field select, .console-page .field textarea { width: 100%; }
+.console-page input[type=text], .console-page input[type=password], .console-page input[type=number], .console-page input[type=url], .console-page input[type=search], .console-page select, .console-page textarea {
+  padding: 8px 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+}
+.console-page textarea { min-height: 96px; }
+.console-page input[type=file] { max-width: 100%; }
+.console-page .btn { padding: 7px 14px; border-radius: 8px; white-space: nowrap; }
+.console-page .btn.small { padding: 3px 10px; }
+.console-page .form-actions { flex-wrap: wrap; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 14px; }
+.field-group { margin: 6px 0 -6px; font-weight: 600; }
+.hosted-label { margin: 0; padding: 10px 12px; background: var(--panel-2); border-radius: 8px; }
+.model-own { display: flex; flex-direction: column; gap: 14px; }
+.check { margin: 0; }
+
+/* ── 居民 ── */
+.resident-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+.resident-card { display: flex; gap: 14px; align-items: flex-start; min-width: 0; padding: 16px; background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 10px; color: var(--text) !important; text-decoration: none; }
+.resident-card:hover { border-color: var(--accent); }
+.resident-card .resident-avatar { width: 56px; height: 56px; margin: 0; flex-shrink: 0; }
+.resident-card-body { min-width: 0; flex: 1; }
+.resident-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.resident-card-top strong { font-size: 16px; overflow-wrap: anywhere; }
+.resident-card p { margin: 4px 0 0; }
+.resident-card .chip { margin-left: 0; }
+.resident-avatar { width: 28px; height: 28px; object-fit: cover; border-radius: 50%; vertical-align: middle; margin-right: 8px; background: var(--panel-2); }
+.resident-avatar.large { width: 80px; height: 80px; }
+.chip.run.good { color: var(--good); border-color: var(--good); }
+.chip.run.warn { color: var(--warn); border-color: var(--warn); }
+.chip.run.bad { color: var(--bad); border-color: var(--bad); }
+.chip.req-pending { color: var(--warn); border-color: var(--warn); margin-left: 0; }
+.chip.req-approved { color: var(--good); border-color: var(--good); margin-left: 0; }
+.chip.req-rejected { color: var(--bad); border-color: var(--bad); margin-left: 0; }
+.chip.req-cancelled { margin-left: 0; }
+.console-page .subtabs { gap: 2px; margin: 4px 0 20px; overflow-x: auto; scrollbar-width: none; }
+.console-page .subtab { padding: 10px 14px; white-space: nowrap; }
+.console-page .kv { gap: 10px 18px; }
+.console-page .timeline { list-style: none; padding: 0; margin: 12px 0; }
+.console-page .timeline li { border-left: 2px solid var(--line); padding: 6px 16px; margin-bottom: 10px; overflow-wrap: anywhere; }
+.console-page pre { margin-top: 12px; padding: 14px; max-height: 440px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--panel-2); border-radius: 8px; font-size: 12px; }
+.console-page .crop-preview { display: block; width: 256px; height: 256px; margin: 14px 0; border-radius: 12px; cursor: move; touch-action: none; }
+
+/* ── 账户设置 ── */
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 16px; align-items: start; }
+.settings-grid .wide { grid-column: 1 / -1; }
+.console-page .account-form { margin-bottom: 0; }
+.console-page .account-message:empty { display: none; }
+.card-panel > .prayer-panel { margin-top: 0; padding-top: 0; border-top: 0; }
+
+/* ── 余额与充值 ── */
+.billing-grid { align-items: stretch; }
+.steps { margin: 0; padding-left: 22px; }
+.steps > li { margin-bottom: 18px; padding-left: 4px; }
+.steps > li::marker { color: var(--accent); font-weight: 600; }
+.steps > li > strong { display: block; margin-bottom: 6px; }
+.support-grid.compact { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 12px; margin: 8px 0; }
+.support-grid.compact .support-qr-card { padding: 12px; border-radius: 10px; background: #fff; }
+.support-grid.compact .support-qr-card figcaption { margin-top: 8px; color: #1d2230; }
+.support-grid.compact .support-qr-image { max-width: 100%; }
+.mono-tag { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; padding: 1px 6px; border-radius: 6px; background: var(--panel-2); }
+.rule-list { margin: 16px 0 12px; padding-left: 20px; color: var(--muted); }
+.rule-list li { margin: 6px 0; }
+
+/* ── 管理后台 ── */
+.admin-layout { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 28px; align-items: start; }
+.admin-side { position: sticky; top: 76px; }
+.admin-nav { display: flex; flex-direction: column; gap: 2px; }
+.admin-nav-group { margin: 18px 12px 6px; color: var(--muted); font-size: 12px; letter-spacing: 0.12em; }
+.admin-nav-group:first-child { margin-top: 0; }
+.admin-nav-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 8px; color: var(--text) !important; text-decoration: none; }
+.admin-nav-link:hover { background: var(--panel-2); }
+.admin-nav-link[aria-current="page"] { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); color: var(--accent) !important; font-weight: 600; }
+.nav-badge { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--warn); color: #1d2230; font-size: 12px; font-weight: 600; text-align: center; }
+.admin-content { min-width: 0; }
+.admin-head .page-head { margin-bottom: 16px; }
+.admin-body > * + * { margin-top: 16px; }
+.admin-body > div > .usage-head:first-child, .admin-body > .prayer-panel > .usage-head:first-child { justify-content: flex-end; }
+.admin-body > div > .usage-head:first-child > h3, .admin-body > .prayer-panel > .usage-head:first-child > h3 { display: none; }
+.admin-body > .prayer-panel { margin-top: 0; padding-top: 0; border-top: 0; }
+.admin-body .usage-tile { background: var(--panel); }
+.admin-body .account-list .card { margin: 0; padding: 12px 16px; background: var(--panel); border-color: var(--line); border-radius: 10px; }
+.admin-body .experiment-panel, .admin-body .server-status .card-panel { line-height: 1.7; }
+.admin-body .experiment-panel { padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.admin-body .experiment-panel .form-actions { flex-wrap: wrap; margin: 12px 0; }
+.row-decisions { display: flex; flex-direction: column; gap: 6px; min-width: 220px; }
+.row-decisions > details > summary { cursor: pointer; color: var(--accent); }
+.row-decisions .form { margin-top: 8px; }
+.pager { justify-content: center; }
+.hosted-admin .check input { width: auto; }
+
+/* ── 支持页 ── */
+.support-statement { max-width: 76ch; margin: 0 0 28px; font-size: 16px; line-height: 1.9; }
+.support-statement p + p { margin-top: 18px; }
+
+@media (max-width: 860px) {
+  .admin-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .admin-side { position: static; margin: 0 -16px; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
+  .admin-nav { flex-direction: row; gap: 6px; }
+  .admin-nav-group { display: none; }
+  .admin-nav-link { flex-shrink: 0; border: 1px solid var(--line); white-space: nowrap; }
+  .admin-nav-link[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--accent); }
+  .summary-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .console-header { flex-wrap: wrap; padding: 8px 16px; gap: 4px 12px; }
+  .console-nav { order: 3; flex-basis: 100%; margin: 0 -8px; }
+  .console-link { padding: 8px; }
+  .console-main { padding: 20px 16px 48px; }
+  .console-page h1 { font-size: 24px; }
+  .page-head { align-items: flex-start; }
+  .card-panel { padding: 16px; }
+  .account-name { max-width: 7rem; }
+  .resident-metric strong, .summary-stat strong { font-size: 20px; }
+  .page-title-row .resident-avatar.large { width: 56px; height: 56px; }
+}

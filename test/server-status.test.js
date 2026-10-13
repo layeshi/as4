@@ -4,6 +4,7 @@ import os from 'node:os';
 import { boot } from './http-helpers.js';
 import { installFakeDom } from './fake-dom.js';
 import { openAccount } from '../public/accounts.js';
+import { serverStatusPanel } from '../public/admin-panels.js';
 import { closeAllModals } from '../public/modals.js';
 import { getLang, setLang } from '../public/i18n.js';
 
@@ -101,7 +102,7 @@ test('user count windows include boundaries and exclude future or invalid dates'
   assert.deepEqual(registeredUserCounts(users, now), { total: 6, active: 5, disabled: 1, admins: 1, wechatLinked: 1, createdLast24Hours: 2, createdLast7Days: 3 });
 });
 
-test('server status UI: admin entry, refresh, retained values after failure, close and English fallback', async (t) => {
+test('server status UI: refresh, retained values after failure, stop after leaving, admin-only entry and English fallback', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const dom = installFakeDom();
   const saved = { fetch: globalThis.fetch, lang: getLang() };
@@ -123,10 +124,7 @@ test('server status UI: admin entry, refresh, retained values after failure, clo
   const button = label => dom.root.querySelectorAll('button').find(b => b.textContent === label);
   try {
     setLang('zh');
-    await openAccount();
-    button('服务器状态').click(); await settle();
-    const modal = dom.root.querySelectorAll('.modal').at(-1);
-    assert.ok(modal.classList.contains('wide'));
+    const modal = serverStatusPanel(); dom.root.append(modal); await settle();
     assert.match(modal.textContent, /30.0% · 2 核/);
     assert.match(modal.textContent, /5.0 MiB \/ 8.0 MiB \(62.5%\)/);
     assert.match(modal.textContent, /↓ 接收 1.0 KiB\/s · ↑ 发送 2.0 MiB\/s/);
@@ -140,16 +138,18 @@ test('server status UI: admin entry, refresh, retained values after failure, clo
     t.mock.timers.tick(10000); await settle();
     assert.match(modal.textContent, /70.0%/);
     assert.doesNotMatch(modal.textContent, /refresh failed/);
-    closeAllModals();
+    modal.remove(); // 离开这一块（管理后台切到别的功能）
     const beforeClose = requests;
     t.mock.timers.tick(30000); await settle();
     assert.equal(requests, beforeClose);
+    const consoleLink = () => dom.root.querySelectorAll('a').find(a => a.getAttribute('href') === '/admin.html');
     role = 'user'; await openAccount();
-    assert.equal(button('服务器状态'), undefined);
+    assert.equal(consoleLink(), undefined); assert.equal(button('服务器状态'), undefined);
     closeAllModals();
     role = 'admin'; setLang('en');
     status.network.available = false; status.uptime.systemSeconds = null;
-    await openAccount(); button('Server status').click(); await settle();
+    await openAccount(); assert.ok(consoleLink()); closeAllModals();
+    dom.root.append(serverStatusPanel()); await settle();
     assert.match(dom.root.textContent, /Network · Unavailable/);
     assert.match(dom.root.textContent, /System uptime · Unavailable/);
     assert.doesNotMatch(dom.root.textContent, /NaN|undefined/);

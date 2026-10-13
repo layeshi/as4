@@ -4,6 +4,7 @@ import { residentAvatar } from './resident-avatar.js';
 
 import { h, ai } from './dom.js';
 import { t, fmt, getLang, describeEvent, CAT } from './i18n.js';
+import { tokenized } from './e2-strings.js';
 
 export const SEASON_TABLE = [
   1000, 1065, 1125, 1177, 1217, 1241, 1250, 1241, 1217, 1177, 1125, 1065,
@@ -13,6 +14,16 @@ export const SEASON_TABLE = [
 const PERCENT_PARAMS = new Set(['rationShare', 'transferTax', 'wealthTax', 'quorum', 'passThreshold', 'amendThreshold']);
 
 export const pct = (bp) => `${Math.round(bp / 100)}%`;
+
+/**
+ * 顶栏标题。词元本位的世界（第四前提起）显示作品名「后人纪：词元本位」，城名放进悬停提示；更早的世界仍显示城名。
+ * city：按当前语言取好的城名（ctx.cityName()）。返回 { heading, tooltip, document }。
+ */
+export function topTitle(world, city) {
+  const human = world.cityName === world.humanCityName.zh ? '' : t('humanCalled', { name: world.humanCityName[getLang()] });
+  if (!tokenized(world)) return { heading: city, tooltip: human, document: `${t('title')} · ${city}` };
+  return { heading: t('brandToken'), tooltip: [t('cityNamed', { name: city }), human].filter(Boolean).join(' · '), document: t('brandToken') };
+}
 
 /** 每日刻数来自服务器配置（TICKS_PER_DAY）；app.js 在拿到状态后设置 */
 export const clockConfig = { ticksPerDay: 12 };

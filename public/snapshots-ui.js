@@ -1,15 +1,15 @@
 import { h, clear } from './dom.js';
 import { getLang } from './i18n.js';
 import { api, errorText } from './api.js';
-import { openModal } from './modals.js';
 
 const tr = (zh, en) => getLang() === 'en' ? en : zh;
 const button = (label, run) => h('button', { type: 'button', class: 'btn', onClick: run }, label);
 const size = (bytes) => bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 const moment = (s) => tr(`第 ${s.day + 1} 日 · 已推进 ${s.tick} 刻`, `Day ${s.day + 1} · ${s.tick} ticks elapsed`);
 
-export async function openSnapshots() {
-  const modal = openModal(tr('世界快照', 'World snapshots'), 'wide');
+/** 管理后台的「世界快照」：保存当前快照、分页列出并下载。返回根节点。 */
+export function snapshotsPanel() {
+  const root = h('div', { class: 'snapshots-panel' });
   let page = 1, generation = 0;
   const note = h('input', { name: 'label', type: 'text', maxlength: 120, placeholder: tr('例如：第一天结算后', 'For example: after day one') });
   const save = h('button', { type: 'submit', class: 'btn primary' }, tr('保存当前快照', 'Save current snapshot'));
@@ -19,7 +19,7 @@ export async function openSnapshots() {
     h('div', { class: 'form-actions' }, save), message);
   const list = h('div', { class: 'account-list' });
   const pages = h('div', { class: 'form-actions' });
-  modal.body.append(
+  root.append(
     h('p', { class: 'muted' }, tr('保存当前纪元、居民状态与历史日志，城市继续运行。每次保存都会保留一份独立存档。', 'Save the current era, residents and history while the city keeps running. Each save keeps a separate archive.')),
     h('p', { class: 'muted' }, tr('存档包含居民的私有灵魂与记忆，仅管理员可下载。人类账号与托管模型配置需单独备份。', 'Archives include private souls and memories and are available only to administrators. Back up human accounts and hosted model configuration separately.')),
     form, h('div', { class: 'account-toolbar' }, h('h3', null, tr('已保存的快照', 'Saved snapshots')), button(tr('刷新列表', 'Refresh list'), load)), list, pages);
@@ -91,5 +91,6 @@ export async function openSnapshots() {
     const next = button(tr('下一页', 'Next'), () => { page++; load(); }); next.disabled = page * r.json.pageSize >= r.json.total;
     pages.append(prev, h('span', { class: 'muted' }, tr(`第 ${page} 页 · 共 ${r.json.total} 份`, `Page ${page} · ${r.json.total} snapshots`)), next);
   }
-  await load();
+  load();
+  return root;
 }

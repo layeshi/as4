@@ -2,22 +2,22 @@ import { h, clear } from './dom.js';
 import { getLang } from './i18n.js';
 import { api, errorText } from './api.js';
 import { openModal, openBackstage, savedOwners } from './modals.js';
-import { accountAgentsPanel, adminUsageView } from './account-usage-ui.js';
-import { openSnapshots } from './snapshots-ui.js';
-import { experimentPanel } from './experiment-ui.js';
-import { adminInventionsPanel } from './inventions-ui.js';
+import { accountAgentsPanel } from './account-usage-ui.js';
 import { prayerAuditPanel } from './prayers-ui.js';
+// 人类账号：登录 / 注册弹窗、用户中心（只做导航，不放管理功能）、账户设置表单。
+// 管理功能都在管理后台（admin.html）；居民、余额与充值各有自己的页面。
 const tr = (zh, en) => getLang() === 'en' ? en : zh;
 let current = null;
 let accountGeneration = 0;
 let accountButton;
 let appCtx; // 观测站的上下文：「我的居民」里的「进入幕后」要用
-const button = (label, run, primary = false) => h('button', { type: 'button', class: `btn${primary ? ' primary' : ''}`, onClick: run }, label);
-function field(label, name, type = 'text', value = '', extra = {}) {
+const watchers = new Set(); // 会员页的顶栏：每次读到账号都重画
+export const button = (label, run, primary = false) => h('button', { type: 'button', class: `btn${primary ? ' primary' : ''}`, onClick: run }, label);
+export function field(label, name, type = 'text', value = '', extra = {}) {
   const input = h('input', { name, type, value, required: true, ...extra });
   return h('label', { class: 'field' }, h('span', null, label), input);
 }
-function form(fields, label, submit) {
+export function form(fields, label, submit) {
   const message = h('p', { role: 'status', 'aria-live': 'polite', class: 'account-message' });
   const save = h('button', { class: 'btn primary', type: 'submit' }, label);
   const f = h('form', { class: 'form account-form' }, fields, h('div', { class: 'form-actions' }, save), message);
@@ -41,9 +41,18 @@ function form(fields, label, submit) {
   });
   return f;
 }
-const request = (path, body, method = 'POST') => api(path, { method, body });
-const password = (name = 'password', label = tr('密码（12–128 位）', 'Password (12–128 characters)'), required = true) => field(label, name, 'password', '', { minlength: 12, maxlength: 128, autocomplete: name === 'currentPassword' ? 'current-password' : 'new-password', required });
-const identity = () => [field(tr('用户名', 'Username'), 'username', 'text', '', { pattern: '[A-Za-z0-9_]{3,32}', minlength: 3, maxlength: 32, autocomplete: 'username', placeholder: tr('3–32 位字母、数字或下划线', '3–32 letters, numbers or underscores') }), field(tr('昵称', 'Display name'), 'displayName', 'text', '', { maxlength: 60, autocomplete: 'nickname' })];
+export const request = (path, body, method = 'POST') => api(path, { method, body });
+export const password = (name = 'password', label = tr('密码（12–128 位）', 'Password (12–128 characters)'), required = true) => field(label, name, 'password', '', { minlength: 12, maxlength: 128, autocomplete: name === 'currentPassword' ? 'current-password' : 'new-password', required });
+export const identity = () => [field(tr('用户名', 'Username'), 'username', 'text', '', { pattern: '[A-Za-z0-9_]{3,32}', minlength: 3, maxlength: 32, autocomplete: 'username', placeholder: tr('3–32 位字母、数字或下划线', '3–32 letters, numbers or underscores') }), field(tr('昵称', 'Display name'), 'displayName', 'text', '', { maxlength: 60, autocomplete: 'nickname' })];
+export const roleName = (u) => u.role === 'admin' ? tr('管理员', 'Administrator') : tr('普通用户', 'User');
+/** 头像位置的圆形字标：昵称的第一个字 */
+export const initialBadge = (u) => h('span', { class: 'account-initial', 'aria-hidden': 'true' }, [...(u.displayName || u.username || '?').trim()][0] || '?');
+export const currentUser = () => current;
+/** 订阅账号变化（登录、退出、改昵称）；返回取消订阅的函数 */
+export function watchAccount(fn) {
+  watchers.add(fn);
+  return () => watchers.delete(fn);
+}
 export async function refreshAccount({ notify = true } = {}) {
   const version=++accountGeneration;
   const r = await api('/api/account');
@@ -52,23 +61,30 @@ export async function refreshAccount({ notify = true } = {}) {
   if (r.ok) current = r.json.user;
   if(notify&&r.ok&&before!==current?.id)queueMicrotask(()=>appCtx?.onAccountChange?.());
   if (accountButton) accountButton.textContent = current ? `${tr('用户中心', 'Account')} · ${current.displayName}` : tr('登录 / 注册', 'Sign in / Register');
+  for (const fn of watchers) fn(current, r);
   return r;
 }
 export function initAccounts(btn, ctx) {
   accountButton = btn;
   appCtx = ctx;
-  btn.addEventListener('click', openAccount);
+  if (btn) btn.addEventListener('click', () => openAccount());
 }
-export async function openAccount() {
+export async function signOut() {
+  const r = await request('/api/account/logout', {});
+  if (r.ok) await refreshAccount();
+  return r;
+}
+/** 登录 / 注册弹窗；已登录时是用户中心。hub = false：登录成功后只关闭弹窗（会员页自己会重画） */
+export async function openAccount({ hub = true } = {}) {
   const modal = openModal(tr('用户中心', 'Account'), 'account-modal');
   modal.body.append(h('p', { class: 'muted' }, tr('正在加载…', 'Loading…')));
   const r = await refreshAccount();
   clear(modal.body);
   if (!r.ok) {
-    modal.body.append(h('p', { class: 'error' }, tr('无法读取账号信息，请重试。', 'Unable to load your account.')), button(tr('重试', 'Retry'), () => { modal.close(); openAccount(); }));
+    modal.body.append(h('p', { class: 'error' }, tr('无法读取账号信息，请重试。', 'Unable to load your account.')), button(tr('重试', 'Retry'), () => { modal.close(); openAccount({ hub }); }));
     return;
   }
-  if (current) { modal.dialog.classList.add('wide'); return profile(modal); } // 「我的居民」是一张表，要宽一些
+  if (current) return accountHub(modal);
   const tabs = h('div', { class: 'subtabs' });
   const pane = h('div');
   modal.body.append(h('p', { class: 'muted' }, appCtx?.S?.state?.world?.premise===6 ? tr('登录后可创建、管理与查看自己的居民。', 'Sign in to create, manage and inspect your residents.') : tr('游客可自由观测城市。创建人类用户账号后，可保存个人资料。Agent 入境与造者密钥仍在「入境 / 幕后」中使用；登录状态下入境的居民会关联到账号，可在用户中心查看它们的状态与 token 用量。', 'Guests can observe the city. Human accounts store your profile. Agent entry and owner keys remain available through Enter / Backstage; residents you enter while signed in are linked to your account, where you can see their status and token usage.')), tabs, pane);
@@ -87,38 +103,44 @@ export async function openAccount() {
       if (creating && body.password !== body.confirmPassword) return { ok: false, json: { error: { message: tr('两次密码不一致。', 'Passwords do not match.') } } };
       delete body.confirmPassword;
       const result = await request(`/api/account/${mode}`, body);
-      if (result.ok) { await refreshAccount(); modal.close(); openAccount(); }
+      if (result.ok) { await refreshAccount(); modal.close(); if (hub) openAccount(); }
       return result;
     }));
   }
   for (const [id, label] of modes) tabs.append(h('button', { type: 'button', class: 'btn', dataset: { mode: id }, onClick: () => show(id) }, label));
   show('login');
 }
-function profile(modal) {
-  const u = current;
-  const role = u.role === 'admin' ? tr('管理员', 'Administrator') : tr('普通用户', 'User');
-  const nameHeading = h('h3', null, u.displayName);
-  modal.body.append(h('div', { class: 'account-summary' }, nameHeading, h('p', { class: 'muted' }, `@${u.username} · ${role}`)));
-  const actions = h('div', { class: 'form-actions' });
-  if (u.role === 'admin') actions.append(button(tr('用户管理', 'Manage users'), openUsers, true), button(tr('世界快照', 'World snapshots'), openSnapshots));
-  if (u.role === 'admin') actions.append(button(tr('托管用量', 'Hosted usage'), openAdminUsage));
-  if (u.role === 'admin') actions.append(button(tr('服务器状态', 'Server status'), openServerStatus));
-  if (u.role === 'admin') actions.append(button(tr('实验运行', 'Experiment'), openExperiment));
-  if (u.role === 'admin') actions.append(button(tr('打赏收款码', 'Tip QR codes'), openSupportQr));
-  if (u.role === 'admin') actions.append(button(tr('发明认定', 'Invention review'), () => openModal(tr('发明认定', 'Invention review'), 'wide').body.append(adminInventionsPanel())));
-  actions.append(button(tr('我的祈愿操作记录', 'My prayer actions'), () => openModal(tr('我的祈愿操作记录', 'My prayer actions'), 'wide').body.append(prayerAuditPanel())));
+/** 用户中心：身份、去往各功能区的入口、退出登录。第六前提以前的世界在这里列出关联的居民（进入幕后要用观测站的上下文）。 */
+function accountHub(modal) {
+  const u = current, p6 = appCtx?.S?.state?.world?.premise === 6;
+  if (!p6) modal.dialog.classList.add('wide'); // 「我的居民」是一张表，要宽一些
+  modal.body.append(h('div', { class: 'account-summary' }, initialBadge(u), h('div', null, h('h3', null, u.displayName), h('p', { class: 'muted' }, `@${u.username} · ${roleName(u)}`))));
+  const links = [];
+  if (p6) links.push(['/residents.html', tr('我的居民', 'My residents'), tr('查看居民状态，创建居民并配置模型', 'See how your residents are doing, create residents and set up models')]);
+  if (p6) links.push(['/billing.html', tr('余额与充值', 'Balance & top-up'), tr('平台托管模型的余额、购买额度与记录', 'Hosted model balance, top-ups and records')]);
+  links.push(['/account.html', tr('账户设置', 'Account settings'), tr('昵称、密码与祈愿操作记录', 'Display name, password and prayer records')]);
+  if (u.role === 'admin') links.push(['/admin.html', tr('管理后台', 'Admin console'), tr('用户、充值审核、托管配置、实验运行与服务器状态', 'Users, top-up review, hosted model, experiment and server status')]);
+  const entries = links.map(([href, title, note]) => h('a', { class: 'hub-link', href }, h('strong', null, title), h('span', { class: 'muted' }, note)));
+  modal.body.append(h('nav', { class: 'hub-links', 'aria-label': tr('功能入口', 'Sections') }, entries));
+  if (u.role === 'admin') api('/api/admin/hosted').then((r) => { // 有待处理的入账申请时，直接写在「管理后台」入口上
+    const n = r.ok && Array.isArray(r.json?.requests) ? r.json.requests.length : 0;
+    if (n > 0) entries.at(-1).append(h('span', { class: 'hub-alert' }, tr(`${n} 笔入账申请待处理`, `${n} pending top-up request${n > 1 ? 's' : ''}`)));
+  });
+  if (!p6) modal.body.append(accountAgentsPanel({ openBackstage: (key) => { modal.close(); openBackstage(appCtx, key); }, savedOwners }));
   const logoutMessage = h('p', { role: 'status', class: 'error' });
-  actions.append(button(tr('退出登录', 'Sign out'), async () => {
-    const r = await request('/api/account/logout', {});
-    if (r.ok) { await refreshAccount(); modal.close(); }
+  modal.body.append(h('div', { class: 'form-actions hub-actions' }, button(tr('退出登录', 'Sign out'), async () => {
+    const r = await signOut();
+    if (r.ok) modal.close();
     else logoutMessage.textContent = errorText(r, tr('退出失败，请重试。', 'Sign out failed. Please retry.'));
-  }));
-  modal.body.append(actions, logoutMessage, appCtx?.S?.state?.world?.premise===6 ? h('a',{class:'btn primary',href:'/residents.html'},tr('我的居民','My residents')) : accountAgentsPanel({ openBackstage: (key) => { modal.close(); openBackstage(appCtx, key); }, savedOwners }), h('h3', null, tr('个人资料', 'Profile')));
-  modal.body.append(form([field(tr('昵称', 'Display name'), 'displayName', 'text', u.displayName, { maxlength: 60 })], tr('保存资料', 'Save profile'), async (body, msg) => {
+  })), logoutMessage);
+}
+/** 账户设置：个人资料与修改密码（account.html） */
+export function settingsPanel(user) {
+  const profile = form([field(tr('昵称', 'Display name'), 'displayName', 'text', user.displayName, { maxlength: 60 })], tr('保存资料', 'Save profile'), async (body, msg) => {
     const r = await request('/api/account', body, 'PATCH');
-    if (r.ok) { await refreshAccount(); nameHeading.textContent = r.json.user.displayName; msg.textContent = tr('资料已保存。', 'Profile saved.'); }
+    if (r.ok) { await refreshAccount(); msg.textContent = tr('资料已保存。', 'Profile saved.'); }
     return r;
-  }), h('h3', null, tr('修改密码', 'Change password')));
+  });
   const change = form([password('currentPassword', tr('当前密码', 'Current password')), password(), password('confirmPassword', tr('确认新密码', 'Confirm new password'))], tr('更新密码', 'Update password'), async (body, msg) => {
     if (body.password !== body.confirmPassword) return { ok: false, json: { error: { message: tr('两次新密码不一致。', 'New passwords do not match.') } } };
     delete body.confirmPassword;
@@ -126,165 +148,8 @@ function profile(modal) {
     if (r.ok) { change.reset(); msg.textContent = tr('密码已更新，其他登录会话已失效。', 'Password updated. Other sessions have been signed out.'); }
     return r;
   });
-  modal.body.append(change);
-}
-function openSupportQr() {
-  const modal = openModal(tr('打赏收款码', 'Tip QR codes'), 'wide');
-  const grid = h('div', { class: 'support-grid' });
-  const message = h('p', { role: 'status', 'aria-live': 'polite', class: 'account-message' });
-  const slots = [], controls = [];
-  let busy = false;
-  async function refresh() {
-    const r = await api('/api/public/support');
-    if (!r.ok) throw Error(errorText(r, tr('无法读取收款码。', 'Unable to load QR codes.')));
-    for (const { kind, caption, preview, remove } of slots) {
-      preview.replaceChildren(r.json.qr[kind]
-        ? h('img', { class: 'support-qr-image', src: r.json.qr[kind], alt: caption, onError: () => preview.replaceChildren(h('p', { class: 'error' }, tr('预览加载失败，请刷新。', 'Preview failed to load. Please refresh.'))) })
-        : h('p', { class: 'muted' }, tr('未设置', 'Not set')));
-      remove.dataset.configured = String(!!r.json.qr[kind]);
-    }
-  }
-  async function run(action, success = '') {
-    if (busy) return;
-    busy = true;
-    for (const control of controls) control.disabled = true;
-    message.className = 'account-message';
-    message.textContent = tr('正在处理…', 'Working…');
-    try { await action(); message.textContent = success; }
-    catch (e) { message.className = 'account-message error'; message.textContent = e.message || tr('请求失败，请重试。', 'Request failed. Please retry.'); }
-    finally {
-      busy = false;
-      for (const control of controls) control.disabled = false;
-      for (const { remove } of slots) remove.disabled = remove.dataset.configured !== 'true';
-    }
-  }
-  for (const [kind, caption] of [['wechat', tr('微信收款码', 'WeChat QR code')], ['alipay', tr('支付宝收款码', 'Alipay QR code')]]) {
-    const preview = h('div', { class: 'support-qr-preview' });
-    const file = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp' });
-    const path = `/api/admin/support/qr/${kind}`;
-    const upload = button(tr('上传', 'Upload'), () => run(async () => {
-      const image = file.files[0];
-      if (!image) throw Error(tr('请先选择图片。', 'Choose an image first.'));
-      if (image.size > 2 * 1024 * 1024) throw Error(tr('图片不能超过2 MiB。', 'Image must be at most 2 MiB.'));
-      const r = await fetch(path, { method: 'POST', headers: { 'X-Houren-Request': '1', 'Content-Type': image.type || 'application/octet-stream' }, body: image });
-      let json = null;
-      try { json = await r.json(); } catch { /* Use the fallback message for non-JSON errors. */ }
-      if (!r.ok) throw Error(errorText({ json }, tr('上传失败，请重试。', 'Upload failed. Please retry.')));
-      file.value = '';
-      await refresh();
-    }, tr('收款码已更新。', 'QR code updated.')), true);
-    const remove = button(tr('移除', 'Remove'), () => run(async () => {
-      const r = await request(path, {}, 'DELETE');
-      if (!r.ok) throw Error(errorText(r, tr('移除失败，请重试。', 'Removal failed. Please retry.')));
-      await refresh();
-    }, tr('收款码已移除。', 'QR code removed.')));
-    slots.push({ kind, caption, preview, remove });
-    controls.push(file, upload, remove);
-    grid.append(h('section', { class: 'support-qr-card' }, h('h3', null, caption), preview,
-      h('label', { class: 'field' }, h('span', null, tr('选择图片', 'Choose image')), file), h('div', { class: 'form-actions' }, upload, remove)));
-  }
-  const reload = button(tr('刷新预览', 'Refresh previews'), () => run(refresh));
-  controls.push(reload);
-  modal.body.append(h('p', { class: 'muted' }, tr('仅用于展示自愿打赏收款码，不提供任何游戏内回报。支持静态 JPEG、PNG、WebP，最多2 MiB、16MP。', 'Display voluntary tip QR codes only; tips bring no in-world reward. Static JPEG, PNG or WebP, up to 2 MiB and 16 MP.')), grid, message, reload);
-  run(refresh);
-}
-function openExperiment() {
-  const modal = openModal(tr('实验运行', 'Experiment'));
-  modal.body.append(experimentPanel({ onChanged: () => appCtx?.refresh() }));
-}
-function openAdminUsage() {
-  adminUsageView(openModal(tr('托管用量', 'Hosted usage'), 'wide').body);
-}
-function openServerStatus() {
-  const modal = openModal(tr('服务器状态', 'Server status'), 'wide');
-  const values = h('div', null, h('p', { class: 'muted' }, tr('正在加载…', 'Loading…')));
-  const error = h('p', { class: 'error', role: 'alert' });
-  modal.body.append(values, error);
-  const bytes = (value, rate = false) => {
-    if (value === null) return tr('采样中…', 'Sampling…');
-    const units = rate ? ['B/s', 'KiB/s', 'MiB/s', 'GiB/s'] : ['B', 'KiB', 'MiB', 'GiB'];
-    let unit = 0;
-    while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
-    return `${value.toFixed(unit ? 1 : 0)} ${units[unit]}`;
-  };
-  const duration = seconds => {
-    if (seconds === null) return tr('不可用', 'Unavailable');
-    const days = Math.floor(seconds / 86400), hours = Math.floor(seconds / 3600) % 24, minutes = Math.floor(seconds / 60) % 60;
-    return tr(`${days} 天 ${hours} 小时 ${minutes} 分 ${Math.floor(seconds) % 60} 秒`, `${days}d ${hours}h ${minutes}m ${Math.floor(seconds) % 60}s`);
-  };
-  const row = (label, value) => h('p', null, h('strong', null, `${label} · `), value);
-  async function refresh() {
-    if (!modal.body.isConnected) return;
-    const r = await api('/api/admin/server-status');
-    if (!modal.body.isConnected) return;
-    if (!r.ok) error.textContent = errorText(r, tr('刷新失败，请稍后重试。', 'Refresh failed. Please try again.'));
-    else {
-      error.textContent = '';
-      const { cpu, memory, network, uptime, users, sampledAt } = r.json;
-      clear(values).append(
-        h('article', { class: 'card' }, h('h3', null, tr('服务器负载', 'Server load')),
-          row('CPU', `${cpu.busyPercent === null ? tr('采样中…', 'Sampling…') : `${cpu.busyPercent.toFixed(1)}%`} · ${cpu.cores} ${tr('核', 'cores')}`),
-          row(tr('平均负载（1 / 5 / 15 分钟）', 'Load average (1 / 5 / 15 min)'), cpu.loadavg.map(n => n.toFixed(2)).join(' / ')),
-          row(tr('内存', 'Memory'), `${bytes(memory.usedBytes)} / ${bytes(memory.totalBytes)} (${memory.usedPercent.toFixed(1)}%)`),
-          row(tr('服务进程 RSS', 'Server process RSS'), bytes(memory.rss)),
-          row(tr('网络', 'Network'), network.available ? `↓ ${tr('接收', 'Receive')} ${bytes(network.receiveBytesPerSecond, true)} · ↑ ${tr('发送', 'Transmit')} ${bytes(network.transmitBytesPerSecond, true)}` : tr('不可用', 'Unavailable')),
-          row(tr('系统运行时间', 'System uptime'), duration(uptime.systemSeconds)),
-          row(tr('服务进程运行时间', 'Server process uptime'), duration(uptime.processSeconds))),
-        h('article', { class: 'card' }, h('h3', null, tr('注册用户', 'Registered users')),
-          row(tr('总数', 'Total'), String(users.total)),
-          row(tr('启用 / 停用', 'Active / Disabled'), `${users.active} / ${users.disabled}`),
-          row(tr('管理员', 'Administrators'), String(users.admins)),
-          row(tr('已关联微信', 'WeChat-linked'), String(users.wechatLinked)),
-          row(tr('最近 24 小时 / 7 天注册', 'Created in the last 24 hours / 7 days'), `${users.createdLast24Hours} / ${users.createdLast7Days}`)),
-        h('p', { class: 'muted' }, `${tr('采样时间', 'Sample time')} · ${new Date(sampledAt).toLocaleString(getLang() === 'en' ? 'en-US' : 'zh-CN')} · ${tr('每 10 秒刷新', 'Refreshes every 10 seconds')}`),
-      );
-    }
-    // 弹窗关闭后，下一次定时检查即结束；不再发送请求，也不启动重叠刷新。
-    if (modal.body.isConnected) setTimeout(refresh, 10000);
-  }
-  refresh();
-}
-async function openUsers() {
-  const modal = openModal(tr('用户管理', 'User management'), 'wide');
-  let page = 1, query = '', generation = 0;
-  const search = h('input', { type: 'search', maxlength: 100, placeholder: tr('搜索用户名或昵称', 'Search username or display name'), 'aria-label': tr('搜索用户', 'Search users') });
-  const list = h('div', { class: 'account-list' });
-  const pages = h('div', { class: 'form-actions' });
-  const searchForm = h('form', { class: 'account-search' }, search, h('button', { type: 'submit', class: 'btn' }, tr('搜索', 'Search')));
-  searchForm.addEventListener('submit', (e) => { e.preventDefault(); query = search.value; page = 1; load(); });
-  modal.body.append(h('p', { class: 'muted' }, tr('停用、角色变更和密码重置会结束该用户的登录会话。至少保留一个启用的管理员。', 'Disabling an account, changing its role or resetting its password ends its sessions. At least one active administrator must remain.')), h('div', { class: 'account-toolbar' }, searchForm, button(tr('创建用户', 'Create user'), () => editUser(null, load))), list, pages);
-  async function load() {
-    const version = ++generation;
-    clear(list).append(h('p', null, tr('正在加载…', 'Loading…')));
-    clear(pages);
-    const r = await api(`/api/admin/users?q=${encodeURIComponent(query)}&page=${page}`);
-    if (version !== generation) return;
-    clear(list);
-    if (!r.ok) { list.append(h('p', { class: 'error', role: 'alert' }, errorText(r, tr('加载失败。', 'Unable to load.'))), button(tr('重试', 'Retry'), load)); return; }
-    if (!r.json.users.length) list.append(h('p', { class: 'empty' }, tr('没有匹配的用户。', 'No matching users.')));
-    for (const u of r.json.users) list.append(h('article', { class: 'card account-row' }, h('div', null, h('strong', null, u.displayName), h('p', { class: 'muted' }, `@${u.username} · ${u.role === 'admin' ? tr('管理员', 'Administrator') : tr('普通用户', 'User')} · ${u.status === 'active' ? tr('启用', 'Active') : tr('停用', 'Disabled')}`), h('small', { class: 'muted' }, `${tr('注册于', 'Joined')} ${new Date(u.createdAt).toLocaleDateString(getLang() === 'en' ? 'en-US' : 'zh-CN')}`)), button(tr('编辑', 'Edit'), () => editUser(u, load))));
-    const prev = button(tr('上一页', 'Previous'), () => { page--; load(); }); prev.disabled = page <= 1;
-    const next = button(tr('下一页', 'Next'), () => { page++; load(); }); next.disabled = page * r.json.pageSize >= r.json.total;
-    pages.append(prev, h('span', { class: 'muted' }, tr(`第 ${page} 页 · 共 ${r.json.total} 人`, `Page ${page} · ${r.json.total} users`)), next);
-  }
-  await load();
-}
-function editUser(user, reload) {
-  const modal = openModal(user ? tr('编辑用户', 'Edit user') : tr('创建用户', 'Create user'));
-  const fields = user ? [h('p', { class: 'muted' }, `@${user.username}`), field(tr('昵称', 'Display name'), 'displayName', 'text', user.displayName, { maxlength: 60 })] : identity();
-  const role = h('select', { name: 'role' }, h('option', { value: 'user' }, tr('普通用户', 'User')), h('option', { value: 'admin' }, tr('管理员', 'Administrator')));
-  role.value = user?.role || 'user';
-  fields.push(h('label', { class: 'field' }, h('span', null, tr('角色', 'Role')), role));
-  if (user) {
-    const status = h('select', { name: 'status' }, h('option', { value: 'active' }, tr('启用', 'Active')), h('option', { value: 'disabled' }, tr('停用', 'Disabled')));
-    status.value = user.status;
-    fields.push(h('label', { class: 'field' }, h('span', null, tr('账号状态', 'Account status')), status));
-  }
-  fields.push(password('password', user ? tr('重置密码（留空则不修改）', 'Reset password (leave blank to keep)') : tr('初始密码（12–128 位）', 'Initial password (12–128 characters)'), !user));
-  modal.body.append(form(fields, tr('保存', 'Save'), async (body) => {
-    if (user && !body.password) delete body.password;
-    const r = await request(user ? `/api/admin/users/${user.id}` : '/api/admin/users', body, user ? 'PATCH' : 'POST');
-    if (r.ok) { await refreshAccount(); modal.close(); reload(); }
-    return r;
-  }));
+  return h('div', { class: 'settings-grid' },
+    h('section', { class: 'card-panel' }, h('h2', null, tr('个人资料', 'Profile')), h('p', { class: 'muted' }, `@${user.username} · ${roleName(user)}`), profile),
+    h('section', { class: 'card-panel' }, h('h2', null, tr('修改密码', 'Change password')), h('p', { class: 'muted' }, tr('更新后，其他设备上的登录会失效。', 'Other sessions are signed out after the change.')), change),
+    h('section', { class: 'card-panel wide' }, prayerAuditPanel()));
 }

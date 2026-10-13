@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { installFakeDom } from './fake-dom.js';
-import { openSnapshots } from '../public/snapshots-ui.js';
+import { snapshotsPanel } from '../public/snapshots-ui.js';
 import { openAccount } from '../public/accounts.js';
+import { adminSections } from '../public/admin.js';
 import { closeAllModals } from '../public/modals.js';
 import { getLang, setLang } from '../public/i18n.js';
 
@@ -32,7 +33,7 @@ test('snapshot UI: saving prevents duplicate submits, retains failed notes, refr
     return reply(200, listing(rows));
   });
   try {
-    await openSnapshots();
+    env.dom.root.append(snapshotsPanel()); await settle();
     assert.match(env.dom.root.textContent, /还没有保存快照/);
     const form = env.dom.root.querySelector('form');
     const note = form.querySelector('input');
@@ -69,15 +70,17 @@ test('snapshot UI: administrator entry, English text and list retry', async () =
     return reply(200, listing([{ ...snapshot, label: '' }]));
   });
   try {
+    const consoleLink = () => env.dom.root.querySelectorAll('a').find((a) => a.getAttribute('href') === '/admin.html');
+    assert.ok(adminSections().flatMap(([, items]) => items).some(([id, title]) => id === 'snapshots' && title === '世界快照'));
     await openAccount();
-    assert.ok(button(env.dom.root, '世界快照'));
+    assert.ok(consoleLink(), '管理员从用户中心进入管理后台');
     closeAllModals();
     role = 'user';
     await openAccount();
-    assert.equal(button(env.dom.root, '世界快照'), undefined);
+    assert.equal(consoleLink(), undefined);
     closeAllModals(); setLang('en');
-    await openSnapshots();
-    assert.match(env.dom.root.textContent, /World snapshots/);
+    env.dom.root.append(snapshotsPanel()); await settle();
+    assert.match(env.dom.root.textContent, /Save the current era/);
     assert.match(env.dom.root.textContent, /Please retry/);
     failed = false;
     button(env.dom.root, 'Retry').click(); await settle();

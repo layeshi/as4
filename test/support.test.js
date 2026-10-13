@@ -10,6 +10,8 @@ import { loadConfig } from '../src/config.js';
 import { createApp, CSP } from '../src/http/server.js';
 import { installFakeDom } from './fake-dom.js';
 import { openAccount } from '../public/accounts.js';
+import { supportQrPanel } from '../public/admin-panels.js';
+import { adminSections } from '../public/admin.js';
 import { closeAllModals } from '../public/modals.js';
 import { getLang, setLang } from '../public/i18n.js';
 
@@ -186,7 +188,7 @@ test('support page is served with the strict CSP and bilingual non-profit statem
   assert.equal((await e.call('/support.js')).status, 200);
 });
 
-test('support admin modal uploads raw files, refreshes previews, removes codes and reports errors', async () => {
+test('support QR admin panel uploads raw files, refreshes previews, removes codes and reports errors; only admins get the console entry', async () => {
   const dom = installFakeDom(), saved = { fetch: globalThis.fetch, lang: getLang() };
   const qr = { wechat: null, alipay: null }, requests = [];
   let role = 'admin', failed = false;
@@ -204,8 +206,9 @@ test('support admin modal uploads raw files, refreshes previews, removes codes a
   const settle = () => new Promise(resolve => setImmediate(resolve));
   const button = (root, text) => root.querySelectorAll('button').find(b => b.textContent === text);
   try {
-    setLang('zh'); await openAccount(); button(dom.root, '打赏收款码').click(); await settle();
-    const modal = dom.root.querySelectorAll('.modal').at(-1), cards = modal.querySelectorAll('.support-qr-card');
+    setLang('zh');
+    const modal = supportQrPanel(); dom.root.append(modal); await settle();
+    const cards = modal.querySelectorAll('.support-qr-card');
     assert.equal(cards.length, 2); assert.match(cards[0].textContent, /未设置/);
     const file = new Blob([await png()], { type: 'image/png' });
     cards[0].querySelector('input').files = [file];
@@ -221,9 +224,12 @@ test('support admin modal uploads raw files, refreshes previews, removes codes a
     assert.equal(requests.at(-1).method, 'DELETE'); assert.equal(requests.at(-1).headers['X-Houren-Request'], '1');
     assert.equal(requests.at(-1).body, '{}'); assert.equal(cards[0].querySelector('img'), null);
     assert.match(modal.textContent, /收款码已移除/);
-    closeAllModals(); role = 'user'; await openAccount();
-    assert.equal(button(dom.root, '打赏收款码'), undefined);
+    modal.remove();
+    const consoleLink = () => dom.root.querySelectorAll('a').find(a => a.getAttribute('href') === '/admin.html');
+    role = 'user'; await openAccount();
+    assert.equal(consoleLink(), undefined); assert.equal(button(dom.root, '打赏收款码'), undefined, '用户中心不再放管理按钮');
     closeAllModals(); role = 'admin'; setLang('en'); await openAccount();
-    assert.ok(button(dom.root, 'Tip QR codes'));
+    assert.match(consoleLink().textContent, /Admin console/);
+    assert.ok(adminSections().flatMap(([, items]) => items).some(([id, title]) => id === 'support' && title === 'QR codes'));
   } finally { await settle(); closeAllModals(); dom.restore(); setLang(saved.lang); globalThis.fetch = saved.fetch; }
 });

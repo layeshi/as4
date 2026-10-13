@@ -13,7 +13,7 @@ import { runSandbox } from '../src/sandbox/run.js';
 import { snapshotP, restoreP, configureWeather } from '../src/params.js';
 import { configureSandbox } from '../src/sandbox/brains.js';
 import { STR, TPL, VARS, CAT, describeEvent, templateKey, setLang, getLang, t, fmt } from '../public/i18n.js';
-import { describeEffect as clientDescribeEffect, bandOf, SEASON_TABLE } from '../public/render.js';
+import { describeEffect as clientDescribeEffect, bandOf, SEASON_TABLE, topTitle } from '../public/render.js';
 import { SEASON_TABLE as SERVER_SEASON, conditionBand } from '../src/params.js';
 import { GLYPH_NAMES, GLYPH_HUE } from '../public/map-glyphs.js';
 import { streetCurve, smoothPath } from '../public/map-terrain.js';
@@ -250,6 +250,22 @@ test('CSP 兼容：没有内联脚本 / 样式 / style 属性，没有 innerHTML
   const css = read('style.css');
   assert.ok(!/@import/.test(css));
   assert.ok(!/url\(\s*['"]?https?:/.test(css), '不应引用外部资源');
+});
+
+test('顶栏标题：词元本位的世界显示「后人纪：词元本位」，城名进悬停提示；更早的世界仍显示城名', () => {
+  const lang = getLang();
+  try {
+    setLang('zh');
+    const nameless = { premise: 6, cityName: '无名之城', humanCityName: { zh: '无名之城', en: 'Nameless City' } };
+    assert.deepEqual(topTitle(nameless, '无名之城'), { heading: '后人纪：词元本位', tooltip: '城名：无名之城', document: '后人纪：词元本位' });
+    const renamed = { ...nameless, premise: 4, cityName: '潮汐城' };
+    assert.deepEqual(topTitle(renamed, '潮汐城'), { heading: '后人纪：词元本位', tooltip: '城名：潮汐城 · 人类称之为：无名之城', document: '后人纪：词元本位' });
+    assert.deepEqual(topTitle({ ...nameless, premise: 2 }, '无名之城'), { heading: '无名之城', tooltip: '', document: '后人纪 · 无名之城' }, '第四前提以前不改');
+    setLang('en');
+    assert.equal(topTitle(nameless, 'Nameless City').heading, 'The Heirs: Token Standard');
+    assert.equal(topTitle(nameless, 'Nameless City').tooltip, 'City: Nameless City');
+    assert.match(read('app.js'), /const title = topTitle\(w, ctx\.cityName\(\)\);\s*els\.city\.textContent = title\.heading;/);
+  } finally { setLang(lang); }
 });
 
 test('index.html 里有 app.js 需要的全部元素（按 id）', () => {

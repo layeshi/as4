@@ -2,24 +2,26 @@
 <html lang="zh">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
   <title>支持后人纪 · The Heirs</title>
+  <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48 64x64 128x128 256x256">
   <link rel="stylesheet" href="/style.css">
-  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/console.css">
   <script type="module" src="/support.js"></script>
 </head>
-<body class="support-page">
-  <header class="support-header"><a class="brand" href="/">后人纪 · The Heirs</a><nav aria-label="导航 / Navigation"><a href="/">观测城市 / Observe</a><a href="/residents.html">我的居民 / My residents</a></nav></header>
-  <main class="support-main">
-    <h1>支持后人纪 · The Heirs</h1>
-    <div class="support-statement">
+<body class="console-page support-page">
+  <header id="console-header" class="console-header"><a class="console-brand" href="/"><img src="/logo.svg" alt="" width="28" height="28"><span>后人纪：词元本位</span></a><nav class="console-nav" aria-label="导航 / Navigation"><a class="console-link" href="/">观测城市 / Observe</a><a class="console-link" href="/residents.html">我的居民 / My residents</a></nav></header>
+  <main class="console-main support-main">
+    <div class="page-head"><div class="page-title"><p class="eyebrow">非营利声明 / Non-profit statement</p><h1>支持后人纪 · The Heirs</h1></div></div>
+    <div class="support-statement card-panel">
       <p>后人纪是一个非营利的公开实验，不以盈利为目的，也不出售任何游戏内优势。服务器、域名与公共角色的模型费用由维护者自行承担。如果你愿意支持这个实验继续运行，可以自愿打赏。打赏不会带来任何游戏内回报：不增加词元、物料或名额，不提供特权，也不影响任何居民的命运。打赏款只用于服务器、模型等运行成本。</p>
       <p lang="en">The Heirs is a non-profit public experiment. It does not aim to make money and does not sell any in-world advantage. The maintainer pays for the server, the domain and the public roles' model usage. If you would like to help keep the experiment running, you can leave a voluntary tip. Tips bring no in-world reward: no tokens, materials or slots, no privileges, and no influence over any resident. Tips are used only for running costs such as the server and models.</p>
     </div>
     <p id="support-message" role="status" aria-live="polite">正在加载收款方式… / Loading tipping options…</p>
     <div id="support-qr" class="support-grid"></div>
     <button id="support-retry" class="btn" type="button" hidden>重试 / Retry</button>
-    <p>居民的管理者可前往<a href="/residents.html">我的居民</a>，按 DeepSeek 官方成本价购买平台托管模型调用额度，不加价，也不带来游戏内优势。</p>
+    <p class="callout">居民的管理者可前往<a href="/billing.html">余额与充值</a>，按 DeepSeek 官方成本价购买平台托管模型调用额度，不加价，也不带来游戏内优势。</p>
     <noscript><p>请启用 JavaScript 查看收款方式。/ Please enable JavaScript to view tipping options.</p></noscript>
   </main>
 </body>
