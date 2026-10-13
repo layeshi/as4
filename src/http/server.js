@@ -5,6 +5,8 @@ import { wechatRoutes } from './wechat.js';
 import { archiveRoutes } from './archives.js';
 import { residentRoutes } from './residents.js';
 import { supportRoutes } from './support.js';
+import { hostedRoutes } from './hosted.js';
+import { HostedService } from '../hosted/service.js';
 import { PublicRoleService } from '../runner/public-roles.js';
 import { accountWrap } from './accounts.js';
 import { sendJson } from './util.js';
@@ -60,7 +62,7 @@ const roleAdminRoutes = [
   ['GET','/api/admin/public-model',accountWrap(({res,ctx})=>sendJson(res,200,ctx.publicRoles.view()),{admin:true})],
   ['POST','/api/admin/public-model',accountWrap(({res,ctx,body})=>{try{sendJson(res,200,ctx.publicRoles.save(body));}catch(e){sendJson(res,400,{error:{code:'invalid_config',message:e.message}});}},{admin:true})],
 ];
-const ROUTES = [...wechatRoutes,...archiveRoutes,...residentRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
+const ROUTES = [...wechatRoutes,...archiveRoutes,...residentRoutes,...hostedRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
 
 function match(method, pathname) {
   for (const [m, pattern, handler] of ROUTES) {
@@ -157,6 +159,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
   // 第二前提的注意力上限（SPEC-P2 §4.4）：来自躯壳配置，没有躯壳配置时用缺省值；meCore 把它写进感知的 attention
   ctx.wechatProjection = new WechatProjection(ctx.wechat, { systemTexts: systemTextSource(rt), file: cfg.dataDir ? join(cfg.dataDir, 'wechat-moderation.json') : null });
   ctx.runners.ctx = ctx;
+  ctx.hosted = new HostedService(ctx);
   ctx.publicRoles = new PublicRoleService(ctx);
   rt.agentLoop = (ctx.shells && ctx.shells.config.agentLoop) || DEFAULT_AGENT_LOOP;
   if (agentic(rt.w) && cfg.tickMs < 4 * rt.agentLoop.marginSec * 1000) {

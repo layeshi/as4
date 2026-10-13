@@ -301,6 +301,7 @@ function createOpenAIProvider(cfg, deps) {
       const reasoning = u?.completion_tokens_details?.reasoning_tokens;
       if (out.usage && Number.isFinite(reasoning)) out.usage.reasoning = reasoning;
       if(out.usage&&Number.isFinite(u?.prompt_tokens_details?.cached_tokens))out.usage.cacheRead=u.prompt_tokens_details.cached_tokens;
+      else if(out.usage&&Number.isFinite(u?.prompt_cache_hit_tokens))out.usage.cacheRead=u.prompt_cache_hit_tokens;
       return out;
     },
     /** 原生工具调用（SPEC-P2 §9.3）：不发 jsonMode；extraBody 不能覆盖 tools；raw 原样传回（含推理内容） */
@@ -331,6 +332,7 @@ function createOpenAIProvider(cfg, deps) {
       const reasoning = u?.completion_tokens_details?.reasoning_tokens;
       if (out.usage && Number.isFinite(reasoning)) out.usage.reasoning = reasoning;
       if(out.usage&&Number.isFinite(u?.prompt_tokens_details?.cached_tokens))out.usage.cacheRead=u.prompt_tokens_details.cached_tokens;
+      else if(out.usage&&Number.isFinite(u?.prompt_cache_hit_tokens))out.usage.cacheRead=u.prompt_cache_hit_tokens;
       return out;
     },
   };

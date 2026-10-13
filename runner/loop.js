@@ -383,6 +383,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
     if (deps.beforeModel && !(await deps.beforeModel(agentId, { chars, perception: latest }))) {
       log.info('本刻不调用模型（预算 / 匀速 / 暂停）。');
       ended = 'budget';
+      if (p4 && rec.turns === 0) firstModelFailed = true;
       break;
     }
     const turn = rec.turns + 1;

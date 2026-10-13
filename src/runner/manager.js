@@ -12,6 +12,7 @@ import { UsageStore } from './usage.js';
 import { earthDay } from '../shells/budget.js';
 import { agentic, tokenized } from '../e2/facade.js';
 import { waitCore } from '../http/agent.js';
+import { reservationMicro } from '../hosted/billing.js';
 import { toolDefs } from '../../runner/loop.js';
 
 const hash = (s) => createHash('sha256').update(s).digest('hex');
@@ -23,8 +24,14 @@ const integer = (v, fallback, min, max) => {
   if (!Number.isInteger(v) || v < min || v > max) throw new RunnerError(`运行参数必须是 ${min}–${max} 范围内的整数。`);
   return v;
 };
-export function runnerConfig(raw, previous = {}) {
+export function runnerConfig(raw, previous = {}, hosted = null) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new RunnerError('请填写模型配置。');
+  if (raw.hosted === true) {
+    if (!hosted?.model) throw new RunnerError('平台托管尚未开放或模型未配置，请使用自己的模型。');
+    return { hosted: true, model: hosted.model, toolMode: 'native', actionTools: 'typed',
+      actEveryTicks: integer(raw.actEveryTicks, 1, 1, 100), historyRounds: integer(raw.historyRounds, 6, 0, 20),
+      timeoutMs: integer(raw.timeoutMs, 120000, 1000, 120000) };
+  }
   const provider = raw.provider;
   if (!PROVIDER_NAMES.includes(provider)) throw new RunnerError('请选择支持的模型接口类型。');
   const text = (k, max = 500) => {
@@ -159,6 +166,7 @@ export class RunnerManager {
     };
   }
   async prepare(raw, previous) {
+    if (raw?.hosted === true) throw new RunnerError('平台托管不提供用户连接测试，避免产生额外扣费。');
     const config = runnerConfig(raw, previous);
     try {
       if (config.provider !== 'mock') await checkEndpoint(config.baseURL, this.cfg.allowLocalModels === true);
@@ -208,6 +216,7 @@ export class RunnerManager {
     return this.view(id);
   }
   async attachManaged(id,accountId,config,enabled=false,authorize=()=>{}) {
+    if(config.hosted)config=this.ctx.hosted.runnerChoice(config);
     const link=relation(this.rt.w,id), a=this.rt.w.agents[id];
     if(!link||link.managerAccountId!==accountId||!['awake','dormant'].includes(a?.status))throw new RunnerError('居民当前不可配置。',403);
     const revision=link.ownershipRevision;
@@ -242,29 +251,61 @@ export class RunnerManager {
     if (['dead', 'retired'].includes(this.rt.w.agents[id].status)) throw new RunnerError('已长眠或归隐的居民不能启动。');
     if (this.jobs.has(id)) return this.view(id);
     const r = this.records[id]; r.enabled = true; this.persist();
+    const hosted = r.config.hosted ? this.ctx.hosted : null;
+    if (hosted && !hosted.available()) {
+      this.states.set(id, { status: 'hosted_unavailable', logs: [] });
+      return this.view(id);
+    }
     if (!this.serverURL || this.rt.w.paused) return this.view(id);
+    const hostedConfig = hosted ? structuredClone(hosted.config) : null;
+    const config = hosted ? { ...r.config, ...hosted.resolved(hostedConfig), timeoutMs: r.config.timeoutMs } : r.config;
+    let reservation = null, balanceLow = false;
     const controller = new AbortController();
     const state = { ...this.states.get(id), status: 'starting', lastError: null, logs: [] };
     if (this.rt.w.premise === 6) { delete state.nextWakeTick; delete state.wakeEvery; }
     this.states.set(id, state);
-    const log = makeLogger(id, { secrets: [r.token, r.config.apiKey], quiet: true, out: () => {}, err: () => {} });
+    const log = makeLogger(id, { secrets: [r.token, config.apiKey], quiet: true, out: () => {}, err: () => {} });
     const promise = Promise.resolve().then(async () => {
-      const provider = await this.provider(r.config);
-      return runAgent({ ...r.config, token: r.token, server: this.serverURL, lang: this.rt.w.agents[id].lang, name: this.rt.w.agents[id].name }, {
+      const provider = await (hosted ? hosted.provider(config) : this.provider(config));
+      const client = this.rt.w.premise === 6 ? managedClient(this.ctx,id,()=>this.records[id]===r&&this.valid(id)&&!this.rt.w.paused,controller.signal) : null;
+      if (hosted && client) {
+        const wake = client.wake;
+        client.wake = async args => {
+          if (hosted.billing.available(r.accountId) < reservationMicro(0, hostedConfig.maxOutputTokens, hostedConfig.pricesMicro)) {
+            balanceLow = true; state.status = 'hosted_balance_low';
+            return { ok: false, status: 409, json: { error: { code: 'hosted_balance_low' } } };
+          }
+          balanceLow = false; state.status = 'running';
+          return wake(args);
+        };
+      }
+      return runAgent({ ...config, token: r.token, server: this.serverURL, lang: this.rt.w.agents[id].lang, name: this.rt.w.agents[id].name }, {
         signal: controller.signal, provider, log,
-        ...(this.rt.w.premise===6?{client:managedClient(this.ctx,id,()=>this.records[id]===r&&this.valid(id)&&!this.rt.w.paused,controller.signal)}:{}),
+        ...(client ? { client } : {}),
+        ...(hosted ? { beforeModel: (_agentId, { chars }) => {
+          if (controller.signal.aborted) return false;
+          reservation = hosted.billing.reserve(r.accountId, id, chars, hostedConfig);
+          balanceLow = !reservation;
+          if (balanceLow) state.status = 'hosted_balance_low';
+          return !!reservation;
+        } } : {}),
         ...(tokenized(this.rt.w) ? { refundWake: async wakeId => { if(this.rt.w.premise===6&&(this.records[id]!==r||!this.valid(id)))return {ok:false};return this.rt.exec('meter', { op: 'refund', agentId: id, wakeId, day: earthDay(Date.now(), this.cfg.shellTz || 'Asia/Shanghai').key }).result; } } : {}),
         onUsage: (_agentId, usage, meta) => {
+          if (hosted) {
+            hosted.billing.settle(reservation, usage, { ...meta, cancelled: meta.cancelled || controller.signal.aborted });
+            reservation = null;
+          }
           // A request we cancelled ourselves (pause, saving new settings, shutdown, the tick boundary) is not a provider failure.
           if (!meta.ok && (controller.signal.aborted || meta.cancelled)) return;
-          this.usage.record(id, usage, meta, r.config.model);
-          if(this.rt.w.premise===6)this.usage.record(`${id}@${r.accountId}`,usage,meta,r.config.model);
+          this.usage.record(id, usage, meta, config.model);
+          if(this.rt.w.premise===6)this.usage.record(`${id}@${r.accountId}`,usage,meta,config.model);
         },
         waitWake: this.rt.w.premise===6?async args=>this.records[id]===r&&this.valid(id)?managedClient(this.ctx,id,()=>this.records[id]===r&&this.valid(id),controller.signal).wait(args):{ok:false,status:401}:this.waitWake(id),
         onWaking: (_agentId, rec) => { if(this.rt.w.premise!==6)this.traces?.append(id, rec, r.config.model); }, // 观察用的轨迹（第二前提，SPEC-P2 §14.1）；没有 traces 时什么也不做
         onState: (event) => {
           if (controller.signal.aborted) return;
           Object.assign(state, event);
+          if (balanceLow) state.status = 'hosted_balance_low';
           if (event.lastActionAt) state.logs = [...state.logs, { at: event.lastActionAt, actions: event.actions }].slice(-10);
         },
       });
@@ -279,9 +320,14 @@ export class RunnerManager {
         state.status = 'error'; state.lastError = '运行失败，请检查模型配置。'; r.enabled = false;
         try { this.persist(); } catch { state.lastError = '运行状态无法保存，请检查服务器数据目录。'; }
       }
-    }).finally(() => this.jobs.delete(id));
+    }).finally(() => { if (hosted) hosted.billing.release(reservation); this.jobs.delete(id); });
     this.jobs.set(id, { controller, promise });
     return this.view(id);
+  }
+  async refreshHosted() {
+    const ids = Object.keys(this.records).filter(id => this.records[id].config.hosted && this.records[id].enabled);
+    await Promise.all(ids.map(id => this.stop(id)));
+    for (const id of ids) if (this.records[id]?.config.hosted && this.records[id].enabled && this.valid(id) && !this.closing) this.start(id);
   }
   async stop(id) {
     const job = this.jobs.get(id);

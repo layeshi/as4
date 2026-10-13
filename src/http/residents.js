@@ -131,7 +131,7 @@ export const residentRoutes=[
     sendJson(res,200,{transfers:Object.values(ctx.rt.w.access.transfers).filter(t=>t.to===actor.id||t.from===actor.id).map(t=>({id:t.id,agentId:t.agentId,name:ctx.rt.w.agents[t.agentId].name,direction:t.to===actor.id?'incoming':'outgoing',expiresAt:t.expiresAt,status:t.status}))});
   })],
   ['POST',/^\/api\/account\/transfers\/([^/]+)\/accept$/,wrap(async({res,ctx,actor,params,body,authorize})=>{
-    const config=runnerConfig(body.config);authorize();
+    const config=body.config?.hosted===true?ctx.hosted.runnerChoice(body.config):runnerConfig(body.config);authorize();
     const invitation=ctx.rt.w.access.transfers[params[0]];if(invitation&&ctx.accounts.get(invitation.from)?.status!=='active')fail(409,'conflict','原管理账号当前不可用。');
     const result=command(ctx,actor,{op:'accept_transfer',transferId:params[0],dailyCap:body.dailyCap,model:config.model,now:Date.now(),requestId:body.requestId});
     const check=()=>{authorize();if(owned(ctx,actor,result.agentId).ownershipRevision!==result.ownershipRevision)fail(409,'conflict','管理权已再次变更。');};
@@ -146,7 +146,7 @@ export const residentRoutes=[
     const id=params[0],r=owned(ctx,actor,id),revision=r.ownershipRevision;
     const check=()=>{authorize();if(owned(ctx,actor,id).ownershipRevision!==revision)fail(409,'conflict','管理权已变更。');};
     if(body.op==='test'){const config=await ctx.runners.prepare(body.config,ctx.runners.valid(id)?ctx.runners.records[id]?.config:{});check();sendJson(res,200,{ok:true,model:config.model});}
-    else if(body.op==='save'){const config=runnerConfig(body.config,ctx.runners.valid(id)?ctx.runners.records[id]?.config:{});await ctx.runners.attachManaged(id,actor.id,config,false,check);sendJson(res,200,ctx.runners.view(id));}
+    else if(body.op==='save'){const previous=ctx.runners.valid(id)?ctx.runners.records[id]?.config:{};const config=body.config?.hosted===true?ctx.hosted.runnerChoice(body.config,previous):runnerConfig(body.config,previous);await ctx.runners.attachManaged(id,actor.id,config,false,check);sendJson(res,200,ctx.runners.view(id));}
     else if(body.op==='start'){check();sendJson(res,200,ctx.runners.start(id));}
     else if(body.op==='pause'){await ctx.runners.pause(id);check();sendJson(res,200,ctx.runners.view(id));}
     else if(body.op==='remove'){await ctx.runners.remove(id);check();sendJson(res,200,{ok:true});}
