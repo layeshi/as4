@@ -865,3 +865,25 @@ ul.reading { list-style: none; padding-left: 0; }
 .prayer-reply, .invention-review { margin-top: .75rem; }
 
 .resident-avatar{width:28px;height:28px;object-fit:cover;border-radius:50%;vertical-align:middle;margin-right:8px}.resident-avatar.large{width:80px;height:80px}.public-role-map text{font-size:12px;fill:#d3d8b2;paint-order:stroke;stroke:#172527;stroke-width:3px}.resident-map-avatar{clip-path:circle(9px at 0px -7px)}
+
+/* Voluntary support page and administrator QR previews. */
+.foot a[href="/support.html"] { color: var(--accent); }
+.support-header, .support-main { width: min(100%, 960px); margin: 0 auto; padding: 24px; }
+.support-header, .support-header nav { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+.support-header { justify-content: space-between; border-bottom: 1px solid var(--line); }
+.support-page a { color: var(--accent); }
+.support-main { padding-top: 40px; padding-bottom: 64px; }
+.support-main h1 { font-size: clamp(24px, 5vw, 36px); }
+.support-statement { max-width: 76ch; margin: 24px 0 32px; font-size: 16px; line-height: 1.9; }
+.support-statement p + p { margin-top: 20px; }
+.support-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 24px; }
+.support-qr-card { min-width: 0; margin: 0; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.support-qr-image { display: block; width: auto; max-width: min(100%, 320px); height: auto; margin: 0 auto; }
+.support-qr-card figcaption { margin-top: 16px; text-align: center; font-weight: 600; }
+.support-qr-card figcaption span { display: block; font-weight: 400; }
+.support-qr-preview { margin: 16px 0; }
+.support-qr-card input[type="file"] { width: 100%; min-width: 0; }
+@media (max-width: 480px) {
+  .support-header, .support-main { padding: 20px 16px; }
+  .support-qr-card { padding: 16px; }
+}

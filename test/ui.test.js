@@ -308,6 +308,11 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
         assert.equal(reply.status, 401, '回应路由存在且要求登录会话');
         continue;
       }
+      if (path === '/api/admin/support/qr') { // 插值的收款方式：实际入口是 POST / DELETE /api/admin/support/qr/:kind，要求管理员会话。
+        const removed = await env.call('/api/admin/support/qr/wechat', { method: 'DELETE', body: {}, headers: { 'X-Houren-Request': '1' } });
+        assert.equal(removed.status, 401, '收款码路由存在且要求登录会话');
+        continue;
+      }
       if (path === '/api/me/wake') { assert.equal((await env.call(path, { method: 'POST', body: {} })).status, 404); continue; } // P4/P5-only wake; covered by token HTTP tests.
       if (path === '/api/owner/cap') { assert.equal((await env.call(path, { method: 'POST', body: {} })).status, 404); continue; } // SPEC-P4 T22: P4-only, tested separately.
       if (['materials','services','demands','orders','research','observations','projects','project'].some(k => path === `/api/public/${k}`)) { assert.equal((await env.call(path)).status, 404); continue; } // Material-world routes: positive coverage in p5-http.test.js and project-feedback.test.js.

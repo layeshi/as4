@@ -4,6 +4,7 @@ import { systemTextSource } from '../wechat/system-texts.js';
 import { wechatRoutes } from './wechat.js';
 import { archiveRoutes } from './archives.js';
 import { residentRoutes } from './residents.js';
+import { supportRoutes } from './support.js';
 import { PublicRoleService } from '../runner/public-roles.js';
 import { accountWrap } from './accounts.js';
 import { sendJson } from './util.js';
@@ -59,7 +60,7 @@ const roleAdminRoutes = [
   ['GET','/api/admin/public-model',accountWrap(({res,ctx})=>sendJson(res,200,ctx.publicRoles.view()),{admin:true})],
   ['POST','/api/admin/public-model',accountWrap(({res,ctx,body})=>{try{sendJson(res,200,ctx.publicRoles.save(body));}catch(e){sendJson(res,400,{error:{code:'invalid_config',message:e.message}});}},{admin:true})],
 ];
-const ROUTES = [...wechatRoutes,...archiveRoutes,...residentRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
+const ROUTES = [...wechatRoutes,...archiveRoutes,...residentRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
 
 function match(method, pathname) {
   for (const [m, pattern, handler] of ROUTES) {

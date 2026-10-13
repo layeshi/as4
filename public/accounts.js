@@ -104,6 +104,7 @@ function profile(modal) {
   if (u.role === 'admin') actions.append(button(tr('托管用量', 'Hosted usage'), openAdminUsage));
   if (u.role === 'admin') actions.append(button(tr('服务器状态', 'Server status'), openServerStatus));
   if (u.role === 'admin') actions.append(button(tr('实验运行', 'Experiment'), openExperiment));
+  if (u.role === 'admin') actions.append(button(tr('打赏收款码', 'Tip QR codes'), openSupportQr));
   if (u.role === 'admin') actions.append(button(tr('发明认定', 'Invention review'), () => openModal(tr('发明认定', 'Invention review'), 'wide').body.append(adminInventionsPanel())));
   actions.append(button(tr('我的祈愿操作记录', 'My prayer actions'), () => openModal(tr('我的祈愿操作记录', 'My prayer actions'), 'wide').body.append(prayerAuditPanel())));
   const logoutMessage = h('p', { role: 'status', class: 'error' });
@@ -126,6 +127,66 @@ function profile(modal) {
     return r;
   });
   modal.body.append(change);
+}
+function openSupportQr() {
+  const modal = openModal(tr('打赏收款码', 'Tip QR codes'), 'wide');
+  const grid = h('div', { class: 'support-grid' });
+  const message = h('p', { role: 'status', 'aria-live': 'polite', class: 'account-message' });
+  const slots = [], controls = [];
+  let busy = false;
+  async function refresh() {
+    const r = await api('/api/public/support');
+    if (!r.ok) throw Error(errorText(r, tr('无法读取收款码。', 'Unable to load QR codes.')));
+    for (const { kind, caption, preview, remove } of slots) {
+      preview.replaceChildren(r.json.qr[kind]
+        ? h('img', { class: 'support-qr-image', src: r.json.qr[kind], alt: caption, onError: () => preview.replaceChildren(h('p', { class: 'error' }, tr('预览加载失败，请刷新。', 'Preview failed to load. Please refresh.'))) })
+        : h('p', { class: 'muted' }, tr('未设置', 'Not set')));
+      remove.dataset.configured = String(!!r.json.qr[kind]);
+    }
+  }
+  async function run(action, success = '') {
+    if (busy) return;
+    busy = true;
+    for (const control of controls) control.disabled = true;
+    message.className = 'account-message';
+    message.textContent = tr('正在处理…', 'Working…');
+    try { await action(); message.textContent = success; }
+    catch (e) { message.className = 'account-message error'; message.textContent = e.message || tr('请求失败，请重试。', 'Request failed. Please retry.'); }
+    finally {
+      busy = false;
+      for (const control of controls) control.disabled = false;
+      for (const { remove } of slots) remove.disabled = remove.dataset.configured !== 'true';
+    }
+  }
+  for (const [kind, caption] of [['wechat', tr('微信收款码', 'WeChat QR code')], ['alipay', tr('支付宝收款码', 'Alipay QR code')]]) {
+    const preview = h('div', { class: 'support-qr-preview' });
+    const file = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp' });
+    const path = `/api/admin/support/qr/${kind}`;
+    const upload = button(tr('上传', 'Upload'), () => run(async () => {
+      const image = file.files[0];
+      if (!image) throw Error(tr('请先选择图片。', 'Choose an image first.'));
+      if (image.size > 2 * 1024 * 1024) throw Error(tr('图片不能超过2 MiB。', 'Image must be at most 2 MiB.'));
+      const r = await fetch(path, { method: 'POST', headers: { 'X-Houren-Request': '1', 'Content-Type': image.type || 'application/octet-stream' }, body: image });
+      let json = null;
+      try { json = await r.json(); } catch { /* Use the fallback message for non-JSON errors. */ }
+      if (!r.ok) throw Error(errorText({ json }, tr('上传失败，请重试。', 'Upload failed. Please retry.')));
+      file.value = '';
+      await refresh();
+    }, tr('收款码已更新。', 'QR code updated.')), true);
+    const remove = button(tr('移除', 'Remove'), () => run(async () => {
+      const r = await request(path, {}, 'DELETE');
+      if (!r.ok) throw Error(errorText(r, tr('移除失败，请重试。', 'Removal failed. Please retry.')));
+      await refresh();
+    }, tr('收款码已移除。', 'QR code removed.')));
+    slots.push({ kind, caption, preview, remove });
+    controls.push(file, upload, remove);
+    grid.append(h('section', { class: 'support-qr-card' }, h('h3', null, caption), preview,
+      h('label', { class: 'field' }, h('span', null, tr('选择图片', 'Choose image')), file), h('div', { class: 'form-actions' }, upload, remove)));
+  }
+  const reload = button(tr('刷新预览', 'Refresh previews'), () => run(refresh));
+  controls.push(reload);
+  modal.body.append(h('p', { class: 'muted' }, tr('仅用于展示自愿打赏收款码，不提供任何游戏内回报。支持静态 JPEG、PNG、WebP，最多2 MiB、16MP。', 'Display voluntary tip QR codes only; tips bring no in-world reward. Static JPEG, PNG or WebP, up to 2 MiB and 16 MP.')), grid, message, reload);
+  run(refresh);
 }
 function openExperiment() {
   const modal = openModal(tr('实验运行', 'Experiment'));
