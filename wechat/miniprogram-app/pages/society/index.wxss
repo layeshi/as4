@@ -1,1 +1,12 @@
-page{height:100%;background:#0c1725}.canvas{width:100vw;height:100vh;display:block}.editor-mask{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:flex-start;padding-top:18vh;z-index:10}.editor{margin:0 24px;padding:20px;background:#17283b;color:#f7ead7;border-radius:18px;width:calc(100% - 88px)}.editor-title{margin-bottom:12px;font-size:16px}.editor input,.editor textarea{box-sizing:border-box;width:100%;background:#0c1725;padding:12px;border-radius:8px;color:#fff}.editor input{height:48px}.editor textarea{height:160px}.editor button{margin-top:14px;background:#e5bd79;color:#17283b}.failure{position:fixed;inset:30% 24px auto;color:#fff}
+/* 原生输入层沿用 Canvas 的月下城色板与尺寸。 */
+page { height: 100%; background: #0A1520; }
+.canvas { width: 100vw; height: 100vh; display: block; }
+.editor-mask { position: fixed; inset: 0; background: rgba(5, 10, 16, 0.55); display: flex; align-items: flex-start; padding-top: 18vh; z-index: 10; }
+.editor { box-sizing: border-box; margin: 0 16px; padding: 16px; background: #132433; color: #EDEAE3; border: 1px solid #233A4F; border-radius: 16px; width: calc(100% - 32px); }
+.editor-title { margin-bottom: 12px; font-size: 17px; line-height: 24px; font-weight: 600; }
+.editor input, .editor textarea { box-sizing: border-box; width: 100%; background: #1A2E40; padding: 12px; border: 1px solid #33506B; border-radius: 12px; color: #EDEAE3; font-size: 16px; line-height: 26px; }
+.editor input { height: 46px; }
+.editor textarea { height: 160px; }
+.editor button, .failure button { margin-top: 12px; padding: 0 16px; background: #FFEDCE; color: #19364D; border-radius: 14px; height: 46px; line-height: 46px; font-size: 14px; }
+.editor button::after, .failure button::after { border: 0; }
+.failure { position: fixed; inset: 30% 16px auto; padding: 16px; border: 1px solid #233A4F; border-radius: 16px; background: #132433; color: #EDEAE3; font-size: 16px; line-height: 26px; }

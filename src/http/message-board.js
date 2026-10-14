@@ -9,6 +9,7 @@ function write(ctx, actor, change) {
   return change();
 }
 const view = (ctx, actor, entry) => ctx.messageBoard.view(entry, ctx.accounts, actor);
+export { write as writeMessage, view as messageView };
 export const messageBoardRoutes = [
   ['GET', '/api/messages', wrap(({ res, ctx, actor, url }) => {
     sendJson(res, 200, ctx.messageBoard.list(ctx.accounts, actor, { cursor: url.searchParams.get('cursor') }));

@@ -13,12 +13,13 @@ const screens = require('./screens/index');
 const serifChars = require('./ui/serif-chars');
 const modelPresets = require('./utils/model-presets');
 const { GAME_NAME } = require('./copy');
+const { MessageBoard } = require('./messages');
 const { C, font } = theme;
 
 const TABS = [['city', '观测', 'city'], ['residents', '居民', 'residents'], ['archive', '档案', 'archive'], ['account', '我的', 'me']];
 const TAB_IDS = TABS.map(t => t[0]);
 // 不访问网络、也不改数据的动作，处理中也可以点。
-const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider', 'preset', 'modelChoice']);
+const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider', 'preset', 'modelChoice', 'messageExpand']);
 const PREFS_KEY = 'houren.prefs';
 const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null;
 const caf = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
@@ -39,6 +40,7 @@ class SocietyGame {
     this.pendingCount = 0; this.quickTries = 0; this.mapVersion = 0; this.dismissed = {};
     this.moderation = {}; this.loginRequired = {};
     this.navigation = 0; this.readVersions = {};
+    this.messageBoard = new MessageBoard(this);
     this.modelPresets = modelPresets.bundled;
     this.cityMap = new CityMap(() => this.wx.createCanvas());
     this.filterScroller = new Scroller(); this.horizontalAreas = [];
@@ -86,7 +88,10 @@ class SocietyGame {
     return this.refresh();
   }
   loadFont() {
-    if (!serifChars || !this.wx.loadFont) return;
+    if (!serifChars) return;
+    // 普通小程序没有小游戏的同步字体加载能力时，固定标题使用系统衬线字体。
+    theme.setSerif(null, serifChars);
+    if (!this.wx.loadFont) return;
     try { const family = this.wx.loadFont('fonts/HeirsSerif.ttf'); if (family) theme.setSerif(family, serifChars); } catch (_) { /* 用系统字体 */ }
   }
   hide() {
@@ -100,6 +105,7 @@ class SocietyGame {
   }
   clearSecrets() {
     this.editing = ''; this.mergePreview = null;
+    this.messageBoard.stash();
     delete this.form.apiKey; delete this.form.password; delete this.form.confirmPassword;
     if (this.wx.hideKeyboard) this.wx.hideKeyboard();
     this.invalidate();
@@ -142,6 +148,13 @@ class SocietyGame {
     clearTimeout(this.timer); this.timer = null;
     if (!this.entered) { this.render(); return; }
     if (this.refreshing) return;
+    if (['messages', 'messageThread'].includes(this.tab)) {
+      this.refreshing = true; this.render();
+      try { await this.messageBoard.refresh(); }
+      catch (error) { this.messageBoard.fail(error); this.messageBoard.error = error.message; this.showToast(error.message, 'error'); }
+      finally { this.refreshing = false; this.invalidate(); this.render(); this.schedule(); }
+      return;
+    }
     const ticket = this.beginRead('refresh');
     this.refreshing = true; this.render();
     try {
@@ -196,6 +209,7 @@ class SocietyGame {
     if (!this.readCurrent('account', ticket)) return;
     this.user = result.user; this.registrationOpen = result.registrationOpen;
     this.wechatLinked = status.linked; this.wechatEnabled = status.enabled; this.wechatVerified = status.verified;
+    this.messageBoard.sync();
     this.linked = mine?.managed || []; this.created = mine?.created || [];
     this.rememberModeration('account', mine);
   }
@@ -248,6 +262,7 @@ class SocietyGame {
 
   async dispatch(action) {
     if (!action) return;
+    if (this.busy && action.type === 'field' && action.name === 'messageText') return;
     if (this.busy && !UI_ONLY.has(action.type)) return;
     if (!this.entered && !['about', 'back'].includes(action.type) && !(this.tab === 'startup' && action.type === 'start')) return;
     if (action.type === 'field') {
@@ -267,6 +282,7 @@ class SocietyGame {
   }
   async handle(a) {
     const f = this.form;
+    if (a.type === 'messages' || a.type?.startsWith('message')) return this.messageBoard.handle(a);
     switch (a.type) {
       case 'start': this.entered = true; this.tab = 'city'; this.stack = []; await Promise.all([this.refresh({ full: true }), this.loadAccount().catch(() => {})]); break;
       case 'tab':
@@ -309,7 +325,7 @@ class SocietyGame {
       case 'auth':
         if (!f.accepted) throw new Error('请先阅读并同意隐私说明');
         await api.request('/api/account/login', { method: 'POST', timeout: 30000, data: { username: (f.username || '').trim(), password: f.password || '' } });
-        f.password = ''; this.navigation++; this.owner = null; this.residentId = ''; this.moderation = {}; this.loginRequired = {}; await this.loadAccount(); this.back(); this.showToast('已登录网站账号', 'ok');
+        f.password = ''; this.navigation++; this.owner = null; this.residentId = ''; this.moderation = {}; this.loginRequired = {}; this.messageBoard.reset(); await this.loadAccount(); this.back(); this.showToast('已登录网站账号', 'ok');
         break;
       case 'linkAccount': this.push('link'); break;
       case 'webLogin': this.push('webLogin'); break;
@@ -327,6 +343,7 @@ class SocietyGame {
         const ticket = this.mergePreview.ticket;
         await api.request('/api/wechat/merge/confirm', { method: 'POST', timeout: 60000, data: { ticket, confirm: true } });
         this.clearSecrets(); this.navigation++; this.owner = null; this.residentId = '';
+        this.messageBoard.reset();
         this.moderation = {}; this.loginRequired = {}; this.stack = []; this.tab = 'account';
         await this.loadAccount(); this.showToast('账号已合并，请使用网站账号登录', 'ok');
         break;
@@ -346,6 +363,7 @@ class SocietyGame {
         this.navigation++; // Old readers must not restore a previous login's moderation state.
         this.refreshing = false; // A fresh read may replace an outstanding read from the previous login.
         this.moderation = {}; this.loginRequired = {}; this.updatePending();
+        this.messageBoard.reset();
         await this.loadAccount(); this.map = null; await this.refresh({ full: true });
         this.notice = '微信登录成功'; this.showToast('微信登录成功', 'ok');
         break;
@@ -355,6 +373,7 @@ class SocietyGame {
         const revocation = api.request('/api/account/logout', { method: 'POST', data: {} });
         api.clearSession();
         this.user = null; this.owner = null; this.linked = []; this.created = []; this.wechatVerified = false;
+        this.messageBoard.reset();
         this.loginRequired = {};
         this.form = {}; this.residentId = ''; this.letterDraft = ''; this.createDraft = ''; this.letterRequestId = null; this.createRequestId = null;
         this.stack = []; this.sheet = null; this.tab = 'account'; this.moderation.owner = 0; this.moderation.account = 0;

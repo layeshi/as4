@@ -4,4 +4,5 @@ const { city, placeSheet } = require('./city');
 const { residents, resident } = require('./residents');
 const { archive, detail } = require('./archive');
 const { account, link, webLogin, mergeAccount, owner, entry, settings, about } = require('./me');
-module.exports = { startup, city, residents, resident, archive, detail, account, link, webLogin, mergeAccount, owner, entry, settings, about, sheet: placeSheet };
+const { messages, messageThread, messageEditor } = require('./messages');
+module.exports = { startup, city, residents, resident, archive, detail, account, link, webLogin, mergeAccount, owner, entry, settings, about, messages, messageThread, messageEditor, sheet: placeSheet };
