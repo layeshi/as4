@@ -23,7 +23,8 @@
 .message-meta { margin: 4px 0 0; font-size: 12px; font-variant-numeric: tabular-nums; }
 .message-text { margin: 16px 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; }
 .message-deleted { padding: 12px 16px; border: 1px dashed var(--line); border-radius: var(--radius); }
-.message-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.message-actions { display: flex; flex-wrap: nowrap; gap: 8px; margin: 8px 0; overflow-x: auto; }
+.message-actions > .btn { flex: 0 0 auto; white-space: nowrap; }
 .message-target { margin: 12px 0 0; font-size: 13px; overflow-wrap: anywhere; }
 .message-replies { margin-top: 16px; padding: 0 16px; border-left: 1px solid var(--line); background: var(--panel-2); border-radius: var(--radius); }
 .message-reply { padding: 16px 0; border-top: 1px solid var(--line-soft); }

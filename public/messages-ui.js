@@ -95,11 +95,12 @@ export async function mountMessageBoard({ header, head, message, content }) {
       },
     });
   }
-  function entry(item, threadId, reply = false) {
+  function entry(item, threadId, reply = false, extraActions = []) {
     const actions = [];
     actions.push(btn(tr('回复', 'Reply'), () => openEditor('reply', item, threadId)));
     if (item.canEdit) actions.push(btn(tr('编辑', 'Edit'), () => openEditor('edit', item, threadId)));
     if (item.canDelete) actions.push(btn(tr('删除', 'Delete'), () => openEditor('delete', item, threadId)));
+    actions.push(...extraActions);
     return h('article', { class: reply ? 'message-reply' : 'message-entry', dataset: { messageId: item.id } },
       h('header', { class: 'message-author' }, initialBadge(item.author), h('div', { class: 'message-who' }, h('h3', null, item.author.displayName),
         h('p', { class: 'message-meta muted' }, h('time', { datetime: item.createdAt }, time(item.createdAt)), item.editedAt && !item.deletedAt ? ` · ${tr('已编辑', 'Edited')}` : ''))),
@@ -140,7 +141,7 @@ export async function mountMessageBoard({ header, head, message, content }) {
       for (const item of state.messages) replies.append(entry(item, root.id, true));
       if (state.nextCursor && !state.loading) replies.append(btn(tr('加载更多回复', 'Load more replies'), () => fetchReplies(root.id, true)));
     }
-    return h('div', { class: 'message-thread' }, entry(root, root.id), toggle, replies);
+    return h('div', { class: 'message-thread' }, entry(root, root.id, false, [toggle]), replies);
   }
   function render() {
     // 局部请求结束时仍保留正在输入的草稿、焦点和光标位置。
