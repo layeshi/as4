@@ -319,6 +319,16 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
       if (path === '/api/public/avatars' || path === '/api/public/worlds') continue; // ID-based P6 endpoints are exercised by p6.test.js.
       if (path === '/api/public') continue; // Dynamic P5 collection names are covered by p5-http.test.js.
       if (path === '/api/public/stream') continue; // SSE，长连接
+      if (path === '/api/wechat/qr' || path === '/api/wechat/qr/image') {
+        // The client appends an operation or scene; these prefixes are not GET routes.
+        for (const op of ['create', 'status', 'cancel', 'consume', 'scan', 'confirm']) {
+          const reply = await env.call(`/api/wechat/qr/${op}`, { method: 'POST', body: {} });
+          assert.equal(reply.status, 403, `${op} 路由存在并执行 CSRF 验证`);
+        }
+        const image = await env.call('/api/wechat/qr/image/' + '0'.repeat(32));
+        assert.equal(image.status, 410, '二维码图片路由存在且拒绝未知凭据');
+        continue;
+      }
       if (path === '/api/account/prayers') { // 插值的祈祷编号：实际入口是带会话的 POST，而非集合 GET。
         const reply = await env.call('/api/account/prayers/pr1/reply', { method: 'POST', body: { text: 'reply' }, headers: { 'X-Houren-Request': '1' } });
         assert.equal(reply.status, 401, '回应路由存在且要求登录会话');
