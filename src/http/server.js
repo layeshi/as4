@@ -23,6 +23,8 @@ import { ExperimentControl } from '../experiment-control.js';
 import { AccountStore } from '../accounts/store.js';
 import { ServerStatusSampler, registeredUserCounts } from '../server-status.js';
 import { accountRoutes, accountLimits } from './accounts.js';
+import { MessageBoard } from '../message-board.js';
+import { messageBoardRoutes, messageBoardLimits } from './message-board.js';
 import { prayerRoutes } from './prayers.js';
 import { RunnerManager } from '../runner/manager.js';
 import { ShellManager } from '../shells/manager.js';
@@ -66,7 +68,7 @@ const roleAdminRoutes = [
   ['GET','/api/admin/public-model',accountWrap(({res,ctx})=>sendJson(res,200,ctx.publicRoles.view()),{admin:true})],
   ['POST','/api/admin/public-model',accountWrap(({res,ctx,body})=>{try{sendJson(res,200,ctx.publicRoles.save(body));}catch(e){sendJson(res,400,{error:{code:'invalid_config',message:e.message}});}},{admin:true})],
 ];
-const ROUTES = [...wechatWebLoginRoutes,...wechatRoutes,...archiveRoutes,...residentRoutes,...hostedRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
+const ROUTES = [...messageBoardRoutes, ...wechatWebLoginRoutes,...wechatRoutes,...archiveRoutes,...residentRoutes,...hostedRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
 
 function match(method, pathname) {
   for (const [m, pattern, handler] of ROUTES) {
@@ -149,6 +151,8 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     rt,
     cfg,
     accounts: new AccountStore(cfg.dataDir),
+    messageBoard: new MessageBoard(cfg.dataDir),
+    messageBoardLimits: messageBoardLimits(),
     wechat: new WechatService(cfg),
     snapshots: new WorldSnapshots(rt),
     accountLimits: accountLimits(),

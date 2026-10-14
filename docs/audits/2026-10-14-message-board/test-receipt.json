@@ -1,0 +1,25 @@
+{
+  "baseline": {
+    "tests": 1727,
+    "pass": 1726,
+    "fail": 0,
+    "skipped": 1,
+    "duration_ms": 154776.169542
+  },
+  "targeted": {
+    "tests": 33,
+    "pass": 33,
+    "fail": 0,
+    "skipped": 0,
+    "duration_ms": 3043.73125
+  },
+  "full": {
+    "tests": 1740,
+    "pass": 1739,
+    "fail": 0,
+    "skipped": 1,
+    "duration_ms": 155429.793167
+  },
+  "base": "f22ff0c",
+  "runtime": "Node.js v22.14.0"
+}

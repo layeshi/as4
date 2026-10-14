@@ -200,6 +200,7 @@ function applyLabels() {
   els['btn-enter'].textContent = S.state?.world.premise===6 ? '创建居民' : t('enter');
   els['btn-back'].textContent = S.state?.world.premise===6 ? '我的居民' : t('backstage');
   els['btn-lang'].textContent = t('langSwitch');
+  document.getElementById('message-board-link').textContent = getLang() === 'en' ? 'Message board' : '留言板';
   els.foot.textContent = `${t('aiContent')} · ${t('keyboardHint')}`;
   els.foot.append(' · ', h('a', { href: '/support.html' }, '支持我们 / Support'));
   for (const o of els['color-mode'].options) o.textContent = t(o.value === 'script' ? 'colorScript' : 'colorGroup');

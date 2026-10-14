@@ -2,6 +2,44 @@
    沿用 style.css 的颜色变量（深浅色跟随系统），和观测站是同一套纸页与墨色。不依赖 style 属性（CSP）。 */
 
 .console-page { --radius: 12px; display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── 人类留言：纸页与细线，讨论和回复共用一个阅读宽度 ── */
+.message-page .console-main { max-width: 960px; }
+.message-page .btn { min-height: 44px; }
+.message-page .console-link, .message-page .menu-item { min-height: 44px; }
+.message-page .account-menu > summary { min-height: 44px; }
+.message-page .form.message-form { max-width: none; gap: 8px; }
+.message-page .message-form textarea { min-height: 112px; resize: vertical; }
+.message-form-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.message-form-foot .form-actions { margin: 0; }
+.message-counter { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.message-counter.error { color: var(--bad); }
+.message-thread { padding: 20px 0; border-top: 1px solid var(--line-soft); }
+.message-thread:last-of-type { padding-bottom: 0; }
+.message-author { display: flex; gap: 12px; align-items: center; }
+.message-who { min-width: 0; overflow-wrap: anywhere; }
+.message-page .card-note { overflow-wrap: anywhere; }
+.message-who h3 { margin: 0; }
+.message-meta { margin: 4px 0 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+.message-text { margin: 16px 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; }
+.message-deleted { padding: 12px 16px; border: 1px dashed var(--line); border-radius: var(--radius); }
+.message-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.message-target { margin: 12px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.message-replies { margin-top: 16px; padding: 0 16px; border-left: 1px solid var(--line); background: var(--panel-2); border-radius: var(--radius); }
+.message-reply { padding: 16px 0; border-top: 1px solid var(--line-soft); }
+.message-reply:first-child { border-top: 0; }
+.message-replies > .btn { margin-bottom: 16px; }
+.message-entry > .message-form, .message-reply > .message-form, .message-confirm { margin: 12px 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.message-confirm p { margin-top: 0; }
+.topbar a.btn { display: inline-flex; align-items: center; text-decoration: none; min-height: 36px; }
+@media (max-width: 640px) {
+  .message-page .console-brand { min-width: 0; }
+  .message-page .console-brand span { overflow-wrap: anywhere; }
+  .message-page .console-account { max-width: 100%; }
+  .message-page .account-menu > summary { max-width: 100%; }
+  .message-page .message-replies { padding: 0 12px; }
+  .message-page .message-entry > .message-form, .message-page .message-reply > .message-form, .message-page .message-confirm { padding: 12px; }
+}
 .console-page a { color: var(--accent); }
 .console-page a.btn { color: var(--text); text-decoration: none; display: inline-block; }
 .console-page a.btn.primary { color: var(--accent-ink); }

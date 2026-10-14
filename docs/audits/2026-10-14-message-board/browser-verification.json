@@ -1,0 +1,489 @@
+{
+  "checks": [
+    "通过真实页面发布与编辑主留言",
+    "普通用户没有他人编辑删除按钮；回复可指向回复且平铺",
+    "断网提交保留草稿",
+    "大量留言分页；长昵称、无空格长英文和长中文在手机上不溢出",
+    "管理员删除他人主留言，回复仍然可读",
+    "加载状态与读取失败重试状态",
+    "英文桌面与手机布局、键盘焦点可达",
+    "匿名页面不显示讨论内容",
+    "会话失效后清空讨论内容"
+  ],
+  "layouts": [
+    {
+      "width": 375,
+      "theme": "dark",
+      "viewport": 375,
+      "scroll": 375,
+      "primary": 1,
+      "controls": [
+        {
+          "tag": "TEXTAREA",
+          "height": 112,
+          "width": 309
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        }
+      ]
+    },
+    {
+      "width": 375,
+      "theme": "light",
+      "viewport": 375,
+      "scroll": 375,
+      "primary": 1,
+      "controls": [
+        {
+          "tag": "TEXTAREA",
+          "height": 112,
+          "width": 309
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "theme": "dark",
+      "viewport": 768,
+      "scroll": 768,
+      "primary": 1,
+      "controls": [
+        {
+          "tag": "TEXTAREA",
+          "height": 112,
+          "width": 678
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "theme": "light",
+      "viewport": 768,
+      "scroll": 768,
+      "primary": 1,
+      "controls": [
+        {
+          "tag": "TEXTAREA",
+          "height": 112,
+          "width": 678
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        }
+      ]
+    },
+    {
+      "width": 1280,
+      "theme": "dark",
+      "viewport": 1280,
+      "scroll": 1280,
+      "primary": 1,
+      "controls": [
+        {
+          "tag": "TEXTAREA",
+          "height": 112,
+          "width": 870
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        }
+      ]
+    },
+    {
+      "width": 1280,
+      "theme": "light",
+      "viewport": 1280,
+      "scroll": 1280,
+      "primary": 1,
+      "controls": [
+        {
+          "tag": "TEXTAREA",
+          "height": 112,
+          "width": 870
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        }
+      ]
+    },
+    {
+      "width": 1920,
+      "theme": "dark",
+      "viewport": 1920,
+      "scroll": 1920,
+      "primary": 1,
+      "controls": [
+        {
+          "tag": "TEXTAREA",
+          "height": 112,
+          "width": 870
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        }
+      ]
+    },
+    {
+      "width": 1920,
+      "theme": "light",
+      "viewport": 1920,
+      "scroll": 1920,
+      "primary": 1,
+      "controls": [
+        {
+          "tag": "TEXTAREA",
+          "height": 112,
+          "width": 870
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 86
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        },
+        {
+          "tag": "BUTTON",
+          "height": 44,
+          "width": 58
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "passed": true
+}

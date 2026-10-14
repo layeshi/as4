@@ -163,6 +163,7 @@
 | 数字块 | 卡片里用 `metrics([[label, value], …])`；页面概览的大数字用 `.summary-row` 与 `.summary-stat`（可以整块作链接，加 `warn` 变色） |
 | 表格 | `table(heads, rows)` → `.scroll-table`；数字列右对齐（`.num`）；超过 24 字的文字格自动折行；空表显示「暂无记录」 |
 | 表单 | `form(fields, label, submit)` 加 `field()` / `textarea()`；表单最宽 560；提交时禁用按钮并显示「正在处理…」 |
+| 留言输入 | `messageComposer({label,value,submitLabel,submit,onInput,cancel,key,primary})`：纯文字多行输入、2,000 字计数、提交状态与草稿保留；留言板用 `.message-form` 在阅读卡片内铺满，编辑和回复就地展开，每次只有一个实心提交按钮 |
 | 异步按钮 | `btn(text, run, primary)`：执行中禁用，出错写到页头下的提示行 |
 | 状态标签 | `chip(text, tone)`：描边胶囊，颜色由 tone 类决定 |
 | 空状态 | `emptyState(title, text, ...actions)`：虚线框、居中，带下一步按钮 |
