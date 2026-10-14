@@ -44,6 +44,7 @@ function captureCookies(response) {
 function request(path, options = {}) {
   if (!/^\/api\//.test(path) || path.includes('..')) return Promise.reject(new Error('接口路径无效'));
   if (path.startsWith('/api/public/')) path = path.replace('/api/public/', '/api/wechat/public/');
+  if (/^\/api\/messages(?:[/?]|$)/.test(path)) path = path.replace('/api/messages', '/api/wechat/messages');
   if ((!options.method || options.method === 'GET') && /^\/api\/account\/residents(?:\/|$)/.test(path)) path = path.replace('/api/account/residents', '/api/wechat/residents');
   const generation = sessionGeneration, session = cookies.houren_session;
   return new Promise((resolve, reject) => {

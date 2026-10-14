@@ -12,6 +12,7 @@ const config = require('../config');
 const privacyLink = { label: '《隐私说明》', action: { type: 'about' } };
 function moreMenu(app, W) {
   return N.menu(W, [
+    { label: '留言板', hint: '交流与回复', icon: 'mail', action: { type: 'messages' } },
     { label: '设置', hint: '字号、震动、刷新', icon: 'settings', action: { type: 'settings' } },
     { label: '隐私说明', icon: 'shield', action: { type: 'about' } },
     { label: config.clientType === 'miniprogram' ? '使用说明' : '健康游戏忠告', hint: config.clientType === 'miniprogram' ? 'AI 社会模拟' : '16+', icon: 'heart', action: { type: 'health' } },

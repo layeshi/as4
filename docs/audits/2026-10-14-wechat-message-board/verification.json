@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-14",
+  "webMergedMain": "ee9082bdffcd7a64857d38a548c65a266dd6a9d1",
+  "version": "0.5.0",
+  "fullSuite": {
+    "command": "npm test",
+    "tests": 1752,
+    "passed": 1751,
+    "failed": 0,
+    "skipped": 1,
+    "skipReason": "未设置 HOUREN_FROZEN_WORLDS，第一纪冻结数据副本不在本地"
+  },
+  "messageBoardFinalFocused": {
+    "command": "node --test test/wechat-message-board.test.js test/wechat-messages-ui.test.js",
+    "passed": 11,
+    "failed": 0
+  },
+  "offlineMiniprogram": {
+    "commands": [
+      "npm run check -- --offline",
+      "npm run prepare -- --offline"
+    ],
+    "passed": true,
+    "pages": 2,
+    "files": 40,
+    "sourceKiB": 429
+  },
+  "screenshots": {
+    "environment": "本地浏览器 Canvas 模拟；示例账号、独立临时数据、模拟微信内容检查",
+    "devices": [
+      "375x667",
+      "390x844",
+      "393x851"
+    ],
+    "largeText": true
+  },
+  "productionDeployment": false,
+  "wechatUpload": false,
+  "realDeviceVerified": false,
+  "realWechatModerationVerified": false
+}

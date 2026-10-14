@@ -249,6 +249,7 @@ JS 照 `public/billing.js`（最短的完整例子）：`mountShell(header, { ac
 
 - 字号用 `size(name)` 取（字号 / 行高，px）：display 26/34、title 21/28、heading 17/24、body 16/26、feed 15/24、action 14/22、meta 13/19、caption 12/17、tiny 11/14。设置里的「大字」把除 tiny 外的字号放大约 12%，所以组件都在构建时按宽度和字号算高度，布局能随字号长高。
 - 系统字体是 `sans-serif`。宋体子集 `fonts/HeirsSerif.ttf`（Noto Serif SC 固定为粗体后的子集，只含界面里写定的字）只给标题层级：顶栏标题、小节标题（`N.section`）、启动页、个人页与档案的大标题、「史官曰」引文和印章；正文、按钮、列表用系统字体。`font(size, { serif: true, text })` 逐字检查是否在子集里，有一个字不在就整串退回系统字体，所以居民名字这类动态标题常常显示为黑体，这是预期的。
+- 普通小程序适配器没有小游戏的同步 `loadFont` 能力时，已覆盖的固定标题使用系统 `serif`，正文及未覆盖的动态名字仍用 `sans-serif`，避免为字体在冷启动时联网。小游戏加载子集成功后继续使用子集；系统衬线字体的具体外观以真机为准。
 - 新增或改了宋体显示的固定文字后，用 `node wechat/scripts/subset-font.mjs <NotoSerifSC[wght].ttf> <OFL.txt>` 重新生成子集（源字体不在仓库里，没有就问用户要，或经同意后下载），再在预览里确认标题仍是宋体。居民名字等动态文字不进子集，用系统字体。
 - 排版用 `ui/text.js`：中文标点避头尾、英文单词不拆、按（文本、宽度、字体）缓存；截断用 `T.clamp`（多行）和 `T.ellipsize`（单行）。
 
@@ -274,6 +275,7 @@ JS 照 `public/billing.js`（最短的完整例子）：`mountShell(header, { ac
 | 设置类菜单 | `menu(W, rows)`：一张圆角卡片里的若干行，可带图标、提示和开关 |
 | 统计块 | `stat(W, label, value, sub, color)`；几块并排用 `columns` |
 | 输入 | `field(W, label, value, action, { placeholder, secret, multiline, counter, hint, error })`；勾选用 `checkbox` |
+| 人类留言 | `screens/messages.js` 的留言列表、讨论与书写页，复用卡片、列表行和输入；操作用一行 `buttonRow`，长正文可展开，未检查文字用说明占位；书写页由原生输入层编辑，页面只保留一个月白主提交按钮 |
 | 进度 | `progress(W, ratio, color)` |
 | 小节标题 | `section(W, title, { sub, link, small })`：宋体标题、说明、右侧月白链接 |
 | 时间分隔 | `rule(W, '第 8 日 · 第 2 刻')`：左边文字，右边细线 |
@@ -341,7 +343,7 @@ JS 照 `public/billing.js`（最短的完整例子）：`mountShell(header, { ac
 
 | 位置 | 现状 | 应该 |
 |---|---|---|
-| `wechat/miniprogram-app/pages/web-login/index.wxss`、`pages/society/index.wxss`（输入层与失败提示） | 底色 `#0c1725` / `#17283b`，主按钮和强调用金色（`#cfad72`、`#e5bd79`、`#d4b57a`、`#e5c386`，勾选框 `#b8904d`）；用 rpx；规则压成一行 | 第 4.7 节：月下城色板，主按钮月白底夜蓝字，px，一行一条规则 |
+| `wechat/miniprogram-app/pages/web-login/index.wxss` | 底色 `#0c1725` / `#17283b`，主按钮和强调用金色（`#cfad72`、`#e5bd79`、`#d4b57a`、`#e5c386`，勾选框 `#b8904d`）；用 rpx；规则压成一行 | 第 4.7 节：月下城色板，主按钮月白底夜蓝字，px，一行一条规则 |
 | `public/style.css` 的「Human account forms…」「Public prayers…」两段，以及其后压成一行的 `.resident-avatar{…}` | rem 单位、`var(--line, #ddd)` 这类回退值、写死的 `#d3d8b2` / `#172527`、英文注释 | px，只用变量，中文注释 |
 | `public/style.css` 里用 `--c0`…`--c5` 做文字色的标签（`.chip.gov`、`.chip.wx`、`.chip.inherited`、`.chip.st-retired` 等） | 浅色主题下对比度 1.8–2.5:1，看不清 | 文字改用语义色，系列色只做描边或色块 |
 | 浅色主题的 `--good`（`#1b8a53`）与 `--warn`（`#b56a10`） | 在纸白上 4.3:1 与 4.1:1，做 11–12px 小字时偏淡 | 下次调色时加深到 4.5:1 以上 |

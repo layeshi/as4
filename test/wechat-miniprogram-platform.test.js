@@ -3,6 +3,16 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { createPlatform } = require('../wechat/miniprogram-app/platform.js');
+const theme = require('../wechat/minigame/ui/theme.js');
+test('没有同步字体加载能力的小程序仍用衬线标题，未知动态名字使用系统正文字体', () => {
+  try {
+    theme.setSerif(null, '留言板');
+    assert.equal(theme.font(17, { bold: true, serif: true, text: '留言板' }), 'bold 17px serif');
+    assert.equal(theme.font(17, { bold: true, serif: true, text: '陌生昵称' }), 'bold 17px sans-serif');
+    theme.setSerif('HeirsSerif', '留言板');
+    assert.equal(theme.font(17, { bold: true, serif: true, text: '留言板' }), '17px "HeirsSerif"');
+  } finally { theme.setSerif(null, null); }
+});
 test('Mini Program adapter routes canvas, input, touch and disposal without persisting secrets', () => {
   const offscreen = {}, canvas = { createImage: () => 'image' };
   const page = { game: { editing: 'apiKey' }, data: {}, setData(d) { Object.assign(this.data, d); } };

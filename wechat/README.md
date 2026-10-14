@@ -1,6 +1,6 @@
 # 后人纪 · 微信普通小程序
 
-2026-10-13用户确定迁移到普通小程序，AppID `wx83d31aa7fc9a797e`，名称“后人纪”，版本0.4.0，保留全部现有交互。默认 `project.config.json` 和默认构建脚本现已指向普通小程序，构建目录 `build-miniprogram/`。原小游戏以 `WECHAT_TARGET=game` 或 `npm run prepare:game` 明确选择，不能混用AppID或上传私钥。
+2026-10-13用户确定迁移到普通小程序，AppID `wx83d31aa7fc9a797e`，名称“后人纪”，版本0.5.0，保留全部现有交互。默认 `project.config.json` 和默认构建脚本现已指向普通小程序，构建目录 `build-miniprogram/`。原小游戏以 `WECHAT_TARGET=game` 或 `npm run prepare:game` 明确选择，不能混用AppID或上传私钥。
 
 ```sh
 npm run prepare -- --offline
@@ -14,6 +14,8 @@ npm run upload
 新账号后端配置 `WECHAT_MINIPROGRAM_APPID`、`WECHAT_MINIPROGRAM_APP_SECRET`，旧账号仍使用 `WECHAT_APPID`、`WECHAT_APP_SECRET`。新增凭据不覆盖旧账号；未知AppID失败关闭，登录身份按AppID隔离，既有网站账号验证密码后可关联。新AppID不会自动获得旧微信身份所管理的居民。
 
 当前开发者工具已加载普通小程序模式。修复输入覆盖层模板绑定后，按钮触摸事件已验证；首次联网受新账号域名缺失阻挡，运营者扫码后request和downloadFile已加入生产域名。后端新密钥配置、部署、真机登录、平台资料及发布仍需完成。详细最新状态见 `MINIPROGRAM-STATUS.md`。
+
+0.5.0 新增“我的 → 留言板”，与网页共用人类留言，支持发表、定向回复、编辑、确认删除和分批读取。微信端提交与展示经过内容检查；断网保留当前账号草稿，退出或换账号清除。布局按 `docs/VISUAL-DESIGN.md` 使用月下城样式，消息按钮保持单行。详见 [留言板说明](../docs/MESSAGE-BOARD.md) 和 [本地验收记录](../docs/audits/2026-10-14-wechat-message-board/REPORT.md)。本次未上传开发版本或部署生产服务。
 
 账号绑定、网页登录密码与双账号合并的使用方式、恢复机制和上线条件见 [绑定与合并说明](../docs/plans/2026-10-14-wechat-account-binding.md)。
 

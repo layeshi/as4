@@ -20,15 +20,15 @@ function size(name) { const [s, lh] = BASE[name]; return { size: Math.round(s * 
 const SYSTEM = 'sans-serif';
 let serifFamily = null, serifChars = null;
 /** wx.loadFont 成功后登记宋体子集及其覆盖的字符；未覆盖的字符串一律用系统字体。 */
-function setSerif(family, chars) { serifFamily = family || null; serifChars = family && chars ? new Set(Array.from(chars)) : null; }
+function setSerif(family, chars) { serifFamily = family || null; serifChars = chars ? new Set(Array.from(chars)) : null; }
 function serifCovers(text) {
-  if (!serifFamily || !serifChars) return false;
+  if (!serifChars) return false;
   for (const ch of String(text)) if (ch !== ' ' && !serifChars.has(ch)) return false;
   return true;
 }
 function font(sizeValue, { bold = false, serif = false, text = '' } = {}) {
   // 宋体子集本身已固定为粗体，不再叠加 bold；族名带空格时加引号。
-  if (serif && serifCovers(text)) return `${sizeValue}px "${serifFamily}"`;
+  if (serif && serifCovers(text)) return serifFamily ? `${sizeValue}px "${serifFamily}"` : `${bold ? 'bold ' : ''}${sizeValue}px serif`;
   return `${bold ? 'bold ' : ''}${sizeValue}px ${SYSTEM}`;
 }
 const SPACE = { gutter: 16, gap: 12, card: 14 };
