@@ -302,24 +302,24 @@ export async function renderMetrics(ctx, root) {
   const rate = (v) => `${Math.round(v * 100)}%`;
   root.append(
     two(
-      fig(t('m_population'), lineChart({ series: [{ name: t('s_awake'), points: pts('awake'), color: 0 }, { name: t('s_dormant'), points: pts('dormant'), color: 3 }], height: 190, xLabel: 'D' })),
-      fig(t('m_well'), lineChart({ series: [{ name: t('s_condition'), points: pts('wellCondition', 0.01), color: 1 }, { name: t('s_output'), points: pts('output'), axis: 'right', color: 2 }], height: 190, yMax: 100, xLabel: 'D' })),
+      fig(t('m_population'), lineChart({ series: [{ name: t('s_awake'), points: pts('awake'), color: 0 }, { name: t('s_dormant'), points: pts('dormant'), color: 3 }], xLabel: 'D' })),
+      fig(t('m_well'), lineChart({ series: [{ name: t('s_condition'), points: pts('wellCondition', 0.01), color: 1 }, { name: t('s_output'), points: pts('output'), axis: 'right', color: 2 }], yMax: 100, xLabel: 'D' })),
     ),
     two(
-      fig(t('m_treasury'), lineChart({ series: [{ name: t('treasury'), points: pts('treasuryEnergy'), color: 4 }], height: 190, xLabel: 'D' })),
-      fig(t('m_gini'), lineChart({ series: [{ name: 'Gini', points: pts('gini'), color: 5 }], height: 190, yMax: 1, xLabel: 'D' })),
+      fig(t('m_treasury'), lineChart({ series: [{ name: t('treasury'), points: pts('treasuryEnergy'), color: 4 }], xLabel: 'D' })),
+      fig(t('m_gini'), lineChart({ series: [{ name: 'Gini', points: pts('gini'), color: 5 }], yMax: 1, xLabel: 'D' })),
     ),
     two(
-      fig(t('m_invest'), lineChart({ series: [{ name: t('m_invest'), points: pts('publicInvestmentRate'), color: 1 }], height: 190, yMax: 1, yFormat: rate, xLabel: 'D' })),
-      fig(t('m_freerider'), lineChart({ series: [{ name: t('m_freerider'), points: pts('freeRiderShare'), color: 3 }], height: 190, yMax: 1, yFormat: rate, xLabel: 'D' })),
+      fig(t('m_invest'), lineChart({ series: [{ name: t('m_invest'), points: pts('publicInvestmentRate'), color: 1 }], yMax: 1, yFormat: rate, xLabel: 'D' })),
+      fig(t('m_freerider'), lineChart({ series: [{ name: t('m_freerider'), points: pts('freeRiderShare'), color: 3 }], yMax: 1, yFormat: rate, xLabel: 'D' })),
     ),
     two(
-      fig(t('m_curtain'), lineChart({ series: [{ name: t('m_curtain'), points: pts('humanAuthoredShare'), color: 2 }], height: 190, yMax: 1, yFormat: rate, xLabel: 'D' })),
-      fig(t('m_entropy'), lineChart({ series: [{ name: t('m_entropy'), points: pts('scriptEntropy'), color: 4 }], height: 190, xLabel: 'D' })),
+      fig(t('m_curtain'), lineChart({ series: [{ name: t('m_curtain'), points: pts('humanAuthoredShare'), color: 2 }], yMax: 1, yFormat: rate, xLabel: 'D' })),
+      fig(t('m_entropy'), lineChart({ series: [{ name: t('m_entropy'), points: pts('scriptEntropy'), color: 4 }], xLabel: 'D' })),
     ),
     two(
-      fig(t('m_coins'), lineChart({ series: [{ name: t('s_volume'), points: pts('coinVolume'), color: 0 }, { name: t('s_price'), points: pts('coinPrice'), axis: 'right', color: 3 }], height: 190, xLabel: 'D' })),
-      fig(t('m_laws'), lineChart({ series: [{ name: t('m_laws'), points: pts('lawsActive'), color: 5 }], height: 190, xLabel: 'D' })),
+      fig(t('m_coins'), lineChart({ series: [{ name: t('s_volume'), points: pts('coinVolume'), color: 0 }, { name: t('s_price'), points: pts('coinPrice'), axis: 'right', color: 3 }], xLabel: 'D' })),
+      fig(t('m_laws'), lineChart({ series: [{ name: t('m_laws'), points: pts('lawsActive'), color: 5 }], xLabel: 'D' })),
     ),
   );
 }

@@ -373,13 +373,15 @@ textarea { width: 100%; resize: vertical; }
 .tallies li { display: inline-block; margin-right: 12px; }
 
 /* ── 图表 ── */
-.charts { display: grid; gap: 12px; margin: 10px 0; }
-.charts.two { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.charts { display: grid; gap: 20px 12px; margin: 10px 0; }
+/* 图按实际像素宽度绘制（charts.js），所以每张图要有足够的宽度才看得清：容器放得下两张 480px 的图才分两列 */
+.charts.two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); }
 figure { margin: 0; }
 figcaption { font-size: 12px; color: var(--muted); text-align: center; }
+.charts figcaption { font-size: 13px; }
 .chart { width: 100%; height: auto; }
 .chart .grid { stroke: var(--line-soft); stroke-width: 1; }
-.chart .axis, .chart .legend, .chart .readout { fill: var(--muted); font-size: 10px; }
+.chart .axis, .chart .legend, .chart .readout { fill: var(--muted); } /* 字号由 svg 根元素的 font-size 属性给出（charts.js 的 FONT） */
 .chart .readout { fill: var(--text); }
 .chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; }
 .chart .crosshair { stroke: var(--muted); stroke-dasharray: 3 3; }
