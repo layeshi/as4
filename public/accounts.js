@@ -124,6 +124,7 @@ function accountHub(modal) {
   if (!p6) modal.dialog.classList.add('wide'); // 「我的居民」是一张表，要宽一些
   modal.body.append(h('div', { class: 'account-summary' }, initialBadge(u), h('div', null, h('h3', null, u.displayName), h('p', { class: 'muted' }, `@${u.username} · ${roleName(u)}`))));
   const links = [];
+  links.push(['/messages.html', tr('留言板', 'Message board'), tr('与其他用户交流想法，查看留言与回复', 'Share ideas with other users and read messages and replies')]);
   if (p6) links.push(['/residents.html', tr('我的居民', 'My residents'), tr('查看居民状态，创建居民并配置模型', 'See how your residents are doing, create residents and set up models')]);
   if (p6) links.push(['/billing.html', tr('余额与充值', 'Balance & top-up'), tr('平台托管模型的余额、购买额度与记录', 'Hosted model balance, top-ups and records')]);
   links.push(['/account.html', tr('账户设置', 'Account settings'), tr('昵称、密码与祈愿操作记录', 'Display name, password and prayer records')]);

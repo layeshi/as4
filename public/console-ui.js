@@ -31,6 +31,40 @@ export const btn = (text, run, primary = false) => h('button', { type: 'button',
 } }, text);
 export const field = (label, name, value = '', type = 'text', extra = {}) => h('label', { class: 'field' }, h('span', null, label), h('input', { name, type, value, ...extra }));
 export const textarea = (label, name, value = '') => h('label', { class: 'field' }, h('span', null, label), h('textarea', { name, required: true }, value));
+/** 留言输入：按 Unicode 字符计数；提交失败保留草稿，不解析富文本。 */
+export function messageComposer({ label, value = '', submitLabel, primary = true, onInput, submit, cancel, key }) {
+  const input = h('textarea', { name: 'text', rows: 4, required: true, value, dataset: { draft: key } });
+  const counter = h('span', { class: 'message-counter', id: `counter-${key}` });
+  input.setAttribute('aria-describedby', `counter-${key}`);
+  const status = h('p', { role: 'status', 'aria-live': 'polite' });
+  const save = h('button', { type: 'submit', class: `btn${primary ? ' primary' : ''}` }, submitLabel);
+  const abort = cancel ? btn(tr('取消', 'Cancel'), cancel) : null;
+  const form = h('form', { class: 'form message-form' }, h('label', { class: 'field' }, h('span', null, label), input),
+    h('div', { class: 'message-form-foot' }, counter, h('div', { class: 'form-actions' }, abort, save)), status);
+  const count = () => {
+    const n = [...input.value.trim()].length;
+    counter.textContent = `${n.toLocaleString()} / 2,000 ${tr('字', 'characters')}`;
+    counter.classList.toggle('error', n > 2000);
+    input.setCustomValidity?.(n > 2000 ? tr('最多输入 2,000 字。', 'Use no more than 2,000 characters.') : '');
+  };
+  input.addEventListener('input', () => { status.textContent = ''; status.className = ''; onInput?.(input.value); count(); });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (save.disabled) return;
+    count();
+    if (!input.value.trim() || [...input.value.trim()].length > 2000) {
+      status.className = 'error'; status.textContent = tr('请输入 1–2,000 字的留言。', 'Enter between 1 and 2,000 characters.'); return;
+    }
+    save.disabled = true; input.disabled = true;
+    if (abort) abort.disabled = true;
+    status.className = ''; status.textContent = tr('正在发布…', 'Saving…');
+    try { await submit(input.value.trim()); }
+    catch (err) { status.className = 'error'; status.textContent = err.message; }
+    finally { save.disabled = false; input.disabled = false; if (abort) abort.disabled = false; }
+  });
+  count();
+  return form;
+}
 export function form(fields, label, submit) {
   const notice = h('p', { role: 'status' }), button = h('button', { class: 'btn primary', type: 'submit' }, label), f = h('form', { class: 'form' }, fields, h('div', { class: 'form-actions' }, button), notice);
   f.addEventListener('submit', async (e) => {
@@ -84,6 +118,7 @@ export function setBadge(badge, n) {
 const NAV = [
   { id: 'observe', href: '/', label: () => tr('观测城市', 'Observe') },
   { id: 'residents', href: '/residents.html', label: () => tr('我的居民', 'My residents') },
+  { id: 'messages', href: '/messages.html', label: () => tr('留言板', 'Message board') },
   { id: 'billing', href: '/billing.html', label: () => tr('余额与充值', 'Balance'), signedIn: true },
   { id: 'admin', href: '/admin.html', label: () => tr('管理后台', 'Admin'), admin: true },
 ];
