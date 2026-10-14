@@ -111,7 +111,7 @@ test('会员页顶栏：按身份显示导航，当前页高亮，账户菜单�
     mountShell(env.header, { active: 'residents' });
     assert.equal(env.header.querySelectorAll('button').length, 0, '读到账号之前不画登录按钮');
     await refreshAccount({ notify: false }); await settle();
-    assert.equal(env.header.querySelector('.console-brand').textContent, '后人纪：词元本位');
+    assert.equal(env.header.querySelector('.console-brand').textContent, '后人纪 · 词元本位');
     assert.deepEqual(navLinks(env.header), ['观测城市', '我的居民']);
     assert.ok(env.header.querySelectorAll('button').some((b) => b.textContent === '登录 / 注册'));
     assert.equal(env.header.querySelector('[aria-current="page"]').getAttribute('href'), '/residents.html');
@@ -136,7 +136,7 @@ test('新页面：走 CSP，不写内联样式或脚本，旧的居民页样式�
       assert.equal(r.status, 200, page); assert.equal(r.headers.get('content-security-policy'), CSP, page);
       assert.doesNotMatch(r.text, /\sstyle=|<script(?![^>]*\bsrc=)/, page);
       assert.match(r.text, /href="\/console.css"/, page);
-      assert.match(r.text, /<span>后人纪：词元本位<\/span>/, page);
+      assert.match(r.text, /<span>后人纪 · 词元本位<\/span>/, page);
     }
     for (const file of ['console.css', 'console-ui.js', 'admin.js', 'admin-panels.js', 'hosted-ui.js', 'hosted-admin.js', 'model-form.js', 'billing.js', 'account.js']) assert.equal((await e.call(`/${file}`)).status, 200, file);
     assert.equal((await e.call('/residents.css')).status, 404);

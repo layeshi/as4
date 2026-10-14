@@ -111,7 +111,7 @@ export function mountShell(header, { active } = {}) {
       .map((n) => h('a', { class: 'console-link', href: n.href, 'aria-current': n.id === active ? 'page' : null }, h('span', null, n.label()), n.admin ? h('span', { class: 'nav-badge', hidden: true, title: tr('待处理入账申请', 'Pending top-up requests') }) : null));
     const account = user ? accountMenu(user) : known ? h('button', { type: 'button', class: 'btn primary', onClick: () => openAccount({ hub: false }) }, tr('登录 / 注册', 'Sign in / Register')) : '';
     clear(header).append(
-      h('a', { class: 'console-brand', href: '/' }, h('img', { src: '/logo.svg', alt: '', width: 28, height: 28 }), h('span', null, tr('后人纪：词元本位', 'The Heirs: Token Standard'))),
+      h('a', { class: 'console-brand', href: '/' }, h('img', { src: '/logo.svg', alt: '', width: 28, height: 28 }), h('span', null, tr('后人纪 · 词元本位', 'The Heirs: Token Standard'))),
       h('nav', { class: 'console-nav', 'aria-label': tr('主导航', 'Main navigation') }, links),
       h('div', { class: 'console-account' }, account));
     if (isAdmin && lastPending !== null) setBadge(header.querySelector('.console-link .nav-badge'), lastPending);

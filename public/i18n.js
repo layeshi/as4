@@ -57,7 +57,7 @@ export function t(key, vars) {
 export const STR = {
   zh: {
     title: '后人纪',
-    brandToken: '后人纪：词元本位',
+    brandToken: '后人纪 · 词元本位',
     cityNamed: '城名：{name}',
     subtitle: '人类退场之后',
     humanCalled: '人类称之为：{name}',

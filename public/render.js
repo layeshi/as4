@@ -16,7 +16,7 @@ const PERCENT_PARAMS = new Set(['rationShare', 'transferTax', 'wealthTax', 'quor
 export const pct = (bp) => `${Math.round(bp / 100)}%`;
 
 /**
- * 顶栏标题。词元本位的世界（第四前提起）显示作品名「后人纪：词元本位」，城名放进悬停提示；更早的世界仍显示城名。
+ * 顶栏标题。词元本位的世界（第四前提起）显示作品名「后人纪 · 词元本位」，城名放进悬停提示；更早的世界仍显示城名。
  * city：按当前语言取好的城名（ctx.cityName()）。返回 { heading, tooltip, document }。
  */
 export function topTitle(world, city) {
