@@ -59,6 +59,8 @@ test('admin initialization, management, privilege isolation and last-admin prote
   const e = await boot(); const admin = client(e), user = client(e);
   try {
     assert.equal((await user.call('/api/admin/users')).status, 401);
+    // 不向匿名访客报告「尚无管理员」：页面上没有初始化入口，接口只认 ADMIN_KEY
+    assert.equal('setupAvailable' in (await user.call('/api/account')).json, false);
     assert.equal((await admin.call('/api/account/setup', person('chief', { adminKey: 'wrong' }))).status, 403);
     assert.equal((await admin.call('/api/account/setup', person('chief', { adminKey: e.cfg.adminKey }))).status, 201);
     const chief = (await admin.call('/api/account')).json.user;

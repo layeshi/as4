@@ -49,7 +49,8 @@ description: 将 as4（后人纪）GitHub 最新代码部署到现有生产服�
 
 - 确认 current 指向目标 release、MainPID 的实际启动目录/命令正确，服务 active，无重启循环，nginx/Xray 与之前状态一致。
 - 从本机回环和真实公网入口请求首页、引用的 JS/CSS、`/api/public/state`、`/api/account`（以目标路由为准）。检查响应结构与业务内容，不仅 HTTP 200；未登录状态不等于账号丢失。
-- `/api/public/stream` 收到 `: connected`；设置有界超时，收到数据后超时退出不是 SSE 失败。
+- 网页版开着登录门（`REQUIRE_LOGIN`，缺省开启）时，匿名首页是 302 到 `/login.html`、`/api/public/*` 是 401 `login_required`，这是预期：匿名只验收登录页（200、`/login.js` 可取）与 `/api/account`（`loginRequired: true`）；`/api/public/state`、首页与 SSE 的业务内容在服务器本机回环上，用服务进程环境里的 `ADMIN_KEY` 以 `X-Admin-Key` 头读取，密钥经标准输入或配置文件传入（如 `curl -K -`），不放进命令行参数、日志或报告。
+- `/api/public/stream` 收到 `: connected`（开着登录门时同样要 `X-Admin-Key` 或登录会话）；设置有界超时，收到数据后超时退出不是 SSE 失败。
 - 确认相同世界和纪元，tick/commandN/事件序号不倒退；已恢复后的世界可自然变化，居民死亡、token 用量增加不能简单要求上线后逐字节相等。用命令日志解释变化，核实历史前缀保留、账户仍在、运行器配置与启用状态未被启动代码删除。服务运行中多文件副本不能用来断言严格一致性。
 - 看启动恢复日志及自然运行器活动；HTTP/SSE 正常不代表模型成功。供应商余额、限流、授权失败单独报告，不擅自换 key/模型或重试真实付费调用。不为测试推进世界或修改法律。
 - 输出固定 SHA、新旧 release、备份位置、停机时长、保状态证据、实际检查结果与未验证事项。只在上述证据满足时称部署成功。

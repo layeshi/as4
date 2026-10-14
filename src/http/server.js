@@ -10,6 +10,7 @@ import { HostedService } from '../hosted/service.js';
 import { PublicRoleService } from '../runner/public-roles.js';
 import { accountWrap } from './accounts.js';
 import { sendJson } from './util.js';
+import { loginLocation, passesWall, walledApi, walledPage } from './login-wall.js';
 // SPEC-M1 §13：HTTP 服务。路由、静态文件、限速、CORS、CSP。
 // 只用 Node 内置模块。所有 JSON 响应带 X-Houren-Protocol（第一纪的城为 1，第二纪的城为 2）；请求体上限 64 KB。
 
@@ -24,7 +25,7 @@ import { RunnerManager } from '../runner/manager.js';
 import { ShellManager } from '../shells/manager.js';
 import { runnerRoutes } from './runner.js';
 import { readFile, stat } from 'node:fs/promises';
-import { dirname, extname, join, normalize, sep } from 'node:path';
+import { dirname, extname, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PerTickLimiter, SlidingLimiter, TokenIndex, sendError } from './util.js';
 import { agentRoutes } from './agent.js';
@@ -83,7 +84,9 @@ function match(method, pathname) {
   return null;
 }
 
-async function serveStatic(req, res, pathname, dir) {
+/** gateCtx：开着登录门时传 ctx（页面要登录才给），否则 null */
+async function serveStatic(req, res, url, dir, gateCtx) {
+  const { pathname } = url;
   let rel;
   try {
     rel = decodeURIComponent(pathname);
@@ -108,8 +111,14 @@ async function serveStatic(req, res, pathname, dir) {
       file = join(file, 'index.html');
       st = await stat(file);
     }
-    const body = await readFile(file);
     const ext = extname(file).toLowerCase();
+    // 登录门：.html 页面（含 / 与目录首页）按白名单放行，其余要登录；脚本、样式与图片不设门
+    if (gateCtx && ext === '.html' && walledPage(relative(dir, file).split(sep).join('/')) && !passesWall(gateCtx, req)) {
+      res.writeHead(302, { Location: loginLocation(pathname, url.search), 'Cache-Control': 'no-store', 'Content-Length': 0, 'X-Content-Type-Options': 'nosniff' });
+      res.end();
+      return;
+    }
+    const body = await readFile(file);
     const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Length': body.length };
     if (ext === '.html') {
       headers['Content-Security-Policy'] = CSP;
@@ -196,6 +205,10 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
       if (pathname.startsWith('/api/')) {
         if (rt.w.premise === 6 && (/^\/api\/(me(?:\/|$)|owner(?:\/|$))/.test(pathname) || /^\/api\/port\//.test(pathname) && req.method !== 'GET' || pathname === '/api/account/agents' && req.method !== 'GET' || /^\/api\/admin\/agents\/[^/]+\/owner-key$/.test(pathname))) return sendError(res,'zh','unauthorized');
         res.setHeader('X-Houren-Protocol', String(rt.engine.protocol)); // 协议版本随世界的物理（SPEC-E2 §2.1）
+        if (cfg.requireLogin === true && walledApi(pathname) && !passesWall(ctx, req)) {
+          const en = url.searchParams.get('lang') === 'en';
+          return sendJson(res, 401, { error: { code: 'login_required', message: en ? 'Please sign in to watch the city.' : '请先登录后再观看这座城。' } });
+        }
         const m = match(req.method, pathname);
         if (!m) return sendError(res, 'zh', 'not_found');
         await m.handler(req, res, ctx, url, m.params);
@@ -205,7 +218,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
         res.writeHead(405, { Allow: 'GET, HEAD' }).end();
         return;
       }
-      await serveStatic(req, res, pathname, publicDir);
+      await serveStatic(req, res, url, publicDir, cfg.requireLogin === true ? ctx : null);
     } catch (e) {
       logger.error?.('HTTP 处理出错：', e);
       if (!res.headersSent) sendError(res, 'zh', 'internal');

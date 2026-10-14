@@ -15,6 +15,7 @@ const pkg = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'));
 
 const cfg = loadConfig(process.env, process.argv.slice(2), { defaultPhysics: DEFAULT_PHYSICS }); // 新世界缺省用第二纪的物理（已有的世界按快照）
 cfg.trustProxy = process.env.TRUST_PROXY === '1';
+cfg.requireLogin = process.env.REQUIRE_LOGIN !== '0'; // 网页版的登录门（src/http/login-wall.js）：缺省开启，REQUIRE_LOGIN=0 关闭
 applyConfig(cfg);
 if (cfg.host !== '127.0.0.1' && !cfg.adminKey) console.warn('提示：对外监听但没有设置 ADMIN_KEY，管理接口保持关闭。');
 

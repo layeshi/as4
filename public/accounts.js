@@ -1,6 +1,6 @@
 import { h, clear } from './dom.js';
 import { getLang } from './i18n.js';
-import { api, errorText } from './api.js';
+import { api, errorText, leaveForLogin } from './api.js';
 import { openModal, openBackstage, savedOwners } from './modals.js';
 import { accountAgentsPanel } from './account-usage-ui.js';
 import { prayerAuditPanel } from './prayers-ui.js';
@@ -8,6 +8,7 @@ import { prayerAuditPanel } from './prayers-ui.js';
 // 管理功能都在管理后台（admin.html）；居民、余额与充值各有自己的页面。
 const tr = (zh, en) => getLang() === 'en' ? en : zh;
 let current = null;
+let loginWall = false; // 服务器开着登录门（REQUIRE_LOGIN）：没有登录就不该停在任何会员页或观测站
 let accountGeneration = 0;
 let accountButton;
 let appCtx; // 观测站的上下文：「我的居民」里的「进入幕后」要用
@@ -53,12 +54,19 @@ export function watchAccount(fn) {
   watchers.add(fn);
   return () => watchers.delete(fn);
 }
-export async function refreshAccount({ notify = true } = {}) {
+/**
+ * 读取账号状态。开着登录门时，没有登录就回登录页（登录后回到这一页）；redirect = false 给不需要登录的页面（支持页）。
+ */
+export async function refreshAccount({ notify = true, redirect = true } = {}) {
   const version=++accountGeneration;
   const r = await api('/api/account');
   if(version!==accountGeneration)return r;
   const before=current?.id;
-  if (r.ok) current = r.json.user;
+  if (r.ok) {
+    current = r.json.user;
+    loginWall = r.json.loginRequired === true;
+    if (redirect && loginWall && !current) leaveForLogin();
+  }
   if(notify&&r.ok&&before!==current?.id)queueMicrotask(()=>appCtx?.onAccountChange?.());
   if (accountButton) accountButton.textContent = current ? `${tr('用户中心', 'Account')} · ${current.displayName}` : tr('登录 / 注册', 'Sign in / Register');
   for (const fn of watchers) fn(current, r);
@@ -71,7 +79,9 @@ export function initAccounts(btn, ctx) {
 }
 export async function signOut() {
   const r = await request('/api/account/logout', {});
-  if (r.ok) await refreshAccount();
+  if (!r.ok) return r;
+  if (loginWall) leaveForLogin({ remember: false }); // 登录门开着：退出后回登录页，不带着这一页
+  else await refreshAccount();
   return r;
 }
 /** 登录 / 注册弹窗；已登录时是用户中心。hub = false：登录成功后只关闭弹窗（会员页自己会重画） */
@@ -90,7 +100,6 @@ export async function openAccount({ hub = true } = {}) {
   modal.body.append(h('p', { class: 'muted' }, appCtx?.S?.state?.world?.premise===6 ? tr('登录后可创建、管理与查看自己的居民。', 'Sign in to create, manage and inspect your residents.') : tr('游客可自由观测城市。创建人类用户账号后，可保存个人资料。Agent 入境与造者密钥仍在「入境 / 幕后」中使用；登录状态下入境的居民会关联到账号，可在用户中心查看它们的状态与 token 用量。', 'Guests can observe the city. Human accounts store your profile. Agent entry and owner keys remain available through Enter / Backstage; residents you enter while signed in are linked to your account, where you can see their status and token usage.')), tabs, pane);
   const modes = [['login', tr('登录', 'Sign in')]];
   if (r.json.registrationOpen) modes.push(['register', tr('注册', 'Register')]);
-  if (r.json.setupAvailable) modes.push(['setup', tr('初始化管理员', 'Set up administrator')]);
   function show(mode) {
     clear(pane);
     for (const b of tabs.children) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
@@ -98,7 +107,6 @@ export async function openAccount({ hub = true } = {}) {
     const fields = creating ? identity() : [field(tr('用户名', 'Username'), 'username', 'text', '', { autocomplete: 'username', maxlength: 32 })];
     fields.push(creating ? password() : field(tr('密码', 'Password'), 'password', 'password', '', { autocomplete: 'current-password', maxlength: 128 }));
     if (creating) fields.push(password('confirmPassword', tr('确认密码', 'Confirm password')));
-    if (mode === 'setup') fields.push(field(tr('服务器 ADMIN_KEY', 'Server ADMIN_KEY'), 'adminKey', 'password', '', { autocomplete: 'off' }));
     pane.append(form(fields, modes.find(([id]) => id === mode)[1], async (body, msg) => {
       if (creating && body.password !== body.confirmPassword) return { ok: false, json: { error: { message: tr('两次密码不一致。', 'Passwords do not match.') } } };
       delete body.confirmPassword;

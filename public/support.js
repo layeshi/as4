@@ -4,7 +4,7 @@ import { mountShell } from './console-ui.js';
 import { refreshAccount } from './accounts.js';
 
 mountShell(document.querySelector('#console-header'), { active: 'support' });
-refreshAccount({ notify: false });
+refreshAccount({ notify: false, redirect: false }); // 支持页不需要登录
 
 const message = document.querySelector('#support-message');
 const images = document.querySelector('#support-qr');
