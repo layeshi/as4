@@ -2,9 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WechatService, identityHash } from '../src/wechat/service.js';
 import { boot } from './http-helpers.js';
+import { loadConfig } from '../src/config.js';
 const gameId = 'wx216f3fb724629f67', appId = 'wx83d31aa7fc9a797e';
 const cfg = { wechatAppId: gameId, wechatAppSecret: 'game-test-secret', wechatMiniprogramAppId: appId, wechatMiniprogramAppSecret: 'app-test-secret' };
 const ok = data => ({ ok: true, json: async () => data });
+test('configuration loads the ordinary mini program credentials separately', () => {
+  const loaded = loadConfig({ WECHAT_APPID: gameId, WECHAT_APP_SECRET: cfg.wechatAppSecret,
+    WECHAT_MINIPROGRAM_APPID: appId, WECHAT_MINIPROGRAM_APP_SECRET: cfg.wechatMiniprogramAppSecret }, []);
+  assert.equal(loaded.wechatAppId, gameId);
+  assert.equal(loaded.wechatMiniprogramAppId, appId);
+  assert.equal(loaded.wechatMiniprogramAppSecret, cfg.wechatMiniprogramAppSecret);
+});
 test('two applications isolate upstream credentials, tokens and identities; unknown app fails closed', async () => {
   const calls = [];
   const service = new WechatService(cfg, { fetcher: async (url, options) => {
@@ -30,13 +38,23 @@ test('two applications isolate upstream credentials, tokens and identities; unkn
   await assert.rejects(new WechatService({ ...cfg, wechatMiniprogramAppSecret: null }).exchange('code', appId), e => e.code === 'wechat_unconfigured');
 });
 test('HTTP login selects configured mini program; status never claims another app is verified', async t => {
-  const e = await boot(cfg); t.after(() => e.close());
-  e.app.ctx.wechat.fetcher = async () => ok({ openid: 'same-openid-for-test' });
+  const e = await boot({ ...cfg, requireLogin: true }); t.after(() => e.close());
+  const upstream = [];
+  e.app.ctx.wechat.fetcher = async url => { upstream.push(url); return ok({ openid: 'same-openid-for-test' }); };
   const headers = { 'X-Houren-Request': '1', 'X-Houren-Client': 'wechat' };
   const a = await e.call('/api/wechat/login', { method: 'POST', headers, body: { code: 'code', appid: appId } });
   assert.equal(a.status, 200); assert.ok(!a.text.includes('openid-for-test'));
+  assert.equal(upstream[0].searchParams.get('appid'), appId);
+  assert.equal(upstream[0].searchParams.get('secret'), cfg.wechatMiniprogramAppSecret);
+  assert.equal((await e.call('/api/public/state')).status, 401);
+  assert.equal((await e.call('/api/wechat/public/state')).status, 200);
   const auth = { Cookie: a.headers.get('set-cookie').split(';')[0] };
+  const anonymous = await e.call('/api/wechat/status?appid=' + appId);
+  assert.equal(anonymous.json.appid, appId);
+  assert.equal(anonymous.json.enabled, true);
+  assert.equal(anonymous.json.verified, false);
   assert.equal((await e.call('/api/wechat/status?appid=' + appId, { headers: auth })).json.verified, true);
   assert.equal((await e.call('/api/wechat/status', { headers: auth })).json.verified, false);
   assert.equal((await e.call('/api/wechat/login', { method: 'POST', headers, body: { code: 'code', appid: 'wx0000000000000000' } })).status, 400);
+  assert.equal(upstream.length, 1, 'unknown app must not reach WeChat with fallback credentials');
 });

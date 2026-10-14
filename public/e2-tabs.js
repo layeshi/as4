@@ -666,7 +666,7 @@ export async function renderMetrics2(ctx, root) {
   const fig = (title, chart) => h('figure', null, chart, h('figcaption', null, title));
   const two = (a, b) => h('div', { class: 'charts two' }, a, b);
   const rate = (v) => `${Math.round(v * 100)}%`;
-  const c = (series, o = {}) => lineChart({ series, height: 190, xLabel: 'D', ...o });
+  const c = (series, o = {}) => lineChart({ series, xLabel: 'D', ...o });
   root.append(h('p', { class: 'muted' }, getLang() === 'en'
     ? 'Scheduled law payments include actual daily/monthly transfers and shares from the city treasury to residents, averaged over living residents. Repair subsidies are shown separately. Historical balances are unchanged.'
     : '日结法律拨款按公库每日／每月规则实际转账、均分金额统计，人均值按在世居民计算；修缮等其他法律拨款另列。历史余额不变。'));
