@@ -56,9 +56,10 @@ export const wechatRoutes = [
     if (status >= 400) return sendJson(res, status, payload);
     sendJson(res, status, project(ctx, req, payload));
   }, { signedIn: true })],
-  ['GET', '/api/wechat/status', accountWrap(({ req, res, ctx }) => {
+  ['GET', '/api/wechat/status', accountWrap(({ req, res, ctx, url }) => {
     const identity = wechatIdentity(ctx, req);
-    sendJson(res, 200, { enabled: ctx.wechat.enabled, verified: !!identity && Date.now() - identity.verifiedAt < 110 * 60000, supportEmail: 'wong.laye@outlook.com' });
+    const selected = ctx.wechat.forApp(url.searchParams.get('appid') || undefined);
+    sendJson(res, 200, { appid: selected.appid, enabled: selected.enabled, verified: !!identity && identity.appid === selected.appid && Date.now() - identity.verifiedAt < 110 * 60000, supportEmail: 'wong.laye@outlook.com' });
   })],
   ['POST', '/api/wechat/login', accountWrap(async ({ req, res, ctx, body }) => {
     if (!ctx.accountLimits.ip.take(clientIp(req, ctx.cfg.trustProxy))) fail(429, 'rate_limited', '登录过于频繁，请稍后再试。');
@@ -70,7 +71,7 @@ export const wechatRoutes = [
       const current = accountFor(ctx, req);
       if (!current || current.id !== before.id || current.revision !== before.revision) fail(401, 'unauthorized', '账号已更新，请重新登录。');
     };
-    const identity = await ctx.wechat.exchange(body.code);
+    const identity = await ctx.wechat.exchange(body.code, body.appid);
     authorize();
     const user = await ctx.accounts.wechatLogin(identityHash(identity.appid, identity.openid), { registrationOpen: ctx.cfg.registrationOpen !== false, bindId: before?.id, authorize });
     authorize();
