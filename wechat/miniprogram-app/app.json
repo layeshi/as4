@@ -1,6 +1,7 @@
 {
   "pages": [
-    "pages/society/index"
+    "pages/society/index",
+    "pages/web-login/index"
   ],
   "window": {
     "navigationStyle": "custom",

@@ -44,6 +44,8 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
     registrationOpen: env.REGISTRATION_OPEN !== '0',
     wechatAppId: env.WECHAT_APPID || null,
     wechatAppSecret: env.WECHAT_APP_SECRET || null,
+    wechatWebLogin: env.WECHAT_WEB_LOGIN !== '0',
+    wechatQrEnvironment: env.WECHAT_QR_ENVIRONMENT || 'release',
     wechatMiniprogramAppId: env.WECHAT_MINIPROGRAM_APPID || null,
     wechatMiniprogramAppSecret: env.WECHAT_MINIPROGRAM_APP_SECRET || null,
     inviteCode: env.INVITE_CODE || null,

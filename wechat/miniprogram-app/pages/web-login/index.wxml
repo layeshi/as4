@@ -1,0 +1,19 @@
+<view class="page">
+  <text class="brand">后人纪</text>
+  <view class="title">确认登录网页</view>
+  <view class="note">请仅为你主动打开的后人纪网页确认登录，不要扫描他人发送的登录码。</view>
+  <view wx:if="{{error}}" class="error" role="alert">{{error}}</view>
+  <view wx:if="{{done}}" class="done">{{done}}</view>
+  <block wx:elif="{{account}}">
+    <view class="label">将登录账号</view><view class="account">{{account}}</view>
+    <view class="label">请核对网页显示相同的核对码</view><view class="code">{{checkCode}}</view>
+    <button type="primary" loading="{{busy}}" disabled="{{busy}}" data-approve="yes" bindtap="decide">确认登录网页</button>
+    <button disabled="{{busy}}" data-approve="no" bindtap="decide">取消登录</button>
+  </block>
+  <block wx:else>
+    <view class="note">验证微信身份后显示将登录的账号；还需再次确认才会让网页登录。首次使用微信登录将按注册开放状态创建账号，已有绑定会沿用原账号。</view>
+    <view class="privacy">隐私说明：本功能使用微信登录凭证识别你的账号，并将确认结果提供给生成该登录码的浏览器。不会向网页提供你的微信身份凭证或小程序会话。</view>
+    <checkbox-group bindchange="consent"><label><checkbox value="accepted" checked="{{accepted}}" color="#b8904d"/>我已阅读并同意上述隐私说明</label></checkbox-group>
+    <button type="primary" loading="{{busy}}" disabled="{{busy}}" bindtap="verify">验证微信身份</button>
+  </block>
+</view>

@@ -408,7 +408,7 @@ test('登录页的文件：走 CSP、不写内联样式或脚本，页面里有 
   assert.doesNotMatch(js, /innerHTML|document\.write|eval\(/);
   // 登录页不引入观测站的模块：首屏轻，也不会因它们的改动而坏
   const imports = [...js.matchAll(/from '\.\/([\w-]+)\.js'/g)].map((m) => m[1]).sort();
-  assert.deepEqual(imports, ['api', 'dom', 'i18n']);
+  assert.deepEqual(imports, ['api', 'dom', 'i18n', 'wechat-login']);
   const e = await boot();
   try {
     const r = await e.call('/login.html');
@@ -431,4 +431,18 @@ test('登录页的文件：走 CSP、不写内联样式或脚本，页面里有 
     assert.ok(Math.abs(Number(inset[2])) <= 16 && Math.abs(Number(inset[4])) <= 16, `衬底左右外扩 ${inset[4]} / ${inset[2]}px，超过了页面边距`);
     assert.match(css, /\.login-main \{[^}]*overflow-x: clip;/);
   } finally { await e.close(); }
+});
+
+test('微信扫码入口按服务端能力显示，切换回密码登录会关闭二维码', async () => {
+  const env = setup({ ...openAccount, wechatQrEnabled: true }, {
+    '/api/wechat/qr/create': () => reply(503, { error: { message: '扫码暂不可用' } }),
+  });
+  try {
+    const page = await env.mount();
+    assert.deepEqual(tabs(env.root), ['登录', '注册', '微信扫码']);
+    page.show('wechat'); await settle();
+    assert.match(env.root.textContent, /扫码暂不可用/);
+    page.show('login'); assert.deepEqual(names(env.root), ['username', 'password']);
+    page.dispose();
+  } finally { env.restore(); }
 });

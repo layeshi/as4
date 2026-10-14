@@ -1,3 +1,4 @@
+import { mountWechatLogin } from './wechat-login.js';
 // 登录页（login.html）：网页版的入口。服务器开着登录门时，没有登录的访问（页面与公共接口）都落到这里；
 // 登录或注册成功后回到原来要去的页面（?next=）。已经登录的人打开它会直接被送进去。
 // 只依赖 dom / i18n / api，不引入观测站的模块，首屏轻。所有文字经 textContent。
@@ -7,7 +8,7 @@ import { getLang, setLang } from './i18n.js';
 import { api, errorText, LOGIN_PAGE } from './api.js';
 
 const tr = (zh, en) => (getLang() === 'en' ? en : zh);
-const MODES = ['login', 'register'];
+const MODES = ['login', 'register', 'wechat'];
 const BOUNCE_KEY = 'houren.loginBounce';
 
 /**
@@ -65,7 +66,9 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
   const params = new URLSearchParams(search);
   let mode = MODES.includes(params.get('mode')) ? params.get('mode') : 'login';
   let account = null; // GET /api/account 的结果
-  let generation = 0;
+  let generation = 0, qr = null;
+  const stopQr = () => { qr?.dispose(); qr = null; };
+  const show = id => { mode = id; render(); };
 
   const target = () => {
     const next = safeNext(params.get('next'), origin);
@@ -74,6 +77,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
 
   async function load() {
     const version = ++generation;
+    stopQr();
     clear(root).append(h('p', { class: 'login-loading' }, tr('正在确认登录状态…', 'Checking your sign-in…')));
     const r = await api('/api/account');
     if (version !== generation) return;
@@ -98,17 +102,25 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
   }
 
   function render() {
+    const version = ++generation; stopQr();
     const tabs = [['login', tr('登录', 'Sign in'), tr('登录', 'Sign in')]];
     if (account.registrationOpen) tabs.push(['register', tr('注册', 'Register'), tr('注册并进入', 'Register and enter')]);
+    if (account.wechatQrEnabled) tabs.push(['wechat', tr('微信扫码', 'WeChat'), '']);
     if (!tabs.some(([id]) => id === mode)) mode = 'login';
     const wall = account.loginRequired === true;
 
     const message = h('p', { role: 'status', 'aria-live': 'polite', class: 'account-message' });
-    const show = (id) => { mode = id; render(); };
     const tablist = h('div', { class: 'login-tabs', role: 'group', 'aria-label': tr('登录方式', 'Sign-in options') }, tabs.map(([id, label]) => h('button', {
       type: 'button', class: 'login-tab', 'aria-pressed': String(id === mode), onClick: () => show(id),
     }, label)));
 
+    if (mode === 'wechat') {
+      const content = h('div', { class: 'wechat-login' });
+      clear(root).append(h('div', { class: 'login-card card-panel' },
+        h('h2', { class: 'login-card-title' }, tr('微信扫码登录', 'Sign in with WeChat')), tablist, content));
+      qr = mountWechatLogin(content, () => navigate(target()));
+      return;
+    }
     const creating = mode !== 'login';
     const inputs = {};
     const fields = [];
@@ -144,6 +156,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
       message.className = 'account-message';
       message.textContent = tr('正在处理…', 'Working…');
       const r = await api(`/api/account/${mode}`, { method: 'POST', body });
+      if (version !== generation) return;
       if (r.ok) {
         message.textContent = tr('成功，正在进入…', 'Success. Taking you in…');
         navigate(target());
@@ -170,6 +183,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
   return {
     show: (id) => { if (account && !account.user) show(id); },
     get mode() { return mode; },
+    dispose: () => { generation++; stopQr(); },
     /** 换语言后重画：不必再读一次账号 */
     relabel: () => (account && !account.user ? render() : load()),
   };
@@ -193,6 +207,7 @@ if (typeof document !== 'undefined') {
     };
     labels();
     const page = await mountLogin({ root, search: location.search, hash: location.hash, origin: location.origin });
+    window.addEventListener('pagehide', () => page.dispose());
     lang.addEventListener('click', () => { setLang(getLang() === 'zh' ? 'en' : 'zh'); labels(); page.relabel(); });
   }
 }

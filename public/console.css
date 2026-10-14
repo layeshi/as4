@@ -358,3 +358,9 @@ a.summary-stat small { color: var(--accent); }
   .resident-metric strong, .summary-stat strong { font-size: 20px; }
   .page-title-row .resident-avatar.large { width: 56px; height: 56px; }
 }
+
+/* WeChat sign-in: same-origin image, no external scripts or embedded frames. */
+.wechat-login { display: grid; justify-items: center; gap: 14px; text-align: center; }
+.wechat-login-code { max-width: 100%; height: auto; border-radius: 12px; border: 8px solid #fff; background: #fff; }
+.wechat-login-code[hidden] { display: none; }
+.wechat-check-code { font: 600 1.15rem monospace; letter-spacing: .16em; }

@@ -90,7 +90,7 @@ function limit(ctx, req, body, registering = false) {
 export const accountRoutes = [
   ['GET', '/api/account', wrap(({ req, res, ctx }) => {
     const user = accountFor(ctx, req);
-    sendJson(res, 200, { user: user ? publicUser(user) : null, registrationOpen: ctx.cfg.registrationOpen !== false, loginRequired: ctx.cfg.requireLogin === true });
+    sendJson(res, 200, { user: user ? publicUser(user) : null, registrationOpen: ctx.cfg.registrationOpen !== false, loginRequired: ctx.cfg.requireLogin === true, wechatQrEnabled: ctx.wechatWebLogin.enabled });
   })],
   ['POST', '/api/account/register', wrap(async ({ req, res, ctx, body }) => {
     limit(ctx, req, body, true);

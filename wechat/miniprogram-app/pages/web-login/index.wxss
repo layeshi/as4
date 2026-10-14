@@ -1,0 +1,14 @@
+page { background: #0c1725; color: #eee5d5; }
+.page { padding: 64rpx 44rpx; line-height: 1.7; }
+.brand { color: #d4b57a; letter-spacing: .2em; }
+.title { font-size: 46rpx; margin: 24rpx 0; font-weight: 600; }
+.note,.privacy { color: #b6c2cf; font-size: 28rpx; margin: 28rpx 0; }
+.privacy { padding: 24rpx; background: #17283b; border-radius: 16rpx; }
+.label { color: #b6c2cf; margin-top: 28rpx; }
+.account { overflow-wrap: anywhere; font-size: 30rpx; }
+.code { font-size: 56rpx; letter-spacing: .2em; color: #e5c386; margin-bottom: 36rpx; }
+.error { color: #ffaca2; margin: 24rpx 0; }
+.done { font-size: 36rpx; margin-top: 48rpx; }
+button { margin-top: 28rpx; }
+button[type=primary] { background: #cfad72; color: #17202c; }
+checkbox-group { font-size: 28rpx; }

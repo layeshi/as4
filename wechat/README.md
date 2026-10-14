@@ -17,6 +17,8 @@ npm run upload
 
 账号绑定、网页登录密码与双账号合并的使用方式、恢复机制和上线条件见 [绑定与合并说明](../docs/plans/2026-10-14-wechat-account-binding.md)。
 
+网页微信扫码登录的流程和上线顺序见 [扫码登录说明](../docs/plans/2026-10-14-wechat-web-login.md)。正式开放前须先发布 `pages/web-login/index` 确认页。
+
 <details><summary>小游戏发布历史说明</summary>
 
 # 后人纪 · 微信小游戏

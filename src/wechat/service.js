@@ -37,6 +37,26 @@ export class WechatService {
     // session_key and unionid are deliberately discarded.
     return { appid: this.appid, openid: data.openid, verifiedAt: Date.now() };
   }
+  async loginCode(scene, environment = 'release') {
+    if (!/^[a-f0-9]{32}$/.test(scene) || !['release', 'trial', 'develop'].includes(environment)) fail(400, 'invalid_qr', '扫码登录配置无效。');
+    const token = await this.accessToken();
+    try {
+      const url = new URL('https://api.weixin.qq.com/wxa/getwxacodeunlimit');
+      url.searchParams.set('access_token', token);
+      const response = await this.fetcher(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000),
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene, page: 'pages/web-login/index', check_path: environment === 'release', env_version: environment, width: 430 }) });
+      if (!response.ok) throw Error();
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.length > 256 * 1024) throw Error();
+      const png = bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+      const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+      if (!png && !jpeg) {
+        try { if ([40001, 42001].includes(JSON.parse(bytes.toString()).errcode)) this.token = null; } catch {}
+        throw Error();
+      }
+      return { bytes, type: png ? 'image/png' : 'image/jpeg' };
+    } catch { fail(503, 'wechat_qr_unavailable', '暂时无法生成微信登录码，请稍后重试或使用密码登录。'); }
+  }
   async accessToken() {
     if (!this.enabled) fail(503, 'wechat_unconfigured', '微信内容审核尚未配置。');
     if (this.token && this.token.until > Date.now()) return this.token.value;
