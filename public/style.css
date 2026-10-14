@@ -895,3 +895,10 @@ ul.reading { list-style: none; padding-left: 0; }
 .hub-link span { font-size: 12px; }
 .hub-link .hub-alert { color: var(--warn); font-weight: 600; }
 .hub-actions { justify-content: flex-end; margin-top: 12px; }
+
+/* Knowledge and cooperation use the observation station’s existing palette. */
+.coop-nav { display:flex; flex-wrap:wrap; gap:.5rem; margin:.8rem 0; }
+.coop-records { display:grid; gap:.8rem; }
+.coop-card { padding:1rem; border:1px solid var(--line, #39404b); border-radius:.5rem; }
+.coop-card h3, .coop-card h4 { margin-top:0; }
+.coop-body { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.7; margin:.65rem 0; }

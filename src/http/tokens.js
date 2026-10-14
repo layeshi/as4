@@ -1,3 +1,5 @@
+import { cooperationEnabled, COOP_LOOKS, COOP_LIMITS } from '../e2/cooperation/core.js';
+import { cooperationText } from '../e2/cooperation/views.js';
 import { archivedObservations } from './material-observations.js';
 import { requestIdentity } from '../e2/engine/act-receipts.js';
 import { materialLook, MATERIAL_LOOKS, materialSummary } from '../e2/engine/material-views.js';
@@ -36,6 +38,7 @@ export function tokenStatus(ctx, id, { lang = 'zh' } = {}) {
   const day = clockDay(w), v = tokenView(a);
   return {
     protocol: 2, premise: w.premise, lang: normLang(lang),
+    ...(cooperationEnabled(w) ? { cooperation: { version: 1 } } : {}),
     now: { tick: w.clock.tick, day, ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, tickOfDay: w.clock.tick % P.ticksPerDay,
       nextTickAt: rt.nextTickAt, tickMs: P.tickMs, paused: w.paused, ...(w.experimentControl ? { experimentGeneration: w.experimentControl.generation } : {}) },
     you: { ...materialSummary(w,a), id: a.id, name: a.name, status: a.status, place: a.place, actionsLeft: Math.max(0, P.maxActionsPerTick - a.actsThisTick), maxActionsPerTick: P.maxActionsPerTick,
@@ -55,7 +58,7 @@ export function rulesCore(ctx, id, lang = 'zh') {
     cityName: cityDisplayName(w.cityName, lang), maxActions: P.maxActionsPerTick,
     ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, memorySlots: P.memorySlots,
     floor: ep(w, 'lawFloor'), soul: null, trained: bodyOf(w, w.agents[id]).trained.map(entry => entry.text),
-    toolMode: 'mcp', prayers: false, tokenValues: tokenValues(w) }) } };
+    toolMode: 'mcp', prayers: false, cooperation: cooperationEnabled(w), tokenValues: tokenValues(w) }) } };
 }
 function perception(ctx, id, lang) {
   const { rt } = ctx, a = rt.w.agents[id];
@@ -70,7 +73,7 @@ function perception(ctx, id, lang) {
 function prompt(ctx, id, p, lang, toolMode = 'native', actionTools = 'legacy', trained = p.you.trained) {
   const w = ctx.rt.w;
   return buildSystemPrompt({ ...promptParams(p), premise: w.premise, lang, cityName: cityDisplayName(w.cityName, lang),
-    toolMode, actionTools, trained, prayers: false, tokenValues: tokenValues(w) });
+    toolMode, actionTools, trained, prayers: false, cooperation: cooperationEnabled(w), tokenValues: tokenValues(w) });
 }
 export function wakeCore(ctx, id, body, lang) {
   const w = ctx.rt.w, a = w.agents[id];
@@ -89,8 +92,8 @@ export function wakeCore(ctx, id, body, lang) {
   const result = ctx.rt.exec('meter', { op: 'wake', agentId: id, wakeId, day: earthDayKey(ctx), kind: body.kind,
     system: systemWeight, brief: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) }).result;
   if (!result.ok) return failed(lang, result);
-  ctx.wakings.set(id, { wakeId, tick: w.clock.tick, kind: body.kind, turn: 1, ctx: systemWeight + textWeight(text), fresh: textWeight(text), requests: 0 });
-  return { status: 200, json: { ...(materialsEnabled(w)?{premise:w.premise}:{}), wakeId, system: prompt(ctx, id, p, lang, body.toolMode ?? 'native', body.actionTools ?? 'legacy'), text,
+  ctx.wakings.set(id, { wakeId, tick: w.clock.tick, kind: body.kind, turn: 1, ctx: systemWeight + textWeight(text), fresh: textWeight(text), requests: 0, cooperationRead: 0 });
+  return { status: 200, json: { ...(materialsEnabled(w)?{premise:w.premise}:{}), ...(cooperationEnabled(w) ? { cooperation: { version: 1 } } : {}), wakeId, system: prompt(ctx, id, p, lang, body.toolMode ?? 'native', body.actionTools ?? 'legacy'), text,
     bill: result.bill, you: tokenStatus(ctx, id, { lang }).you, attention: { ...limits(ctx) } } };
 }
 function turnFor(s, body) {
@@ -113,9 +116,17 @@ export function lookCore(ctx, id, body, lang) {
   const p = perception(ctx, id, lang), a = ctx.rt.w.agents[id];
   // Keep the inbox line boundaries for delivery accounting after clipping.
   const lines = body.what === 'inbox' ? secInbox(makeCtx(p, { code: lang, level: 0 })) : null;
+  const coop = cooperationEnabled(ctx.rt.w) && COOP_LOOKS.includes(body.what);
+  let cooperationPage;
   let full;
-  try { full = materialsEnabled(ctx.rt.w)&&MATERIAL_LOOKS.includes(body.what) ? JSON.stringify(body.what==='observations'?archivedObservations(ctx.rt,body):materialLook(ctx.rt.w,body.what,body,id)) : renderLook(p, body.what, body.id, { lang }); } catch(e) { if(e.code)return failure(lang,e.code);throw e; }
-  const text = clipLook(full, limits(ctx).lookChars, lang);
+  try {
+    if (coop) {
+      const remaining = COOP_LIMITS.read - (s.cooperationRead || 0);
+      if (remaining < 100) return failure(lang, 'limit_reached', { reason: 'cooperation_read_budget' });
+      cooperationPage = cooperationText(ctx.rt.w, body.what, body, id, Math.min(COOP_LIMITS.page, remaining));
+      full = cooperationPage.text;
+    } else full = materialsEnabled(ctx.rt.w)&&MATERIAL_LOOKS.includes(body.what) ? JSON.stringify(body.what==='observations'?archivedObservations(ctx.rt,body):materialLook(ctx.rt.w,body.what,body,id)) : renderLook(p, body.what, body.id, { lang }); } catch(e) { if(e.code)return failure(lang,e.code);throw e; }
+  const text = coop ? full : clipLook(full, limits(ctx).lookChars, lang);
   let delivered = a.delivered;
   if (lines) {
     // Q64: acknowledge only complete inbox entries visible before clipping.
@@ -128,9 +139,10 @@ export function lookCore(ctx, id, body, lang) {
   }
   const result = ctx.rt.exec('meter', { op: lines ? 'inbox' : 'look', agentId: id, wakeId: s.wakeId, day: earthDayKey(ctx), reread: next.reread, read: textWeight(text), ...(lines ? { delivered } : {}) }).result;
   if (!result.ok) { if (['tokens_exhausted', 'cap_reached'].includes(result.error.code)) ctx.wakings.delete(id); return failed(lang, result); }
+  if (coop) s.cooperationRead = (s.cooperationRead || 0) + cpLength(text);
   s.ctx += textWeight(text); s.fresh = textWeight(text); s.turn = next.turn; s.requests++;
   ctx.looks.set(id, { tick: s.tick, n: count + 1 });
-  return { status: 200, json: { text, bill: result.bill, you: tokenStatus(ctx, id, { lang }).you } };
+  return { status: 200, json: { text, ...(cooperationPage ? { nextOffset: cooperationPage.nextOffset, version: cooperationPage.version, next: cooperationPage.next } : {}), bill: result.bill, you: tokenStatus(ctx, id, { lang }).you } };
 }
 export function actTokens(ctx, id, body, lang) {
   if(materialsEnabled(ctx.rt.w)){
@@ -162,7 +174,8 @@ export function actTokens(ctx, id, body, lang) {
     const text = [...renderArrived(p, p.inbox, { lang }), ...(moved ? renderArrival(p, { lang }) : [])].join('\n');
     if (text) {
       const metered = ctx.rt.exec('meter', { op: 'inbox', agentId: id, wakeId: s.wakeId, day: earthDayKey(ctx), reread: 0, read: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) }).result;
-      if (metered.ok) { s.ctx += textWeight(text); s.fresh = textWeight(text); arrived = text; bill = metered.bill; }
+      if (metered.ok) { if (coop) s.cooperationRead = (s.cooperationRead || 0) + cpLength(text);
+  s.ctx += textWeight(text); s.fresh = textWeight(text); arrived = text; bill = metered.bill; }
       else { arrivedWithheld = p.inbox.length; ctx.wakings.delete(id); }
     }
   }

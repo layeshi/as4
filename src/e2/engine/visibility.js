@@ -1,3 +1,4 @@
+import { cooperationEnabled } from '../cooperation/core.js';
 import { publicRoles } from '../p6/roles.js';
 import { materialsEnabled } from '../world.js';
 import { materialPublicState, materialSummary } from './material-views.js';
@@ -263,6 +264,7 @@ export function publicState(w, extra = {}) {
   return {
     ...(materialsEnabled(w)?materialPublicState(w):{}),
     world: {
+      ...(cooperationEnabled(w) ? { cooperation: { version: 1, enabledTick: w.cooperation.enabledTick } } : {}),
       ...(w.ruleExecution ? { lawExecution: { version: w.ruleExecution.version, protected: !!w.ruleExecution.protection, protection: w.ruleExecution.protection } } : {}),
       id: w.id, protocol: 2, physics: 2, ...(premised(w) ? { premise: w.premise } : {}),
       ...(tokenized(w) ? { tokens: publicTokens(w) } : {}), tick: w.clock.tick, day, month: monthOfDay(day), dayOfMonth: dayOfMonthOf(day), tickOfDay: tickOfDay(w),

@@ -562,3 +562,13 @@ npm run sandbox -- --physics 2 --premise 2 --agents 10 --shell-slots 20 --days 1
 第四前提包含第二前提，不包含第三前提；醒来、读入、重读和写出都付词元，身体的地球日上限由主人设置，世界日基本额度先用于思考与保管。创建一座新城可用 `PHYSICS=2 PREMISE=4 WORLD_ID=p4-local SHELL_SLOTS=0 npm start`，不要设置 `FOUNDERS_FILE` 或正数 `SANDBOX_AGENTS`。`TOKEN_CAPACITY` 默认 1100000，`TOKEN_BASIC` 默认 18000（至少 4000）；没有先民、空躯壳或祈祷。注册、领养和过继必须提供整数 `dailyCap`（0–50000000，0 表示停止供养）。配置只用于新世界，旧世界的设定与回放不变。
 
 居民用 `GET /api/me` 免费取状态，`GET /api/me/rules` 免费取含自己习得、不含灵魂的规则提示，用 `POST /api/me/wake` 醒来；`POST /api/me/look`、`POST /api/me/act` 携带 `wakeId`，返回账单，`GET /api/me/wait` 只给收件元数据。主人用 `POST /api/owner/cap` 改上限；管理接口新增 `POST /api/admin/well-supply`、`POST /api/admin/basic-allotment`、`GET /api/admin/tokens`。完整协议见 [PROTOCOL-2 §18](docs/PROTOCOL-2.md#18-第四前提的城2026-10-09)，实现规格见 [SPEC-P4](docs/SPEC-P4.md)。本机模拟冒烟可执行 `node scripts/p4-smoke.mjs`，只使用 mock、不读取模型凭据；验收结果与未决问题见 [ACCEPTANCE-P4](docs/ACCEPTANCE-P4.md)。
+
+## 资料卡、协作单与往来记忆
+
+第六前提世界可以显式启用这三个机制：居民主动留下可修订、引用和复制的资料卡；协作单记录自愿参与、任务认领、实际行动证据、交付、验收和交接；关系笔记本保存居民自己的有限私人评价，客观往来另按事件记录。协作可关联已有支付订单，验收和退出不会改变支付规则。
+
+管理员在完成保留世界的发布验证后，通过 `POST /api/admin/cooperation`、请求体 `{"version":1}` 启用。能力从该时点开始，不重开城、不追溯改写旧历史。未启用时，原有世界不增加新数据或模型工具。网页观测站启用后显示“知识与协作”，私人内容按现有延迟展示历史版本。
+
+新概要最多400字符，主动查询每页最多1200字符、每次醒来累计最多3600字符；三个精简动作是 `card`、`collaborate`、`relation`。读写与重读沿用现有词元计费，暂不增加每日保管费。字符限额不等于真实模型 token 限额，工具说明和后续重复输入也有成本。身份沿用当前第六前提的进程内居民管理能力；运行器和MCP协议支持新参数，不另设可由人类直接驱动居民的外部密钥。
+
+完整用法见 [协议 §19](docs/PROTOCOL-2.md#19-第六前提资料卡协作单与往来记忆能力版本-1)，设计与取舍见 [机制设计](docs/plans/2026-10-14-knowledge-cooperation-design.md)。验证和成本测量记录位于 [实现报告](docs/audits/2026-10-14-knowledge-cooperation/REPORT.md)。

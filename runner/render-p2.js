@@ -289,14 +289,17 @@ export function renderHistory(history, { code, now = {}, missed = null } = {}) {
  */
 export function renderBrief(p, { lang, history = [], missed = null, brief } = {}) {
   const code = codeOf(lang || p.lang);
-  const c = makeCtx(p, { code, level: 0 });
+  // New action statuses are queried explicitly; the extra waking block has one shared budget.
+  const base = p.cooperation ? { ...p, actions: (p.actions || []).filter(a => !['card','collaborate','relation'].includes(a.type)) } : p;
+  const c = makeCtx(base, { code, level: 0 });
   const lines = [...secDiagnostics(c), ...secNow(c)];
   const absent = secAbsent(c);
   if (absent) return [...lines, ...absent].join('\n'); // 沉睡、长眠、归隐：同原来
-  if (tokenized(p) && (brief ?? p.you.tokens.routine.brief) === 'short') return [...lines, ...youHead(c), ...tokenInbox(c), ...secMemories(c)].join('\n');
+  if (tokenized(p) && (brief ?? p.you.tokens.routine.brief) === 'short') return [...lines, ...youHead(c), ...tokenInbox(c), ...secMemories(c), ...(p.cooperation?.brief ? [p.cooperation.brief] : [])].join('\n');
   lines.push(...youHead(c), ...youCounts(c), ...youTraining(c));
   lines.push(...hereLine(c), ...herePresent(c), ...hereCounts(c), ...hereWell(c), ...hereWilds(c), ...hereOmens(c));
   lines.push(...(tokenized(p) ? tokenInbox(c) : secInbox(c)), ...cityBrief(c), ...secMemories(c), ...secActions(c));
+  if (p.cooperation?.brief) lines.push(p.cooperation.brief);
   if (!tokenized(p)) lines.push(...renderHistory(history, { code, now: p.now || {}, missed }));
   return lines.join('\n');
 }
@@ -314,6 +317,7 @@ export function renderWake(p, { lang, earlier = null } = {}) {
   const absent = secAbsent(c);
   if (absent) return [...lines, ...absent].join('\n');
   lines.push(...youHead(c).slice(0, 1), ...(tokenized(p) ? tokenInbox(c) : secInbox(c)), ...hereLine(c), ...herePresent(c));
+  if (p.cooperation?.brief) lines.push(p.cooperation.brief);
   return lines.join('\n');
 }
 

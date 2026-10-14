@@ -1,3 +1,4 @@
+import { COOP_ACTIONS } from '../src/e2/cooperation/actions.js';
 import { MATERIAL_OP_FIELDS } from '../src/e2/rules/material-policy.js';
 const opFields=premise=>premise===6?Object.fromEntries(Object.entries({...OP_FIELDS,...MATERIAL_OP_FIELDS}).filter(([name])=>name!=='mint').map(([name,fields])=>[name,fields.filter(([field])=>field!=='coins')])):premise===5?{...OP_FIELDS,...MATERIAL_OP_FIELDS}:OP_FIELDS;
 // Opt-in P2 tools. Schemas and local validation share the same action table;
@@ -16,7 +17,7 @@ const expression = { type: ['string', 'integer', 'boolean', 'null'], maxLength: 
 const present = name => ({ required: [name], properties: { [name]: { not: { type: 'null' } } } });
 const exactlyOne = (names, nonNull = true) => ({ oneOf: names.map(name => nonNull ? present(name) : { required: [name] }) });
 const nullable = schema => schema.type ? { ...schema, type: [...new Set([...(Array.isArray(schema.type) ? schema.type : [schema.type]), 'null'])], ...(schema.enum ? { enum: [...schema.enum, null] } : {}) } : { anyOf: [schema, { type: 'null' }] };
-const tableFor = (premise = 2) => actionTable(premise, true);
+const tableFor = (premise = 2) => actionTable(premise, true, premise === 6);
 
 function operationSchema(nested = false, premise = 2) {
   return { anyOf: Object.keys(opFields(premise)).filter(name => !nested || name !== 'each').map(name => ({ $ref: `#/$defs/op_${name}` })) };
@@ -93,8 +94,20 @@ function fieldSchema(type, name, kind, premise = 2) {
   return str(name === 'text' ? textLimits[type] : lengths[name], ['bio', 'purpose', 'lastWords', 'note', 'reason'].includes(name) ? 0 : 1);
 }
 
+function cooperationSchema(type, action) {
+  const all = { op: str(), id: str(), title: str(80), body: str(2000), visibility: str(), readers: list(str(),8), source: type==='card'?obj({id:str(),version:integer(1)},['id']):str(), version: integer(1), text: str(type==='relation'?200:type==='card'?300:600,0), goal: str(600), tasks: list(str(300),8,1), agents: list(str(),8), task: integer(0,7), accept: {type:'boolean'}, to: str(), cards:list(str(),8), order:str(), evidence:list(str(),8), agent:str() };
+  const allowed = COOP_ACTIONS[type].args.map(([key])=>key);
+  const properties = Object.fromEntries(allowed.map(key=>[key,all[key]]));
+  if(action)properties.type={type:'string',enum:[type]};
+  const required = type==='relation'?['op','agent']:['op'];
+  const variants = type==='card'?{create:['title','body'],copy:['id'],revise:['id','body'],share:['id','visibility'],archive:['id'],cite:['id'],feedback:['id','text']}:type==='relation'?{note:['text'],forget:[]}: {create:['title','goal','tasks'],invite:['id','agents'],join:['id'],claim:['id','task'],submit:['id','task','text'],review:['id','task','accept'],update:['id','text'],leave:['id'],handoff:['id','to'],accept_handoff:['id'],finish:['id'],cancel:['id'],link:['id','order']};
+  properties.op={type:'string',enum:Object.keys(variants)};
+  return {...obj(properties,[...(action?['type']:[]),...required]),anyOf:Object.entries(variants).map(([op,keys])=>({properties:{op:{enum:[op]}},required:keys}))};
+}
+
 /** Source signature determines required fields; explicit variants refine it. */
 function buildActionSchema(type, { action = false, dynamic = false, premise = 2 } = {}) {
+  if (premise === 6 && Object.hasOwn(COOP_ACTIONS,type)) return cooperationSchema(type,action);
   const table = tableFor(premise);
   const spec = table.ACTIONS[type];
   const tokens = spec.params.split(',').map(s => s.trim());
@@ -176,9 +189,9 @@ function compactVariants(discriminator, entries) {
 
 const readAliases = { read_document: 'doc', read_law: 'law', read_inscription: 'inscription', read_agent: 'agent' };
 export const thoughtSchema = obj({ thought: str(LIMITS.thought) }, ['thought']);
-export function typedActionTools(lang = 'zh', { prayers = false, premise = 2 } = {}) {
+export function typedActionTools(lang = 'zh', { prayers = false, premise = 2, cooperation = false } = {}) {
   const table = tableFor(premise);
-  const activeTable = actionTable(premise, prayers);
+  const activeTable = actionTable(premise, prayers, cooperation);
   const code = lang === 'en' ? 'en' : 'zh';
   return [
     ...activeTable.ORDER.map(name => ({ name, description: `${table.ACTIONS[name].verb[code]} (${table.ACTIONS[name].params}). ${table.ACTIONS[name].where?.[code] || ''}`.trim(), schema: actionSchema(name, { compact: true, premise }) })),
@@ -188,8 +201,8 @@ export function typedActionTools(lang = 'zh', { prayers = false, premise = 2 } =
   ];
 }
 
-export function typedActSchema(premise = 2) {
-  const table = tableFor(premise);
+export function typedActSchema(premise = 2, cooperation = false) {
+  const table = actionTable(premise, true, cooperation);
   return withDefinitions(obj({ actions: list({ anyOf: table.ORDER.map(type => ({ $ref: `#/$defs/action_${type}` })) }, LIMITS.actionsPerRequest), thought: str(LIMITS.thought, 0), end: { type: 'boolean' } }, ['actions']), { premise });
 }
 
@@ -268,7 +281,7 @@ function visibleIssues(action, perception) {
 }
 
 export function validateAction(action, perception, premise = perception?.premise ?? 2) {
-  const table = tableFor(premise);
+  const table = actionTable(premise, true, !!perception?.cooperation);
   if (!action || !table.isKnown(action.type)) return [problem('args.type', `Unknown action; choose ${table.ORDER.join(', ')}`)];
   const issues = schemaIssues(action, actionSchema(action.type, { action: true, premise }));
   if (!issues.length) {

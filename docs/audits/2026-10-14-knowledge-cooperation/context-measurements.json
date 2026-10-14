@@ -1,0 +1,68 @@
+{
+  "unit": "Unicode code points, not provider tokens",
+  "measurements": [
+    {
+      "label": "enabled_unused",
+      "baseline": {
+        "brief": 1088,
+        "system": 11530,
+        "tools": 68936
+      },
+      "enabled": {
+        "brief": 1161,
+        "system": 11892,
+        "tools": 73028
+      },
+      "delta": {
+        "brief": 73,
+        "system": 362,
+        "tools": 4092
+      }
+    },
+    {
+      "label": "card_collaboration_note",
+      "baseline": {
+        "brief": 1165,
+        "system": 11530,
+        "tools": 68936
+      },
+      "enabled": {
+        "brief": 1294,
+        "system": 11892,
+        "tools": 73028
+      },
+      "delta": {
+        "brief": 129,
+        "system": 362,
+        "tools": 4092
+      }
+    }
+  ],
+  "readExample": {
+    "firstPageCharacters": 1084,
+    "nextOffset": 1040,
+    "firstBill": {
+      "id": "w0-444c60",
+      "tick": 0,
+      "kind": "main",
+      "reread": 726,
+      "read": 1628,
+      "write": 0
+    },
+    "secondBill": {
+      "id": "w0-444c60",
+      "tick": 0,
+      "kind": "main",
+      "reread": 1521,
+      "read": 2145,
+      "write": 0
+    },
+    "totalReturnedCharacters": 1741
+  },
+  "providerCalls": 0,
+  "limits": {
+    "brief": 400,
+    "page": 1200,
+    "wakingReads": 3600
+  }
+}

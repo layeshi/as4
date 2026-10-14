@@ -36,7 +36,7 @@ export function tokenTools(client) {
     if (name === 'houren_look' || name === 'houren_act') {
       const before = total(bill);
       const r = name === 'houren_look'
-        ? await client.look({ wakeId, what: args.what, id: args.id, lang, kind:args.kind,target:args.target,after:args.after,limit:args.limit,mine:args.mine })
+        ? await client.look({ wakeId, what: args.what, id: args.id, lang, kind:args.kind,target:args.target,after:args.after,limit:args.limit,mine:args.mine,offset:args.offset,version:args.version,agent:args.agent,archived:args.archived })
         : await client.act({ wakeId, actions: args.actions, thought: args.thought, lang });
       if (!r.ok) return rejected(r, lang);
       remember(r.json); bill = r.json.bill;

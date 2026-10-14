@@ -349,7 +349,7 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
       }
       if (path === '/api/me/wake') { assert.equal((await env.call(path, { method: 'POST', body: {} })).status, 404); continue; } // P4/P5-only wake; covered by token HTTP tests.
       if (path === '/api/owner/cap') { assert.equal((await env.call(path, { method: 'POST', body: {} })).status, 404); continue; } // SPEC-P4 T22: P4-only, tested separately.
-      if (['materials','services','demands','orders','research','observations','projects','project'].some(k => path === `/api/public/${k}`)) { assert.equal((await env.call(path)).status, 404); continue; } // Material-world routes: positive coverage in p5-http.test.js and project-feedback.test.js.
+      if (['materials','services','demands','orders','research','observations','projects','project','cooperation'].some(k => path === `/api/public/${k}`)) { assert.equal((await env.call(path)).status, 404); continue; } // Material-world routes: positive coverage in p5-http.test.js and project-feedback.test.js.
       if (path === '/api/public/attention') { assert.equal((await env.call(path)).status, 404); continue; } // Q43 A：只在第二前提存在，由 T15 验证。
       const method = ['/api/me/wake', '/api/me/act', '/api/admin/pause', '/api/admin/resume', '/api/admin/law-recover', '/api/account/logout', '/api/port/register', '/api/port/adopt', '/api/port/foster', '/api/owner/letter', '/api/owner/release', '/api/public/weather/vote'].includes(path) ? 'POST' : 'GET';
       const r = await env.call(path, method === 'POST' ? { method, body: {} } : {});

@@ -52,6 +52,7 @@ export const TABS2 = [
 /** 第二纪各页的内容签名：数据没变时不必重画（app.js 的 signature 在第二纪里调用它） */
 export function signature2(tab, s) {
   switch (tab) {
+    case 'cooperation': return String(s.world.tick)+':'+String(s.world.cooperation?.version);
     case 'laws': return JSON.stringify([s.vars, s.procedure, s.charter, s.laws.map((l) => [l.id, l.status, l.suspendedDays, l.suspended]), s.proposals.map((p) => [p.id, p.status, p.tally, p.votes.length]), s.refounds.map((r) => [r.id, r.status, r.signers.length]), s.groups.map((g) => g.bylaws && g.bylaws.setTick), s.petitions.length, s.world.tick, ...(s.world.lawSemanticsVersion === 2 ? [s.laws.map(l => l.enact), s.proposals.map(p => p.enact), s.groups.map(g => g.bylaws && [g.bylaws.fingerprints, g.bylaws.enact]), s.places.map(p => p.rules && [p.rules.fingerprints, p.rules.enact])] : [])]);
     case 'residents': return JSON.stringify(s.agents.map((a) => [a.id, a.status, a.energy, a.coins, a.place, a.groups.length, a.lastActTick, a.ageDays, a.tags.length, a.purpose, a.avatar]));
     case 'groups': return JSON.stringify(s.groups);

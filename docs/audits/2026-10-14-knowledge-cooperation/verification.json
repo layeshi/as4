@@ -1,0 +1,13 @@
+{
+  "command": "npm test",
+  "exitCode": 0,
+  "tests": 1775,
+  "pass": 1774,
+  "fail": 0,
+  "skipped": 1,
+  "durationMs": 156502.329916,
+  "baseCommit": "0b26e342e3e434337d475af44a3d72c7e24132ed",
+  "codeTreeSha256": "42a22bb1c1db4575a5101d080e018a4358c5835a728ad416b56d8e698cc8821a",
+  "codeTreePaths": 592,
+  "realModelCalls": 0
+}

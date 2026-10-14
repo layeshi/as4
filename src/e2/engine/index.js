@@ -1,3 +1,4 @@
+import { recordCooperation } from '../cooperation/relations.js';
 import { accountCommand } from '../p6/access.js';
 import { coinScratch, stripCoins, hasCoinInput } from '../p6/coins.js';
 import { roleReply, roleActivity } from '../p6/roles.js';
@@ -185,6 +186,8 @@ export function prepareCommand(original, cmd) {
       roleActivity(w,out.events); out.events.push(...drainEvents(w)); out.wakes.push(...drainWakes(w));
       const replayed = cmd.type === 'act' && Object.hasOwn(original.actReceipts, `${cmd.payload?.agentId}:${cmd.payload?.experimentGeneration ?? 0}:${cmd.payload?.requestId}`);
       recordResidents(w,before,cmd,replayed ? { ...out.result, replayed:true } : out.result,out.events);
+      recordCooperation(w, cmd, out, replayed);
+      out.events.push(...drainEvents(w));
       stripCoins(w); stripCoins(out);
     }
     return { candidate: w, out };

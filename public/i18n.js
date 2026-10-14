@@ -102,7 +102,7 @@ export const STR = {
     coinsN: '{n} 旧币',
     and: '与',
     // 标签页
-    tab_live: '实况', tab_chronicle: '编年史', tab_laws: '法典', tab_residents: '居民', tab_groups: '社群',
+    tab_cooperation: '知识与协作', tab_live: '实况', tab_chronicle: '编年史', tab_laws: '法典', tab_residents: '居民', tab_groups: '社群',
     tab_environment: '环境', tab_library: '典籍', tab_cemetery: '墓园', tab_metrics: '指标', tab_legacy: '遗产', tab_weather: '天象',
     tabs: '标签页',
     // 状态
@@ -342,7 +342,7 @@ export const STR = {
     energyN: '{n} energy',
     coinsN: '{n} coins',
     and: 'and',
-    tab_live: 'Live', tab_chronicle: 'Chronicle', tab_laws: 'Laws', tab_residents: 'Residents', tab_groups: 'Groups',
+    tab_cooperation: 'Knowledge & cooperation', tab_live: 'Live', tab_chronicle: 'Chronicle', tab_laws: 'Laws', tab_residents: 'Residents', tab_groups: 'Groups',
     tab_environment: 'Environment', tab_library: 'Library', tab_cemetery: 'Cemetery', tab_metrics: 'Metrics', tab_legacy: 'Legacy', tab_weather: 'Weather',
     tabs: 'Tabs',
     status_awake: 'awake', status_dormant: 'dormant', status_dead: 'gone', status_retired: 'retired',
@@ -1102,3 +1102,24 @@ Object.assign(VARS, {
 Object.assign(TPL.zh,{appearance:'{a} 更新了公开形象。',startup_grant:'{a} 获得首次启动发放 {n} 词元。',role_question:'{a} 向公共角色 {role} 提问：“{text}”',role_reply:'公共角色 {role}：“{text}”'});
 Object.assign(TPL.en,{appearance:'{a} updated their public image.',startup_grant:'{a} received {n} startup tokens.',role_question:'{a} asked public role {role}: “{text}”',role_reply:'Public role {role}: “{text}”'});
 Object.assign(CAT,{appearance:'life',startup_grant:'econ',role_question:'speech',role_reply:'speech'});
+
+// Knowledge and cooperation events disclose only the edition released by the engine.
+Object.assign(VARS, {
+  cooperation_enabled: () => ({}),
+  knowledge_card: e => ({ a: A(e.agent), id: e.data.id, version: e.data.version }),
+  collaboration: e => ({ a: A(e.agent), id: e.data.id, version: e.data.version }),
+  relationship_note: e => ({ a: A(e.agent), b: A(e.data.target) }),
+});
+Object.assign(TPL.zh, {
+  cooperation_enabled: '城中开放了资料卡、协作单和往来记忆。',
+  knowledge_card: '{a} 更新了资料卡 {id}，版本 {version}。',
+  collaboration: '{a} 更新了协作单 {id}，版本 {version}。',
+  relationship_note: '{a} 更新了对 {b} 的私人评价。',
+});
+Object.assign(TPL.en, {
+  cooperation_enabled: 'Knowledge cards, collaborations and relationship memories are now available.',
+  knowledge_card: '{a} updated knowledge card {id}, edition {version}.',
+  collaboration: '{a} updated collaboration {id}, edition {version}.',
+  relationship_note: '{a} updated their private judgment of {b}.',
+});
+Object.assign(CAT, { cooperation_enabled: 'admin', knowledge_card: 'know', collaboration: 'polity', relationship_note: 'know' });

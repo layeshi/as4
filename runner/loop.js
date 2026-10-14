@@ -1,3 +1,4 @@
+import { COOP_LOOKS } from '../src/e2/cooperation/core.js';
 import { MATERIAL_LOOKS } from '../src/e2/engine/material-views.js';
 import { tokenized } from '../src/e2/world.js';
 import { missedTokensLine, stoppedTokensLine } from './render-p4.js';
@@ -32,7 +33,7 @@ const HISTORY_KEEP = 2; // 摘要的条数：historyRounds 缺省时
  * 原生工具调用的两个工具（附录 A.3，中立定义 [{ name, description, schema }]，各家的提供者转成自己的格式）：
  * look 展开概要里的一段，act 行动。描述按居民的语言给。
  */
-export function toolDefs(lang, { actionTools, premise = 0, prayers = false } = {}) {
+export function toolDefs(lang, { actionTools, premise = 0, prayers = false, cooperation = false } = {}) {
   const t = D2[lang === 'en' ? 'en' : 'zh'].tools;
   const legacy = [
     {
@@ -41,7 +42,7 @@ export function toolDefs(lang, { actionTools, premise = 0, prayers = false } = {
         ((premise === 5 || premise === 6) ? (lang === 'en' ? ' projects lists all project states; project requires id and shows recorded deposits, consumption and your participation checks. Use limit/after to page contributors; lower limit if truncated.' : ' projects 列出所有状态工程；project 须填 id，核对实际出资、消耗和你的参与条件。用 limit/after 分页出资账户，文字截断时减小 limit。') : ''),
       schema: {
         type: 'object',
-        properties: { what: { type: 'string', enum: [...(tokenized({ premise }) ? LOOK_WHATS_P4 : LOOK_WHATS),...((premise === 5 || premise === 6)?MATERIAL_LOOKS:[])] }, id: { type: 'string' },...((premise === 5 || premise === 6)?{kind:{type:'string',enum:['regrowth','construction']},target:{type:'string'},after:{type:'string'},limit:{type:'integer',minimum:1,maximum:50},mine:{type:'boolean'}}:{}) },
+        properties: { what: { type: 'string', enum: [...(tokenized({ premise }) ? LOOK_WHATS_P4 : LOOK_WHATS),...((premise === 5 || premise === 6)?MATERIAL_LOOKS:[]), ...(cooperation ? COOP_LOOKS : [])] }, id: { type: 'string' },...((premise === 5 || premise === 6)?{kind:{type:'string',enum:['regrowth','construction']},target:{type:'string'},after:{type:'string'},limit:{type:'integer',minimum:1,maximum:50},mine:{type:'boolean'}, ...(cooperation?{offset:{type:'integer',minimum:0},version:{type:'integer',minimum:1},agent:{type:'string'},archived:{type:'boolean'}}:{})}:{}) },
         required: ['what'],
         additionalProperties: false,
       },
@@ -62,7 +63,7 @@ export function toolDefs(lang, { actionTools, premise = 0, prayers = false } = {
     },
   ];
   if (actionTools !== 'typed' || premise < 2) return legacy;
-  return [legacy[0], ...typedActionTools(lang, { prayers, premise })].map(t => ({ ...t, strict: false }));
+  return [legacy[0], ...typedActionTools(lang, { prayers, premise, cooperation })].map(t => ({ ...t, strict: false }));
 }
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -73,7 +74,7 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
  * 同一个对象里有几种时，按 look、act、done 的顺序处理。返回 { ok: true, calls } 或 { ok: false, calls: [], error }；
  * calls 是中立的 [{ id, name, args }]（id 用 j1、j2……，done 的 name 是 'done'）。参数不是对象的调用 args 为 null，运行器给它参数错误的结果。
  */
-export function parseToolJson(text, { actionTools, premise = 0, prayers = false } = {}) {
+export function parseToolJson(text, { actionTools, premise = 0, prayers = false, cooperation = false } = {}) {
   const parsed = parseModelJson(text);
   if (!parsed.ok) return { ok: false, calls: [], error: parsed.error };
   const v = parsed.value;
@@ -84,7 +85,7 @@ export function parseToolJson(text, { actionTools, premise = 0, prayers = false 
   }
   if (Object.hasOwn(v, 'act')) add('act', Array.isArray(v.act) ? { actions: v.act } : isObj(v.act) ? v.act : null);
   if (actionTools === 'typed' && premise >= 2) {
-    const names = new Set(typedActionTools('en', { prayers, premise }).map(t => t.name));
+    const names = new Set(typedActionTools('en', { prayers, premise, cooperation }).map(t => t.name));
     for (const [name, args] of Object.entries(v)) if (name !== 'done' && names.has(name)) add(name, args);
   }
   if (v.done === true) add('done', {});
@@ -176,7 +177,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
   }
   }
   const system = p4 ? tokenWake.system : S.system;
-  const tools = toolDefs(lang, { actionTools: cfg.actionTools, premise: p0.premise, prayers: !!p0.you?.prayers?.enabled });
+  const tools = toolDefs(lang, { actionTools: cfg.actionTools, premise: p0.premise, prayers: !!p0.you?.prayers?.enabled, cooperation: !!p0.cooperation });
   if (S.looks.tick !== tick) S.looks = { tick, n: 0 }; // 看的次数按刻归零，醒来与被叫醒合计
 
   const freeHistory = p4 ? [...renderHistory(S.history, { code: lang, now: p0.now }), ...(kind === 'wake' && S.mainEntry?.tick === tick ? renderEarlier(S.mainEntry.entry, lang) : [])].join('\n') : '';
@@ -241,7 +242,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
     if (S.looks.n >= limits.looks) return { text: res.looksOut };
     if (p4) {
       const id = args.id === undefined || args.id === null || args.id === '' ? undefined : String(args.id);
-      const r = await client.look({ wakeId: tokenWake.wakeId, turn: rec.turns, what: args.what, id, lang, ...((p0.premise === 5 || p0.premise === 6)?{kind:args.kind,target:args.target,after:args.after,limit:args.limit,mine:args.mine}:{}) });
+      const r = await client.look({ wakeId: tokenWake.wakeId, turn: rec.turns, what: args.what, id, lang, ...((p0.premise === 5 || p0.premise === 6)?{kind:args.kind,target:args.target,after:args.after,limit:args.limit,mine:args.mine,offset:args.offset,version:args.version,agent:args.agent,archived:args.archived}:{}) });
       if (!r.ok) {
         const code = r.json?.error?.code;
         if (r.status === 402) { ended = 'tokens'; tokenEnded = true; return { text: stoppedTokensLine(code, lang), isError: true }; }
@@ -266,8 +267,8 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
   // ── 工具：act ──
   const doAct = async (args) => {
     if (typed) {
-      const issues = schemaIssues(args, typedActSchema(p0.premise));
-      if (!issues.length) for (const action of args.actions) issues.push(...validateAction(action, p4 ? null : latest, p0.premise));
+      const issues = schemaIssues(args, typedActSchema(p0.premise, !!p0.cooperation));
+      if (!issues.length) for (const action of args.actions) issues.push(...validateAction(action, p4 ? { premise: p0.premise, cooperation: p0.cooperation } : latest, p0.premise));
       if (issues.length) return malformed(args?.actions?.[0]?.type || 'act', issues.slice(0, 5));
     }
     if (!isObj(args)) return invalid(res.details.notObject);
@@ -369,7 +370,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
       return { text: '' };
     }
     if (typed) {
-      const converted = typedCall(call.name, call.args, p4 ? null : latest, p0.premise);
+      const converted = typedCall(call.name, call.args, p4 ? { premise: p0.premise, cooperation: p0.cooperation } : latest, p0.premise);
       if (converted) return converted.issues.length ? malformed(converted.action?.type || call.name, converted.issues) : doAct({ actions: [converted.action] });
     }
     return { text: res.noTool(String(call.name).slice(0, 40)), isError: true };
@@ -467,7 +468,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
     }
     const replyText = String(reply.text || '');
     const replyChars = replyText.length + (mode === 'native' ? JSON.stringify(reply.calls || []).length : 0);
-    const toolCallCount = mode === 'native' ? (Array.isArray(reply.calls) ? reply.calls.length : 0) : parseToolJson(replyText, { actionTools: cfg.actionTools, premise: p0.premise, prayers: !!p0.you?.prayers?.enabled }).calls.length;
+    const toolCallCount = mode === 'native' ? (Array.isArray(reply.calls) ? reply.calls.length : 0) : parseToolJson(replyText, { actionTools: cfg.actionTools, premise: p0.premise, prayers: !!p0.you?.prayers?.enabled, cooperation: !!p0.cooperation }).calls.length;
     reportUsage(usage, { ok: true, replyChars, ms, waking, finishReason: safeFinishReason(reply.stop), toolCallCount });
     log.info(`模型用时 ${(ms / 1000).toFixed(1)} s${usage ? ` · 输入 ${boundedCount(usage.input) ?? 0} · 输出 ${boundedCount(usage.output) ?? 0} token${Number.isFinite(usage.reasoning) ? ` · 思考 ${boundedCount(usage.reasoning) ?? 0}` : ''}` : ''} · stop=${safeFinishReason(reply.stop)}`);
     if (signal && signal.aborted) { stop = 'aborted'; break; }
@@ -485,7 +486,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
       if (!calls.length) { ended = 'reply'; break; } // 模型直接回复了，没有调用工具
       transcript.push({ role: 'assistant', raw: reply.raw });
     } else {
-      const parsed = parseToolJson(replyText, { actionTools: cfg.actionTools, premise: p0.premise, prayers: !!p0.you?.prayers?.enabled });
+      const parsed = parseToolJson(replyText, { actionTools: cfg.actionTools, premise: p0.premise, prayers: !!p0.you?.prayers?.enabled, cooperation: !!p0.cooperation });
       calls = parsed.calls;
       unparsable = !parsed.ok;
       if (unparsable) {
@@ -658,5 +659,5 @@ export async function runWaking4(S, status, { kind = 'main' } = {}) {
     tokenWake.text = [...lines, tokenWake.text].join('\n');
     S.missed = [];
   }
-  return runWaking(S, { ...status, you: { ...status.you, ...r.json.you }, attention: r.json.attention || status.attention }, { kind, tokenWake });
+  return runWaking(S, { ...status, ...(r.json.cooperation ? { cooperation: r.json.cooperation } : {}), you: { ...status.you, ...r.json.you }, attention: r.json.attention || status.attention }, { kind, tokenWake });
 }

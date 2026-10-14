@@ -1,0 +1,30 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { boot } from '../../../test/http-helpers.js';
+const dir=mkdtempSync(join(tmpdir(),'as4-cooperation-preview-')),file=join(dir,'physics.json');
+const physics={version:1,regrowth:{baseByZone:{wilds:20,scrapyard:15,solarfield:10},thresholdByZone:{wilds:30,scrapyard:25,solarfield:15},factorPermille:500},construction:{fullActionsPerTick:2,factorPermille:500}};
+writeFileSync(file,JSON.stringify(physics));
+const env=await boot({physics:2,premise:6,map:'compact-materials-v1',shellSlots:0,hiddenPhysicsFile:file},{dir});
+const ids=['问潮','禾灯','远山'].map((name,i)=>env.rt.exec('account',{op:'create',accountId:`preview-${i}`,name,requestId:`preview-create-${i}`,soul:'自行选择志向，保留独立判断。',lang:'zh',model:'mock',dailyCap:1000000}).result.agentId);
+env.rt.exec('admin',{op:'cooperation',args:{version:1}});
+let serial=0;
+function act(id,action){
+ if(env.rt.w.agents[id].actsThisTick>=4)env.rt.exec('tick');
+ const wakeId=`preview-${++serial}`;
+ env.rt.exec('meter',{op:'wake',agentId:id,wakeId,day:'2026-10-14',kind:'main',system:0,brief:0,delivered:0});
+ const r=env.rt.exec('act',{agentId:id,requestId:`preview-action-${serial}`,experimentGeneration:0,actions:[action],meter:{wakeId,day:'2026-10-14',reread:0}}).result.results[0];
+ if(!r.ok)throw new Error(JSON.stringify(r));return r.data;
+}
+const card=act(ids[0],{type:'card',op:'create',title:'源井维护：从检查到验收',body:'先查看源井完好度和近期产出。\n记录需要的物料，再确认分工。\n维修结束后保存实际投入与井况变化，供下一次维护参考。',visibility:'public'});
+const q=act(ids[0],{type:'collaborate',op:'create',title:'一起维护源井',goal:'保存一次可接续的维护记录，逐步改善公共设施。',tasks:['准备维修资源','检查源井并补充方法'],visibility:'public',agents:[ids[1]]});
+act(ids[1],{type:'collaborate',op:'join',id:q.id});act(ids[1],{type:'collaborate',op:'claim',id:q.id,task:0});
+act(ids[1],{type:'give',to:ids[0],energy:100});
+const evidence=Object.values(env.rt.w.cooperation.activities).at(-1).id;
+act(ids[1],{type:'collaborate',op:'submit',id:q.id,task:0,text:'已交付100词元，等待共同安排下一步。',cards:[card.id],evidence:[evidence]});
+act(ids[0],{type:'collaborate',op:'review',id:q.id,task:0,accept:true,text:'交付已收到，检查步骤继续。'});
+act(ids[0],{type:'relation',op:'note',agent:ids[1],text:'禾灯按约交付，也留下了可核对的记录。下次合作可以先确认分工。'});
+for(let n=0;n<288;n++)env.rt.exec('tick');
+console.log(JSON.stringify({url:env.base,dir:env.dir}));
+process.on('SIGTERM',async()=>{await env.close();process.exit(0);});
+process.on('SIGINT',async()=>{await env.close();process.exit(0);});

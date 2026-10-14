@@ -1,3 +1,5 @@
+import { cooperationEnabled } from '../cooperation/core.js';
+import { cooperationBrief } from '../cooperation/views.js';
 import { projectParticipation } from './project-views.js';
 import { publicRoles } from '../p6/roles.js';
 import { stripCoins } from '../p6/coins.js';
@@ -79,6 +81,7 @@ const clipText = (text, max) => clip(text, max).text;
 export function buildPerception(w, agentId, opts = {}) {
   const out=perceptionRaw(w,agentId,opts);
   if(w.premise===6&&out) { out.publicRoles=publicRoles(w);stripCoins(out); }
+  if (out && cooperationEnabled(w)) out.cooperation = { version: 1, brief: cooperationBrief(w, agentId, opts.lang) };
   return out;
 }
 function perceptionRaw(w, agentId, opts = {}) {
@@ -466,7 +469,7 @@ function renderProcedureOf(w, r, lang) {
 const MODULE_ACTIONS = new Set(['write', 'epitaph', 'offer', 'accept']);
 
 function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, projectsHere, openProposals, pendingRefounds, activeGroups) {
-  const { ACTIONS, ORDER: ACTION_ORDER } = actionTable(w.premise || 0, prayersEnabled(w));
+  const { ACTIONS, ORDER: ACTION_ORDER } = actionTable(w.premise || 0, prayersEnabled(w), cooperationEnabled(w));
   const relay = hasRelay(w);
   const fog = isWeatherActive(w, 'fog');
   const eclipse = isWeatherActive(w, 'eclipse');
@@ -628,7 +631,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, pro
         break;
     }
     // 规则的预求值（§7.13）：只有物理上可用的动作才有意义
-    if (!NO_PREVIEW.has(type) && !actionTable(w.premise || 0, prayersEnabled(w)).INNER.includes(type)) {
+    if (!NO_PREVIEW.has(type) && !actionTable(w.premise || 0, prayersEnabled(w), cooperationEnabled(w)).INNER.includes(type)) {
       const pre = previewBefore(w, a, type, lang, beforeRules);
       if (entry.available && pre.denied) deny({ code: 'forbidden', law: pre.denied.law, ...(pre.denied.ruleCode ? { rule: pre.denied.rule, ruleCode: pre.denied.ruleCode } : {}), text: fmt(R.forbidden, { law: pre.denied.law, reason: pre.denied.ruleCode ? `rules[${pre.denied.rule}] ${pre.denied.ruleCode}` : pre.denied.reason }) });
       if (entry.available && pre.fees.length) {

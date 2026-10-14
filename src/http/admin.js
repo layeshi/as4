@@ -239,6 +239,7 @@ async function tokenAdminView(req, res, ctx) {
   sendJson(res, 200, { ...w.tokens, supply: w.well.supply, upgrades: w.well.upgrades.map(({ level, owner, shares }) => ({ level, owner, shares })), caps: capDistribution(w), today: w.dayLog.p4 });
 }
 export const adminRoutes = [
+  ['POST', '/api/admin/cooperation', op('cooperation')],
   ['POST', '/api/admin/well-supply', tokenOp('well_supply')],
   ['POST', '/api/admin/basic-allotment', tokenOp('basic_allotment')],
   ['GET', '/api/admin/tokens', tokenAdminView],

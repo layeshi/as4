@@ -1,3 +1,5 @@
+import { cooperationEnabled } from '../e2/cooperation/core.js';
+import { cooperationQuery } from '../e2/cooperation/views.js';
 import { archivedObservations } from './material-observations.js';
 import { materialsEnabled } from '../e2/world.js';
 import { materialLook, MATERIAL_LOOKS } from '../e2/engine/material-views.js';
@@ -240,6 +242,14 @@ export async function postWeatherVote(req, res, ctx, url) {
 }
 
 export const publicRoutes = [
+  ['GET', '/api/public/cooperation', async (req,res,ctx,url) => {
+    const lang=langOf(url.searchParams);
+    if(!cooperationEnabled(ctx.rt.w))return sendError(res,lang,'not_found');
+    const args=Object.fromEntries([...url.searchParams].map(([key,value])=>[key,['limit','version'].includes(key)?Number(value):key==='archived'?value==='true':value]));
+    if(!['cards','collaborations','relations'].includes(args.what))return sendError(res,lang,'invalid_request');
+    try { sendJson(res,200,cooperationQuery(ctx.rt.w,args.what,args)); }
+    catch(e){if(e.code)return sendError(res,lang,e.code);throw e;}
+  }],
   ...MATERIAL_LOOKS.map(what=>['GET',`/api/public/${what}`,async(req,res,ctx,url)=>{
     const lang=langOf(url.searchParams);
     if(!materialsEnabled(ctx.rt.w))return sendError(res,lang,'not_found');

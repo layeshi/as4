@@ -1,3 +1,4 @@
+import { enableCooperation } from '../cooperation/core.js';
 // SPEC-E2 §13.7、PROTOCOL-2 §11：管理命令 admin。
 // 所有管理操作都会产生公开的 admin 事件（不含管理员身份）。载荷：op, args。
 //
@@ -43,6 +44,7 @@ export function adminCommand(w, p) {
   if (tokenized(w) && p.op === 'seed_sandbox') return bad('not_allowed');
   const args = p.args && typeof p.args === 'object' ? p.args : {};
   switch (p.op) {
+    case 'cooperation': return enableCooperation(w, args);
     case 'law_semantics': {
       const r = migrateLawSemantics(w, args);
       if (r.ok) emit(w, 'admin', { data: { op: 'law_semantics', version: 2 } });

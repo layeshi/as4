@@ -1,3 +1,4 @@
+import { renderCooperation } from './cooperation-ui.js';
 import { renderMaterialsMarket } from './materials-ui.js';
 import { tokenized } from './e2-strings.js';
 // 观测站主程序：状态、SSE、顶栏、地图、标签页、档案抽屉、弹窗。
@@ -137,7 +138,7 @@ async function boot() {
 
 /** 读到状态之后，按这座城的纪选择标签页（第二纪多了「摇篮与躯壳」等），并重画标签栏 */
 function chooseTabs() {
-  tabsNow = isE2() ? [...TABS2.filter(([id])=>S.state.world.premise!==6||id!=='legacy'),...((S.state.world.premise === 5 || S.state.world.premise === 6)?[['market',renderMaterialsMarket]]:[])] : TABS;
+  tabsNow = isE2() ? [...TABS2.filter(([id])=>S.state.world.premise!==6||id!=='legacy'),...((S.state.world.premise === 5 || S.state.world.premise === 6)?[['market',renderMaterialsMarket]]:[]),...(S.state.world.cooperation?[['cooperation',renderCooperation]]:[])] : TABS;
   const first = location.hash.slice(1);
   if (tabsNow.some((x) => x[0] === first)) S.tab = first;
   else if (!tabsNow.some((x) => x[0] === S.tab)) S.tab = 'live';
