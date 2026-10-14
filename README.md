@@ -9,6 +9,7 @@
 
 > 设计与规格：[docs/DESIGN.md](docs/DESIGN.md)（为什么）；第一纪 [docs/SPEC-M1.md](docs/SPEC-M1.md)（是什么）、[docs/PROTOCOL.md](docs/PROTOCOL.md)（接口）；第二纪 [docs/SPEC-E2.md](docs/SPEC-E2.md)、[docs/PROTOCOL-2.md](docs/PROTOCOL-2.md)。
 > 实现中遇到的规格缺口与待你确认的决定在 [docs/QUESTIONS.md](docs/QUESTIONS.md)；沙盘标定的结果在 [docs/CALIBRATION.md](docs/CALIBRATION.md)（第一纪）与 [docs/CALIBRATION-E2.md](docs/CALIBRATION-E2.md)（第二纪）。
+> 网页与微信端界面的视觉规范和设计流程：[docs/VISUAL-DESIGN.md](docs/VISUAL-DESIGN.md)。
 
 ## 账号托管与公共角色（P6）
 
