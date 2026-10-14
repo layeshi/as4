@@ -58,7 +58,7 @@ export class BillingStore {
   constructor({ file = null, timezone = 'Asia/Shanghai', now = Date.now } = {}) {
     this.file = file; this.timezone = validTimeZone(timezone) ? timezone : 'Asia/Shanghai'; this.now = now;
     this.reservations = new Map(); this.fault = false;
-    this.data = { version: 1, accounts: Object.create(null), ledger: [], requests: [], daily: [] };
+    this.data = { version: 1, accounts: Object.create(null), ledger: [], requests: [], daily: [], merges: [] };
     this.load(); this.prune();
   }
   load() {
@@ -73,13 +73,15 @@ export class BillingStore {
     }
     for (const l of Array.isArray(raw.ledger) ? raw.ledger : []) {
       if (!object(l) || !idOK(l.id) || !idOK(l.accountId) || !idOK(l.adminId) || !timeOK(l.at) || !safe(l.amountMicro) || !['credit', 'adjustment'].includes(l.kind) || typeof l.note !== 'string' || [...l.note].length > 200 || !(l.requestId === null || idOK(l.requestId))) { this.fault = true; continue; }
-      this.data.ledger.push({ id: l.id, accountId: l.accountId, adminId: l.adminId, at: l.at, amountMicro: l.amountMicro, kind: l.kind, note: l.note, requestId: l.requestId });
+      this.data.ledger.push({ id: l.id, accountId: l.accountId, adminId: l.adminId, at: l.at, amountMicro: l.amountMicro, kind: l.kind, note: l.note, requestId: l.requestId, ...(idOK(l.originalAccountId) ? { originalAccountId: l.originalAccountId } : {}) });
     }
+    this.data.merges = Array.isArray(raw.merges) ? raw.merges.filter(m => idOK(m.id) && idOK(m.from) && idOK(m.to) && safe(m.amountMicro)) : [];
     const seen = new Set();
     for (const r of Array.isArray(raw.requests) ? raw.requests : []) {
       if (!object(r) || !idOK(r.id) || !idOK(r.accountId) || !idOK(r.requestId) || seen.has(`${r.accountId}/${r.requestId}`) || !['pending', 'approved', 'rejected', 'cancelled'].includes(r.status) || !timeOK(r.createdAt) || !timeOK(r.updatedAt) || !safe(r.amountMicro) || r.amountMicro < MICRO || r.amountMicro > 5000 * MICRO || r.amountMicro % 10000 || typeof r.note !== 'string' || [...r.note].length > 200 || typeof r.adminNote !== 'string' || [...r.adminNote].length > 200 || !(r.decider === null || idOK(r.decider)) || !(r.decidedAt === null || timeOK(r.decidedAt)) || !(r.cancelledAt === null || timeOK(r.cancelledAt)) || !count(r.creditMicro)) { this.fault = true; continue; }
       seen.add(`${r.accountId}/${r.requestId}`);
       this.data.requests.push(Object.fromEntries(['id','accountId','requestId','amountMicro','note','status','createdAt','updatedAt','decider','decidedAt','cancelledAt','creditMicro','adminNote'].map(k => [k, r[k]])));
+      if (idOK(r.originalAccountId)) this.data.requests.at(-1).originalAccountId = r.originalAccountId;
     }
     for (const d of Array.isArray(raw.daily) ? raw.daily : []) {
       if (object(d) && idOK(d.accountId) && idOK(d.residentId) && validDay(d.day)) this.data.daily.push({ accountId: d.accountId, residentId: d.residentId, day: d.day, ...cleanUsage(d) });
@@ -172,6 +174,26 @@ export class BillingStore {
       r.status = approve ? 'approved' : 'rejected'; r.decider = adminId; r.decidedAt = r.updatedAt = new Date(this.now()).toISOString(); r.adminNote = note; r.creditMicro = amount;
       if (approve) this.credit(r.accountId, amount, adminId, note, r.id);
       return r;
+    });
+  }
+  mergeAccounts(id, from, to) {
+    if (this.data.merges.some(m => m.id === id)) return;
+    if (this.reserved(from) || this.reserved(to)) fail(409, 'billing_busy', '模型费用正在结算，请稍后重试。');
+    return this.transaction(() => {
+      const source = this.account(from), target = this.account(to), amountMicro = source.balanceMicro;
+      addUsage(target.total, source.total); source.total = emptyUsage();
+      this.credit(from, -amountMicro, to, '账号合并转出：' + id);
+      this.credit(to, amountMicro, to, '账号合并转入：' + id);
+      const used = new Set(this.data.requests.filter(r => r.accountId === to).map(r => r.requestId));
+      for (const r of this.data.requests) if (r.accountId === from) {
+        r.originalAccountId ||= from; r.accountId = to;
+        const base = 'merge-' + r.id; let key = base, suffix = 0;
+        while (used.has(key)) key = base + '-' + (++suffix);
+        r.requestId = key; used.add(key);
+      }
+      for (const l of this.data.ledger) if (l.accountId === from) { l.originalAccountId ||= from; l.accountId = to; }
+      for (const d of this.data.daily) if (d.accountId === from) d.accountId = to;
+      this.data.merges.push({ id, from, to, amountMicro });
     });
   }
   accountView(id) {

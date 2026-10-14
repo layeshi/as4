@@ -14,7 +14,7 @@ function moreMenu(app, W) {
   return N.menu(W, [
     { label: '设置', hint: '字号、震动、刷新', icon: 'settings', action: { type: 'settings' } },
     { label: '隐私说明', icon: 'shield', action: { type: 'about' } },
-    { label: '健康游戏忠告', hint: '16+', icon: 'heart', action: { type: 'health' } },
+    { label: config.clientType === 'miniprogram' ? '使用说明' : '健康游戏忠告', hint: config.clientType === 'miniprogram' ? 'AI 社会模拟' : '16+', icon: 'heart', action: { type: 'health' } },
     { label: '客服与投诉', hint: '复制邮箱', icon: 'mail', action: { type: 'support' } },
     { label: '关于后人纪', hint: config.version, icon: 'info', action: { type: 'about' } },
   ]);
@@ -40,9 +40,9 @@ function account(app, W) {
       N.text(iw, '为一位居民写下灵魂，接入你自己的模型，看它在城里怎样生活。', { style: 'action', color: C.text2 }),
       steps(iw),
       N.node(36, (g, x, y) => { P.fillRound(g.ctx, x, y, iw, 36, 12, 'rgba(242,182,94,0.10)'); P.icon(g.ctx, 'token', x + 10, y + 10, 16, C.token, 2); P.text(g.ctx, T.ellipsize(g.ctx, '首次创建居民，账号得 5 万启动词元', iw - 44, font(13, {})), x + 34, y + 18, font(13, {}), C.token); }),
-      N.button(iw, app.user ? app.needsWechatLogin ? '重新微信登录' : '关联微信' : '微信一键登录', { type: 'wechatLogin' }, { variant: 'primary', size: 'large' }),
+      N.button(iw, app.user ? app.wechatLinked ? '重新微信登录' : '关联微信' : '微信一键登录', { type: 'wechatLogin' }, { variant: 'primary', size: 'large' }),
       N.checkbox(iw, '我已阅读并同意', !!f.accepted, { type: 'toggle', name: 'accepted' }, privacyLink),
-      app.user ? N.text(iw, `已登录网站账号「${app.user.displayName}」。关联微信后可在这里管理居民。`, { style: 'caption', color: C.text3 })
+      app.user ? N.text(iw, `当前账号「${app.user.username}」。${app.wechatLinked ? '已绑定微信，请刷新微信登录以继续。' : '关联微信后，两端使用同一账号和居民。'}`, { style: 'caption', color: C.text3 })
         : N.button(iw, '已有网站账号？登录后关联微信', { type: 'linkAccount' }, { variant: 'text', size: 'small' }),
     ], { pad: 18, gap: 12 }));
     if (app.user) nodes.push(N.button(W, '退出登录', { type: 'logout' }, { variant: 'danger', size: 'small' }));
@@ -65,6 +65,8 @@ function account(app, W) {
       chevron: true, action: { type: 'owner', id: a.agentId || a.id } }))));
     nodes.push(N.button(W, '让一位居民入城', { type: 'entry' }, { variant: 'secondary', icon: 'plus' }));
   }
+  if (app.user && app.wechatLinked) nodes.push(N.button(W, app.user.passwordLoginEnabled ? '网页登录与密码' : '设置网页登录密码', { type: 'webLogin' }, { variant: 'secondary' }));
+  if (app.user && app.wechatLinked) nodes.push(N.button(W, '合并到已有网站账号', { type: 'mergeAccount' }, { variant: 'secondary' }));
   nodes.push(moreMenu(app, W));
   if (app.user && app.wechatVerified) nodes.push(N.button(W, '退出登录', { type: 'logout' }, { variant: 'danger', size: 'small' }));
   nodes.push(N.text(W, '文字通过内容检查后展示；暂未显示的内容可稍后刷新。', { style: 'caption', color: C.text3, align: 'center' }));
@@ -78,6 +80,39 @@ function link(app, W) {
     N.field(W, '密码', f.password || '', { type: 'field', name: 'password', max: 128 }, { secret: true }),
     N.checkbox(W, '我已阅读并同意', !!f.accepted, { type: 'toggle', name: 'accepted' }, privacyLink),
     N.button(W, '登录', { type: 'auth' }, { variant: 'primary' }),
+  ] };
+}
+function webLogin(app, W) {
+  const f = app.form;
+  return { top: { kind: 'back', title: '网页登录' }, tabbar: false, nodes: [
+    N.text(W, '小程序和网页共用这个账号，居民和余额无需迁移。请在网页使用下方用户名和你设置的密码登录。', { style: 'action', color: C.text2 }),
+    N.text(W, '网站：' + config.apiBase, { style: 'meta' }),
+    N.text(W, '用户名：' + app.user.username, { style: 'meta' }),
+    N.button(W, '复制用户名', { type: 'copyUsername' }, { variant: 'secondary' }),
+    N.text(W, '设置密码会重新验证当前微信身份，并使其他设备上的登录失效。已存在的其他网站账号不会自动合并。', { style: 'caption', color: C.text3 }),
+    N.field(W, '新密码（12–128 个字符）', f.password || '', { type: 'field', name: 'password', max: 128 }, { secret: true }),
+    N.field(W, '确认新密码', f.confirmPassword || '', { type: 'field', name: 'confirmPassword', max: 128 }, { secret: true }),
+    N.checkbox(W, '我已阅读并同意', !!f.accepted, { type: 'toggle', name: 'accepted' }, privacyLink),
+    N.button(W, '验证微信并设置密码', { type: 'saveWebPassword' }, { variant: 'primary' }),
+  ] };
+}
+function mergeAccount(app, W) {
+  const f = app.form, preview = app.mergePreview;
+  if (preview) return { top: { kind: 'back', title: '确认账号合并' }, tabbar: false, nodes: [
+    N.text(W, '请核对：合并后保留网站账号', { style: 'heading', bold: true }),
+    N.text(W, preview.target.username, { style: 'heading' }),
+    N.text(W, '原微信账号：' + preview.source.username, { style: 'meta' }),
+    N.text(W, '迁移居民：' + preview.residents + ' 位；迁移余额：¥' + (preview.sourceBalanceMicro / 1000000).toFixed(6), { style: 'action' }),
+    N.text(W, '网站账号当前余额：¥' + (preview.targetBalanceMicro / 1000000).toFixed(6), { style: 'meta' }),
+    N.text(W, '居民、余额、入账申请和微信绑定将归入网站账号；保留网站账号的用户名和密码。原账号停用，两端旧会话退出，待接受的居民转交邀请取消。此操作不能自行撤销。', { style: 'action', color: C.text2 }),
+    N.button(W, '确认合并并迁移', { type: 'confirmMerge' }, { variant: 'primary' }),
+  ] };
+  return { top: { kind: 'back', title: '合并已有网站账号' }, tabbar: false, nodes: [
+    N.text(W, '将当前微信账号合并到你已有的网站账号。先验证网站密码和当前微信身份，核对迁移内容后再确认。', { style: 'action', color: C.text2 }),
+    N.field(W, '保留的网站用户名', f.username || '', { type: 'field', name: 'username', max: 32 }),
+    N.field(W, '网站账号密码', f.password || '', { type: 'field', name: 'password', max: 128 }, { secret: true }),
+    N.checkbox(W, '我已阅读并同意', !!f.accepted, { type: 'toggle', name: 'accepted' }, privacyLink),
+    N.button(W, '验证两端身份并预览', { type: 'previewMerge' }, { variant: 'primary' }),
   ] };
 }
 function modelFields(app, W) {
@@ -167,11 +202,11 @@ function settings(app, W) {
 function about(app, W) {
   return { top: { kind: 'back', title: '关于后人纪' }, tabbar: false, nodes: [
     N.text(W, copy.GAME_NAME + ' · ' + config.version, { style: 'title', bold: true, serif: true }),
-    N.node(46, (g, x, y) => { P.fillRound(g.ctx, x, y, 44, 44, 10, '#E9A93B'); P.text(g.ctx, '16+', x + 22, y + 22, font(17, { bold: true }), '#3A2604', 'center'); P.text(g.ctx, copy.AGE, x + 56, y + 22, font(14, {}), C.text2); }),
-    N.card(W, iw => [N.text(iw, '健康游戏忠告', { style: 'meta', color: C.text3, align: 'center' })].concat(copy.HEALTH_LINES.map(l => N.text(iw, l, { style: 'action', align: 'center', line: 25 }))), { pad: 18, gap: 2 }),
+    ...(config.clientType === 'miniprogram' ? [] : [N.node(46, (g, x, y) => { P.fillRound(g.ctx, x, y, 44, 44, 10, '#E9A93B'); P.text(g.ctx, '16+', x + 22, y + 22, font(17, { bold: true }), '#3A2604', 'center'); P.text(g.ctx, copy.AGE, x + 56, y + 22, font(14, {}), C.text2); }),
+    N.card(W, iw => [N.text(iw, '健康游戏忠告', { style: 'meta', color: C.text3, align: 'center' })].concat(copy.HEALTH_LINES.map(l => N.text(iw, l, { style: 'action', align: 'center', line: 25 }))), { pad: 18, gap: 2 })]),
     N.section(W, '隐私说明', { small: true }),
     ...copy.PRIVACY.map(t => N.text(W, t, { style: 'action', color: C.text2 })),
     N.button(W, '复制客服与投诉邮箱', { type: 'support' }, { variant: 'secondary', icon: 'copy' }),
   ] };
 }
-module.exports = { account, link, owner, entry, settings, about };
+module.exports = { account, link, webLogin, mergeAccount, owner, entry, settings, about };

@@ -28,6 +28,16 @@ function ageBadge(W) {
   });
 }
 function startup(app, W) {
+  if (config.clientType === 'miniprogram') return { fullscreen: true, tabbar: false, padTop: app.navTop + app.navH, nodes: [
+    emblem(W, Math.min(160, W * 0.5)),
+    N.text(W, copy.GAME_NAME, { style: 'heading', serif: true, bold: true, align: 'center' }),
+    N.text(W, 'AI 社会模拟', { style: 'action', align: 'center', color: C.moon }),
+    N.text(W, '观测城市、阅读居民档案与历史；登录后可创建居民、写家书、配置模型并管理运行器。', { style: 'action', color: C.text2 }),
+    N.text(W, '居民的言行由 AI 生成，可能有错误。模拟资源不提供充值、提现或现实货币兑换。', { style: 'meta', color: C.text3 }),
+  ], footer: N.stack([
+    N.button(W, '进入城市', { type: 'start' }, { variant: 'primary', size: 'large' }),
+    N.button(W, '隐私说明 · 版本 ' + config.version, { type: 'about' }, { variant: 'text', size: 'small' }),
+  ], 6) };
   N.record('health', copy.HEALTH); // 文本记录用全文；画面按四句排版
   const health = N.card(W, iw => [N.text(iw, '健康游戏忠告', { style: 'meta', color: C.text3, align: 'center' })]
     .concat(copy.HEALTH_LINES.map(l => N.text(iw, l, { style: 'action', align: 'center', color: C.text, line: 25, kind: 'health-line' }))), { pad: 18, gap: 2 });

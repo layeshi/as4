@@ -1,3 +1,4 @@
+import { AccountMerger } from '../accounts/merge.js';
 import { WechatProjection } from '../wechat/projection.js';
 import { WechatService } from '../wechat/service.js';
 import { systemTextSource } from '../wechat/system-texts.js';
@@ -169,6 +170,8 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
   ctx.wechatProjection = new WechatProjection(ctx.wechat, { systemTexts: systemTextSource(rt), file: cfg.dataDir ? join(cfg.dataDir, 'wechat-moderation.json') : null });
   ctx.runners.ctx = ctx;
   ctx.hosted = new HostedService(ctx);
+  ctx.accountMerger = new AccountMerger(ctx);
+  ctx.accountMerger.recover();
   ctx.publicRoles = new PublicRoleService(ctx);
   rt.agentLoop = (ctx.shells && ctx.shells.config.agentLoop) || DEFAULT_AGENT_LOOP;
   if (agentic(rt.w) && cfg.tickMs < 4 * rt.agentLoop.marginSec * 1000) {

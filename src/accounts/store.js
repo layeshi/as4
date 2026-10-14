@@ -1,5 +1,6 @@
+import { durableFile } from '../durable-file.js';
 // Human accounts are separate from the deterministic world and its command log.
-import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes, randomUUID, scrypt, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -32,7 +33,19 @@ async function verify(password, encoded) {
   const key = await derive(password, salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
   return timingSafeEqual(key, Buffer.from(expected, 'hex'));
 }
-export const publicUser = ({ id, username, displayName, role, status, createdAt, updatedAt }) => ({ id, username, displayName, role, status, createdAt, updatedAt });
+export const wechatBindings = (u, legacyAppId) => [
+  ...(u.wechatIdentity ? [{ appid: u.wechatAppId || legacyAppId, identity: u.wechatIdentity }] : []),
+  ...(u.wechatBindings || []),
+];
+export const hasWechatIdentity = (u, identity) => wechatBindings(u).some(b => b.identity === identity);
+export const publicUser = (u) => {
+  const { id, username, displayName, role, status, createdAt, updatedAt } = u;
+  return { id, username, displayName, role, status, createdAt, updatedAt,
+    wechatLinked: wechatBindings(u).length > 0,
+    // Legacy generated users had an unknown random password. This is display state only;
+    // password setup always requires a new upstream identity proof, even for legacy users.
+    passwordLoginEnabled: u.passwordLoginEnabled ?? !(u.wechatIdentity && /^wx_[a-f0-9]{24}$/.test(username)) };
+};
 export class AccountStore {
   constructor(dir) {
     mkdirSync(dir, { recursive: true });
@@ -54,9 +67,7 @@ export class AccountStore {
   commit(change) {
     const next = structuredClone(this.data);
     const result = change(next.users);
-    const tmp = `${this.file}.tmp`;
-    writeFileSync(tmp, JSON.stringify(next), { mode: 0o600 });
-    renameSync(tmp, this.file);
+    durableFile(this.file, JSON.stringify(next));
     this.data = next;
     return result;
   }
@@ -122,36 +133,51 @@ export class AccountStore {
     });
   }
   /** Verified WeChat identity only; never link by username or client-supplied OpenID. */
-  async wechatLogin(identity, { registrationOpen = true, bindId = null, authorize = () => {} } = {}) {
+  async wechatLogin(identity, { registrationOpen = true, bindId = null, appid, legacyAppId, authorize = () => {} } = {}) {
     if (typeof identity !== 'string' || !/^[a-f0-9]{64}$/.test(identity)) fail(400, 'invalid_identity', '微信身份无效。');
-    const existing = this.data.users.find(u => u.wechatIdentity === identity);
+    const existing = this.data.users.find(u => hasWechatIdentity(u, identity));
     if (existing) {
       authorize();
-      if (existing.status !== 'active') fail(401, 'unauthorized', '账号已停用。');
-      if (bindId && existing.id !== bindId) fail(409, 'identity_linked', '此微信已关联其他账号，请退出网站账号后使用微信登录。');
+      if ((existing.status !== 'active' || existing.mergePending)) fail(401, 'unauthorized', '账号已停用。');
+      if (bindId && existing.id !== bindId) fail(409, 'identity_linked', '此微信已关联另一个账号，不能覆盖绑定。请退出后使用微信登录；可在原微信账号中选择「合并到已有网站账号」并验证两端身份。');
       return existing;
     }
     if (!bindId && !registrationOpen) fail(403, 'registration_closed', '公开注册已关闭，请登录已有账号后关联微信。');
     const encoded = bindId ? null : await this.expensive(() => passwordHash(randomBytes(48).toString('hex')));
     authorize();
     return this.commit(users => {
-      const current = users.find(u => u.wechatIdentity === identity);
+      const current = users.find(u => hasWechatIdentity(u, identity));
       if (current) {
-        if (current.status !== 'active' || bindId && current.id !== bindId) fail(409, 'identity_linked', '微信关联已变化，请重新登录。');
+        if ((current.status !== 'active' || current.mergePending) || bindId && current.id !== bindId) fail(409, 'identity_linked', '微信关联已变化，请重新登录。');
         return current;
       }
       if (bindId) {
-        const user = users.find(u => u.id === bindId && u.status === 'active');
-        if (!user || user.wechatIdentity) fail(409, 'identity_linked', '账号已经关联微信或不可用。');
-        user.wechatIdentity = identity;
+        const user = users.find(u => u.id === bindId && u.status === 'active' && !u.mergePending);
+        if (!user || wechatBindings(user, legacyAppId).some(b => !appid || b.appid === appid || !b.appid)) fail(409, 'identity_linked', '此账号已关联该微信应用的其他身份，请使用原微信登录。');
+        if (!user.wechatIdentity) { user.wechatIdentity = identity; user.wechatAppId = appid; }
+        else { (user.wechatBindings ||= []).push({ appid, identity }); }
+        user.updatedAt = new Date().toISOString();
         return user;
       }
       const now = new Date().toISOString();
       // Random account name prevents a pre-registered name from hijacking this identity.
       let name;
       do { name = 'wx_' + randomBytes(12).toString('hex'); } while (users.some(u => u.username === name));
-      const user = { id: randomUUID(), username: name, displayName: '微信访客', passwordHash: encoded, wechatIdentity: identity, role: 'user', status: 'active', revision: 1, createdAt: now, updatedAt: now };
+      const user = { id: randomUUID(), username: name, displayName: '微信访客', passwordHash: encoded, passwordLoginEnabled: false, wechatIdentity: identity, wechatAppId: appid, role: 'user', status: 'active', revision: 1, createdAt: now, updatedAt: now };
       users.push(user); return user;
+    });
+  }
+  async setWechatPassword(id, identity, password, { authorize = () => {} } = {}) {
+    const before = this.get(id);
+    if (!before || before.status !== 'active' || !hasWechatIdentity(before, identity)) fail(403, 'identity_mismatch', '当前微信与账号不匹配。');
+    const encoded = await this.expensive(() => passwordHash(password));
+    authorize();
+    return this.commit(users => {
+      const u = users.find(u => u.id === id);
+      if (!u || (u.status !== 'active' || u.mergePending) || u.revision !== before.revision || (u.authRevision || 0) !== (before.authRevision || 0) || !hasWechatIdentity(u, identity)) fail(409, 'account_changed', '账号已更新，请重新登录。');
+      u.passwordHash = encoded; u.passwordLoginEnabled = true;
+      u.authRevision = (u.authRevision || 0) + 1; u.updatedAt = new Date().toISOString();
+      return publicUser(u);
     });
   }
   async login(body) {
@@ -159,28 +185,28 @@ export class AccountStore {
     const before = this.data.users.find((u) => u.username === name);
     const valid = await this.expensive(() => verify(body.password, before?.passwordHash ?? this.dummy));
     const current = before && this.get(before.id);
-    if (!valid || !current || current.status !== 'active' || current.revision !== before.revision) fail(401, 'invalid_credentials', '用户名或密码错误，或账号已停用。');
+    if (!valid || !current || (current.status !== 'active' || current.mergePending) || current.revision !== before.revision || current.passwordHash !== before.passwordHash) fail(401, 'invalid_credentials', '用户名或密码错误，或账号已停用。');
     return current;
   }
   session(token) {
     if (typeof token !== 'string' || !token) return null;
     const key = hash(token), session = this.sessions.get(key);
     const u = session && this.get(session.userId);
-    if (!session || session.expires <= Date.now() || !u || u.status !== 'active' || u.revision !== session.revision) {
+    if (!session || session.expires <= Date.now() || !u || (u.status !== 'active' || u.mergePending) || u.revision !== session.revision || (u.authRevision || 0) !== (session.authRevision || 0)) {
       this.sessions.delete(key); return null;
     }
     return u;
   }
   issue(id, metadata = {}) {
     const u = this.get(id);
-    if (!u || u.status !== 'active') fail(401, 'unauthorized', '请重新登录。');
+    if (!u || (u.status !== 'active' || u.mergePending)) fail(401, 'unauthorized', '请重新登录。');
     for (const [key, s] of this.sessions) if (s.expires <= Date.now()) this.sessions.delete(key);
     // Bound sessions per user and globally.
     const own = [...this.sessions].filter(([, s]) => s.userId === id);
     for (const [key] of own.slice(0, Math.max(0, own.length - 9))) this.sessions.delete(key);
     if (this.sessions.size >= 10000) this.sessions.delete(this.sessions.keys().next().value);
     const token = randomBytes(32).toString('hex');
-    this.sessions.set(hash(token), { userId: id, revision: u.revision, expires: Date.now() + TTL, wechat: metadata.wechat });
+    this.sessions.set(hash(token), { userId: id, revision: u.revision, authRevision: u.authRevision || 0, expires: Date.now() + TTL, wechat: metadata.wechat });
     return token;
   }
   sessionMetadata(token) {
@@ -191,6 +217,7 @@ export class AccountStore {
   async update(id, body, { admin = false, authorize = () => {} } = {}) {
     const before = this.get(id);
     if (!before) fail(404, 'not_found', '用户不存在。');
+    if (before.mergePending || before.mergedTo) fail(409, 'account_merging', '账号正在合并或已合并。');
     const patch = {};
     if (body.displayName !== undefined) patch.displayName = displayName(body.displayName);
     if (admin) {
@@ -204,11 +231,12 @@ export class AccountStore {
     if (body.password !== undefined) {
       if (!admin && !await this.expensive(() => verify(body.currentPassword, before.passwordHash))) fail(401, 'invalid_password', '当前密码错误。');
       patch.passwordHash = await this.expensive(() => passwordHash(body.password));
+      patch.passwordLoginEnabled = true;
     }
     authorize();
     return this.commit((users) => {
       const u = users.find((u) => u.id === id);
-      if (u.revision !== before.revision) fail(409, 'account_changed', '账号已更新，请刷新后重试。');
+      if (u.mergePending || u.mergedTo || u.revision !== before.revision || (u.authRevision || 0) !== (before.authRevision || 0)) fail(409, 'account_changed', '账号已更新，请刷新后重试。');
       const next = { ...u, ...patch };
       if (u.role === 'admin' && u.status === 'active' && (next.role !== 'admin' || next.status !== 'active') && !users.some((v) => v.id !== id && v.role === 'admin' && v.status === 'active')) fail(409, 'last_admin', '必须保留至少一个启用的管理员。');
       const invalidate = patch.passwordHash || (patch.role && patch.role !== u.role) || (patch.status && patch.status !== u.status);

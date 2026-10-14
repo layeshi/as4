@@ -1,7 +1,7 @@
 const config = require('../config');
 let cookies = {};
 let sessionGeneration = 0;
-const storageKey = 'houren.session:' + config.apiBase;
+const storageKey = 'houren.session:' + (config.appid ? config.appid + ':' : '') + config.apiBase;
 
 function sessionCurrent(generation, token) {
   return generation === sessionGeneration && token === cookies.houren_session;
@@ -62,7 +62,7 @@ function request(path, options = {}) {
         const code = body && body.error && body.error.code;
         if (response.statusCode >= 200 && response.statusCode < 300 && body && typeof body === 'object' && !body.error) return resolve(body);
         // Content-check identity expiry is distinct from an invalid website account session.
-        if (current && response.statusCode === 401 && code !== 'wechat_login_required' && !options.ownerKey) clearSession();
+        if (current && response.statusCode === 401 && !['wechat_login_required', 'invalid_credentials', 'wechat_login_failed', 'invalid_password'].includes(code) && !options.ownerKey) clearSession();
         const error = new Error(body && body.error && (body.error.message || body.error.code) || '服务暂不可用，请稍后刷新');
         error.status = response.statusCode;
         error.code = code;
@@ -73,18 +73,21 @@ function request(path, options = {}) {
     });
   });
 }
-function loginWeChat(bindCurrent) {
+function wechatProof(path, data) {
   const generation = sessionGeneration, session = cookies.houren_session;
   return new Promise((resolve, reject) => {
     wx.login({ timeout: 10000, success: result => result.code ? resolve(result.code) : reject(new Error('微信登录失败，请重试')), fail: () => reject(new Error('微信登录失败，请重试')) });
   }).then(code => {
     if (!sessionCurrent(generation, session)) throw new Error('登录会话已变更，请重试');
-    return request('/api/wechat/login', { method: 'POST', timeout: 30000, data: { code, bindCurrent: !!bindCurrent } });
+    return request(path, { method: 'POST', timeout: 30000, data: { ...data, code, ...(config.appid ? { appid: config.appid } : {}) } });
   });
 }
+function loginWeChat(bindCurrent) { return wechatProof('/api/wechat/login', { bindCurrent: !!bindCurrent }); }
+function setWebPassword(password) { return wechatProof('/api/wechat/password', { password }); }
+function previewMerge(username, password) { return wechatProof('/api/wechat/merge/preview', { username, password }); }
 function requestId() {
   // Idempotency identifier, not an authentication credential.
   return 'wx-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
-module.exports = { request, restoreSession, clearSession, loginWeChat, requestId };
+module.exports = { request, restoreSession, clearSession, loginWeChat, setWebPassword, previewMerge, requestId };

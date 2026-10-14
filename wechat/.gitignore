@@ -7,3 +7,5 @@ project.private.config.json
 *.pem
 .env
 .env.*
+build-miniprogram/
+miniprogram-app/runtime/

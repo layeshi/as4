@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { createPlatform } = require('../wechat/miniprogram-app/platform.js');
+test('Mini Program adapter routes canvas, input, touch and disposal without persisting secrets', () => {
+  const offscreen = {}, canvas = { createImage: () => 'image' };
+  const page = { game: { editing: 'apiKey' }, data: {}, setData(d) { Object.assign(this.data, d); } };
+  const p = createPlatform({ createOffscreenCanvas: options => { assert.equal(options.type, '2d'); return offscreen; }, hideKeyboard() {} }, canvas, page);
+  assert.equal(p.api.createCanvas(), canvas); assert.equal(p.api.createCanvas(), offscreen); assert.equal(p.api.createImage(), 'image');
+  p.api.showKeyboard({ defaultValue: 'secret-only-memory', maxLength: 4096 });
+  assert.equal(page.data.secret, true); assert.equal(page.data.inputValue, 'secret-only-memory');
+  page.game.editing = 'confirmPassword'; p.api.showKeyboard({ defaultValue: 'confirmation-secret' });
+  assert.equal(page.data.secret, true);
+  let touch; p.api.onTouchStart(e => { touch = e.touches[0]; }); p.emit('TouchStart', { touches: [{ x: 15, y: 25 }] });
+  assert.equal(touch.clientX, 15); assert.equal(touch.clientY, 25);
+  p.api.onHide(() => p.api.hideKeyboard()); p.emit('Hide');
+  assert.equal(page.data.inputValue, ''); assert.equal(page.data.editing, false);
+  p.dispose(); p.emit('TouchStart', { touches: [{ x: 99, y: 99 }] }); assert.equal(touch.clientX, 15);
+});

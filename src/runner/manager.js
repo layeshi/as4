@@ -1,3 +1,4 @@
+import { durableFile } from '../durable-file.js';
 import { managedClient } from './managed-client.js';
 import { relation } from '../e2/p6/access.js';
 import { randomUUID } from 'node:crypto';
@@ -88,14 +89,13 @@ export class RunnerManager {
     }
     const iv = randomBytes(12), cipher = createCipheriv('aes-256-gcm', this.key, iv);
     const data = Buffer.concat([cipher.update(JSON.stringify(this.records)), cipher.final()]);
-    writeFileSync(this.file + '.tmp', JSON.stringify({ iv: iv.toString('hex'), tag: cipher.getAuthTag().toString('hex'), data: data.toString('hex') }), { mode: 0o600 });
-    renameSync(this.file + '.tmp', this.file); chmodSync(this.file, 0o600);
+    durableFile(this.file, JSON.stringify({ iv: iv.toString('hex'), tag: cipher.getAuthTag().toString('hex'), data: data.toString('hex') })); chmodSync(this.file, 0o600);
   }
   valid(id) {
     const r = this.records[id], a = this.rt.w.agents[id];
     if (this.rt.w.premise === 6) {
       const link=relation(this.rt.w,id), user=this.ctx?.accounts.get(r?.accountId);
-      return !!(r&&a&&link&&link.managerAccountId===r.accountId&&link.ownershipRevision===r.ownershipRevision&&user?.status==='active'&&user.revision===r.accountRevision);
+      return !!(r&&a&&link&&link.managerAccountId===r.accountId&&link.ownershipRevision===r.ownershipRevision&&user?.status==='active'&&!user.mergePending&&user.revision===r.accountRevision);
     }
     return !!(r && a && a.tokenHash === hash(r.token) && a.owner?.keyHash === r.ownerHash);
   }

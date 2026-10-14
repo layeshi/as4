@@ -123,7 +123,7 @@ export const residentRoutes=[
   ['POST',/^\/api\/account\/residents\/([^/]+)\/(cap|letter|transfer|cancel_transfer)$/,wrap(({res,ctx,actor,params,body})=>{
     let to;
     if(params[1]==='transfer'){
-      const user=ctx.accounts.data.users.find(u=>u.username===String(body.username??'').toLowerCase()&&u.status==='active');
+      const user=ctx.accounts.data.users.find(u=>u.username===String(body.username??'').toLowerCase()&&u.status==='active'&&!u.mergePending&&!u.mergedTo);
       if(!user)fail(404,'not_found','接收账号不存在或不可用。');to=user.id;
     }
     sendJson(res,200,command(ctx,actor,{op:params[1],agentId:params[0],dailyCap:body.dailyCap,text:body.text,transferId:body.transferId,to,...(params[1]==='transfer'?{now:Date.now()}:{}),requestId:body.requestId}));
@@ -133,7 +133,7 @@ export const residentRoutes=[
   })],
   ['POST',/^\/api\/account\/transfers\/([^/]+)\/accept$/,wrap(async({res,ctx,actor,params,body,authorize})=>{
     const config=body.config?.hosted===true?ctx.hosted.runnerChoice(body.config):runnerConfig(body.config);authorize();
-    const invitation=ctx.rt.w.access.transfers[params[0]];if(invitation&&ctx.accounts.get(invitation.from)?.status!=='active')fail(409,'conflict','原管理账号当前不可用。');
+    const invitation=ctx.rt.w.access.transfers[params[0]], sender=invitation&&ctx.accounts.get(invitation.from);if(invitation&&(sender?.status!=='active'||sender.mergePending||sender.mergedTo))fail(409,'conflict','原管理账号当前不可用。');
     const result=command(ctx,actor,{op:'accept_transfer',transferId:params[0],dailyCap:body.dailyCap,model:config.model,now:Date.now(),requestId:body.requestId});
     const check=()=>{authorize();if(owned(ctx,actor,result.agentId).ownershipRevision!==result.ownershipRevision)fail(409,'conflict','管理权已再次变更。');};
     check();

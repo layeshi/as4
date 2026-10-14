@@ -17,7 +17,18 @@ export function accountCommand(w, p) {
   const receipt = w.access.requests[key];
   if (receipt) return receipt.digest === digest ? structuredClone(receipt.result) : bad('conflict');
   let result;
-  if (p.op === 'create' || p.op === 'adopt') {
+  if (p.op === 'merge_accounts') {
+    if (typeof p.from !== 'string' || !p.from || p.from === p.accountId) return bad('invalid_request');
+    const moved = [];
+    for (const [id, r] of Object.entries(w.access.residents)) {
+      if (r.creatorAccountId === p.from) r.creatorAccountId = p.accountId;
+      if (r.managerAccountId === p.from) { r.managerAccountId = p.accountId; r.ownershipRevision++; moved.push(id); }
+    }
+    if (Object.hasOwn(w.access.startupClaims, p.from) && !Object.hasOwn(w.access.startupClaims, p.accountId)) w.access.startupClaims[p.accountId] = structuredClone(w.access.startupClaims[p.from]);
+    // Old invitations must not grant control after either principal changed.
+    for (const transfer of Object.values(w.access.transfers)) if (transfer.status === 'pending' && [transfer.from, transfer.to].some(id => id === p.from || id === p.accountId)) transfer.status = 'cancelled';
+    result = { ok: true, moved };
+  } else if (p.op === 'create' || p.op === 'adopt') {
     result = p.op === 'create' ? register(w, p) : adopt(w, p);
     if (result.ok) {
       const a = w.agents[result.agentId];

@@ -19,7 +19,7 @@ export const hostedRoutes = [
   ['POST', '/api/admin/hosted/adjust', wrap(({ res, ctx, actor, body }) => {
     if (typeof body.username !== 'string') fail(400, 'invalid_username', '请填写用户名。');
     const user = ctx.accounts.data.users.find(u => u.username === body.username.trim().toLowerCase());
-    if (!user) fail(404, 'not_found', '账号不存在。');
+    if (!user || user.mergedTo || user.mergePending) fail(409, 'account_unavailable', '账号正在合并或已合并，请使用保留账号。');
     const entry = ctx.hosted.billing.adjust(user.id, body.amountMicro, actor.id, body.note);
     sendJson(res, 200, { entry, balanceMicro: ctx.hosted.billing.balance(user.id) });
   }, true)],

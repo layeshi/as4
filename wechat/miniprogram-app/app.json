@@ -1,0 +1,15 @@
+{
+  "pages": [
+    "pages/society/index"
+  ],
+  "window": {
+    "navigationStyle": "custom",
+    "backgroundColor": "#0c1725",
+    "backgroundTextStyle": "light"
+  },
+  "networkTimeout": {
+    "request": 60000
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}

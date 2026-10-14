@@ -7,8 +7,17 @@ export class WechatService {
     this.appid = cfg.wechatAppId; this.secret = cfg.wechatAppSecret;
     this.fetcher = fetcher; this.token = null; this.pendingToken = null;
     this.approved = new Map();
+    if (cfg.wechatMiniprogramAppId) {
+      if (!/^wx[a-f0-9]{16}$/.test(cfg.wechatMiniprogramAppId) || cfg.wechatMiniprogramAppId === this.appid) throw new Error('普通小程序 AppID 必须有效且独立于小游戏 AppID');
+      this.miniprogram = new WechatService({ wechatAppId: cfg.wechatMiniprogramAppId, wechatAppSecret: cfg.wechatMiniprogramAppSecret }, { fetcher: (...args) => this.fetcher(...args) });
+    }
   }
   get enabled() { return /^wx[a-f0-9]{16}$/.test(this.appid || '') && !!this.secret; }
+  forApp(appid = this.appid) {
+    if (appid === this.appid) return this;
+    if (this.miniprogram && appid === this.miniprogram.appid) return this.miniprogram;
+    fail(400, 'wechat_app_unknown', '此微信应用尚未配置。');
+  }
   async json(url, options = {}) {
     try {
       const response = await this.fetcher(url, { ...options, redirect: 'error', signal: AbortSignal.timeout(10000) });
@@ -16,7 +25,9 @@ export class WechatService {
       return await response.json();
     } catch { fail(503, 'wechat_unavailable', '微信服务暂不可用，请稍后再试。'); }
   }
-  async exchange(code) {
+  async exchange(code, appid = this.appid) {
+    const selected = this.forApp(appid);
+    if (selected !== this) return selected.exchange(code);
     if (!this.enabled) fail(503, 'wechat_unconfigured', '微信登录尚未配置。');
     if (typeof code !== 'string' || !/^[\w-]{1,256}$/.test(code)) fail(400, 'invalid_code', '微信登录凭证无效。');
     const url = new URL('https://api.weixin.qq.com/sns/jscode2session');
@@ -41,10 +52,12 @@ export class WechatService {
     try { return await this.pendingToken; } finally { this.pendingToken = null; }
   }
   requireIdentity(identity) {
+    if (identity && this.miniprogram && identity.appid === this.miniprogram.appid) return this.miniprogram.requireIdentity(identity);
     // The official v2 API requires an OpenID active in the last two hours.
     if (!identity || identity.appid !== this.appid || typeof identity.openid !== 'string' || !Number.isFinite(identity.verifiedAt) || Date.now() - identity.verifiedAt > 110 * 60000) fail(401, 'wechat_login_required', '请重新使用微信登录后继续。');
   }
   async check(content, identity, scene = 1) {
+    if (identity && this.miniprogram && identity.appid === this.miniprogram.appid) return this.miniprogram.check(content, identity, scene);
     this.requireIdentity(identity);
     if (typeof content !== 'string') fail(400, 'invalid_text', '文本格式无效。');
     if (!content.trim()) return;

@@ -159,5 +159,8 @@ export function settingsPanel(user) {
   return h('div', { class: 'settings-grid' },
     h('section', { class: 'card-panel' }, h('h2', null, tr('个人资料', 'Profile')), h('p', { class: 'muted' }, `@${user.username} · ${roleName(user)}`), profile),
     h('section', { class: 'card-panel' }, h('h2', null, tr('修改密码', 'Change password')), h('p', { class: 'muted' }, tr('更新后，其他设备上的登录会失效。', 'Other sessions are signed out after the change.')), change),
+    h('section', { class: 'card-panel' }, h('h2', null, tr('微信关联', 'WeChat linking')),
+      h('p', null, user.wechatLinked ? tr('已关联微信。小程序与网页使用同一账号。', 'WeChat linked. The mini program and website share this account.') : tr('尚未关联微信。', 'WeChat not linked.')),
+      h('p', { class: 'muted' }, tr('在小程序「我的」选择「已有网站账号」，使用本页用户名登录，再关联微信。若微信已有独立账号，请使用该账号的「设置网页登录密码」；已有两个账号时，可在微信账号的「合并到已有网站账号」中验证两端身份并确认迁移。', 'In the mini program, sign in with this username, then link WeChat. If WeChat already has a separate account, set its web password there. To merge existing accounts, verify both identities and confirm the transfer in the mini program.'))),
     h('section', { class: 'card-panel wide' }, prayerAuditPanel()));
 }

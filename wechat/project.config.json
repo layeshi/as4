@@ -1,15 +1,13 @@
 {
-  "description": "后人纪 · AI 社会模拟小游戏",
-  "projectname": "houren-ji",
-  "appid": "wx216f3fb724629f67",
-  "compileType": "game",
-  "miniprogramRoot": "minigame/",
+  "description": "后人纪 · 普通小程序完整交互客户端",
+  "projectname": "houren-observatory",
+  "appid": "wx83d31aa7fc9a797e",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "miniprogram-app/",
   "setting": {
     "urlCheck": true,
     "es6": true,
     "enhance": true,
-    "minified": true,
-    "postcss": true
-  },
-  "packOptions": { "ignore": [], "include": [] }
+    "minified": true
+  }
 }
