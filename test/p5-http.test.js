@@ -73,6 +73,14 @@ test('P5 HTTP paid discovery, typed actions, retry receipts, public isolation an
     const first = await post('/api/me/act', body);
     assert.equal(first.status, 200, first.text);
     assert.equal(first.json.results[0].ok, true, first.text);
+    const beforeRead = stateHash(env.rt.w);
+    const filtered = await env.call(`/api/public/orders?agent=${a.id}&status=open&kind=document&limit=1`);
+    assert.equal(filtered.status, 200);
+    assert.equal(filtered.json.length, 1);
+    assert.equal(filtered.json[0].requester, a.id);
+    const unmatched = await env.call('/api/public/orders?status=completed&kind=document');
+    assert.deepEqual(unmatched.json, []);
+    assert.equal(stateHash(env.rt.w), beforeRead, '公开筛选不改变世界状态或居民账目');
     const before = stateHash(env.rt.w);
     const again = await post('/api/me/act', body);
     assert.deepEqual(again.json, first.json);

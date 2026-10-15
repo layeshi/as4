@@ -1,0 +1,110 @@
+TAP version 13
+# Subtest: market filters combine before pagination and preserve settled history without mutating the world
+ok 1 - market filters combine before pagination and preserve settled history without mutating the world
+  ---
+  duration_ms: 1.520708
+  ...
+# Subtest: market is read-only, shows citywide orders, names, escrow, outcomes and safe AI content
+ok 2 - market is read-only, shows citywide orders, names, escrow, outcomes and safe AI content
+  ---
+  duration_ms: 11.420708
+  ...
+# Subtest: filter changes reset pagination, while redraw preserves filters, cursor and expanded details
+ok 3 - filter changes reset pagination, while redraw preserves filters, cursor and expanded details
+  ---
+  duration_ms: 10.369417
+  ...
+# Subtest: late responses cannot overwrite a new view; errors, retry, empty and English states are readable
+ok 4 - late responses cannot overwrite a new view; errors, retry, empty and English states are readable
+  ---
+  duration_ms: 1.313417
+  ...
+# Subtest: P5 HTTP paid discovery, typed actions, retry receipts, public isolation and restart/replay
+ok 5 - P5 HTTP paid discovery, typed actions, retry receipts, public isolation and restart/replay
+  ---
+  duration_ms: 6914.244291
+  ...
+# Subtest: i18n：中英两套界面用语与事件模板的键完全一致，且没有空文本
+ok 6 - i18n：中英两套界面用语与事件模板的键完全一致，且没有空文本
+  ---
+  duration_ms: 3.138792
+  ...
+# Subtest: i18n：代码里用到的 t("键") 都有定义（含按前缀拼出的键）
+ok 7 - i18n：代码里用到的 t("键") 都有定义（含按前缀拼出的键）
+  ---
+  duration_ms: 2.886542
+  ...
+# Subtest: 事件模板：引擎发出的每一种公开事件类型都有中英模板与类别
+ok 8 - 事件模板：引擎发出的每一种公开事件类型都有中英模板与类别
+  ---
+  duration_ms: 9.267625
+  ...
+# Subtest: 事件模板：真实事件（沙盘 260 日）的占位符都有取值，且不会抛错
+ok 9 - 事件模板：真实事件（沙盘 260 日）的占位符都有取值，且不会抛错
+  ---
+  duration_ms: 2673.45825
+  ...
+# Subtest: 事件模板：按数据分叉的类型选对模板；被遮盖的事件只显示说明
+ok 10 - 事件模板：按数据分叉的类型选对模板；被遮盖的事件只显示说明
+  ---
+  duration_ms: 0.235917
+  ...
+# Subtest: i18n：语言选择只认 zh / en；fmt 与 t 的占位符替换
+ok 11 - i18n：语言选择只认 zh / en；fmt 与 t 的占位符替换
+  ---
+  duration_ms: 0.115
+  ...
+# Subtest: 前端的法律效力描述与引擎的 describeEffect 逐字一致（中英）
+ok 12 - 前端的法律效力描述与引擎的 describeEffect 逐字一致（中英）
+  ---
+  duration_ms: 1.688667
+  ...
+# Subtest: 前端常量与引擎一致：季节表、完好度档位；每张地图用到的图形前端都画得出
+ok 13 - 前端常量与引擎一致：季节表、完好度档位；每张地图用到的图形前端都画得出
+  ---
+  duration_ms: 0.829042
+  ...
+# Subtest: CSP 兼容：没有内联脚本 / 样式 / style 属性，没有 innerHTML 之类的危险 API
+ok 14 - CSP 兼容：没有内联脚本 / 样式 / style 属性，没有 innerHTML 之类的危险 API
+  ---
+  duration_ms: 4.078459
+  ...
+# Subtest: 顶栏标题：词元本位的世界显示「后人纪 · 词元本位」，城名进悬停提示；更早的世界仍显示城名
+ok 15 - 顶栏标题：词元本位的世界显示「后人纪 · 词元本位」，城名进悬停提示；更早的世界仍显示城名
+  ---
+  duration_ms: 0.798084
+  ...
+# Subtest: index.html 里有 app.js 需要的全部元素（按 id）
+ok 16 - index.html 里有 app.js 需要的全部元素（按 id）
+  ---
+  duration_ms: 0.349833
+  ...
+# Subtest: agent 的文字只经 textContent / 文本节点渲染：dom.js 的 h() 不解析 HTML
+ok 17 - agent 的文字只经 textContent / 文本节点渲染：dom.js 的 h() 不解析 HTML
+  ---
+  duration_ms: 0.093708
+  ...
+# Subtest: 静态文件：GET / 与各模块 200，带 CSP 与正确的 MIME；/api/public/lore 可用；路径穿越被拒
+ok 18 - 静态文件：GET / 与各模块 200，带 CSP 与正确的 MIME；/api/public/lore 可用；路径穿越被拒
+  ---
+  duration_ms: 126.097916
+  ...
+# Subtest: 前端引用的公共接口都存在（按路径前缀）
+ok 19 - 前端引用的公共接口都存在（按路径前缀）
+  ---
+  duration_ms: 87.805792
+  ...
+# Subtest: public/ 目录只有约定的文件
+ok 20 - public/ 目录只有约定的文件
+  ---
+  duration_ms: 0.165416
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 20
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7045.616291

@@ -1,0 +1,72 @@
+[
+  {
+    "name": "services-mobile",
+    "width": 375,
+    "scroll": 375
+  },
+  {
+    "name": "pagination-and-server-filter",
+    "passed": true
+  },
+  {
+    "name": "long-dark-375",
+    "width": 375,
+    "scroll": 375
+  },
+  {
+    "name": "long-light-375",
+    "width": 375,
+    "scroll": 375
+  },
+  {
+    "name": "empty-mobile",
+    "width": 375,
+    "scroll": 375
+  },
+  {
+    "name": "error-mobile",
+    "width": 375,
+    "scroll": 375
+  },
+  {
+    "name": "forbidden-mobile",
+    "width": 375,
+    "scroll": 375
+  },
+  {
+    "name": "sign-in-mobile",
+    "width": 375,
+    "scroll": 375
+  },
+  {
+    "name": "loading-mobile",
+    "width": 375,
+    "scroll": 375
+  },
+  {
+    "name": "keyboard-focus",
+    "tag": "SELECT",
+    "label": "居民",
+    "outline": "2px"
+  },
+  {
+    "name": "market-dark-375-en",
+    "width": 375,
+    "scroll": 375
+  },
+  {
+    "name": "market-dark-768-en",
+    "width": 768,
+    "scroll": 768
+  },
+  {
+    "name": "market-dark-1280-en",
+    "width": 1280,
+    "scroll": 1280
+  },
+  {
+    "name": "market-dark-1920-en",
+    "width": 1920,
+    "scroll": 1920
+  }
+]

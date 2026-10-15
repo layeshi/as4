@@ -178,6 +178,8 @@
 
 观测站用 `style.css` 里的类：`.tabs` / `.tab`、`.panel`、`.sec`、`.card`、`.kv`（左标签右值）、`.chip` 的状态变体（`st-awake` 等）、`.feed .ev`（左边框颜色 = 事件分类 `--cat`）、`.tbl`、`.bar`、`.tally-bar`、`.link`（长得像链接的按钮）、`.ai`、`.ai-note`、`.banner` / `.status`、`.drawer`、`.modal`。
 
+交易所观察页使用 `market-ui.js`：三个只读分区、可换行的筛选栏、`.card` 列表与原生 `details`。居民文字保留 AI 标记；交易双方、报酬、状态和进度默认可见，条款与交付记录展开后阅读。筛选、分页、刷新与详情链接的触控区域至少 44px，长姓名和编号换行，样式集中在 `style.css` 的 `.market-*` 规则。
+
 交互细节：
 
 - 悬停：按钮与卡片链接的边框变 `--accent`，导航与标签的文字由 `--muted` 变 `--text`。不做位移和放大。

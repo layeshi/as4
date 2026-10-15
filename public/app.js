@@ -528,7 +528,7 @@ function applyState({ force = false } = {}) {
 function renderTabBar() {
   clear(els.tabs);
   tabsNow.forEach(([id]) => {
-    const b = h('button', { class: 'tab', role: 'tab', id: `tab-${id}`, type: 'button', 'aria-selected': String(id === S.tab), 'aria-controls': 'panel', tabindex: id === S.tab ? 0 : -1 }, id==='market'?'交易所':t(`tab_${id}`));
+    const b = h('button', { class: 'tab', role: 'tab', id: `tab-${id}`, type: 'button', 'aria-selected': String(id === S.tab), 'aria-controls': 'panel', tabindex: id === S.tab ? 0 : -1 }, id==='market'?(getLang()==='en'?'Exchange':'交易所'):t(`tab_${id}`));
     b.addEventListener('click', () => selectTab(id));
     els.tabs.append(b);
   });

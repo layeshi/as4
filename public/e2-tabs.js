@@ -56,7 +56,7 @@ export function signature2(tab, s) {
     case 'laws': return JSON.stringify([s.vars, s.procedure, s.charter, s.laws.map((l) => [l.id, l.status, l.suspendedDays, l.suspended]), s.proposals.map((p) => [p.id, p.status, p.tally, p.votes.length]), s.refounds.map((r) => [r.id, r.status, r.signers.length]), s.groups.map((g) => g.bylaws && g.bylaws.setTick), s.petitions.length, s.world.tick, ...(s.world.lawSemanticsVersion === 2 ? [s.laws.map(l => l.enact), s.proposals.map(p => p.enact), s.groups.map(g => g.bylaws && [g.bylaws.fingerprints, g.bylaws.enact]), s.places.map(p => p.rules && [p.rules.fingerprints, p.rules.enact])] : [])]);
     case 'residents': return JSON.stringify(s.agents.map((a) => [a.id, a.status, a.energy, a.coins, a.place, a.groups.length, a.lastActTick, a.ageDays, a.tags.length, a.purpose, a.avatar]));
     case 'groups': return JSON.stringify(s.groups);
-    case 'market': return JSON.stringify([s.services,s.demands,s.orders]);
+    case 'market': return JSON.stringify([s.world.tick,s.services,s.demands,s.orders,s.agents.map(a=>[a.id,a.name])]);
     case 'environment': return JSON.stringify([...((s.world.premise === 5 || s.world.premise === 6)?[s.materials,s.research,s.observations,s.projects]:[]),s.places.map((p) => [p.id, p.condition, p.salvage && p.salvage.left, p.modules.length, p.owner, p.razed, p.name]), s.lots, s.projects.map((j) => [j.id, j.have]), s.well, s.regions, s.weather.active, s.world.dayOfMonth]);
     case 'cradle': return JSON.stringify([s.shells, s.cradle.map((c) => [c.id, c.fund, c.queued, c.queuePosition]), s.unborn.length, s.agents.length]);
     case 'library': return `${s.docs.length}:${s.lexicon.length}:${s.docs.reduce((n, d) => n + d.reads, 0)}`;

@@ -88,6 +88,11 @@ export function materialLook(w, what, args = {}, agentId = null) {
           : Object.values(w.orders).filter(
               (o) => what !== 'demands' || o.origin === 'demand'
             );
+  // 先筛选再分页，保证全城交易查询不会遗漏后续页的匹配记录。
+  if (['services', 'demands', 'orders'].includes(what)) {
+    if (args.status) records = records.filter(r => r.status === args.status);
+    if (args.kind) records = records.filter(r => (r.criterionTemplate ?? r.terms?.criterion)?.kind === args.kind);
+  }
   if (args.agent)
     records = records.filter(
       (r) => r.requester === args.agent || r.provider === args.agent

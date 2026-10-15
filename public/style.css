@@ -99,6 +99,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .clockcell { min-width: 190px; }
 .cell .lbl { color: var(--muted); }
 .actions { margin-left: auto; display: flex; gap: 6px; }
+.topbar > .actions { flex-wrap: wrap; }
 .btn {
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -908,3 +909,25 @@ ul.reading { list-style: none; padding-left: 0; }
 .announcement-preview[hidden] { display: none; }
 .announcement-preview-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .announcement-preview a { min-height: 44px; display: inline-flex; align-items: center; }
+
+/* 交易所：纸页工作台，只读列表与筛选，沿用观测站组件。 */
+.market-tabs { display: flex; flex-wrap: wrap; }
+.market-tabs .subtab { min-height: 44px; }
+.market-tabs .subtab[aria-pressed="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.market-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 12px; margin-bottom: 12px; }
+.market-filters .field { min-width: 0; }
+.market-filters select { width: 100%; min-width: 0; min-height: 44px; }
+.market-record { overflow-wrap: anywhere; }
+.market-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.market-title { flex: 1 1 160px; min-width: 0; font-weight: 600; }
+.market-price { font-weight: 600; font-variant-numeric: tabular-nums; }
+.market-parties { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0; }
+.market-parties .link, .market-detail .link, .market-detail .btn { min-height: 44px; min-width: 44px; max-width: 100%; overflow-wrap: anywhere; }
+.market-meta { font-variant-numeric: tabular-nums; }
+.market-detail { border-top: 1px solid var(--line-soft); }
+.market-detail > summary { cursor: pointer; color: var(--accent); padding: 12px 0; min-height: 44px; }
+.market-description { white-space: pre-wrap; }
+.market-facts { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+.market-facts dd { min-width: 0; font-variant-numeric: tabular-nums; }
+.market-pagination .btn, .market-filters + .toolbar .btn { min-height: 44px; }
+.market-empty { border-style: dashed; }
