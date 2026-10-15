@@ -133,7 +133,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
   let pending; // 最近一次感知的游标
   let lastResults = null;
   let lastPerception = null; // 最近一次 houren_perceive 的感知：houren_look 用它渲染
-  let cooperation = false;
+  let cooperation = false, programs = false;
   let premise; // 这座城的设定版本：感知过或探测过之后才知道
   let looks = { tick: -1, n: 0 }; // 本刻已经看了几次（第二前提；按感知里的刻归零）
 
@@ -150,7 +150,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
     if (baseline === undefined) baseline = p.inbox && p.inbox.length ? p.inbox[0].seq - 1 : p.inboxCursor;
     lastPerception = p;
     premise = p.premise || 0;
-    cooperation = !!p.cooperation;
+    cooperation = !!p.cooperation; programs = !!p.programServices;
     if (tokenized(p)) paid.remember(p);
     return r;
   }
@@ -161,7 +161,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
     const r = await client.me({ lang: defaultLang, after: NO_INBOX });
     if (!r.ok) return null;
     premise = r.json.premise || 0;
-    cooperation = !!r.json.cooperation;
+    cooperation = !!r.json.cooperation; programs = !!r.json.programServices;
     if (tokenized(r.json)) paid.remember(r.json);
     return premise;
   }
@@ -244,7 +244,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
       case 'tools/list': {
         if (isNotification) return null;
         const p = client ? await probePremise() : 0;
-        return ok(id, { tools: cooperation ? TOOLS_P5.map(t=>t.name==='houren_look'?{...t,inputSchema:{...t.inputSchema,properties:{...t.inputSchema.properties,what:{type:'string',enum:[...LOOK_WHATS_P4,...MATERIAL_LOOKS,...COOP_LOOKS]},offset:{type:'integer',minimum:0},version:{type:'integer',minimum:1},agent:{type:'string'},archived:{type:'boolean'}}}}:t) : (p===5||p===6)?TOOLS_P5:tokenized({ premise: p }) ? TOOLS_P4 : p === null || p >= 2 ? ALL_TOOLS : TOOLS });
+        return ok(id, { tools: (cooperation || programs) ? TOOLS_P5.map(t=>t.name==='houren_look'?{...t,inputSchema:{...t.inputSchema,properties:{...t.inputSchema.properties,what:{type:'string',enum:[...LOOK_WHATS_P4,...MATERIAL_LOOKS,...(cooperation?COOP_LOOKS:[]),...(programs?['programs']:[])]},offset:{type:'integer',minimum:0},version:{type:'integer',minimum:1},agent:{type:'string'},archived:{type:'boolean'}}}}:t) : (p===5||p===6)?TOOLS_P5:tokenized({ premise: p }) ? TOOLS_P4 : p === null || p >= 2 ? ALL_TOOLS : TOOLS });
       }
       case 'tools/call': {
         if (isNotification) return null;

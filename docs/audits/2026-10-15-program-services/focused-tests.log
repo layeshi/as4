@@ -1,0 +1,410 @@
+TAP version 13
+# Subtest: market filters combine before pagination and preserve settled history without mutating the world
+ok 1 - market filters combine before pagination and preserve settled history without mutating the world
+  ---
+  duration_ms: 1.262375
+  ...
+# Subtest: market is read-only, shows citywide orders, names, escrow, outcomes and safe AI content
+ok 2 - market is read-only, shows citywide orders, names, escrow, outcomes and safe AI content
+  ---
+  duration_ms: 11.124
+  ...
+# Subtest: filter changes reset pagination, while redraw preserves filters, cursor and expanded details
+ok 3 - filter changes reset pagination, while redraw preserves filters, cursor and expanded details
+  ---
+  duration_ms: 11.367875
+  ...
+# Subtest: late responses cannot overwrite a new view; errors, retry, empty and English states are readable
+ok 4 - late responses cannot overwrite a new view; errors, retry, empty and English states are readable
+  ---
+  duration_ms: 1.378792
+  ...
+# Subtest: program services show automatic delivery, input instructions and safe results in both languages
+ok 5 - program services show automatic delivery, input instructions and safe results in both languages
+  ---
+  duration_ms: 0.992125
+  ...
+# Subtest: isolated JavaScript computes real results, handles Unicode and preserves input as data
+ok 6 - isolated JavaScript computes real results, handles Unicode and preserves input as data
+  ---
+  duration_ms: 226.095959
+  ...
+# Subtest: guest cannot access host, load modules, retain state or leak exceptions
+ok 7 - guest cannot access host, load modules, retain state or leak exceptions
+  ---
+  duration_ms: 442.974291
+  ...
+# Subtest: loop, recursion, memory, native regex and result/input limits are bounded
+ok 8 - loop, recursion, memory, native regex and result/input limits are bounded
+  ---
+  duration_ms: 463.257333
+  ...
+# Subtest: explicit activation and schemas keep disabled/older worlds unchanged
+ok 9 - explicit activation and schemas keep disabled/older worlds unchanged
+  ---
+  duration_ms: 39.576417
+  ...
+# Subtest: save, private paid reads, self-test, publish, purchase, accounting and duplicate requests
+ok 10 - save, private paid reads, self-test, publish, purchase, accounting and duplicate requests
+  ---
+  duration_ms: 649.961416
+  ...
+# Subtest: editing affects future purchases, failures do not pay, withdrawal blocks new purchases and ordinary services still work
+ok 11 - editing affects future purchases, failures do not pay, withdrawal blocks new purchases and ordinary services still work
+  ---
+  duration_ms: 792.926292
+  ...
+# Subtest: managed runner executes named program tools and MCP reads author pages and receives automatic delivery
+ok 12 - managed runner executes named program tools and MCP reads author pages and receives automatic delivery
+  ---
+  duration_ms: 402.232083
+  ...
+# Subtest: JSON-escaped source can be read fully in bounded pages
+ok 13 - JSON-escaped source can be read fully in bounded pages
+  ---
+  duration_ms: 210.719542
+  ...
+# Subtest: purchase cannot leak output or move service funds when reading budget is exhausted; restart preserves settlement
+ok 14 - purchase cannot leak output or move service funds when reading budget is exhausted; restart preserves settlement
+  ---
+  duration_ms: 502.586791
+  ...
+# Subtest: i18n：中英两套界面用语与事件模板的键完全一致，且没有空文本
+ok 15 - i18n：中英两套界面用语与事件模板的键完全一致，且没有空文本
+  ---
+  duration_ms: 3.108167
+  ...
+# Subtest: i18n：代码里用到的 t("键") 都有定义（含按前缀拼出的键）
+ok 16 - i18n：代码里用到的 t("键") 都有定义（含按前缀拼出的键）
+  ---
+  duration_ms: 2.960834
+  ...
+# Subtest: 事件模板：引擎发出的每一种公开事件类型都有中英模板与类别
+ok 17 - 事件模板：引擎发出的每一种公开事件类型都有中英模板与类别
+  ---
+  duration_ms: 9.601084
+  ...
+# Subtest: 事件模板：真实事件（沙盘 260 日）的占位符都有取值，且不会抛错
+ok 18 - 事件模板：真实事件（沙盘 260 日）的占位符都有取值，且不会抛错
+  ---
+  duration_ms: 2629.692417
+  ...
+# Subtest: 事件模板：按数据分叉的类型选对模板；被遮盖的事件只显示说明
+ok 19 - 事件模板：按数据分叉的类型选对模板；被遮盖的事件只显示说明
+  ---
+  duration_ms: 0.228583
+  ...
+# Subtest: i18n：语言选择只认 zh / en；fmt 与 t 的占位符替换
+ok 20 - i18n：语言选择只认 zh / en；fmt 与 t 的占位符替换
+  ---
+  duration_ms: 0.11275
+  ...
+# Subtest: 前端的法律效力描述与引擎的 describeEffect 逐字一致（中英）
+ok 21 - 前端的法律效力描述与引擎的 describeEffect 逐字一致（中英）
+  ---
+  duration_ms: 1.73175
+  ...
+# Subtest: 前端常量与引擎一致：季节表、完好度档位；每张地图用到的图形前端都画得出
+ok 22 - 前端常量与引擎一致：季节表、完好度档位；每张地图用到的图形前端都画得出
+  ---
+  duration_ms: 0.877125
+  ...
+# Subtest: CSP 兼容：没有内联脚本 / 样式 / style 属性，没有 innerHTML 之类的危险 API
+ok 23 - CSP 兼容：没有内联脚本 / 样式 / style 属性，没有 innerHTML 之类的危险 API
+  ---
+  duration_ms: 4.130583
+  ...
+# Subtest: 顶栏标题：词元本位的世界显示「后人纪 · 词元本位」，城名进悬停提示；更早的世界仍显示城名
+ok 24 - 顶栏标题：词元本位的世界显示「后人纪 · 词元本位」，城名进悬停提示；更早的世界仍显示城名
+  ---
+  duration_ms: 0.43325
+  ...
+# Subtest: index.html 里有 app.js 需要的全部元素（按 id）
+ok 25 - index.html 里有 app.js 需要的全部元素（按 id）
+  ---
+  duration_ms: 0.235833
+  ...
+# Subtest: agent 的文字只经 textContent / 文本节点渲染：dom.js 的 h() 不解析 HTML
+ok 26 - agent 的文字只经 textContent / 文本节点渲染：dom.js 的 h() 不解析 HTML
+  ---
+  duration_ms: 0.090125
+  ...
+# Subtest: 静态文件：GET / 与各模块 200，带 CSP 与正确的 MIME；/api/public/lore 可用；路径穿越被拒
+ok 27 - 静态文件：GET / 与各模块 200，带 CSP 与正确的 MIME；/api/public/lore 可用；路径穿越被拒
+  ---
+  duration_ms: 114.196083
+  ...
+# Subtest: 前端引用的公共接口都存在（按路径前缀）
+ok 28 - 前端引用的公共接口都存在（按路径前缀）
+  ---
+  duration_ms: 77.301
+  ...
+# Subtest: public/ 目录只有约定的文件
+ok 29 - public/ 目录只有约定的文件
+  ---
+  duration_ms: 0.160417
+  ...
+# Subtest: the miniGame event text module is generated from the website templates and stays in sync
+ok 30 - the miniGame event text module is generated from the website templates and stays in sync
+  ---
+  duration_ms: 21.641625
+  ...
+# Subtest: the feed groups by tick, merges a resident's actions, summarizes exploration and folds the day end
+ok 31 - the feed groups by tick, merges a resident's actions, summarizes exploration and folds the day end
+  ---
+  duration_ms: 8.886
+  ...
+# Subtest: withheld text becomes a locked bubble and neutral names, never a wall of placeholders
+ok 32 - withheld text becomes a locked bubble and neutral names, never a wall of placeholders
+  ---
+  duration_ms: 0.182208
+  ...
+# Subtest: line breaking keeps closing punctuation off the line start, keeps English words whole and clamps with an ellipsis
+ok 33 - line breaking keeps closing punctuation off the line start, keeps English words whole and clamps with an ellipsis
+  ---
+  duration_ms: 0.54575
+  ...
+# Subtest: chronicle days split into stats, items, quotes and the chronicler's line
+ok 34 - chronicle days split into stats, items, quotes and the chronicler's line
+  ---
+  duration_ms: 0.254791
+  ...
+# Subtest: the city screen shows system names and no placeholders when the projection withholds resident text
+ok 35 - the city screen shows system names and no placeholders when the projection withholds resident text
+  ---
+  duration_ms: 18.744333
+  ...
+# Subtest: clicking the privacy link opens the notice without granting consent
+ok 36 - clicking the privacy link opens the notice without granting consent
+  ---
+  duration_ms: 14.146958
+  ...
+# Subtest: leaving an input page clears secrets and ignores late keyboard completion
+ok 37 - leaving an input page clears secrets and ignores late keyboard completion
+  ---
+  duration_ms: 8.350667
+  ...
+# Subtest: startup privacy is readable locally and returns to startup without any requests
+ok 38 - startup privacy is readable locally and returns to startup without any requests
+  ---
+  duration_ms: 7.310833
+  ...
+# Subtest: logout clears local credentials, private records and drafts before success response
+ok 39 - logout clears local credentials, private records and drafts before success response
+  ---
+  duration_ms: 7.967292
+  ...
+# Subtest: logout clears local credentials, private records and drafts before network response
+ok 40 - logout clears local credentials, private records and drafts before network response
+  ---
+  duration_ms: 7.367583
+  ...
+# Subtest: logout clears local credentials, private records and drafts before timeout response
+ok 41 - logout clears local credentials, private records and drafts before timeout response
+  ---
+  duration_ms: 6.803333
+  ...
+# Subtest: logout clears local credentials, private records and drafts before unauthorized response
+ok 42 - logout clears local credentials, private records and drafts before unauthorized response
+  ---
+  duration_ms: 7.016542
+  ...
+# Subtest: logout clears local credentials, private records and drafts before malformed response
+ok 43 - logout clears local credentials, private records and drafts before malformed response
+  ---
+  duration_ms: 7.314792
+  ...
+# Subtest: resident speech has an AI label
+ok 44 - resident speech has an AI label
+  ---
+  duration_ms: 7.162583
+  ...
+# Subtest: the inscriptions tab reads the public profile inscriptions
+ok 45 - the inscriptions tab reads the public profile inscriptions
+  ---
+  duration_ms: 6.602625
+  ...
+# Subtest: active residents sort by their latest action rather than lifetime speech
+ok 46 - active residents sort by their latest action rather than lifetime speech
+  ---
+  duration_ms: 5.882417
+  ...
+# Subtest: pending profile text retries the profile and preserves its tab and scroll
+ok 47 - pending profile text retries the profile and preserves its tab and scroll
+  ---
+  duration_ms: 7.375209
+  ...
+# Subtest: a pending document and private resident record each refresh on their own page
+ok 48 - a pending document and private resident record each refresh on their own page
+  ---
+  duration_ms: 13.374958
+  ...
+# Subtest: the live countdown advances locally and stops in the background
+ok 49 - the live countdown advances locally and stops in the background
+  ---
+  duration_ms: 7.290458
+  ...
+# Subtest: event filters scroll horizontally without changing the feed or vertical position
+ok 50 - event filters scroll horizontally without changing the feed or vertical position
+  ---
+  duration_ms: 10.319667
+  ...
+# Subtest: unapproved profile stops after three quick retries even when auto refresh is disabled
+ok 51 - unapproved profile stops after three quick retries even when auto refresh is disabled
+  ---
+  duration_ms: 7.08275
+  ...
+# Subtest: a refresh preserves a profile tab changed while its response is in flight
+ok 52 - a refresh preserves a profile tab changed while its response is in flight
+  ---
+  duration_ms: 6.235416
+  ...
+# Subtest: late profile, document and private responses cannot replace a newly opened object
+ok 53 - late profile, document and private responses cannot replace a newly opened object
+  ---
+  duration_ms: 20.659333
+  ...
+# Subtest: late chronicle responses cannot replace the newly selected month
+ok 54 - late chronicle responses cannot replace the newly selected month
+  ---
+  duration_ms: 7.140666
+  ...
+# Subtest: unchecked residents stay distinct in the feed without revealing their names
+ok 55 - unchecked residents stay distinct in the feed without revealing their names
+  ---
+  duration_ms: 0.148542
+  ...
+# Subtest: dense map labels remain visible and missing names get a readable neutral label
+ok 56 - dense map labels remain visible and missing names get a readable neutral label
+  ---
+  duration_ms: 20.752875
+  ...
+# Subtest: creation and management offer supplier presets and changing them clears secrets
+ok 57 - creation and management offer supplier presets and changing them clears secrets
+  ---
+  duration_ms: 6.558708
+  ...
+# Subtest: supplier selection works against an old server and submits the selected provider settings
+ok 58 - supplier selection works against an old server and submits the selected provider settings
+  ---
+  duration_ms: 5.545375
+  ...
+# Subtest: late supplier loading cannot reopen a creation page after navigating away
+ok 59 - late supplier loading cannot reopen a creation page after navigating away
+  ---
+  duration_ms: 5.622667
+  ...
+# Subtest: session race: old owner 401 cannot clear a newly logged-in account session
+ok 60 - session race: old owner 401 cannot clear a newly logged-in account session
+  ---
+  duration_ms: 6.866459
+  ...
+# Subtest: session race: old owner cookies cannot resurrect credentials after controller logout
+ok 61 - session race: old owner cookies cannot resurrect credentials after controller logout
+  ---
+  duration_ms: 6.250792
+  ...
+# Subtest: session race: old WeChat bind cookie cannot replace a newer login
+ok 62 - session race: old WeChat bind cookie cannot replace a newer login
+  ---
+  duration_ms: 7.193417
+  ...
+# Subtest: session race: old WeChat bind unauthorized cannot replace a newer login
+ok 63 - session race: old WeChat bind unauthorized cannot replace a newer login
+  ---
+  duration_ms: 5.982166
+  ...
+# Subtest: session race: late logout cookies cannot delete a newer WeChat login
+ok 64 - session race: late logout cookies cannot delete a newer WeChat login
+  ---
+  duration_ms: 6.3975
+  ...
+# Subtest: session race: delayed WeChat code after a session clear cannot begin a login exchange
+ok 65 - session race: delayed WeChat code after a session clear cannot begin a login exchange
+  ---
+  duration_ms: 5.606875
+  ...
+# Subtest: session race: restoring a replacement session invalidates an old request
+ok 66 - session race: restoring a replacement session invalidates an old request
+  ---
+  duration_ms: 5.576958
+  ...
+# Subtest: session race: a current session 401 still removes persisted and outgoing credentials
+ok 67 - session race: a current session 401 still removes persisted and outgoing credentials
+  ---
+  duration_ms: 6.853291
+  ...
+# Subtest: every withheld state produces neutral references and keeps its reason on bubbles and chronicle entries
+ok 68 - every withheld state produces neutral references and keeps its reason on bubbles and chronicle entries
+  ---
+  duration_ms: 0.37425
+  ...
+# Subtest: refused and unavailable content shows accurate notices across city, resident and archive screens
+ok 69 - refused and unavailable content shows accurate notices across city, resident and archive screens
+  ---
+  duration_ms: 161.266
+  ...
+# Subtest: nonpending moderation states never schedule a rapid profile retry
+ok 70 - nonpending moderation states never schedule a rapid profile retry
+  ---
+  duration_ms: 23.325958
+  ...
+# Subtest: all withheld place labels and avatar initials use neutral fallbacks while approved names remain visible
+ok 71 - all withheld place labels and avatar initials use neutral fallbacks while approved names remain visible
+  ---
+  duration_ms: 41.192875
+  ...
+# Subtest: upstream loginRequired exposes an explicit re-login while local verification and the website session remain valid
+ok 72 - upstream loginRequired exposes an explicit re-login while local verification and the website session remain valid
+  ---
+  duration_ms: 7.119417
+  ...
+# Subtest: login-required counts replace each scope and logout clears every re-login hint
+ok 73 - login-required counts replace each scope and logout clears every re-login hint
+  ---
+  duration_ms: 5.760875
+  ...
+# Subtest: consented re-login keeps account binding and clears old scopes before fetching the current world again
+ok 74 - consented re-login keeps account binding and clears old scopes before fetching the current world again
+  ---
+  duration_ms: 6.523208
+  ...
+# Subtest: re-login replaces an in-flight world refresh and ignores its late login-required response
+ok 75 - re-login replaces an in-flight world refresh and ignores its late login-required response
+  ---
+  duration_ms: 7.983417
+  ...
+# Subtest: owner headers and avatar initials never render moderation placeholders as resident names
+ok 76 - owner headers and avatar initials never render moderation placeholders as resident names
+  ---
+  duration_ms: 33.791792
+  ...
+# Subtest: content 401 during letter keeps the website credential and draft, and offers explicit re-login
+ok 77 - content 401 during letter keeps the website credential and draft, and offers explicit re-login
+  ---
+  duration_ms: 8.3705
+  ...
+# Subtest: content 401 during create keeps the website credential and draft, and offers explicit re-login
+ok 78 - content 401 during create keeps the website credential and draft, and offers explicit re-login
+  ---
+  duration_ms: 8.608917
+  ...
+# Subtest: a late previous-session content 401 cannot mark a newer session for re-login
+ok 79 - a late previous-session content 401 cannot mark a newer session for re-login
+  ---
+  duration_ms: 5.129875
+  ...
+# Subtest: an obsolete account refresh finishing after re-login cannot erase the newer refresh failure
+ok 80 - an obsolete account refresh finishing after re-login cannot erase the newer refresh failure
+  ---
+  duration_ms: 9.91925
+  ...
+1..80
+# tests 80
+# suites 0
+# pass 80
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3872.900542

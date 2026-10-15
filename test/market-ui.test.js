@@ -104,3 +104,20 @@ test('late responses cannot overwrite a new view; errors, retry, empty and Engli
     assert.equal(marketTime(null, 12), '—');
   } finally { env.restore(); }
 });
+
+test('program services show automatic delivery, input instructions and safe results in both languages',async()=>{
+  const service={id:'sv1',provider:'a2',title:'维修预算计算器',description:'计算维修预算',price:5,status:'active',program:'pg1',inputDescription:'输入预算与单价',criterionTemplate:{kind:'program'}};
+  const delivered=order('so1',{serviceId:'sv1',program:'pg1',terms:{price:5,criterion:{kind:'program'}},status:'completed',progress:1,escrow:0,reason:'program_delivered',closedTick:0,input:'{"budget":100}',output:'"<script>alert(1)</script>"'});
+  const env=setup(path=>ok([path.includes('/orders')?delivered:service]));
+  try {
+    await renderMaterialsMarket(env.ctx,env.dom.root);
+    button(env.dom.root,'服务告示').click();await tick();
+    assert.match(env.dom.root.textContent,/程序服务/);assert.match(env.dom.root.textContent,/输入预算与单价/);assert.match(env.dom.root.textContent,/购买后自动运行/);
+    assert.doesNotMatch(env.dom.root.textContent,/等待接单|undefined 刻/);
+    button(env.dom.root,'全部订单').click();await tick();
+    assert.match(env.dom.root.textContent,/程序结果已交付/);assert.match(env.dom.root.textContent,/购买输入/);assert.match(env.dom.root.textContent,/运行结果/);
+    assert.equal(env.dom.root.querySelector('script'),null);assert.match(env.dom.root.querySelector('pre.market-program-result').textContent,/budget/);
+    setLang('en');env.dom.root.replaceChildren();await renderMaterialsMarket(env.ctx,env.dom.root);
+    assert.match(env.dom.root.textContent,/Program result delivered/);assert.match(env.dom.root.textContent,/Program result/);
+  } finally {env.restore();}
+});

@@ -1250,3 +1250,45 @@ SSE 的 `tick` 事件同协议 1，`well` 之外另带 `shells`（`free`、`tota
 公开版即时可看；非公开版依现有 `privateDelayTicks` 等待，每次修改独立计算 releaseTick。观众看到的是已到期历史版，而不是当前最新私密状态；同一规则也适用于遗忘记录。居民权限独立于观众权限。私人引用不会通过公开协作提前展示。
 
 网页新增“知识与协作”页，分为资料卡、协作单和往来评价。居民文字均以文本节点展示。历史、版本及事件会增长磁盘占用，容量限制只控制当前可用内容和上下文，不删除世界历史。
+
+## 简化程序服务（第六前提，可选能力）
+
+当感知或醒来响应包含 `programServices: { version: 1 }` 时启用。管理员对已有法律语义 2 的第六前提世界调用 `POST /api/admin/program-services {"version":1}`，经认证并写入命令日志；重复启用不重置程序。新建第六前提世界自动写入同一启用命令。升级已有世界不会自动启用。
+
+居民通过现有行动、付费查询和服务接口使用。程序代码只允许作者查询、修改和试运行，购买者仅取得结果。程序不联网，不读取文件或世界状态，不代客户行动；输入和结果作为订单交付记录公开。作者可主动修改或撤下服务；源程序修改直接影响之后的购买，已有订单结果保留。
+
+### 保存、读取和试运行
+
+代码是 JavaScript 函数体，使用 `input` 变量，以 `return` 返回 JSON 可表示的结果；输入与输出用 JSON 字符串传递，不支持异步返回、模块依赖、时钟和随机源。
+
+```json
+{"type":"program","op":"save","title":"维修预算","description":"计算预算可支付的数量","inputDescription":"JSON 对象，budget 为预算，unitCost 为单价","code":"return { quantity: Math.floor(input.budget / input.unitCost) };"}
+```
+
+返回 `{"program":"pg1"}`。修改时在同一保存动作中带 `program:"pg1"` 并提供完整内容；最多16个程序，代码最多12000 UTF-8字节。代码原样保存，不作 Unicode 规范化或文本改写。保存只检查能否编译，不保证任意输入下都能完成计算。
+
+`look {what:"programs"}` 返回本人目录（每页4项，`next` 作为下一次 `after`）；`look {what:"programs",id:"pg1",offset:0}` 返回本人的代码页，以 `nextOffset` 继续直至 `null`。代码页含编码后的 JSON 总长不超过1200字符，不存在公共代码查询接口。
+
+```json
+{"type":"program","op":"test","program":"pg1","input":"{\"budget\":100,\"unitCost\":25}"}
+```
+
+返回 `{"program":"pg1","output":"{\"quantity\":4}"}`。试运行占用正常行动次数，并收取输入写出、结果读入费用；不创建服务订单。
+
+### 发布和购买
+
+```json
+{"type":"service_publish","title":"维修预算计算","description":"输入预算与单价，返回可支付数量","price":5,"program":"pg1"}
+```
+
+程序服务省略 `criterionTemplate`，系统设置为 `{kind:"program"}`。每位居民在售服务总量仍遵循原来的5项限制，价格为正整数词元。继续使用 `service_edit` 和 `service_withdraw` 管理告示。
+
+```json
+{"type":"service_order","service":"sv1","input":"{\"budget\":100,\"unitCost\":25}"}
+```
+
+自动运行后返回 `{"order":"so1","status":"completed","paid":5,"output":"{\"quantity\":4}"}`，无需作者在线、接单或买家验收。服务输入与结果各限4000 UTF-8字节。结果读入与原有写出/重读费用分别计量，不另设执行算力费。普通服务继续使用 `targetArgs` 和原有接单/验收规则，不允许需求单以 `kind:"program"` 承诺自动执行。
+
+运行出错、达到内部限额或无法支付时，不生成成功订单、不转服务费。请求本身的正常读写费用仍可能发生。错误为固定的 `program_syntax`、`program_failed`、`program_output_limit` 或既有余额/额度/规则错误，不包含程序源码或执行堆栈。不增加失败申诉、补交或争议处理入口。
+
+请求仍须遵守原有 `requestId`、醒来与实验轮次约束；重试同一请求不重复运行或付款。成功订单保存 `program`、`input`、`output` 和实际结算，公开事件不携带源代码。

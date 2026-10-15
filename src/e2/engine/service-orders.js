@@ -1,3 +1,6 @@
+import { programsEnabled } from '../programs/catalog.js';
+import { ownedProgram, runProgram } from '../programs/core.js';
+import { jsonWeight } from './tokens.js';
 import { residentFlow } from '../p6/journal.js';
 // Fixed-price, single-provider orders. Objective facts only; never judge truth or quality.
 import { materialsEnabled, nextId, isAlive } from '../world.js';
@@ -247,6 +250,11 @@ export function recordServiceAction(w, a, act, data, index, startPlace) {
   sweepOrders(w);
 }
 function listing(w, a, args) {
+  if (programsEnabled(w) && args.program != null) {
+    const p = ownedProgram(w, args.program, a.id);
+    if (args.criterionTemplate && (args.criterionTemplate.kind !== 'program' || Object.keys(args.criterionTemplate).length !== 1)) fail('invalid_args');
+    return { title: needText(args.title, { max:80 }), description: needText(args.description, { max:600 }), price:integer(args.price), program:p.id, inputDescription:p.inputDescription, criterionTemplate:{kind:'program'} };
+  }
   return {
     title: needText(args.title, { max: 80 }),
     description: needText(args.description, { max: 600 }),
@@ -376,6 +384,17 @@ const service_order = {
     if (!s || s.status !== 'active' || !isAlive(w.agents[s.provider]))
       fail('not_found');
     if (s.provider === a.id) fail('not_allowed');
+    if (programsEnabled(w) && s.program) {
+      if (args.targetArgs != null) fail('invalid_args');
+      // Check affordability before doing paid computation; normal law/fee checks
+      // and atomic rollback still happen in the shared action dispatcher.
+      if (a.energy < s.price) fail('insufficient_energy');
+      const program = ownedProgram(w, s.program, s.provider);
+      const output = runProgram(program, args.input);
+      return { ...s, provider:s.provider, serviceId:s.id, origin:'service', input:args.input, output,
+        terms:{price:s.price,criterion:{kind:'program'}}, waitTicks:0, cost:0,
+        reserve:{energy:s.price}, thinking:jsonWeight({output}) };
+    }
     const target = args.targetArgs ?? {};
     if (
       !target ||
@@ -414,7 +433,16 @@ const service_order = {
     };
   },
   apply({ w, a }, p) {
-    return newOrder(w, a, p);
+    const result = newOrder(w, a, p);
+    if (p.program && programsEnabled(w)) {
+      const o = w.orders[result.order];
+      Object.assign(o, { program:p.program, input:p.input, output:p.output, acceptedTick:w.clock.tick, dueTick:w.clock.tick, progress:1,
+        evidence:[{key:`program:${o.id}`,amount:1,ref:p.program}] });
+      settleOrder(w,o,'completed','program_delivered');
+      emit(w,'program_delivered',{agent:a.id,data:{order:o.id,program:p.program,provider:p.provider,input:p.input,output:p.output}});
+      return {order:o.id,status:o.status,paid:p.price,output:p.output};
+    }
+    return result;
   },
 };
 const order_accept = {

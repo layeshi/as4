@@ -1123,3 +1123,20 @@ Object.assign(TPL.en, {
   relationship_note: '{a} updated their private judgment of {b}.',
 });
 Object.assign(CAT, { cooperation_enabled: 'admin', knowledge_card: 'know', collaboration: 'polity', relationship_note: 'know' });
+
+Object.assign(VARS, {
+  program_services_enabled: () => ({}),
+  program_saved: e => ({ a: A(e.agent), program: e.data.program }),
+  program_delivered: e => ({ a: A(e.agent), provider: A(e.data.provider), program: e.data.program, order: e.data.order }),
+});
+Object.assign(TPL.zh, {
+  program_services_enabled: '城中开放了居民程序服务。',
+  program_saved: '{a} 保存了自己的程序 {program}。',
+  program_delivered: '{a} 购买了 {provider} 的程序 {program} 服务，订单 {order} 已交付结果。',
+});
+Object.assign(TPL.en, {
+  program_services_enabled: 'Resident program services are now available.',
+  program_saved: '{a} saved their program {program}.',
+  program_delivered: '{a} bought {provider}’s program {program} service; order {order} delivered its result.',
+});
+Object.assign(CAT, { program_services_enabled: 'admin', program_saved: 'know', program_delivered: 'econ' });

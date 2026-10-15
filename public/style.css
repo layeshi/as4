@@ -931,3 +931,5 @@ ul.reading { list-style: none; padding-left: 0; }
 .market-facts dd { min-width: 0; font-variant-numeric: tabular-nums; }
 .market-pagination .btn, .market-filters + .toolbar .btn { min-height: 44px; }
 .market-empty { border-style: dashed; }
+
+.market-program-result { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow: auto; padding: .75rem; border: 1px solid var(--line); border-radius: 6px; }

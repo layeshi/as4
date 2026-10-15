@@ -7,6 +7,7 @@ import { projectAudit } from './project-ui.js';
 
 const text = (zh, en) => getLang() === 'en' ? en : zh;
 const kinds = {
+  program: ['程序服务', 'Program service'],
   material_delivery: ['物料交付', 'Material delivery'], construction: ['施工', 'Construction'],
   repair: ['维修', 'Repair'], document: ['作品交付', 'Document delivery'],
   announcement: ['公告发布', 'Announcement'], proposal: ['提案提交', 'Proposal'],
@@ -17,6 +18,7 @@ const statuses = {
   expired: ['已到期', 'Expired'], failed: ['已终止', 'Terminated'],
 };
 const reasons = {
+  program_delivered: ['程序结果已交付', 'Program result delivered'],
   criterion_met: ['已达到交付条件', 'Delivery criteria met'], deadline: ['超过约定期限', 'Deadline passed'],
   party_departed: ['交易一方已离开', 'A party has departed'], target_unavailable: ['目标已不可用', 'Target unavailable'],
   declined: ['承接者拒绝订单', 'Provider declined'], agreement: ['按取消规则解除', 'Cancelled under the agreed rules'],
@@ -61,7 +63,7 @@ function renderRecord(ctx, row, isService) {
   const unit = c.kind === 'material_delivery' ? text('物料', 'materials') : c.kind === 'construction' ? text('工作量', 'work units') : c.kind === 'repair' ? text('基点', 'basis points') : text('项', 'item(s)');
   const progress = isService ? `${number(goal)} ${unit}` : `${number(row.progress)} / ${number(goal)} ${unit}`;
   const meta = h('p', { class: 'muted market-meta' }, `${label(kinds, c.kind)} · ${text('交付', 'Delivery')} ${progress}`,
-    !isService ? ` · ${text('截止', 'Due')} ${marketTime(row.dueTick ?? row.acceptBy, world.ticksPerDay)}` : '');
+    !isService && c.kind !== 'program' ? ` · ${text('截止', 'Due')} ${marketTime(row.dueTick ?? row.acceptBy, world.ticksPerDay)}` : '');
   const fields = h('dl', { class: 'kv market-facts' });
   const fact = (zh, en, value) => fields.append(h('dt', null, text(zh, en)), h('dd', null, value));
   fact('编号', 'ID', row.id);
@@ -77,7 +79,10 @@ function renderRecord(ctx, row, isService) {
   if (c.place || c.publishPlace) fact('地点', 'Place', placeLink(ctx, c.place ?? c.publishPlace));
   if (c.class) fact('提案类别', 'Proposal class', c.class === 'constitutional' ? text('宪制提案', 'Constitutional') : text('普通提案', 'Ordinary'));
   if (c.audience) fact('公告范围', 'Audience', c.audience === 'all' ? text('全城', 'Citywide') : text('指定地点', 'Specified place'));
-  if (isService) {
+  if (isService && c.kind === 'program') {
+    fact('交付方式', 'Delivery', text('购买后自动运行并返回结果', 'Runs automatically on purchase'));
+    fact('输入说明', 'Input instructions', ai(row.inputDescription ?? ''));
+  } else if (isService) {
     fact('等待接单', 'Acceptance window', text(`${row.waitTicks} 刻`, `${row.waitTicks} ticks`));
     fact('履约时限', 'Delivery window', text(`${row.durationTicks} 刻`, `${row.durationTicks} ticks`));
     if (!c.to && !c.project && !c.target && ['material_delivery', 'construction', 'repair'].includes(c.kind)) {
@@ -88,13 +93,17 @@ function renderRecord(ctx, row, isService) {
     if (row.acceptedTick != null) fact('承接时间', 'Accepted', marketTime(row.acceptedTick, world.ticksPerDay));
     if (row.terms?.durationTicks != null) fact('承接后时限', 'Time after acceptance', text(`${row.terms.durationTicks} 刻`, `${row.terms.durationTicks} ticks`));
     if (row.terms?.eligible) fact('承接资格', 'Eligibility', row.terms.eligible === 'any' ? text('所有居民', 'All residents') : ai(ctx.groupName(row.terms.eligible)));
-    fact(row.dueTick == null ? '接单截止' : '履约截止', row.dueTick == null ? 'Accept by' : 'Deliver by', marketTime(row.dueTick ?? row.acceptBy, world.ticksPerDay));
+    if (c.kind !== 'program') fact(row.dueTick == null ? '接单截止' : '履约截止', row.dueTick == null ? 'Accept by' : 'Deliver by', marketTime(row.dueTick ?? row.acceptBy, world.ticksPerDay));
     fact('当前托管', 'Current escrow', `${number(row.escrow)} ${text('词元', 'tokens')}`);
     if (row.closedTick != null) fact('结束时间', 'Closed', marketTime(row.closedTick, world.ticksPerDay));
     if (row.reason) fact('结束原因', 'Outcome', label(reasons, row.reason));
     if (row.status === 'completed') fact('已支付报酬', 'Reward paid', `${price} ${text('词元', 'tokens')}`);
   }
   detail.append(h('p', { class: 'market-description' }, ai(row.description)), fields);
+  if (!isService && c.kind === 'program') {
+    detail.append(h('h4', null, text('购买输入', 'Purchase input')), h('pre', {class:'market-program-result'}, ai(row.input ?? '')),
+      h('h4', null, text('运行结果', 'Program result')), h('pre', {class:'market-program-result'}, ai(row.output ?? '')));
+  }
   if (!isService) {
     detail.append(h('h4', null, text('公开交付记录', 'Public delivery records')));
     const evidence = row.evidence ?? [];
@@ -105,7 +114,8 @@ function renderRecord(ctx, row, isService) {
         : e.ref ?? e.key ?? '—'
     ))) : h('p', { class: 'muted' }, text('暂无公开交付记录。', 'No public delivery records yet.')));
   }
-  detail.append(h('p', { class: 'muted' }, text(
+  if (c.kind === 'program') detail.append(h('p', {class:'muted'}, text('按次付费，结果交付即结算；平台不保证计算结果正确。', 'Payment is per use on delivery; the platform does not guarantee result accuracy.')));
+  else detail.append(h('p', { class: 'muted' }, text(
     '报酬全额托管，全部达标后一次支付；成本由承接者承担，超时退还报酬。作品只验交付，不评判质量或真伪。',
     'The full reward is held in escrow and paid once on complete delivery. Providers bear costs; expired orders refund the reward. Document orders verify delivery, not quality or truth.'
   )));

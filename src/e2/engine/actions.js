@@ -1,3 +1,5 @@
+import { programHandler } from '../programs/core.js';
+import { programsEnabled } from '../programs/catalog.js';
 import { cooperationEnabled } from '../cooperation/core.js';
 import { cardHandler } from '../cooperation/cards.js';
 import { collaborationHandler } from '../cooperation/collaborations.js';
@@ -70,7 +72,7 @@ export const actionsLeft = (a) => Math.max(0, P.maxActionsPerTick - a.actsThisTi
  * （只是对结果的文字说明，不进入世界状态。）
  */
 function argsHint(type, act, premise = 0, prayers = false, w = {}) {
-  const { ACTIONS, ORDER: ACTION_ORDER, isKnown: isKnownAction } = actionTable(premise, prayers, cooperationEnabled(w));
+  const { ACTIONS, ORDER: ACTION_ORDER, isKnown: isKnownAction } = actionTable(premise, prayers, cooperationEnabled(w), programsEnabled(w));
   if (!isKnownAction(type)) {
     const list = ACTION_ORDER.join(' ');
     return { zh: `没有这个动作：${type}。可用的动作：${list}。`, en: `There is no such action: ${type}. Available actions: ${list}.` };
@@ -110,8 +112,8 @@ function feeTotals(fees) {
  *   6. 收集并施行 after 规则
  */
 function runOne(w, a, type, act, index, lang) {
-  const { NO_BEFORE: NO_BEFORE_ACTIONS, NO_AFTER: NO_AFTER_ACTIONS } = actionTable(w.premise || 0, prayersEnabled(w), cooperationEnabled(w));
-  const handler = materialsEnabled(w) ? materialHandlers[type] ?? serviceHandlers[type] ?? HANDLERS[type] : HANDLERS[type];
+  const { NO_BEFORE: NO_BEFORE_ACTIONS, NO_AFTER: NO_AFTER_ACTIONS } = actionTable(w.premise || 0, prayersEnabled(w), cooperationEnabled(w), programsEnabled(w));
+  const handler = type === 'program' && programsEnabled(w) ? programHandler : materialsEnabled(w) ? materialHandlers[type] ?? serviceHandlers[type] ?? HANDLERS[type] : HANDLERS[type];
   if (!handler) fail('invalid_args');
   const ctx = makeCtx(w, a, index, type, lang);
   if (materialsEnabled(w)) validateOrderAction(w,a,act);
@@ -210,7 +212,7 @@ export function runActions(w, a, actions, lang = 'zh') {
     const checkpoint = (usesLawSemantics2(w) || tokenized(w)) ? actionCheckpoint(w) : null;
     try {
       if (w.premise === 6 && hasCoinInput(act)) fail('invalid_args');
-      if (!actionTable(w.premise || 0, prayersEnabled(w), cooperationEnabled(w)).isKnown(type)) fail('invalid_args');
+      if (!actionTable(w.premise || 0, prayersEnabled(w), cooperationEnabled(w), programsEnabled(w)).isKnown(type)) fail('invalid_args');
       const { data, spent } = runOne(w, a, type, act, i, lang);
       results.push({ index: i, type, ok: true, cost: spent, data });
     } catch (e) {

@@ -18,8 +18,8 @@ function costOf(a, lang) {
  * 动作表：每个动作一行，格式 `type(参数) 基础代价 [地点限制]：说明`（模板来自 lore 的 prompt.catalogLine）。
  * opts：{ memorySlots, distance }——distance 为真（按路程计价的地图，附录 C）时，move 用按路程计价的说明。
  */
-export function actionCatalog(lang, { memorySlots, distance = false, protocol = 1, premise = 0, prayers = false, cooperation = false, tokenValues } = {}) {
-  if (protocol === 2) return actionCatalog2(lang, { memorySlots, premise, prayers, cooperation, tokenValues });
+export function actionCatalog(lang, { memorySlots, distance = false, protocol = 1, premise = 0, prayers = false, cooperation = false, programs = false, tokenValues } = {}) {
+  if (protocol === 2) return actionCatalog2(lang, { memorySlots, premise, prayers, cooperation, programs, tokenValues });
   memorySlots ??= P.memorySlots;
   const l = L(lang).prompt;
   const code = normLang(lang);
@@ -36,9 +36,9 @@ export function actionCatalog(lang, { memorySlots, distance = false, protocol = 
 }
 
 /** 第二纪的动作表（SPEC-E2 §22）：src/e2/lore/actions.js 生成，格式同第一纪 */
-export function actionCatalog2(lang, { memorySlots = P2.memorySlots, premise = 0, prayers = false, cooperation = false, tokenValues } = {}) {
+export function actionCatalog2(lang, { memorySlots = P2.memorySlots, premise = 0, prayers = false, cooperation = false, programs = false, tokenValues } = {}) {
   const values = tokenized({ premise }) ? tokenPromptValues(tokenValues) : {};
-  const { ACTIONS: ACTIONS2, ORDER: ACTION_ORDER2 } = actionTable(premise, prayers, cooperation);
+  const { ACTIONS: ACTIONS2, ORDER: ACTION_ORDER2 } = actionTable(premise, prayers, cooperation, programs);
   const l = promptDict(L2(lang), premise);
   const code = normLang(lang);
   return ACTION_ORDER2.map((type) => {
@@ -63,8 +63,8 @@ const promptDict = (dict, premise) => (tokenized({ premise }) ? dict.promptP4 : 
  * protocol 为 2 时用附录 A.1 的第二纪提示：{ruleLanguage} 填附录 A.2，{floor} 是规则不能把居民的能量扣到的底线（感知的 you.floor）。
  * toolMode（只在第二前提）：'native' | 'json'（缺省）| 'mcp'，决定【怎样行动】一段写哪一种（SPEC-P2 §11.1）。
  */
-export function buildSystemPrompt({ protocol = 1, lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays, memorySlots, distance = false, soul = null, floor, premise = 0, trained = [], toolMode = 'json', actionTools, prayers = false, cooperation = false, tokenValues }) {
-  if (protocol === 2) return buildSystemPrompt2({ lang, cityName, maxActions, ticksPerDay, daysPerMonth, graceDays, memorySlots, soul, floor, premise, trained, toolMode, actionTools, prayers, cooperation, tokenValues });
+export function buildSystemPrompt({ protocol = 1, lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays, memorySlots, distance = false, soul = null, floor, premise = 0, trained = [], toolMode = 'json', actionTools, prayers = false, cooperation = false, programs = false, tokenValues }) {
+  if (protocol === 2) return buildSystemPrompt2({ lang, cityName, maxActions, ticksPerDay, daysPerMonth, graceDays, memorySlots, soul, floor, premise, trained, toolMode, actionTools, prayers, cooperation, programs, tokenValues });
   graceDays ??= P.dormancyGraceDays;
   memorySlots ??= P.memorySlots;
   const l = L(lang).prompt;
@@ -81,7 +81,7 @@ export function buildSystemPrompt({ protocol = 1, lang = 'zh', cityName, maxActi
 }
 
 /** 第二纪的系统提示（附录 A.1）；不含灵魂的一节在 soul 为空时省略。第二前提（premise >= 2）按 toolMode 填【怎样行动】，并有【常驻指令】一段 */
-export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays = P2.dormancyGraceDays, memorySlots = P2.memorySlots, soul = null, floor = P2.lawFloor, premise = 0, trained = [], toolMode = 'json', actionTools, prayers = false, cooperation = false, tokenValues }) {
+export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, ticksPerDay = 12, daysPerMonth = 24, graceDays = P2.dormancyGraceDays, memorySlots = P2.memorySlots, soul = null, floor = P2.lawFloor, premise = 0, trained = [], toolMode = 'json', actionTools, prayers = false, cooperation = false, programs = false, tokenValues }) {
   const values = tokenized({ premise }) ? tokenPromptValues(tokenValues) : {};
   const dict = L2(lang);
   const original = promptDict(dict, premise);
@@ -104,11 +104,12 @@ export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, tick
     floor,
     ...values,
     ruleLanguage: fmt(l.ruleLanguage, { floor, ...values }), // 规则语言的说明里也提到底线；先填好再嵌入（fmt 一遍过，不会重复替换）
-    actionCatalog: actionCatalog2(lang, { memorySlots, premise, prayers, cooperation, tokenValues }),
+    actionCatalog: actionCatalog2(lang, { memorySlots, premise, prayers, cooperation, programs, tokenValues }),
     ...agent,
   });
   let text = soul === null || soul === undefined ? head : `${head}\n\n${fmt(l.soul, { soul })}`;
   if((premise === 5 || premise === 6))text=text.replace('源井、配给、荒野、拆解与别人','源井、配给、荒野与别人').replace('凑够造价就完工','筹齐词元与物料后还须施工才完工').replace('the Well, rations, the wilds, dismantling and others','the Well, rations, the wilds and others').replace('once its cost is met','once its token and material budget is met and construction is complete').replace('the Well, rations, the Wilds, salvage and other residents','the Well, rations, the Wilds and other residents').replace('when its cost is covered it is done','after its token and material budget is covered, construction must finish');
+  if (programs) text += lang === 'en' ? '\nProgram services: save/test JavaScript function bodies with program. Input is JSON text, code uses input and return. Code <=12000 UTF-8 bytes, input/result <=4000 bytes, up to 16 programs per author. look programs lists yours; id/offset reads private code pages. Publish with service_publish {title,description,price,program}; buy with service_order {service,input}. Results are delivered and paid automatically without acceptance. No result means no service payment. Inputs/results are public order records; code stays private. Ordinary reading/writing fees still apply.' : '\n程序服务：program 保存或试运行 JavaScript 函数体；input 是 JSON 字符串，代码用 input 取输入、return 返回结果。代码最多12000 UTF-8字节，输入/结果各4000字节，每位作者至多16个程序。look programs 查看自己的目录，id/offset 分页读取私密代码。service_publish 填 title、description、price、program 发布；service_order 填 service、input 购买。自动交付付款，无需接单验收；无结果不付服务费。输入与结果进入公开订单，代码私密；读写仍按原规则计费。';
   if((premise === 5 || premise === 6))text += lang === 'en' ? '\nMaterials and services: look materials/services/demands/orders/research/observations is paid reading; use after/limit for pagination. Funded projects still need construction. Research institutes serve the whole city; automatic selection uses only free authorized institutes. Order rewards are fully escrowed. Providers pay their own costs; payment is made once, only after full completion. Partial work is unpaid, and orders grant no property permissions. Documents are verified for delivery, not quality. Observe completed records to investigate environmental differences.' : '\n物料与服务：look materials/services/demands/orders/research/observations 按读入计价，可用 after/limit 分页。工程筹资后仍须施工。研究所覆盖全城，未指定时只自动使用免费且获授权的研究所。订单报酬全额托管；成本自付，全部达标才一次付款，部分完成不付款，不授予产权权限。document 只验证交付而非质量。环境差异可通过已发生的记录观察。';
   if (prayers && premise === 2) text += lang === 'en'
     ? '\n\n[Prayer points] Your points belong to you and cannot be transferred. Earn 1 per 100 basis points of public natural-damage repairs, 1 per 10 energy contributed to completed public projects, and 1 for the first rescue of a dormant recipient each day. These automatic rewards share a 10-point daily cap; fractions carry, excess whole points do not. An independently recognized invention earns 10 points outside the cap. Temple replies cost 1 point for text, plus 1 per energy granted; replies are not guaranteed. Demolition damage and rebuilding do not earn points.'
@@ -131,6 +132,7 @@ export function promptParams(perception) {
     return {
       protocol: 2,
       premise: p.premise || 0,
+      ...(p.programServices?.version === 1 ? { programs: true } : {}),
       ...(p.cooperation?.version === 1 ? { cooperation: true } : {}),
       ...(p.you?.prayers?.enabled ? { prayers: true } : {}),
       trained: (p.you && p.you.trained) || [],

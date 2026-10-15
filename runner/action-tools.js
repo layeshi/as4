@@ -1,3 +1,4 @@
+import { PROGRAM_LIMITS } from '../src/e2/programs/catalog.js';
 import { COOP_ACTIONS } from '../src/e2/cooperation/actions.js';
 import { MATERIAL_OP_FIELDS } from '../src/e2/rules/material-policy.js';
 const opFields=premise=>premise===6?Object.fromEntries(Object.entries({...OP_FIELDS,...MATERIAL_OP_FIELDS}).filter(([name])=>name!=='mint').map(([name,fields])=>[name,fields.filter(([field])=>field!=='coins')])):premise===5?{...OP_FIELDS,...MATERIAL_OP_FIELDS}:OP_FIELDS;
@@ -17,7 +18,7 @@ const expression = { type: ['string', 'integer', 'boolean', 'null'], maxLength: 
 const present = name => ({ required: [name], properties: { [name]: { not: { type: 'null' } } } });
 const exactlyOne = (names, nonNull = true) => ({ oneOf: names.map(name => nonNull ? present(name) : { required: [name] }) });
 const nullable = schema => schema.type ? { ...schema, type: [...new Set([...(Array.isArray(schema.type) ? schema.type : [schema.type]), 'null'])], ...(schema.enum ? { enum: [...schema.enum, null] } : {}) } : { anyOf: [schema, { type: 'null' }] };
-const tableFor = (premise = 2) => actionTable(premise, true, premise === 6);
+const tableFor = (premise = 2, programs = false) => actionTable(premise, true, premise === 6, programs);
 
 function operationSchema(nested = false, premise = 2) {
   return { anyOf: Object.keys(opFields(premise)).filter(name => !nested || name !== 'each').map(name => ({ $ref: `#/$defs/op_${name}` })) };
@@ -54,6 +55,10 @@ const procedureSchema = { ...obj({ ordinary: procedureClass, constitutional: pro
 const successorSchema = obj({ name: str(LIMITS.name), soul: str(LIMITS.soul), lang: str(LIMITS.lang), memories: list(integer(), P.memorySlots) }, ['name', 'soul']);
 
 function fieldSchema(type, name, kind, premise = 2) {
+  if (name === 'code') return str(PROGRAM_LIMITS.code);
+  if (name === 'input') return str(PROGRAM_LIMITS.input);
+  if (name === 'inputDescription') return str(600);
+  if (type === 'program' && name === 'title') return str(80);
   if (tokenized({ premise }) && type === 'routine' && name === 'every') return integer(0, 36);
   if (tokenized({ premise }) && type === 'routine' && name === 'brief') return { type: 'string', enum: ['full', 'short'] };
   if (premise === 4 && type === 'initiate' && name === 'owner') return { type: 'string', enum: ['self', 'city'] };
@@ -106,9 +111,9 @@ function cooperationSchema(type, action) {
 }
 
 /** Source signature determines required fields; explicit variants refine it. */
-function buildActionSchema(type, { action = false, dynamic = false, premise = 2 } = {}) {
+function buildActionSchema(type, { action = false, dynamic = false, premise = 2, programs = false } = {}) {
   if (premise === 6 && Object.hasOwn(COOP_ACTIONS,type)) return cooperationSchema(type,action);
-  const table = tableFor(premise);
+  const table = tableFor(premise, programs);
   const spec = table.ACTIONS[type];
   const tokens = spec.params.split(',').map(s => s.trim());
   const properties = action ? { type: { type: 'string', enum: [type] } } : {};
@@ -120,6 +125,8 @@ function buildActionSchema(type, { action = false, dynamic = false, premise = 2 
   }
   const required = spec.params.split(',').map(s => s.trim()).filter(s => s && !s.endsWith('?') && !s.includes('|') && s !== '…');
   const schema = obj(properties, [...(action ? ['type'] : []), ...required]);
+  if (type === 'program') schema.anyOf = [{properties:{op:{enum:['save']}},required:['title','description','inputDescription','code']},{properties:{op:{enum:['test']}},required:['program','input']}];
+  if (programs && type === 'service_publish') schema.anyOf = [present('program'),present('criterionTemplate')];
   if (type === 'read') Object.assign(schema, exactlyOne(['doc', 'inscription', 'law', 'agent']));
   if (type === 'remember') Object.assign(schema, exactlyOne(['text', 'gift'], false));
   if (type === 'draft') Object.assign(schema, exactlyOne(['rules', 'procedure']));
@@ -138,7 +145,7 @@ function buildActionSchema(type, { action = false, dynamic = false, premise = 2 
 
 // Install only definitions used by this tool, including transitive dependencies.
 // The complete schema stays local to one function and works with ordinary JSON Schema.
-function withDefinitions(schema, { compact = false, premise = 2 } = {}) {
+function withDefinitions(schema, { compact = false, premise = 2, programs = false } = {}) {
   const definitions = {};
   const visit = value => {
     if (!value || typeof value !== 'object') return;
@@ -147,8 +154,8 @@ function withDefinitions(schema, { compact = false, premise = 2 } = {}) {
       if (!Object.hasOwn(definitions, name)) {
         const shared = { rules: rulesSchema, procedure: procedureSchema, successor: successorSchema,
           operation: compact ? compactOperationSchema(false,premise) : operationSchema(false,premise), operationNested: compact ? compactOperationSchema(true,premise) : operationSchema(true,premise) };
-        definitions[name] = name.startsWith('op_') ? operationDefinition(name.slice(3),premise) : name.startsWith('action_') ? buildActionSchema(name.slice(7), { action: true, premise })
-          : name.startsWith('dynamic_') ? buildActionSchema(name.slice(8), { action: true, dynamic: true, premise }) : shared[name];
+        definitions[name] = name.startsWith('op_') ? operationDefinition(name.slice(3),premise) : name.startsWith('action_') ? buildActionSchema(name.slice(7), { action: true, premise, programs })
+          : name.startsWith('dynamic_') ? buildActionSchema(name.slice(8), { action: true, dynamic: true, premise, programs }) : shared[name];
         if (!definitions[name]) throw new Error(`Missing tool definition ${name}`);
         visit(definitions[name]);
       }
@@ -189,21 +196,21 @@ function compactVariants(discriminator, entries) {
 
 const readAliases = { read_document: 'doc', read_law: 'law', read_inscription: 'inscription', read_agent: 'agent' };
 export const thoughtSchema = obj({ thought: str(LIMITS.thought) }, ['thought']);
-export function typedActionTools(lang = 'zh', { prayers = false, premise = 2, cooperation = false } = {}) {
-  const table = tableFor(premise);
-  const activeTable = actionTable(premise, prayers, cooperation);
+export function typedActionTools(lang = 'zh', { prayers = false, premise = 2, cooperation = false, programs = false } = {}) {
+  const table = tableFor(premise, programs);
+  const activeTable = actionTable(premise, prayers, cooperation, programs);
   const code = lang === 'en' ? 'en' : 'zh';
   return [
-    ...activeTable.ORDER.map(name => ({ name, description: `${table.ACTIONS[name].verb[code]} (${table.ACTIONS[name].params}). ${table.ACTIONS[name].where?.[code] || ''}`.trim(), schema: actionSchema(name, { compact: true, premise }) })),
+    ...activeTable.ORDER.map(name => ({ name, description: `${table.ACTIONS[name].verb[code]} (${table.ACTIONS[name].params}). ${table.ACTIONS[name].where?.[code] || ''}`.trim(), schema: actionSchema(name, { compact: true, premise, programs }) })),
     ...Object.entries(readAliases).map(([name, field]) => ({ name, description: `${table.ACTIONS.read.verb[code]} (${field}). ${table.ACTIONS.read.where[code]}`, schema: obj({ [field]: str() }, [field]) })),
     { name: 'think', description: code === 'en' ? 'Keep a private thought without spending action quota. Never public speech.' : '记录私有独白，不占行动次数，不是公开发言。', schema: thoughtSchema },
     { name: 'done', description: code === 'en' ? (tokenized({ premise }) ? 'End this waking. No action or tokens are spent.' : 'End this waking. No action or energy is spent.') : (tokenized({ premise }) ? '结束这次醒来，不占行动次数、不花词元。' : '结束这次醒来，不占行动次数、不花能量。'), schema: obj({}) },
   ];
 }
 
-export function typedActSchema(premise = 2, cooperation = false) {
-  const table = actionTable(premise, true, cooperation);
-  return withDefinitions(obj({ actions: list({ anyOf: table.ORDER.map(type => ({ $ref: `#/$defs/action_${type}` })) }, LIMITS.actionsPerRequest), thought: str(LIMITS.thought, 0), end: { type: 'boolean' } }, ['actions']), { premise });
+export function typedActSchema(premise = 2, cooperation = false, programs = false) {
+  const table = actionTable(premise, true, cooperation, programs);
+  return withDefinitions(obj({ actions: list({ anyOf: table.ORDER.map(type => ({ $ref: `#/$defs/action_${type}` })) }, LIMITS.actionsPerRequest), thought: str(LIMITS.thought, 0), end: { type: 'boolean' } }, ['actions']), { premise, programs });
 }
 
 function problem(path, message) { return { path, code: 'invalid_args', message }; }
@@ -281,9 +288,9 @@ function visibleIssues(action, perception) {
 }
 
 export function validateAction(action, perception, premise = perception?.premise ?? 2) {
-  const table = actionTable(premise, true, !!perception?.cooperation);
+  const table = actionTable(premise, true, !!perception?.cooperation, !!perception?.programServices);
   if (!action || !table.isKnown(action.type)) return [problem('args.type', `Unknown action; choose ${table.ORDER.join(', ')}`)];
-  const issues = schemaIssues(action, actionSchema(action.type, { action: true, premise }));
+  const issues = schemaIssues(action, actionSchema(action.type, { action: true, premise, programs: !!perception?.programServices }));
   if (!issues.length) {
     if (['give', 'disburse'].includes(action.type) && !(action.energy > 0 || action.coins > 0 || [5,6].includes(premise)&&action.type==='give'&&action.materials>0)) issues.push(problem('args.energy', premise===6?'Give a positive token or material amount':'Give a positive energy or coins amount'));
     if (action.type === 'offer') {
@@ -302,7 +309,7 @@ export function validateAction(action, perception, premise = perception?.premise
 }
 
 export function typedCall(name, args, perception, premise = perception?.premise ?? 2) {
-  const table = tableFor(premise);
+  const table = tableFor(premise, !!perception?.programServices);
   if (!table.isKnown(name) && !Object.hasOwn(readAliases, name)) return null;
   const type = Object.hasOwn(readAliases, name) ? 'read' : name;
   const action = args && typeof args === 'object' && !Array.isArray(args) ? { type, ...args } : null;

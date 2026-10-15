@@ -1,3 +1,4 @@
+import { programsEnabled } from '../programs/catalog.js';
 import { cooperationEnabled } from '../cooperation/core.js';
 import { publicRoles } from '../p6/roles.js';
 import { materialsEnabled } from '../world.js';
@@ -264,6 +265,7 @@ export function publicState(w, extra = {}) {
   return {
     ...(materialsEnabled(w)?materialPublicState(w):{}),
     world: {
+      ...(programsEnabled(w) ? { programServices: { version: 1 } } : {}),
       ...(cooperationEnabled(w) ? { cooperation: { version: 1, enabledTick: w.cooperation.enabledTick } } : {}),
       ...(w.ruleExecution ? { lawExecution: { version: w.ruleExecution.version, protected: !!w.ruleExecution.protection, protection: w.ruleExecution.protection } } : {}),
       id: w.id, protocol: 2, physics: 2, ...(premised(w) ? { premise: w.premise } : {}),
