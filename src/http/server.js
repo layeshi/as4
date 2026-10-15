@@ -23,6 +23,8 @@ import { ExperimentControl } from '../experiment-control.js';
 import { AccountStore } from '../accounts/store.js';
 import { ServerStatusSampler, registeredUserCounts } from '../server-status.js';
 import { accountRoutes, accountLimits } from './accounts.js';
+import { AnnouncementStore } from '../announcements.js';
+import { announcementRoutes, announcementLimits } from './announcements.js';
 import { MessageBoard } from '../message-board.js';
 import { messageBoardRoutes, messageBoardLimits } from './message-board.js';
 import { wechatMessageBoardRoutes } from './wechat-message-board.js';
@@ -69,7 +71,7 @@ const roleAdminRoutes = [
   ['GET','/api/admin/public-model',accountWrap(({res,ctx})=>sendJson(res,200,ctx.publicRoles.view()),{admin:true})],
   ['POST','/api/admin/public-model',accountWrap(({res,ctx,body})=>{try{sendJson(res,200,ctx.publicRoles.save(body));}catch(e){sendJson(res,400,{error:{code:'invalid_config',message:e.message}});}},{admin:true})],
 ];
-const ROUTES = [...wechatMessageBoardRoutes, ...messageBoardRoutes, ...wechatWebLoginRoutes,...wechatRoutes,...archiveRoutes,...residentRoutes,...hostedRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
+const ROUTES = [...announcementRoutes, ...wechatMessageBoardRoutes, ...messageBoardRoutes, ...wechatWebLoginRoutes,...wechatRoutes,...archiveRoutes,...residentRoutes,...hostedRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
 
 function match(method, pathname) {
   for (const [m, pattern, handler] of ROUTES) {
@@ -153,6 +155,8 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     cfg,
     accounts: new AccountStore(cfg.dataDir),
     messageBoard: new MessageBoard(cfg.dataDir),
+    announcements: new AnnouncementStore(cfg.dataDir),
+    announcementLimits: announcementLimits(),
     messageBoardLimits: messageBoardLimits(),
     wechat: new WechatService(cfg),
     snapshots: new WorldSnapshots(rt),

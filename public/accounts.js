@@ -128,6 +128,7 @@ function accountHub(modal) {
   if (p6) links.push(['/residents.html', tr('我的居民', 'My residents'), tr('查看居民状态，创建居民并配置模型', 'See how your residents are doing, create residents and set up models')]);
   if (p6) links.push(['/billing.html', tr('余额与充值', 'Balance & top-up'), tr('平台托管模型的余额、购买额度与记录', 'Hosted model balance, top-ups and records')]);
   links.push(['/account.html', tr('账户设置', 'Account settings'), tr('昵称、密码与祈愿操作记录', 'Display name, password and prayer records')]);
+  if (u.role === 'admin') links.push(['/admin.html#announcements', tr('公告管理', 'Announcements'), tr('发布、编辑和撤下网页与微信端公告', 'Publish, edit and withdraw shared announcements')]);
   if (u.role === 'admin') links.push(['/admin.html', tr('管理后台', 'Admin console'), tr('用户、充值审核、托管配置、实验运行与服务器状态', 'Users, top-up review, hosted model, experiment and server status')]);
   const entries = links.map(([href, title, note]) => h('a', { class: 'hub-link', href }, h('strong', null, title), h('span', { class: 'muted' }, note)));
   modal.body.append(h('nav', { class: 'hub-links', 'aria-label': tr('功能入口', 'Sections') }, entries));

@@ -25,7 +25,7 @@ export function mutationGate(req) {
   if (req.headers['sec-fetch-site'] === 'cross-site') fail(403, 'csrf', '不允许跨站请求。');
   if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) fail(415, 'content_type', '请使用 JSON 请求。');
 }
-export const accountWrap = (handler, { admin = false, signedIn = false } = {}) => async (req, res, ctx, url, params) => {
+export const accountWrap = (handler, { admin = false, signedIn = false, bodyLimit = 8192 } = {}) => async (req, res, ctx, url, params) => {
   try {
     if (req.method !== 'GET') mutationGate(req);
     const actor = signedIn || admin ? requireUser(ctx, req, admin) : null;
@@ -36,7 +36,7 @@ export const accountWrap = (handler, { admin = false, signedIn = false } = {}) =
     };
     let body = {};
     if (req.method !== 'GET') {
-      const parsed = await readJson(req, 8192);
+      const parsed = await readJson(req, bodyLimit);
       if (!parsed.ok) fail(parsed.code === 'too_large' ? 413 : 400, parsed.code, '请求格式无效或内容过大。');
       body = parsed.value;
       if (!body || Array.isArray(body) || typeof body !== 'object') fail(400, 'invalid_request', '请求需要 JSON 对象。');

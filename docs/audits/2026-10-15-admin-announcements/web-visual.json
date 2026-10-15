@@ -1,0 +1,240 @@
+{
+  "findings": [
+    {
+      "name": "list-375-dark",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    },
+    {
+      "name": "detail-375-dark",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    },
+    {
+      "name": "list-768-dark",
+      "width": 768,
+      "scroll": 768,
+      "primary": 1
+    },
+    {
+      "name": "detail-768-dark",
+      "width": 768,
+      "scroll": 768,
+      "primary": 1
+    },
+    {
+      "name": "list-1280-dark",
+      "width": 1280,
+      "scroll": 1280,
+      "primary": 1
+    },
+    {
+      "name": "detail-1280-dark",
+      "width": 1280,
+      "scroll": 1280,
+      "primary": 1
+    },
+    {
+      "name": "list-1920-dark",
+      "width": 1920,
+      "scroll": 1920,
+      "primary": 1
+    },
+    {
+      "name": "detail-1920-dark",
+      "width": 1920,
+      "scroll": 1920,
+      "primary": 1
+    },
+    {
+      "name": "login-375-dark",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    },
+    {
+      "name": "login-en-375-dark",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    },
+    {
+      "name": "list-en-375-dark",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    },
+    {
+      "name": "list-375-light",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    },
+    {
+      "name": "detail-375-light",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    },
+    {
+      "name": "list-768-light",
+      "width": 768,
+      "scroll": 768,
+      "primary": 1
+    },
+    {
+      "name": "detail-768-light",
+      "width": 768,
+      "scroll": 768,
+      "primary": 1
+    },
+    {
+      "name": "list-1280-light",
+      "width": 1280,
+      "scroll": 1280,
+      "primary": 1
+    },
+    {
+      "name": "detail-1280-light",
+      "width": 1280,
+      "scroll": 1280,
+      "primary": 1
+    },
+    {
+      "name": "list-1920-light",
+      "width": 1920,
+      "scroll": 1920,
+      "primary": 1
+    },
+    {
+      "name": "detail-1920-light",
+      "width": 1920,
+      "scroll": 1920,
+      "primary": 1
+    },
+    {
+      "name": "login-375-light",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    },
+    {
+      "name": "login-en-375-light",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    },
+    {
+      "name": "list-en-375-light",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    },
+    {
+      "name": "admin-375-dark",
+      "width": 375,
+      "scroll": 375,
+      "primary": 0
+    },
+    {
+      "name": "admin-768-dark",
+      "width": 768,
+      "scroll": 768,
+      "primary": 0
+    },
+    {
+      "name": "admin-1280-dark",
+      "width": 1280,
+      "scroll": 1280,
+      "primary": 0
+    },
+    {
+      "name": "admin-1920-dark",
+      "width": 1920,
+      "scroll": 1920,
+      "primary": 0
+    },
+    {
+      "name": "admin-375-light",
+      "width": 375,
+      "scroll": 375,
+      "primary": 0
+    },
+    {
+      "name": "admin-768-light",
+      "width": 768,
+      "scroll": 768,
+      "primary": 0
+    },
+    {
+      "name": "admin-1280-light",
+      "width": 1280,
+      "scroll": 1280,
+      "primary": 0
+    },
+    {
+      "name": "admin-1920-light",
+      "width": 1920,
+      "scroll": 1920,
+      "primary": 0
+    },
+    {
+      "name": "admin-publish-1280-dark",
+      "width": 1280,
+      "scroll": 1280,
+      "primary": 1
+    },
+    {
+      "name": "admin-withdraw-confirm",
+      "width": 1280,
+      "scroll": 1280,
+      "primary": 1
+    },
+    {
+      "name": "admin-activity-history",
+      "width": 1280,
+      "scroll": 1280,
+      "primary": 0
+    },
+    {
+      "name": "public-new-announcement-375-light",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    },
+    {
+      "name": "admin-forbidden",
+      "width": 1280,
+      "scroll": 1280,
+      "primary": 0
+    },
+    {
+      "name": "empty-375-light",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    },
+    {
+      "name": "error-375-light",
+      "width": 375,
+      "scroll": 375,
+      "primary": 1
+    }
+  ],
+  "errors": [],
+  "interactions": [
+    "anonymous read",
+    "pagination",
+    "publish",
+    "edit",
+    "withdraw",
+    "republish",
+    "history",
+    "plain text",
+    "forbidden",
+    "empty",
+    "error"
+  ]
+}

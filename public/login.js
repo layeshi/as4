@@ -1,3 +1,4 @@
+import { mountLatestAnnouncement } from './announcement-preview.js';
 import { mountWechatLogin } from './wechat-login.js';
 // 登录页（login.html）：网页版的入口。服务器开着登录门时，没有登录的访问（页面与公共接口）都落到这里；
 // 登录或注册成功后回到原来要去的页面（?next=）。已经登录的人打开它会直接被送进去。
@@ -192,6 +193,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
 if (typeof document !== 'undefined') {
   const root = document.getElementById('login-root');
   if (root) {
+    const preview = mountLatestAnnouncement(document.getElementById('latest-announcement'));
     const lang = document.getElementById('login-lang');
     const brand = document.getElementById('login-brand');
     const foot = document.getElementById('login-foot');
@@ -203,11 +205,13 @@ if (typeof document !== 'undefined') {
       lang.textContent = tr('English', '中文');
       renderHero(hero);
       foot.textContent = '';
-      foot.append(tr('城中的文字由 AI 居民生成 · 后人纪是公开的非营利实验', 'All text in the city is written by AI residents · The Heirs is a public non-profit experiment'), ' · ', h('a', { href: '/support.html' }, tr('支持我们 / Support', 'Support / 支持我们')));
+      preview.refresh();
+      foot.append(h('a', { href: '/announcements.html' }, tr('公告', 'Announcements')), ' · ', tr('城中的文字由 AI 居民生成 · 后人纪是公开的非营利实验', 'All text in the city is written by AI residents · The Heirs is a public non-profit experiment'), ' · ', h('a', { href: '/support.html' }, tr('支持我们 / Support', 'Support / 支持我们')));
     };
     labels();
     const page = await mountLogin({ root, search: location.search, hash: location.hash, origin: location.origin });
-    window.addEventListener('pagehide', () => page.dispose());
+    window.addEventListener('pagehide', event => { page.dispose(); if (!event.persisted) preview.dispose(); });
+    window.addEventListener('pageshow', event => { if (event.persisted) { preview.refresh(); page.relabel(); } });
     lang.addEventListener('click', () => { setLang(getLang() === 'zh' ? 'en' : 'zh'); labels(); page.relabel(); });
   }
 }
