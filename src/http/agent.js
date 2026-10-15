@@ -152,7 +152,7 @@ export function waitCore(rt, id, { after, timeoutMs = 25000, signal, lang = 'zh'
       const items = wakeItems(rt.w, id, tokenized(rt.w) ? Math.max(rt.w.agents[id].delivered, after) : after, lang);
       if (items.length) finish(result(items));
     });
-    timer = setTimeout(() => finish({ items: [], cursor: after }), timeoutMs);
+    timer = setTimeout(() => finish({ items: [], cursor: after }), Math.max(0, timeoutMs));
     if (signal) {
       if (signal.aborted) onAbort();
       else signal.addEventListener('abort', onAbort, { once: true });

@@ -586,10 +586,12 @@ export async function waitTickOrWake(S, p, n = 1) {
   const target = Math.max(Date.now() + 1000, nextAt + (n - 1) * tickMs) + Math.random() * 0.1 * tickMs; // 同 waitTick：至少 1 秒，加 0–10% 的抖动
   const cutoff = nextAt - limits.marginSec * 1000; // 这之后不再叫醒
   let acted = 0;
-  while (Date.now() < target && !(signal && signal.aborted)) {
+  while (!(signal && signal.aborted)) {
+    const remaining = target - Date.now();
+    if (remaining <= 0) break;
     let r;
     try {
-      r = await waitFn({ after: Math.max(S.cursor, S.wakeSeen), timeoutMs: Math.min(WAIT_SLICE_MS, target - Date.now()), signal, lang });
+      r = await waitFn({ after: Math.max(S.cursor, S.wakeSeen), timeoutMs: Math.min(WAIT_SLICE_MS, remaining), signal, lang });
     } catch (e) {
       r = { ok: false, status: 0, json: null, error: e && e.message };
     }
