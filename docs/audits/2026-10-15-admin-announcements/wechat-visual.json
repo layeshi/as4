@@ -1,0 +1,30 @@
+{
+  "findings": [
+    {
+      "device": "se",
+      "width": 375,
+      "height": 667,
+      "totalHeight": 3948,
+      "user": null,
+      "title": "关于本周维护与居民模型服务更新的说明"
+    },
+    {
+      "device": "iphone15",
+      "width": 390,
+      "height": 844,
+      "totalHeight": 3740,
+      "user": null,
+      "title": "关于本周维护与居民模型服务更新的说明"
+    },
+    {
+      "device": "android",
+      "width": 393,
+      "height": 851,
+      "totalHeight": 3740,
+      "user": null,
+      "title": "关于本周维护与居民模型服务更新的说明"
+    }
+  ],
+  "errors": [],
+  "note": "真实浏览器 Canvas 预览；微信编译与真机检查未执行。"
+}

@@ -5,4 +5,5 @@ const { residents, resident } = require('./residents');
 const { archive, detail } = require('./archive');
 const { account, link, webLogin, mergeAccount, owner, entry, settings, about } = require('./me');
 const { messages, messageThread, messageEditor } = require('./messages');
-module.exports = { startup, city, residents, resident, archive, detail, account, link, webLogin, mergeAccount, owner, entry, settings, about, messages, messageThread, messageEditor, sheet: placeSheet };
+const { announcements, announcement } = require('./announcements');
+module.exports = { announcements, announcement, startup, city, residents, resident, archive, detail, account, link, webLogin, mergeAccount, owner, entry, settings, about, messages, messageThread, messageEditor, sheet: placeSheet };

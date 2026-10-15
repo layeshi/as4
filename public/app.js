@@ -1,3 +1,4 @@
+import { mountLatestAnnouncement } from './announcement-preview.js';
 import { renderCooperation } from './cooperation-ui.js';
 import { renderMaterialsMarket } from './materials-ui.js';
 import { tokenized } from './e2-strings.js';
@@ -61,6 +62,7 @@ const sigs = {};
 let drawerId = null;
 
 const els = {};
+let announcementPreview;
 
 // ── 上下文（各页共用） ────────────────────────────────────────
 
@@ -114,6 +116,9 @@ async function boot() {
     els[id] = document.getElementById(id);
   }
   initAccounts(document.getElementById('btn-account'), ctx);
+  announcementPreview = mountLatestAnnouncement(document.getElementById('latest-announcement'));
+  window.addEventListener('pagehide', event => { if (!event.persisted) announcementPreview.dispose(); });
+  window.addEventListener('pageshow', event => { if (event.persisted) announcementPreview.refresh(); });
   wireStatic();
   applyLabels();
   const first = location.hash.slice(1);
@@ -201,6 +206,8 @@ function applyLabels() {
   els['btn-enter'].textContent = S.state?.world.premise===6 ? '创建居民' : t('enter');
   els['btn-back'].textContent = S.state?.world.premise===6 ? '我的居民' : t('backstage');
   els['btn-lang'].textContent = t('langSwitch');
+  document.getElementById('announcements-link').textContent = getLang() === 'en' ? 'Announcements' : '公告';
+  announcementPreview?.refresh();
   document.getElementById('message-board-link').textContent = getLang() === 'en' ? 'Message board' : '留言板';
   els.foot.textContent = `${t('aiContent')} · ${t('keyboardHint')}`;
   els.foot.append(' · ', h('a', { href: '/support.html' }, '支持我们 / Support'));

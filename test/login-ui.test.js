@@ -408,7 +408,7 @@ test('登录页的文件：走 CSP、不写内联样式或脚本，页面里有 
   assert.doesNotMatch(js, /innerHTML|document\.write|eval\(/);
   // 登录页不引入观测站的模块：首屏轻，也不会因它们的改动而坏
   const imports = [...js.matchAll(/from '\.\/([\w-]+)\.js'/g)].map((m) => m[1]).sort();
-  assert.deepEqual(imports, ['api', 'dom', 'i18n', 'wechat-login']);
+  assert.deepEqual(imports, ['announcement-preview', 'api', 'dom', 'i18n', 'wechat-login']);
   const e = await boot();
   try {
     const r = await e.call('/login.html');

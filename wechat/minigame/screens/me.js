@@ -12,6 +12,7 @@ const config = require('../config');
 const privacyLink = { label: '《隐私说明》', action: { type: 'about' } };
 function moreMenu(app, W) {
   return N.menu(W, [
+    { label: '公告', hint: '维护通知与版本更新', icon: 'info', action: { type: 'announcements' } },
     { label: '留言板', hint: '交流与回复', icon: 'mail', action: { type: 'messages' } },
     { label: '设置', hint: '字号、震动、刷新', icon: 'settings', action: { type: 'settings' } },
     { label: '隐私说明', icon: 'shield', action: { type: 'about' } },

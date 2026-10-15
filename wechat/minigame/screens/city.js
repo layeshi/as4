@@ -1,5 +1,6 @@
 // 观测页：实况、地图、统计、「此刻」事件流；以及点地点弹出的底部卡片。
 const N = require('../ui/nodes');
+const { preview: announcementPreview } = require('./announcements');
 const P = require('../ui/paint');
 const T = require('../ui/text');
 const { C, font, size } = require('../ui/theme');
@@ -171,9 +172,10 @@ function city(app, W) {
   if (!s) {
     const nodes = app.refreshing ? [N.space(40), N.text(W, '正在连接这座城…', { style: 'body', color: C.text2, align: 'center' })]
       : [N.empty(W, '暂时连不上这座城', app.error || '请检查网络后重试。'), N.button(W, '重新连接', { type: 'refresh' }, { variant: 'secondary' })];
+    nodes.unshift(...announcementPreview(app, W));
     return { top: { kind: 'brand', title: '后人纪' }, nodes, tabbar: true, pull: true };
   }
-  const nodes = [];
+  const nodes = announcementPreview(app, W);
   if (!app.wechatVerified && !app.dismissed.login) nodes.push(loginBanner(app, W));
   if ((s.agents || []).some(a => !usable(a.name))) nodes.push(N.text(W, '部分居民名字暂未展示，暂用居民编号区分。', { style: 'caption', color: C.text3 }));
   nodes.push(liveRow(app, W), mapCard(app, W), legend(W), stats(app, W));
