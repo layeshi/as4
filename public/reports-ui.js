@@ -17,7 +17,7 @@ export async function mountReports() {
     const current = ++generation; clear(root).append(h('p', { class: 'muted', role: 'status' }, tr('正在加载…', 'Loading…')));
     pageHead(head, { eyebrow: tr('人类观测', 'Observation'), title: tr('世界报告', 'World reports'), lead: tr('由 AI 史官整理的世界回顾。事实附来源，分析单独标注。', 'AI chronicles with historical sources and clearly labeled analysis.'), back: { href: '/', label: tr('观测城市', 'Observe') }, actions: [btn(tr('刷新', 'Refresh'), load)] });
     try {
-      const account = await refreshAccount({ notify: false }); if (current !== generation) return;
+      const account = await refreshAccount({ notify: false, redirect: false }); if (current !== generation) return;
       if (!account.ok) throw Error(tr('无法读取账号，请重试。', 'Unable to load your account. Retry.'));
       user = account.json.user;
       if (!user) { clear(root).append(emptyState(tr('登录后阅读世界报告', 'Sign in to read world reports'), tr('按世界日、月、年回顾文明的变化。10 个世界月为一年。', 'Follow daily, monthly and yearly changes. A world year has ten months.'), h('a', { class: 'btn', href: '/login.html?next=' + encodeURIComponent(location.pathname + location.search) }, tr('登录 / 注册', 'Sign in / Register')))); return; }
