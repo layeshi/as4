@@ -33,6 +33,7 @@ export class Runtime {
     // Receipts can also record a rejected migration that leaves legacy semantics.
     this.receiptEventsPending = false;
     this.schedulerStarted = false;
+    this.commandSubs = new Set(); // 人类观测者仅接收已提交的结果，不参与世界语义。
     this.remainingMs = w.paused && w.experimentControl?.active ? w.experimentControl.remainingMs : cfg.tickMs;
     this.wakeSubs = new Set(); // 第二前提：运行器订阅「有人找上门」的通知（SPEC-P2 §6.2）；不落盘、不经 SSE、不进事件流
   }
@@ -41,6 +42,11 @@ export class Runtime {
   onWake(fn) {
     this.wakeSubs.add(fn);
     return () => this.wakeSubs.delete(fn);
+  }
+
+  onCommand(fn) {
+    this.commandSubs.add(fn);
+    return () => this.commandSubs.delete(fn);
   }
 
   /**
@@ -104,6 +110,7 @@ export class Runtime {
   /** 执行一条命令；新语义先准备并持久化回执，再公开状态。返回 { result, events, cmd } */
   exec(type, payload = {}) {
     if (this.receiptFailed) throw new Error('Runtime is stopped after a receipt failure');
+    const before = this.commandSubs.size ? Object.fromEntries(Object.values(this.w.agents).map(a => [a.id, Object.fromEntries(['place', 'energy', 'coins', 'basic', 'materials'].filter(k => a[k] !== undefined).map(k => [k, a[k]]))])) : {};
     const wasPaused = this.w.paused;
     const wasExperimentPaused = this.w.experimentControl?.active === true;
     const wasFaultProtected = !!this.w.lawSemantics?.protection;
@@ -173,6 +180,10 @@ export class Runtime {
       this.events.release(this.w.clock.tick);
       if (out.result.settled) this.snapshot();
       this.events.emit('tick', this.tickSummary());
+    }
+    for (const observer of this.commandSubs) {
+      try { observer({ ...out, cmd, before }); }
+      catch (error) { this.logger.error?.('提交观察者失败', error.message); }
     }
     return { ...out, cmd };
   }

@@ -1,4 +1,8 @@
 import { WechatWebLogin } from '../wechat/web-login.js';
+import { HistoryArchive } from '../history/archive.js';
+import { ExportManager } from '../history/exports.js';
+import { ReportManager } from '../history/reports.js';
+import { historyRoutes } from './history.js';
 import { wechatWebLoginRoutes, qrLimits } from './wechat-web-login.js';
 import { AccountMerger } from '../accounts/merge.js';
 import { WechatProjection } from '../wechat/projection.js';
@@ -69,7 +73,7 @@ const roleAdminRoutes = [
   ['GET','/api/admin/public-model',accountWrap(({res,ctx})=>sendJson(res,200,ctx.publicRoles.view()),{admin:true})],
   ['POST','/api/admin/public-model',accountWrap(({res,ctx,body})=>{try{sendJson(res,200,ctx.publicRoles.save(body));}catch(e){sendJson(res,400,{error:{code:'invalid_config',message:e.message}});}},{admin:true})],
 ];
-const ROUTES = [...wechatMessageBoardRoutes, ...messageBoardRoutes, ...wechatWebLoginRoutes,...wechatRoutes,...archiveRoutes,...residentRoutes,...hostedRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
+const ROUTES = [...historyRoutes, ...wechatMessageBoardRoutes, ...messageBoardRoutes, ...wechatWebLoginRoutes,...wechatRoutes,...archiveRoutes,...residentRoutes,...hostedRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
 
 function match(method, pathname) {
   for (const [m, pattern, handler] of ROUTES) {
@@ -182,6 +186,9 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
   ctx.accountMerger = new AccountMerger(ctx);
   ctx.accountMerger.recover();
   ctx.publicRoles = new PublicRoleService(ctx);
+  ctx.history = new HistoryArchive(rt);
+  ctx.historyExports = new ExportManager(ctx, ctx.history);
+  ctx.reports = new ReportManager(ctx, ctx.history);
   rt.agentLoop = (ctx.shells && ctx.shells.config.agentLoop) || DEFAULT_AGENT_LOOP;
   if (agentic(rt.w) && cfg.tickMs < 4 * rt.agentLoop.marginSec * 1000) {
     logger.warn?.(`第二前提：TICK_MS=${cfg.tickMs} 小于 4 × marginSec=${rt.agentLoop.marginSec} 秒，醒来的可用窗口很短；请检查刻长与截止余量。`);
@@ -244,6 +251,8 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     const address = server.address();
     const host = address.address === '::' ? '[::1]' : address.address === '0.0.0.0' ? '127.0.0.1' : address.address.includes(':') ? `[${address.address}]` : address.address;
     ctx.publicRoles.start();
+    ctx.reports.start();
+    ctx.historyExports.kick();
     ctx.runners.activate(`http://${host}:${address.port}`);
     if (ctx.shells) ctx.shells.activate();
   });
@@ -263,6 +272,9 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     ctx,
     async close() {
       ctx.serverStatus.close();
+      await ctx.reports.close();
+      await ctx.historyExports.close();
+      await ctx.history.close();
       ctx.experiment.close();
       if (ctx.shells) await ctx.shells.close();
       await ctx.publicRoles.close();

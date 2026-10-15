@@ -110,7 +110,7 @@ function chips(W, items, opts = {}) {
   const f = font(13, {}), fb = font(13, { bold: true }), h = 32, gap = 8, rows = [];
   let row = [], used = 0;
   for (const item of items) {
-    const w = Math.ceil(T.measure(measureCtx, item.selected ? fb : f, item.label)) + 28;
+    const w = Math.max(44, Math.min(W, Math.ceil(T.measure(measureCtx, item.selected ? fb : f, item.label)) + 28));
     if (row.length && used + w > W) { rows.push(row); row = []; used = 0; }
     row.push({ item, w }); used += w + gap;
   }
@@ -122,9 +122,9 @@ function chips(W, items, opts = {}) {
       for (const { item, w } of r) {
         const cy = y + ri * (h + gap), pressed = g.pressed(item.action);
         if (item.selected) P.fillRound(g.ctx, cx, cy, w, h, h / 2, C.moon);
-        else { if (pressed) P.fillRound(g.ctx, cx, cy, w, h, h / 2, C.raised); P.strokeRound(g.ctx, cx, cy, w, h, h / 2, opts.outline || '#2C4760', 1); }
-        P.text(g.ctx, item.label, cx + w / 2, cy + h / 2, item.selected ? fb : f, item.selected ? C.ink : C.text2, 'center');
-        g.hit(cx, cy - 4, w, h + 8, item.action);
+        else { if (pressed) P.fillRound(g.ctx, cx, cy, w, h, h / 2, C.raised); P.strokeRound(g.ctx, cx, cy, w, h, h / 2, opts.outline || C.lineStrong, 1); }
+        P.text(g.ctx, T.ellipsize(g.ctx, item.label, w - 28, item.selected ? fb : f), cx + w / 2, cy + h / 2, item.selected ? fb : f, item.selected ? C.ink : C.text2, 'center');
+        g.hit(cx, cy - 6, w, h + 12, item.action);
         cx += w + gap;
       }
     });
@@ -316,7 +316,7 @@ function section(W, title, opts = {}) {
     if (opts.link) {
       const lf = font(14, {});
       P.text(g.ctx, opts.link.label, x + W, y + h / 2, lf, C.moon, 'right');
-      g.hit(x + W - T.measure(g.ctx, lf, opts.link.label) - 12, y, T.measure(g.ctx, lf, opts.link.label) + 12, h, opts.link.action);
+      g.hit(x + W - T.measure(g.ctx, lf, opts.link.label) - 12, y + (h - Math.max(h, 44)) / 2, Math.max(44, T.measure(g.ctx, lf, opts.link.label) + 12), Math.max(h, 44), opts.link.action);
     }
   });
 }

@@ -342,6 +342,10 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
         }
         continue;
       }
+      if (['/api/admin/reports/config', '/api/admin/reports/generate'].includes(path)) {
+        assert.equal((await env.call(path, { method: 'POST', body: {}, headers: { 'X-Houren-Request': '1' } })).status, 401);
+        continue;
+      }
       if (path === '/api/admin/support/qr') { // 插值的收款方式：实际入口是 POST / DELETE /api/admin/support/qr/:kind，要求管理员会话。
         const removed = await env.call('/api/admin/support/qr/wechat', { method: 'DELETE', body: {}, headers: { 'X-Houren-Request': '1' } });
         assert.equal(removed.status, 401, '收款码路由存在且要求登录会话');

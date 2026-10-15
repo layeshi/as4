@@ -178,7 +178,7 @@ function city(app, W) {
   if ((s.agents || []).some(a => !usable(a.name))) nodes.push(N.text(W, '部分居民名字暂未展示，暂用居民编号区分。', { style: 'caption', color: C.text3 }));
   nodes.push(liveRow(app, W), mapCard(app, W), legend(W), stats(app, W));
   const count = app.events.length;
-  nodes.push(N.section(W, '此刻', { sub: count ? `最近 ${count} 条公开记录` : '' }), filters(app, W));
+  nodes.push(N.section(W, '此刻', { sub: count ? `最近 ${count} 条公开记录` : '', link: { label: '世界报告', action: { type: 'historyReports' } } }), filters(app, W));
   nodes.push(...feedNodes(app, W));
   return { top: { kind: 'brand', title: cityName(s) }, nodes, tabbar: true, pull: true, gap: 12 };
 }

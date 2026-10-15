@@ -91,4 +91,23 @@ function requestId() {
   return 'wx-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
-module.exports = { request, restoreSession, clearSession, loginWeChat, setWebPassword, previewMerge, requestId };
+function download(path) {
+  if (!/^\/api\/history\/exports\/[a-zA-Z0-9-]+\/download$/.test(path)) return Promise.reject(new Error('下载路径无效'));
+  if (!cookies.houren_session) return Promise.reject(new Error('请先登录后下载历史'));
+  const generation = sessionGeneration, token = cookies.houren_session;
+  return new Promise((resolve, reject) => {
+    if (!wx.downloadFile) return reject(new Error('当前环境不支持文件下载，请在微信或网页中操作'));
+    wx.downloadFile({ url: config.apiBase + path, header: { Cookie: 'houren_session=' + token, 'X-Houren-Client': 'wechat' }, timeout: 120000,
+      success(response) {
+        if (!sessionCurrent(generation, token)) return reject(new Error('登录会话已变更，请重新下载'));
+        if (response.statusCode !== 200) return reject(new Error(response.statusCode === 401 ? '登录已失效，请重新登录' : response.statusCode === 403 ? '你已没有此居民的下载权限' : '下载未完成，请刷新导出记录后重试'));
+        const manager = wx.getFileSystemManager && wx.getFileSystemManager();
+        const save = manager?.saveFile ? options => manager.saveFile(options) : wx.saveFile ? options => wx.saveFile(options) : null;
+        if (!save) return resolve(response.tempFilePath);
+        save({ tempFilePath: response.tempFilePath, success: saved => sessionCurrent(generation, token) ? resolve(saved.savedFilePath || saved.filePath || response.tempFilePath) : reject(new Error('登录会话已变更，请重新下载')), fail: () => reject(new Error('文件保存失败，请检查微信存储空间后重试')) });
+      }, fail() { reject(new Error('文件下载失败，请检查网络后重试')); },
+    });
+  });
+}
+
+module.exports = { request, download, restoreSession, clearSession, loginWeChat, setWebPassword, previewMerge, requestId };

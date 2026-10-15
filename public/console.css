@@ -403,3 +403,38 @@ a.summary-stat small { color: var(--accent); }
 .wechat-login-code { max-width: 100%; height: auto; border-radius: 12px; border: 8px solid #fff; background: #fff; }
 .wechat-login-code[hidden] { display: none; }
 .wechat-check-code { font: 600 1.15rem monospace; letter-spacing: .16em; }
+
+/* 世界报告与历史导出：沿用工作台组件，只补充阅读和筛选布局。 */
+.history-toolbar, .report-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.history-toolbar select {
+  max-width: 100%;
+}
+.report-heading .eyebrow {
+  margin: 0;
+}
+.report-prose {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+}
+.report-entry {
+  border-top: 1px solid var(--line-soft);
+  padding: 12px 0;
+}
+.card-panel pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .history-page .btn, .history-page .subtab, .history-page select,
+  .history-page input, .reports-admin .btn, .reports-admin input, .reports-admin select {
+    min-height: 44px;
+  }
+}

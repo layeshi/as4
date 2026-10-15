@@ -14,6 +14,7 @@ const serifChars = require('./ui/serif-chars');
 const modelPresets = require('./utils/model-presets');
 const { GAME_NAME } = require('./copy');
 const { MessageBoard } = require('./messages');
+const { History } = require('./history');
 const { C, font } = theme;
 
 const TABS = [['city', '观测', 'city'], ['residents', '居民', 'residents'], ['archive', '档案', 'archive'], ['account', '我的', 'me']];
@@ -41,6 +42,7 @@ class SocietyGame {
     this.moderation = {}; this.loginRequired = {};
     this.navigation = 0; this.readVersions = {};
     this.messageBoard = new MessageBoard(this);
+    this.history = new History(this);
     this.modelPresets = modelPresets.bundled;
     this.cityMap = new CityMap(() => this.wx.createCanvas());
     this.filterScroller = new Scroller(); this.horizontalAreas = [];
@@ -148,6 +150,9 @@ class SocietyGame {
     clearTimeout(this.timer); this.timer = null;
     if (!this.entered) { this.render(); return; }
     if (this.refreshing) return;
+    if (['reports', 'worldReport', 'historyExport', 'exports'].includes(this.tab)) {
+      await this.history.refresh(); return;
+    }
     if (['messages', 'messageThread'].includes(this.tab)) {
       this.refreshing = true; this.render();
       try { await this.messageBoard.refresh(); }
@@ -282,6 +287,7 @@ class SocietyGame {
   }
   async handle(a) {
     const f = this.form;
+    if (a.type?.startsWith('history')) return this.history.handle(a);
     if (a.type === 'messages' || a.type?.startsWith('message')) return this.messageBoard.handle(a);
     switch (a.type) {
       case 'start': this.entered = true; this.tab = 'city'; this.stack = []; await Promise.all([this.refresh({ full: true }), this.loadAccount().catch(() => {})]); break;

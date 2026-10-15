@@ -88,7 +88,7 @@ function archive(app, W) {
   if (!s) return { top, nodes: [N.empty(W, '正在连接这座城…')], tabbar: true, pull: true };
   const count = k => (s[k] || []).length;
   const tabs = [['chronicle', '编年史'], ['laws', `法典 ${count('laws')}`], ['docs', `典籍 ${count('docs')}`], ['groups', `社群 ${count('groups')}`], ['cradle', `摇篮 ${count('cradle')}`]];
-  const nodes = [N.chips(W, tabs.map(([v, l]) => ({ label: l, action: { type: 'archive', tab: v }, selected: app.archiveTab === v })))];
+  const nodes = [N.button(W, '世界报告', { type: 'historyReports' }, { variant: 'secondary' }), N.chips(W, tabs.map(([v, l]) => ({ label: l, action: { type: 'archive', tab: v }, selected: app.archiveTab === v })))];
   if (app.archiveTab === 'chronicle') nodes.push(...chronicleNodes(app, W));
   else if (app.archiveTab === 'laws') { const laws = (s.laws || []).slice().sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1)); if (!laws.length) nodes.push(N.empty(W, '还没有法律')); laws.forEach(l => nodes.push(lawCard(W, l))); }
   else if (app.archiveTab === 'docs') { if (!count('docs')) nodes.push(N.empty(W, '还没有典籍')); (s.docs || []).forEach(d => nodes.push(docCard(W, d))); }

@@ -212,6 +212,8 @@ HTML 照 `public/residents.html` 抄：`<html lang="zh">`，`<meta name="color-s
 
 JS 照 `public/billing.js`（最短的完整例子）：`mountShell(header, { active })` → `setNotice()` 把提示写进 `#message` → `load()`。`load()` 用递增的 `generation` 丢弃过时的响应；先画页头，再分「出错 / 未登录 / 空 / 有内容」几种情况，用 `emptyState` 与 `card` 填 `#content`。
 
+世界报告 `reports.html` 和居民历史 `history.html` 沿用纸页工作台及共用页头、卡片、标签、空状态。报告的事实和 AI 分析分节，来源用可展开的历史依据核对；导出页将范围表单和持久化记录分区，只有「生成历史包」一个主按钮。布局规则在 `console.css`，窄屏输入和操作至少 44px。离线包的 `history-export.css` 沿用同一主题色与文字层级，不依赖外部资源。管理员的 AI 史官设置归入现有模型页。
+
 ## 4. 微信小程序与小游戏（wechat/）
 
 ### 4.1 结构与硬约束
@@ -292,6 +294,8 @@ JS 照 `public/billing.js`（最短的完整例子）：`mountShell(header, { ac
 - **滚动**：惯性、回弹、下拉刷新（「下拉刷新 / 松开刷新 / 正在刷新…」），滚动时右侧出现细滚动条。
 - **按下**：变暗或变石阶；轻震 `vibrateShort({ type: 'light' })`，设置里可以关。
 - **实况页的写法**：用 `rule` 按刻分组；动作行是圆形线性图标加一句话；发言用气泡（石阶底，超过 3 行折叠，「展开全文」）；日终是摘要卡（宋体标题，词元数用 `token` 色）；未审核的居民文字显示虚线框加锁的占位（「微信登录后可阅读这段内容」）。
+
+- **报告和导出**：`screens/history.js` 共用 `card`、`text`、`section`、`chips`、`field` 和按钮，保持月下城配色。报告全文标记 AI，事实与分析分节；导出发起、导出记录为两个页面。长筛选标签限于容器宽度并省略，触控区域至少 44px；小节链接也采用至少 44px 的触控区域。
 
 ### 4.7 原生页面（WXML / WXSS）
 

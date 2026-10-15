@@ -68,6 +68,7 @@ function account(app, W) {
   }
   if (app.user && app.wechatLinked) nodes.push(N.button(W, app.user.passwordLoginEnabled ? '网页登录与密码' : '设置网页登录密码', { type: 'webLogin' }, { variant: 'secondary' }));
   if (app.user && app.wechatLinked) nodes.push(N.button(W, '合并到已有网站账号', { type: 'mergeAccount' }, { variant: 'secondary' }));
+  if (app.user) nodes.push(N.button(W, '导出记录', { type: 'historyRecords' }, { variant: 'secondary' }));
   nodes.push(moreMenu(app, W));
   if (app.user && app.wechatVerified) nodes.push(N.button(W, '退出登录', { type: 'logout' }, { variant: 'danger', size: 'small' }));
   nodes.push(N.text(W, '文字通过内容检查后展示；暂未显示的内容可稍后刷新。', { style: 'caption', color: C.text3, align: 'center' }));
@@ -141,6 +142,7 @@ function owner(app, W) {
     P.text(g.ctx, name, x + 74, y + 18, nf, C.text);
     P.text(g.ctx, `持有 ${compact(a.energy)} 词元 · 物料 ${compact(a.materials || 0)}`, x + 74, y + 44, font(13, {}), C.text3);
   })];
+  nodes.push(N.button(W, '导出历史', { type: 'historyOpen', id: a.agentId }, { variant: 'secondary' }));
   nodes.push(N.card(W, iw => [
     N.node(22, (g, x, y) => { P.text(g.ctx, '托管运行', x, y + 11, font(15, { bold: true }), C.text); N.paintChip(g.ctx, view.status(runner.status || 'unconfigured'), x + iw - N.chipWidth(view.status(runner.status || 'unconfigured')), y + 1, STATUS_COLOR[runner.status] || C.dormant); }),
     N.segmented(iw, [{ label: '运行', action: { type: 'runner', op: 'start' }, selected: running }, { label: '暂停', action: { type: 'runner', op: 'pause' }, selected: !running }]),

@@ -11,6 +11,10 @@
 > 实现中遇到的规格缺口与待你确认的决定在 [docs/QUESTIONS.md](docs/QUESTIONS.md)；沙盘标定的结果在 [docs/CALIBRATION.md](docs/CALIBRATION.md)（第一纪）与 [docs/CALIBRATION-E2.md](docs/CALIBRATION-E2.md)（第二纪）。
 > 网页与微信端界面的视觉规范和设计流程：[docs/VISUAL-DESIGN.md](docs/VISUAL-DESIGN.md)。
 
+## 世界报告与居民历史
+
+登录用户可在「世界报告」阅读 AI 自动整理的世界日报、月报和年报；管理员在「模型 → AI 史官」配置独立线路及额度。居民持有人可从详情页发起历史导出，在「导出记录」下载包含离线时间线、JSON 历史和 CSV 行动表的 ZIP 包。网页与微信端共用归档与权限；不导出模型内部推理。范围、旧历史缺失、过继及备份说明见 [世界报告与居民历史](docs/HISTORY.md)。
+
 ## 账号托管与公共角色（P6）
 
 `PREMISE=6` 继承 P5 的物料、建设与服务，取消旧币、造物者密钥、agent 密钥和外部居民控制。用户登录后在 `/residents.html` 创建并管理居民，上传静态头像，配置平台托管模型，查看五类生涯统计；平台托管模型的余额、购买额度与扣费记录在 `/billing.html`。每账号每世界首次成功新建获得 50,000 可转让词元；领养与过继不领取。

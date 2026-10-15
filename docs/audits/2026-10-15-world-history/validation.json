@@ -1,0 +1,16 @@
+{
+  "verifiedAt": "2026-10-15T03:27:02.544814+00:00",
+  "regression": {
+    "tests": 1799,
+    "pass": 1798,
+    "fail": 0,
+    "skipped": 1
+  },
+  "skipReason": "未设置 HOUREN_FROZEN_WORLDS，未提供第一纪冻结世界数据副本。",
+  "wechatProgram": "> check\n> node scripts/release.mjs check --offline\n\n本地检查通过：2 个页面，42 个文件，457 KiB 源文件。\n以上是结构与 JavaScript 语法检查；微信编译与真机检查另行执行。",
+  "wechatGame": "> check\n> node scripts/release.mjs check --offline\n\n本地检查通过：Canvas 小游戏，31 个文件，445 KiB 源文件。\n以上是结构与 JavaScript 语法检查；微信编译与真机检查另行执行。",
+  "productionDataUsed": false,
+  "productionDeployed": false,
+  "realWechatDeviceTested": false,
+  "liveModelCharged": false
+}

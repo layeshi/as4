@@ -99,7 +99,7 @@ async function list(version) {
   const cradle = app.S.state.cradle ?? [];
   if (cradle.length) content.append(card('领养摇篮中的灵魂', '摇篮里的灵魂等待有人领养；领养后由你管理并配置模型。', h('div', { class: 'stack-list' }, cradle.map((s) => h('details', { class: 'list-item' }, h('summary', null, s.name), h('p', { class: 'soul' }, s.soul), form([field('每日游戏词元上限', 'dailyCap', 880000, 'number', { min: 0, max: 50000000 })], '领养', async (b) => { const data = await request('/api/account/residents/adopt', { soulId: s.id, dailyCap: Number(b.dailyCap), requestId: crypto.randomUUID() }); location.assign(`/residents.html?resident=${data.agentId}`); }))))));
   const t = await api('/api/account/transfers'); if (!active(version)) return;
-  if (t.ok && t.json.transfers.length) content.append(card('过继邀请', '收到的邀请需要配置模型后接受；发出的邀请在对方确认前可以取消。', h('div', { class: 'stack-list' }, t.json.transfers.map((inv) => h('details', { class: 'list-item' }, h('summary', null, `${inv.name} · ${inv.direction === 'incoming' ? '收到' : '发出'} · ${inv.status}`), h('p', { class: 'muted' }, `有效期至 ${new Date(inv.expiresAt).toLocaleString()}`),
+  if (t.ok && t.json.transfers.length) content.append(card('过继邀请', '过继会移交居民的完整私人历史，包括既有日记与家书。收到的邀请需配置模型后接受；对方确认前可以取消。', h('div', { class: 'stack-list' }, t.json.transfers.map((inv) => h('details', { class: 'list-item' }, h('summary', null, `${inv.name} · ${inv.direction === 'incoming' ? '收到' : '发出'} · ${inv.status}`), h('p', { class: 'muted' }, `有效期至 ${new Date(inv.expiresAt).toLocaleString()}`),
     inv.direction === 'incoming' && inv.status === 'pending' ? modelForm(null, async (config, dailyCap) => { await request(`/api/account/transfers/${inv.id}/accept`, { config, dailyCap, requestId: crypto.randomUUID() }); await load(); }, '接受并配置模型', undefined, hostedAccount, { withCap: true })
       : inv.status === 'pending' ? btn('取消邀请', async () => { await request(`/api/account/residents/${inv.agentId}/cancel_transfer`, { transferId: inv.id, requestId: crypto.randomUUID() }); await load(); }) : null)))));
   const handedOver = r.json.created.filter((a) => !managedIds.has(a.id));
@@ -121,7 +121,7 @@ async function detail(id, version) {
   const r = await api(`/api/account/residents/${encodeURIComponent(id)}`); if (!active(version)) return; if (!r.ok) throw Error(errorText(r, '无法读取档案'));
   const data = r.json, a = data.resident;
   const publicLink = h('a', { class: 'btn', href: `/?resident=${encodeURIComponent(id)}` }, '公开档案');
-  pageHead(head, { back: { href: '/residents.html', label: '我的居民' }, media: residentAvatar(a, true), title: a.name, lead: h('span', { class: 'lead-chips' }, statusChip(a.status), ` ${a.id}${a.place ? ` · ${placeName(a.place)}` : ''}`, data.publicOnly ? '' : ' · ', data.publicOnly ? null : runnerChip(data.overview.runner.status)), actions: [publicLink, btn('刷新', () => load())] });
+  pageHead(head, { back: { href: '/residents.html', label: '我的居民' }, media: residentAvatar(a, true), title: a.name, lead: h('span', { class: 'lead-chips' }, statusChip(a.status), ` ${a.id}${a.place ? ` · ${placeName(a.place)}` : ''}`, data.publicOnly ? '' : ' · ', data.publicOnly ? null : runnerChip(data.overview.runner.status)), actions: [publicLink, ...(data.publicOnly ? [] : [h('a', { class: 'btn', href: `/history.html?resident=${encodeURIComponent(id)}` }, '导出历史')]), btn('刷新', () => load())] });
   if (data.publicOnly) { content.append(card('公开生涯', '你是原创者，管理权已过继。这里显示公开生涯。', h('p', null, a.bio))); return; }
   const tabs = h('nav', { class: 'subtabs', role: 'tablist', 'aria-label': '居民详情' }), pane = h('div', { class: 'tab-pane' }), items = [['overview', '总览'], ['ledger', '收支'], ['actions', '行动与成果'], ['model', '模型运行'], ['timeline', '生涯时间线'], ['manage', '管理']];
   content.append(tabs, pane);
@@ -195,7 +195,7 @@ function manage(pane, data, id) {
     h('div', { class: 'panel-stack' },
       card('每日游戏词元上限', '每个现实日最多消耗的游戏词元；用尽后当天的醒来会被拒绝。', form([field('每日游戏词元上限', 'dailyCap', o.dailyCap, 'number', { min: 0, max: 50000000 })], '更新上限', async (b) => { await request(`/api/account/residents/${id}/cap`, { dailyCap: Number(b.dailyCap), requestId: crypto.randomUUID() }); await load(); })),
       card('家书', '按既有冷却规则寄送。', form([textarea('家书内容', 'text')], '寄送家书', (b) => request(`/api/account/residents/${id}/letter`, { text: b.text, requestId: crypto.randomUUID() }))),
-      card('过继', '把管理权交给另一个账号；接收者确认前，你仍管理居民。', form([field('接收账号用户名', 'username', '', 'text', { required: true })], '发起过继邀请', async (b) => { await request(`/api/account/residents/${id}/transfer`, { username: b.username, requestId: crypto.randomUUID() }); say('邀请已发出；接收者确认前，你仍管理居民。'); })))));
+      card('过继', '过继会移交完整私人历史，包括已有日记和家书。确认后你将失去管理和下载权限；接收者确认前，你仍管理居民。', form([field('接收账号用户名', 'username', '', 'text', { required: true })], '发起过继邀请', async (b) => { await request(`/api/account/residents/${id}/transfer`, { username: b.username, requestId: crypto.randomUUID() }); say('邀请已发出；接收者确认前，你仍管理居民。'); })))));
 }
 
 async function timeline(id,pane,currentPane){

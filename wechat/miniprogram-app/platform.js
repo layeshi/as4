@@ -3,7 +3,7 @@ function createPlatform(native, canvas, page) {
   const listeners = new Map();
   let first = true, disposed = false;
   const api = {};
-  for (const name of ['getWindowInfo', 'getSystemInfoSync', 'getMenuButtonBoundingClientRect', 'getStorageSync', 'setStorageSync', 'removeStorageSync', 'showShareMenu', 'vibrateShort', 'setClipboardData']) {
+  for (const name of ['getWindowInfo', 'getSystemInfoSync', 'getMenuButtonBoundingClientRect', 'getStorageSync', 'setStorageSync', 'removeStorageSync', 'showShareMenu', 'vibrateShort', 'setClipboardData', 'shareFileMessage']) {
     if (native[name]) api[name] = (...args) => native[name](...args);
   }
   api.createCanvas = () => {

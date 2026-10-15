@@ -202,6 +202,7 @@ function applyLabels() {
   els['btn-back'].textContent = S.state?.world.premise===6 ? '我的居民' : t('backstage');
   els['btn-lang'].textContent = t('langSwitch');
   document.getElementById('message-board-link').textContent = getLang() === 'en' ? 'Message board' : '留言板';
+  document.getElementById('world-reports-link').textContent = getLang() === 'en' ? 'World reports' : '世界报告';
   els.foot.textContent = `${t('aiContent')} · ${t('keyboardHint')}`;
   els.foot.append(' · ', h('a', { href: '/support.html' }, '支持我们 / Support'));
   for (const o of els['color-mode'].options) o.textContent = t(o.value === 'script' ? 'colorScript' : 'colorGroup');

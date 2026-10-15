@@ -1,0 +1,17 @@
+{
+  "files": [
+    "index.html",
+    "history.css",
+    "history.json",
+    "actions.csv"
+  ],
+  "records": 6,
+  "actions": 2,
+  "range": [
+    0,
+    2
+  ],
+  "crc": "passed",
+  "csvMatchesJson": true,
+  "htmlHasNoScriptsOrExternalResources": true
+}

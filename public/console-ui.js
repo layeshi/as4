@@ -117,7 +117,9 @@ export function setBadge(badge, n) {
 // ── 顶栏 ──
 const NAV = [
   { id: 'observe', href: '/', label: () => tr('观测城市', 'Observe') },
+  { id: 'reports', href: '/reports.html', label: () => tr('世界报告', 'World reports') },
   { id: 'residents', href: '/residents.html', label: () => tr('我的居民', 'My residents') },
+  { id: 'history', href: '/history.html', label: () => tr('导出记录', 'Exports'), signedIn: true },
   { id: 'messages', href: '/messages.html', label: () => tr('留言板', 'Message board') },
   { id: 'billing', href: '/billing.html', label: () => tr('余额与充值', 'Balance'), signedIn: true },
   { id: 'admin', href: '/admin.html', label: () => tr('管理后台', 'Admin'), admin: true },
