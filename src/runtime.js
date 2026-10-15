@@ -118,7 +118,7 @@ export class Runtime {
     if (type === 'admin' && payload.op === 'pause' && payload.args?.experiment === true && (!wasPaused || !wasExperimentPaused)) {
       payload = { ...payload, args: { ...payload.args, remainingMs: this.nextTickAt === null ? this.remainingMs : Math.max(0, this.nextTickAt - Date.now()) } };
     }
-    let cmd, out;
+    let cmd, out, committedCommand;
     const durable = usesLawSemantics2(this.w) || (this.w.physics === 2 && type === 'admin' && payload.op === 'law_semantics' && payload.args?.version === 2);
     if (durable) {
       cmd = { n: this.log.n + 1, tick: this.w.clock.tick, type, payload };
@@ -126,7 +126,7 @@ export class Runtime {
         const prepared = this.engine.prepareCommand(this.w, cmd);
         const candidate = prepared.candidate;
         out = prepared.out;
-        this.log.appendReceipt(cmd, makeReceipt(this.w, candidate, out));
+        committedCommand = this.log.appendReceipt(cmd, makeReceipt(this.w, candidate, out));
         this.receiptEventsPending = true;
         commitCommandCandidate(this.w, candidate);
       } catch (error) {
@@ -182,7 +182,7 @@ export class Runtime {
       this.events.emit('tick', this.tickSummary());
     }
     for (const observer of this.commandSubs) {
-      try { observer({ ...out, cmd, before }); }
+      try { observer({ ...out, cmd: committedCommand ?? cmd, before }); }
       catch (error) { this.logger.error?.('提交观察者失败', error.message); }
     }
     return { ...out, cmd };

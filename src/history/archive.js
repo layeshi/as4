@@ -44,13 +44,18 @@ export class HistoryArchive {
   }
   async initialize(state, boundary) {
     let branch = this.index.branches.filter(b => b.identity === state.identity && b.commandN <= boundary).at(-1);
-    let lastCommand = null, prefixHash = null;
+    let lastCommand = null, prefixHash = null, legacyPrefixHash = null;
     const commandsFile = join(this.rt.dir, 'commands.jsonl');
     for await (const frame of jsonLines(commandsFile)) {
       const cmd = frame.command ?? frame; if (cmd.n > boundary) break;
-      lastCommand = cmd; if (cmd.n === branch?.commandN) prefixHash = hash(cmd);
+      lastCommand = cmd;
+      if (cmd.n === branch?.commandN) {
+        prefixHash = hash(cmd);
+        const { receipt, ...legacy } = cmd;
+        legacyPrefixHash = hash(legacy); // 首版观察入口未携带已持久化回执，兼容它保存的前缀摘要。
+      }
     }
-    if (branch && (this.rt.cfg.reset || branch.commandN && prefixHash !== branch.lastHash)) branch = null;
+    if (branch && (this.rt.cfg.reset || branch.commandN && prefixHash !== branch.lastHash && legacyPrefixHash !== branch.lastHash)) branch = null;
     if (!branch) {
       branch = { id: randomUUID(), ...state, enabledDay: Math.floor(state.tick / state.ticksPerDay), commandN: 0, eventSeq: 0, createdAt: new Date().toISOString() };
       this.index.branches.push(branch);

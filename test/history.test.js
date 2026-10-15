@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, readFileSync, writeFileSync, copyFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
 import { Runtime } from '../src/runtime.js';
 import { loadConfig } from '../src/config.js';
 import { stateHash } from '../src/store.js';
@@ -146,6 +147,26 @@ test('a verified account merge preserves access to archived resident history', a
   const job = await exports.create({ id: 'bob' }, { branchId: branch.id, agentId: id });
   await exports.idle(); assert.equal(exports.get({ id: 'bob' }, job.id).status, 'ready'); assert.ok(exports.get({ id: 'bob' }, job.id).records > 0);
   await assert.rejects(exports.download({ id: 'charlie' }, job.id), e => e.status === 403);
+});
+
+test('a normal archive restart reuses its branch after durable receipt commands', async t => {
+  const { rt, archive } = await setup(t), first = archive.branchId;
+  await archive.close();
+  const restarted = new HistoryArchive(rt);
+  try { await restarted.ready; assert.equal(restarted.branchId, first); assert.equal(restarted.branches().length, 1); }
+  finally { await restarted.close(); }
+});
+
+test('archive restart accepts the legacy live-command hash without a stored receipt', async t => {
+  const { rt, archive } = await setup(t), first = archive.branchId;
+  await archive.close();
+  const frame = JSON.parse(readFileSync(join(rt.dir, 'commands.jsonl'), 'utf8').trim().split('\n').at(-1));
+  const { receipt, ...legacy } = frame.command;
+  assert.ok(receipt);
+  archive.meta.lastHash = createHash('sha256').update(JSON.stringify(legacy)).digest('hex'); archive.save();
+  const restarted = new HistoryArchive(rt);
+  try { await restarted.ready; assert.equal(restarted.branchId, first); assert.equal(restarted.branches().length, 1); }
+  finally { await restarted.close(); }
 });
 
 test('restoring an earlier command prefix creates a separate archive branch', async t => {
