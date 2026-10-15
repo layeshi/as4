@@ -902,3 +902,9 @@ ul.reading { list-style: none; padding-left: 0; }
 .coop-card { padding:1rem; border:1px solid var(--line, #39404b); border-radius:.5rem; }
 .coop-card h3, .coop-card h4 { margin-top:0; }
 .coop-body { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.7; margin:.65rem 0; }
+
+/* 最新公告：轻量提示，仅使用纸页与墨色变量。 */
+.announcement-preview { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: inherit; }
+.announcement-preview[hidden] { display: none; }
+.announcement-preview-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.announcement-preview a { min-height: 44px; display: inline-flex; align-items: center; }

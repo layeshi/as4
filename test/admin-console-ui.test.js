@@ -46,7 +46,7 @@ test('管理后台：分组侧栏列出全部管理功能，默认服务器状�
   try {
     const console = await mountAdmin({ header: env.header, app: env.app }); await settle();
     const ids = adminSections().flatMap(([, items]) => items.map(([id]) => id));
-    assert.deepEqual(ids, ['server', 'experiment', 'snapshots', 'users', 'topups', 'reports', 'hosted', 'usage', 'public-model', 'inventions', 'support']);
+    assert.deepEqual(ids, ['server', 'experiment', 'snapshots', 'users', 'topups', 'reports', 'hosted', 'usage', 'public-model', 'announcements', 'inventions', 'support']);
     assert.deepEqual(env.app.querySelectorAll('.admin-nav-group').map((g) => g.textContent), ['运行', '用户与充值', '模型', '内容与支持']);
     assert.equal(env.app.querySelectorAll('.admin-nav-link').length, ids.length);
     assert.equal(console.shown, 'server'); assert.match(env.app.querySelector('h1').textContent, /服务器状态/);
@@ -112,26 +112,26 @@ test('会员页顶栏：按身份显示导航，当前页高亮，账户菜单�
     assert.equal(env.header.querySelectorAll('button').length, 0, '读到账号之前不画登录按钮');
     await refreshAccount({ notify: false }); await settle();
     assert.equal(env.header.querySelector('.console-brand').textContent, '后人纪 · 词元本位');
-    assert.deepEqual(navLinks(env.header), ['观测城市', '世界报告', '我的居民', '留言板']);
+    assert.deepEqual(navLinks(env.header), ['观测城市', '世界报告', '我的居民', '公告', '留言板']);
     assert.ok(env.header.querySelectorAll('button').some((b) => b.textContent === '登录 / 注册'));
     assert.equal(env.header.querySelector('[aria-current="page"]').getAttribute('href'), '/residents.html');
     env.setUser(user); await refreshAccount({ notify: false });
-    assert.deepEqual(navLinks(env.header), ['观测城市', '世界报告', '我的居民', '导出记录', '留言板', '余额与充值']);
+    assert.deepEqual(navLinks(env.header), ['观测城市', '世界报告', '我的居民', '导出记录', '公告', '留言板', '余额与充值']);
     assert.match(env.header.querySelector('.account-menu').textContent, /Alice@alice · 普通用户/);
     assert.ok(links(env.header).some(([text, href]) => text === '账户设置' && href === '/account.html'));
     env.setUser(admin); await refreshAccount({ notify: false });
-    assert.deepEqual(navLinks(env.header), ['观测城市', '世界报告', '我的居民', '导出记录', '留言板', '余额与充值', '管理后台']);
+    assert.deepEqual(navLinks(env.header), ['观测城市', '世界报告', '我的居民', '导出记录', '公告', '留言板', '余额与充值', '管理后台']);
     const signOut = env.header.querySelectorAll('button').find((b) => b.textContent === '退出登录');
     await signOut.listeners.click[0](); await settle();
     assert.ok(env.requests.some((r) => r.url === '/api/account/logout' && r.method === 'POST'));
-    assert.deepEqual(navLinks(env.header), ['观测城市', '世界报告', '我的居民', '留言板']);
+    assert.deepEqual(navLinks(env.header), ['观测城市', '世界报告', '我的居民', '公告', '留言板']);
   } finally { env.restore(); }
 });
 
 test('新页面：走 CSP，不写内联样式或脚本，旧的居民页样式表已移除', async () => {
   const e = await boot();
   try {
-    for (const page of ['residents', 'billing', 'account', 'admin', 'support', 'messages', 'reports', 'history']) {
+    for (const page of ['residents', 'billing', 'account', 'admin', 'support', 'messages', 'reports', 'history', 'announcements']) {
       const r = await e.call(`/${page}.html`);
       assert.equal(r.status, 200, page); assert.equal(r.headers.get('content-security-policy'), CSP, page);
       assert.doesNotMatch(r.text, /\sstyle=|<script(?![^>]*\bsrc=)/, page);

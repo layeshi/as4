@@ -14,7 +14,7 @@ import { timingEqual } from './util.js';
 export const LOGIN_PAGE = '/login.html';
 
 /** public/ 下未登录也能打开的页面（相对路径）；其余 .html 都要登录 —— 新增页面缺省有门 */
-const OPEN_PAGES = new Set(['login.html', 'support.html', 'reports.html']);
+const OPEN_PAGES = new Set(['login.html', 'support.html', 'reports.html', 'announcements.html']);
 
 /** 要登录才能读的接口：GET /api/public/* 与 POST /api/public/weather/vote，打赏页读的 /api/public/support* 除外 */
 export const walledApi = (pathname) => pathname.startsWith('/api/public/') && !/^\/api\/public\/support(?:\/|$)/.test(pathname);

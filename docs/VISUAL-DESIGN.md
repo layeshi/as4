@@ -163,6 +163,7 @@
 | 数字块 | 卡片里用 `metrics([[label, value], …])`；页面概览的大数字用 `.summary-row` 与 `.summary-stat`（可以整块作链接，加 `warn` 变色） |
 | 表格 | `table(heads, rows)` → `.scroll-table`；数字列右对齐（`.num`）；超过 24 字的文字格自动折行；空表显示「暂无记录」 |
 | 表单 | `form(fields, label, submit)` 加 `field()` / `textarea()`；表单最宽 560；提交时禁用按钮并显示「正在处理…」 |
+| 公告阅读与管理 | `announcements-ui.js` 与 `announcements-admin.js`：复用页头、卡片、细线、表单和空状态；`announcement-preview.js` 在首页及登录页展示最新标题；公告使用纯文字正文，不带 AI 标记 |
 | 留言输入 | `messageComposer({label,value,submitLabel,submit,onInput,cancel,key,primary})`：纯文字多行输入、2,000 字计数、提交状态与草稿保留；留言板用 `.message-form` 在阅读卡片内铺满，编辑和回复就地展开，每次只有一个实心提交按钮 |
 | 异步按钮 | `btn(text, run, primary)`：执行中禁用，出错写到页头下的提示行 |
 | 状态标签 | `chip(text, tone)`：描边胶囊，颜色由 tone 类决定 |
@@ -277,6 +278,7 @@ JS 照 `public/billing.js`（最短的完整例子）：`mountShell(header, { ac
 | 设置类菜单 | `menu(W, rows)`：一张圆角卡片里的若干行，可带图标、提示和开关 |
 | 统计块 | `stat(W, label, value, sub, color)`；几块并排用 `columns` |
 | 输入 | `field(W, label, value, action, { placeholder, secret, multiline, counter, hint, error })`；勾选用 `checkbox` |
+| 管理员公告 | `screens/announcements.js`：复用 `N.card`、`N.text`、按钮与空状态，列表和全文在微信端阅读；观测页显示最新标题，我的页提供入口 |
 | 人类留言 | `screens/messages.js` 的留言列表、讨论与书写页，复用卡片、列表行和输入；操作用一行 `buttonRow`，长正文可展开，未检查文字用说明占位；书写页由原生输入层编辑，页面只保留一个月白主提交按钮 |
 | 进度 | `progress(W, ratio, color)` |
 | 小节标题 | `section(W, title, { sub, link, small })`：宋体标题、说明、右侧月白链接 |

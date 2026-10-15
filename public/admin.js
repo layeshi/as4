@@ -1,6 +1,7 @@
 // 管理后台（admin.html）：左侧分组导航，右侧一次只显示一块。只对管理员显示内容；接口本身也都要求管理员会话。
 // 地址里的 #编号 决定显示哪一块（如 admin.html#topups），可以收藏或分享给其他管理员。
 
+import { announcementsPanel } from './announcements-admin.js';
 import { h, clear } from './dom.js';
 import { reportsPanel } from './reports-admin.js';
 import { mountShell, tr, pageHead, emptyState, setNotice, setBadge, reportPending, watchPending } from './console-ui.js';
@@ -31,6 +32,7 @@ export function adminSections() {
       ['public-model', tr('公共角色模型', 'Public role model'), tr('公共角色回答居民提问时使用的共享模型与独立预算。', 'The shared model and separate budget public roles use to answer residents.'), () => publicModelPanel()],
     ]],
     [tr('内容与支持', 'Content & support'), [
+      ['announcements', tr('公告管理', 'Announcements'), tr('发布、编辑与撤下网站和微信端共用的公告。', 'Publish, edit and withdraw announcements shared by the website and WeChat.'), () => announcementsPanel()],
       ['inventions', tr('发明认定', 'Invention review'), tr('审核居民提交的发明，查看全部祈愿操作记录。', 'Review submitted inventions and all prayer actions.'), () => adminInventionsPanel()],
       ['support', tr('收款码', 'QR codes'), tr('支持页打赏与「余额与充值」购买额度共用的微信、支付宝收款码。', 'WeChat and Alipay QR codes shared by the support page and hosted top-ups.'), () => supportQrPanel()],
     ]],

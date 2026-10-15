@@ -15,6 +15,7 @@ const modelPresets = require('./utils/model-presets');
 const { GAME_NAME } = require('./copy');
 const { MessageBoard } = require('./messages');
 const { History } = require('./history');
+const { Announcements } = require('./announcements');
 const { C, font } = theme;
 
 const TABS = [['city', '观测', 'city'], ['residents', '居民', 'residents'], ['archive', '档案', 'archive'], ['account', '我的', 'me']];
@@ -43,6 +44,7 @@ class SocietyGame {
     this.navigation = 0; this.readVersions = {};
     this.messageBoard = new MessageBoard(this);
     this.history = new History(this);
+    this.announcements = new Announcements(this);
     this.modelPresets = modelPresets.bundled;
     this.cityMap = new CityMap(() => this.wx.createCanvas());
     this.filterScroller = new Scroller(); this.horizontalAreas = [];
@@ -153,6 +155,12 @@ class SocietyGame {
     if (['reports', 'worldReport', 'historyExport', 'exports'].includes(this.tab)) {
       await this.history.refresh(); return;
     }
+    if (['announcements', 'announcement'].includes(this.tab)) {
+      this.refreshing = true;
+      try { await this.announcements.refresh(); }
+      finally { this.refreshing = false; this.invalidate(); this.render(); this.schedule(); }
+      return;
+    }
     if (['messages', 'messageThread'].includes(this.tab)) {
       this.refreshing = true; this.render();
       try { await this.messageBoard.refresh(); }
@@ -163,7 +171,7 @@ class SocietyGame {
     const ticket = this.beginRead('refresh');
     this.refreshing = true; this.render();
     try {
-      const events = await api.request('/api/public/events?recent=1&limit=60');
+      const [events] = await Promise.all([api.request('/api/public/events?recent=1&limit=60'), this.announcements.loadLatest()]);
       if (!this.readCurrent('refresh', ticket)) return;
       const newest = events.events.length ? events.events[events.events.length - 1].seq : 0;
       const world = this.state && this.state.world;
@@ -288,6 +296,7 @@ class SocietyGame {
   async handle(a) {
     const f = this.form;
     if (a.type?.startsWith('history')) return this.history.handle(a);
+    if (a.type === 'announcements' || a.type?.startsWith('announcement')) return this.announcements.handle(a);
     if (a.type === 'messages' || a.type?.startsWith('message')) return this.messageBoard.handle(a);
     switch (a.type) {
       case 'start': this.entered = true; this.tab = 'city'; this.stack = []; await Promise.all([this.refresh({ full: true }), this.loadAccount().catch(() => {})]); break;
