@@ -286,7 +286,8 @@ export function createMap2(svg, deps) {
   }
 
   // 聚焦：全岛级为 null；否则看视口中心落在哪座城的地界里，落在荒野就取与视口重叠最多的城
-  let focusNow = null;
+  // 页面可能已按网址的城取了状态；首帧前切回全岛也要上报范围变化。
+  let focusNow = deps.initialCity && cityIds.includes(deps.initialCity) ? deps.initialCity : null;
   let focusTimer = 0;
   function computeFocus() {
     if (lod === 'island' || !view) return null;

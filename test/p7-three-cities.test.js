@@ -11,9 +11,23 @@ import { runEnact, citySet } from '../src/e2/engine/rules.js';
 import { withCity, cityValue } from '../src/e2/engine/cities.js';
 import { buildPerception } from '../src/e2/engine/perception.js';
 import { publicState } from '../src/e2/engine/visibility.js';
+import { FiscalView } from '../src/fiscal-view.js';
 
 const hiddenPhysics = JSON.parse(readFileSync(new URL('./fixtures/p7-hidden-physics.json', import.meta.url), 'utf8'));
 const world = (seed = 'p7') => createWorld({ id: seed, seed, premise: 7, hiddenPhysics });
+
+test('P7 fiscal metrics separate actual law payments by city without changing the world', () => {
+  const w = world(), h = harness(w), fiscal = new FiscalView();
+  for (const city of ['north', 'west', 'east']) h.create(`acct-${city}`, city, city);
+  for (let n = 0; n < 12; n++) for (const e of h.cmd('tick').events) fiscal.index(e);
+  const before = stateHash(w), m = fiscal.metrics(w, w.metrics.at(-1));
+  const cities = Object.values(m.cities);
+  assert.equal(cities.reduce((sum, c) => sum + c.dailyDistributionEnergy, 0), m.dailyDistributionEnergy);
+  assert.ok(m.cities.west.dailyDistributionEnergy > m.cities.east.dailyDistributionEnergy);
+  assert.ok(m.cities.east.dailyDistributionEnergy > m.cities.north.dailyDistributionEnergy);
+  for (const c of cities) assert.equal(c.rationPerCapita, c.dailyDistributionEnergy / (c.awake + c.dormant));
+  assert.equal(stateHash(w), before);
+});
 
 function harness(w) {
   const commands = [];

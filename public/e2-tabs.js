@@ -679,11 +679,14 @@ export function renderCradle(ctx, root) {
 // ── 指标 ──────────────────────────────────────────────────────
 
 export async function renderMetrics2(ctx, root) {
-  root.append(h('p', { class: 'muted' }, t('loading')));
+  const p7 = ctx.S.state?.world.premise === 7, focus = p7 ? ctx.S.focus : null;
+  const loading = h('p', { class: 'muted' }, t('loading'));
+  root.append(loading);
   const r = await api('/api/public/metrics');
-  clear(root);
+  if (p7) loading.remove(); // 保留全岛级顶部的三城对比
+  else clear(root);
   if (!r.ok) return root.append(h('p', { class: 'error' }, t('loadFailed')));
-  const m = r.json.metrics;
+  const m = focus ? r.json.metrics.filter(x => x.cities?.[focus]).map(x => ({ day: x.day, ...x.cities[focus] })) : r.json.metrics;
   if (m.length === 0) return root.append(emptyNote(t('noData')));
   const pts = (key, scale = 1) => m.filter((x) => typeof x[key] === 'number').map((x) => [x.day + 1, x[key] * scale]);
   const fig = (title, chart) => h('figure', null, chart, h('figcaption', null, title));
@@ -700,6 +703,18 @@ export async function renderMetrics2(ctx, root) {
       { name: getLang() === 'en' ? 'Other' : '其他拨款', points: pts('otherLawPaymentsEnergy'), color: 3 },
     ])),
   ));
+  if (focus) {
+    // 单城只画该城保存的指标，世界共享的图表留在全岛视图。
+    root.append(
+      two(fig(t('m_population'), c([{ name: t('s_awake'), points: pts('awake'), color: 0 }, { name: t('s_dormant'), points: pts('dormant'), color: 3 }])),
+        fig(t('m_well'), c([{ name: t('s_condition'), points: pts('wellCondition', 0.01), color: 1 }, { name: t('s_output'), points: pts('output'), axis: 'right', color: 2 }], { yMax: 100 }))),
+      two(fig(t('m_treasury'), c([{ name: t('treasury'), points: pts('treasuryEnergy'), color: 4 }])),
+        fig(t('m_laws'), c([{ name: t('m_laws'), points: pts('lawsActive'), color: 5 }]))),
+      two(fig(t('m_rules'), c([{ name: t('s_rulesActive'), points: pts('rulesActive'), color: 5 }, { name: t('s_upkeep'), points: pts('upkeepPaid'), axis: 'right', color: 3 }])),
+        fig(t('m_ruleHealth'), c([{ name: t('s_suspended'), points: pts('lawsSuspended'), color: 3 }, { name: t('s_ruleErrors'), points: pts('ruleErrors'), axis: 'right', color: 0 }]))),
+    );
+    return;
+  }
   root.append(
     two(
       fig(t('m_population'), c([{ name: t('s_awake'), points: pts('awake'), color: 0 }, { name: t('s_dormant'), points: pts('dormant'), color: 3 }])),

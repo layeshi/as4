@@ -20,11 +20,12 @@ export class FiscalView {
     const key = `${e.city ? `${e.city}/` : ''}${d.owner}:${d.rule}`;
     day.set(key, (day.get(key) || 0) + amount);
   }
-  metrics(w, m) {
+  metrics(w, m, focus = null) {
     let daily = 0, other = 0;
     for (const [key, amount] of this.days.get(m.day) || []) {
       const slash = key.indexOf('/');
       const city = slash >= 0 ? key.slice(0, slash) : null;
+      if (w.premise === 7 && focus && city !== focus) continue;
       const [owner, index] = (slash >= 0 ? key.slice(slash + 1) : key).split(':');
       const laws = city && w.cities ? w.cities[city]?.laws ?? {} : w.laws;
       const when = laws[owner]?.rules[index]?.when;
@@ -32,12 +33,15 @@ export class FiscalView {
       else other += amount;
     }
     const population = m.awake + m.dormant;
-    return { ...m, legacyRationPerCapita: m.rationPerCapita,
+    const result = { ...m, legacyRationPerCapita: m.rationPerCapita,
       // Compatibility field: now ALL actual scheduled law distributions / living residents.
       rationPerCapita: population ? Math.round(daily / population * 1000) / 1000 : 0,
       dailyDistributionEnergy: daily, otherLawPaymentsEnergy: other,
       rationMetricBasis: 'scheduled_law_payments_per_living_resident',
     };
+    // 第七前提：只扩充公开投影，不改世界快照；每城用同一套实际拨款口径。
+    if (w.premise === 7 && !focus && m.cities) result.cities = Object.fromEntries(Object.entries(m.cities).map(([id, city]) => [id, this.metrics(w, { day: m.day, ...city }, id)]));
+    return result;
   }
   diagnostics(w) {
     return [...this.errors.values()].filter(e => e.scope === 'city' && ((e.city && w.cities ? w.cities[e.city]?.laws : w.laws)?.[e.owner]?.status === 'active')).slice(-20);
