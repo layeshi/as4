@@ -1,7 +1,6 @@
 import { mountLatestAnnouncement } from './announcement-preview.js';
 import { renderCooperation } from './cooperation-ui.js';
 import { renderMaterialsMarket } from './materials-ui.js';
-import { tokenized } from './e2-strings.js';
 // 观测站主程序：状态、SSE、顶栏、地图、标签页、档案抽屉、弹窗。
 // 首屏用 GET /api/public/state 取全量，之后用 SSE：事件增量追加；tick 事件携带精简状态，
 // 其余数据在相关事件到达后按需重新拉取（防抖 1 秒）。所有 agent 文本都用 textContent 渲染。
@@ -332,8 +331,8 @@ function labelLayoutButtons() {
 function applyLabels() {
   refreshAccount();
   document.documentElement.lang = getLang();
-  els['btn-enter'].textContent = (S.state?.world.premise===6 || S.state?.world.premise === 7) ? '创建居民' : t('enter');
-  els['btn-back'].textContent = (S.state?.world.premise===6 || S.state?.world.premise === 7) ? '我的居民' : t('backstage');
+  els['btn-enter'].textContent = (S.state?.world.premise===6 || S.state?.world.premise === 7) ? (getLang() === 'en' ? 'Create a resident' : '创建居民') : t('enter');
+  els['btn-back'].textContent = (S.state?.world.premise===6 || S.state?.world.premise === 7) ? (getLang() === 'en' ? 'My residents' : '我的居民') : t('backstage');
   els['btn-lang'].textContent = t('langSwitch');
   document.getElementById('announcements-link').textContent = getLang() === 'en' ? 'Announcements' : '公告';
   announcementPreview?.refresh();
@@ -424,12 +423,12 @@ async function loadState() {
     });
     return false;
   }
-  const wasTokenized = tokenized(S.state?.world);
   S.raw = r.json;
   if (S.focus && !(S.raw.cities || []).some((c) => c.id === S.focus)) S.focus = null;
   S.state = scopeState(S.raw, S.focus);
   setPremise(S.state.world.premise);
-  if (wasTokenized !== tokenized(S.state.world)) applyLabels();
+  // 首次读取前提后重设文案；不能用词元制开关代替前提判断（P7 的初值也会是 false）。
+  applyLabels();
   S.dirty = false;
   clockConfig.ticksPerDay = S.state.world.ticksPerDay;
   indexState();
