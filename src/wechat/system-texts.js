@@ -4,6 +4,7 @@ import { L, placeDisplayName, placeDescription } from '../e2/lore/index.js';
 import { publicLaw } from '../e2/engine/visibility.js';
 import { VIRTUAL_CANON, VIRTUAL_CANON_P7 } from '../e2/p6/canon.js';
 import { ROLE_SYSTEM_TEXTS, ROLE_SYSTEM_PATTERNS } from '../e2/p6/roles.js';
+import { CITY_IDS, cityDef, withCity } from '../e2/engine/cities.js';
 
 const EMPTY = Object.freeze({ texts: new Set(), patterns: [] });
 
@@ -25,6 +26,15 @@ export function buildSystemTexts(rt) {
     for (const lang of ['zh', 'en']) collect(texts, [placeDisplayName(p, lang), placeDescription(p, lang).text]);
   }
   for (const law of Object.values(w.laws || {})) if (law.author === 'humans' && !law.proposalId) collect(texts, publicLaw(w, law.id));
+  if (w.premise === 7) {
+    // 三城的固定名称、简称与地图引用来自地图定义；居民改写的城名仍须审核。
+    for (const id of CITY_IDS) {
+      collect(texts, cityDef(w, id));
+      withCity(w, id, () => {
+        for (const law of Object.values(w.laws)) if (law.author === 'humans' && !law.proposalId) collect(texts, publicLaw(w, law.id));
+      });
+    }
+  }
   return { texts, patterns: ROLE_SYSTEM_PATTERNS };
 }
 

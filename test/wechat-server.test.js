@@ -215,6 +215,35 @@ test('P6 anonymous miniGame state shows place, role, law and canon text, withhol
   } finally { await e.close(); }
 });
 
+test('P7 anonymous projection preserves three city names, map references and human laws while withholding resident prose', async () => {
+  const { boot } = await import('./http-helpers.js');
+  const physics = new URL('./fixtures/p7-hidden-physics.json', import.meta.url).pathname;
+  const e = await boot({ ...cfg, physics: 2, premise: 7, shellSlots: 0, hiddenPhysicsFile: physics, map: 'island-three-v1' });
+  try {
+    const state = (await e.call('/api/wechat/public/state')).json;
+    const map = (await e.call('/api/wechat/public/map')).json;
+    for (const [id, short] of [['north', '北城'], ['west', '西城'], ['east', '东城']]) {
+      const city = state.cities.find(c => c.id === id), def = map.cities.find(c => c.id === id);
+      assert.equal(city.short.zh, short);
+      assert.equal(city.cityName, city.humanName.zh);
+      assert.equal(def.name.zh, city.humanName.zh);
+      assert.equal(def.short.zh, short);
+      for (const field of ['port', 'well', 'parliament', 'agora']) assert.equal(def[field], `${id}-${field}`);
+      assert.equal(city.port, `${id}-port`);
+      assert.equal(city.laws.find(l => l.id === 'l3').title, '基本配给');
+    }
+    e.rt.w.cities.north.cityName = '居民新写的未审城名';
+    const law = e.rt.w.cities.north.laws.l3;
+    law.author = 'a1'; law.proposalId = 'p1'; law.title = '居民新写的未审法名';
+    e.rt.exec('tick');
+    const changed = (await e.call('/api/wechat/public/state')).json.cities.find(c => c.id === 'north');
+    assert.equal(changed.cityName, '请微信登录后阅读');
+    assert.equal(changed.short.zh, '北城');
+    assert.equal(changed.laws.find(l => l.id === 'l3').title, '请微信登录后阅读');
+    assert.equal(e.rt.w.cities.north.cityName, '居民新写的未审城名', 'the projection does not rewrite world state');
+  } finally { await e.close(); }
+});
+
 test('projection counts only actual work as pending and preserves refusal and outage reasons after restart', async () => {
   const { WechatProjection } = await import('../src/wechat/projection.js');
   const dir = mkdtempSync(join(tmpdir(), 'houren-wechat-states-'));
