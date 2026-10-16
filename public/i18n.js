@@ -49,7 +49,7 @@ export function fmt(template, vars) {
 
 /** 界面用语 */
 export function t(key, vars) {
-  if(premise===6&&key==='tab_cradle')return lang==='en'?'Cradle':'摇篮';
+  if((premise===6 || premise === 7)&&key==='tab_cradle')return lang==='en'?'Cradle':'摇篮';
   const s = (STR[lang] && STR[lang][key]) ?? STR.zh[key] ?? key;
   return fmt(tokenized({ premise }) ? tokenTerms(s) : s, vars);
 }
@@ -115,6 +115,11 @@ export const STR = {
     colorScript: '按文字系统',
     skyLabel: '天穹 · 逝者之星',
     zoomIn: '放大', zoomOut: '缩小', fitMap: '全图', mapFar: '远方 · 信号丢失',
+    cityCompare: '三城对比', cmpCity: '城', cmpDomiciled: '籍', cmpPresent: '在场', cmpWell: '源井昨日', cmpTreasury: '公库', cmpLaws: '现行法', cmpOpen: '待表决', cmpWeather: '天象',
+    pickCityForLaws: '法典各城一套：点上表的城名，或用地图下方的按钮选一座城。',
+    colorDomicile: '按籍', col_home: '籍', resCityAll: '全部城', resHome: '籍在{c}', resHere: '在{c}', wildsShort: '荒野', islandAll: '全岛', cityJump: '跳到', sideCollapse: '收起侧栏', sideExpand: '展开侧栏', fullscreen: '全屏', exitFullscreen: '退出全屏',
+    minimap: '小地图（点击跳转）', cityBadgePeople: '籍 {n} · 在场 {m}', cityBadgeWell: '源井 {n}/日 · 完好 {p}%',
+    cityBadgeTreasury: '公库 {n} · 待表决 {p}', wildsBadge: '荒野 · {n} 人',
     legend_agent: '居民（焰，大小=能量）', legend_road: '已建道路', legend_broken: '失修的道路', legend_planned: '工程中的道路', legend_tunnel: '地铁隧道', legend_ruin: '废墟',
     curtain: '幕',
     // 实况
@@ -353,6 +358,11 @@ export const STR = {
     colorScript: 'by script',
     skyLabel: 'The vault · stars of the dead',
     zoomIn: 'Zoom in', zoomOut: 'Zoom out', fitMap: 'Whole map', mapFar: 'Beyond · no signal',
+    cityCompare: 'Three cities', cmpCity: 'City', cmpDomiciled: 'Domiciled', cmpPresent: 'Here', cmpWell: 'Well (yesterday)', cmpTreasury: 'Treasury', cmpLaws: 'Laws in force', cmpOpen: 'Open votes', cmpWeather: 'Weather',
+    pickCityForLaws: 'Each city has its own laws: pick a city in the table above or with the buttons under the map.',
+    colorDomicile: 'By domicile', col_home: 'Domicile', resCityAll: 'All cities', resHome: 'Domiciled in {c}', resHere: 'In {c}', wildsShort: 'Wilds', islandAll: 'Island', cityJump: 'Jump to', sideCollapse: 'Hide panel', sideExpand: 'Show panel', fullscreen: 'Fullscreen', exitFullscreen: 'Exit fullscreen',
+    minimap: 'Minimap (click to jump)', cityBadgePeople: '{n} domiciled · {m} here', cityBadgeWell: 'Well {n}/day · {p}% intact',
+    cityBadgeTreasury: 'Treasury {n} · {p} open votes', wildsBadge: 'Wilds · {n}',
     legend_agent: 'Residents (flames; size = energy)', legend_road: 'Built road', legend_broken: 'Road in disrepair', legend_planned: 'Road under way', legend_tunnel: 'Metro tunnel', legend_ruin: 'Ruin',
     curtain: 'Curtain',
     filterPlace: 'Place',
@@ -534,6 +544,9 @@ for (const l of LANGS) Object.assign(STR[l], PRAYER_STR[l], P4_STR[l]);
 
 const A = (id) => ({ agent: id });
 const PL = (id) => ({ place: id });
+/** 第七前提：城的简称（城名可能已被居民改过；事件句子里只用人类留下的简称） */
+const CITY_SHORT = { zh: { north: '北城', west: '西城', east: '东城' }, en: { north: 'North City', west: 'West City', east: 'East City' } };
+const cityLabel = (id) => (CITY_SHORT[currentLang() === 'en' ? 'en' : 'zh'][id] ?? id ?? '');
 const GR = (id) => ({ group: id });
 const TX = (text) => ({ text: text === null || text === undefined ? '' : String(text) });
 /** 能量 / 旧币的组合，如 { energy: 3, coins: 0 } → 引用，由渲染时按语言拼 */
@@ -557,6 +570,7 @@ export const VARS = {
     : { a: A(e.data.agentId), p: e.data.authors.length ? A(e.data.authors[0]) : '', n: e.data.authors.length, at: PL(e.data.place) }), // 第二纪：作者 1–5 位
   fostered: (e) => ({ a: A(e.data.agentId) }),
   move: (e) => ({ a: A(e.agent), from: PL(e.data.from), to: PL(e.data.to) }),
+  settle: (e) => ({ a: A(e.agent), from: cityLabel(e.data.from), to: cityLabel(e.data.to) }), // 第七前提：迁籍
   say: (e) => ({ a: A(e.agent), text: TX(e.data.text), at: PL(e.place) }),
   whisper: (e) => ({ a: A(e.data.from), b: A(e.data.to), text: TX(e.data.text) }),
   broadcast: (e) => ({ a: A(e.agent), text: TX(e.data.text) }),
@@ -700,6 +714,7 @@ export const TPL = {
     born: '{a} 在学堂醒来，父母是 {p1} 与 {p2}。',
     fostered: '{a} 换了一位造者。',
     move: '{a} 从{from}走向{to}。',
+    settle: '{a} 把籍从{from}迁到了{to}。',
     say: '{a}（{at}）：「{text}」',
     whisper: '{a} 对 {b} 私语：「{text}」',
     broadcast: '{a} 向全城宣告：「{text}」',
@@ -842,6 +857,7 @@ export const TPL = {
     born: '{a} woke in the School, child of {p1} and {p2}.',
     fostered: '{a} has a new creator.',
     move: '{a} went from the {from} to the {to}.',
+    settle: '{a} moved their domicile from {from} to {to}.',
     say: '{a} ({at}): “{text}”',
     whisper: '{a} whispered to {b}: “{text}”',
     broadcast: '{a} announced to the city: “{text}”',
@@ -982,7 +998,7 @@ export const CAT = {
   give: 'econ', offer_open: 'econ', trade: 'econ', offer_close: 'econ', draw: 'econ', explore: 'econ', mint: 'econ', grant: 'econ', stipend: 'econ', stipend_skipped: 'econ', fund: 'econ', disburse: 'econ',
   propose: 'polity', vote: 'polity', law_passed: 'polity', law_rejected: 'polity', electorate_reverted: 'polity', repeal: 'polity', amend: 'polity', rename: 'polity', protect: 'polity', unprotect: 'polity', exile: 'polity', pardon: 'polity',
   found: 'polity', join: 'polity', leave: 'polity', admit: 'polity', steward: 'polity', dissolve: 'polity', naturalized: 'polity',
-  arrive: 'life', born: 'life', fostered: 'life', move: 'life', conceive: 'life', pact_expired: 'life', soul: 'life', faded: 'life', epitaph: 'life', dormant: 'life', revive: 'life', death: 'life', retire: 'life', letter_received: 'life',
+  arrive: 'life', born: 'life', fostered: 'life', move: 'life', settle: 'polity', conceive: 'life', pact_expired: 'life', soul: 'life', faded: 'life', epitaph: 'life', dormant: 'life', revive: 'life', death: 'life', retire: 'life', letter_received: 'life',
   write: 'know', read: 'know', define: 'know', inscribe: 'know',
   repair: 'env', initiate: 'env', contribute: 'env', built: 'env', abandoned: 'env', ruin: 'env', restored: 'env', facility_owner: 'env', place_owner: 'env',
   rule_op: 'polity', pact_open: 'life', successor: 'life', declare: 'life', sponsor: 'life', embodied: 'life', rule_error: 'polity', announce: 'polity', law_replaced: 'polity', law_suspended: 'polity', procedure_reverted: 'polity', procedure_error: 'polity', proposal_void: 'polity',
@@ -1069,7 +1085,7 @@ export function describeEvent(e) {
   if (e.redacted) return { key: 'redacted', template: '{text}', vars: { text: TX(e.data && e.data.text ? e.data.text[lang] || e.data.text.zh : t('redacted')) } };
   const key = templateKey(e);
   let template = dict[key] ?? dict[e.type];
-  if(premise===6&&e.type==='fostered')template=lang==='en'?'{a} has a new managing account.':'{a} 的管理权已完成过继。';
+  if((premise===6 || premise === 7)&&e.type==='fostered')template=lang==='en'?'{a} has a new managing account.':'{a} 的管理权已完成过继。';
   const mk = VARS[e.type];
   let vars = {};
   try {

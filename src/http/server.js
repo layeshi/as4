@@ -226,7 +226,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
         return;
       }
       if (pathname.startsWith('/api/')) {
-        if (rt.w.premise === 6 && (/^\/api\/(me(?:\/|$)|owner(?:\/|$))/.test(pathname) || /^\/api\/port\//.test(pathname) && req.method !== 'GET' || pathname === '/api/account/agents' && req.method !== 'GET' || /^\/api\/admin\/agents\/[^/]+\/owner-key$/.test(pathname))) return sendError(res,'zh','unauthorized');
+        if ((rt.w.premise === 6 || rt.w.premise === 7) && (/^\/api\/(me(?:\/|$)|owner(?:\/|$))/.test(pathname) || /^\/api\/port\//.test(pathname) && req.method !== 'GET' || pathname === '/api/account/agents' && req.method !== 'GET' || /^\/api\/admin\/agents\/[^/]+\/owner-key$/.test(pathname))) return sendError(res,'zh','unauthorized');
         res.setHeader('X-Houren-Protocol', String(rt.engine.protocol)); // 协议版本随世界的物理（SPEC-E2 §2.1）
         if (cfg.requireLogin === true && walledApi(pathname) && !passesWall(ctx, req)) {
           const en = url.searchParams.get('lang') === 'en';

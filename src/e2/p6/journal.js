@@ -8,7 +8,7 @@ export function residentRecord(w,id) {
 // Economic categories record actual amounts, independently of free balance.
 // Escrow movements and refunds are distinct from income and final expenditure.
 export function residentFlow(w,id,kind,reason,resource,amount) {
-  if(w.premise!==6||!Number.isSafeInteger(amount)||amount<=0||!w.agents[id])return;
+  if((w.premise!==6 && w.premise !== 7)||!Number.isSafeInteger(amount)||amount<=0||!w.agents[id])return;
   const st=residentRecord(w,id),key=`${resource}:${kind}:${reason}`;
   st.totals[key]=(st.totals[key]??0)+amount;
   st.flows.push({commandN:w.commandN,tick:w.clock.tick,day:Math.floor(w.clock.tick/P.ticksPerDay),kind,reason,resource,amount});

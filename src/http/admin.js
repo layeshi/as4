@@ -1,4 +1,5 @@
 import { usesLawSemantics2, lawProtectionView } from '../e2/engine/law-semantics.js';
+import { CITY_IDS, cityValue } from '../e2/engine/cities.js';
 // PROTOCOL §11：管理接口。X-Admin-Key 头，常数时间比较；未配置 ADMIN_KEY 时全部返回 404。
 // 所有管理操作都会产生公开的 admin 事件（不含管理员身份）。
 
@@ -40,7 +41,7 @@ async function hostedUsage(req, res, ctx) {
   const links = ctx.accounts.linkIndex(ctx.rt.w.id);
   for (const row of overview.agents) {
     const token = ctx.rt.w.agents[row.agentId].tokenHash; // 令牌换过（过继）的关联不算
-    row.accounts = ctx.rt.w.premise===6 ? [ctx.accounts.get(ctx.rt.w.access.residents[row.agentId]?.managerAccountId)?.username].filter(Boolean) : (links.get(row.agentId) || []).filter((l) => l.token === token).map((l) => l.username);
+    row.accounts = (ctx.rt.w.premise===6 || ctx.rt.w.premise === 7) ? [ctx.accounts.get(ctx.rt.w.access.residents[row.agentId]?.managerAccountId)?.username].filter(Boolean) : (links.get(row.agentId) || []).filter((l) => l.token === token).map((l) => l.username);
   }
   sendJson(res, 200, overview);
 }
@@ -236,6 +237,13 @@ async function tokenAdminView(req, res, ctx) {
   if (!tokenized(ctx.rt.w)) return sendError(res, 'zh', 'not_found');
   if (!authOperator(ctx, req, res)) return;
   const w = ctx.rt.w;
+  if (w.cities) { // 第七前提：源井与当日记录按城分开
+    const cities = Object.fromEntries(CITY_IDS.map((id) => {
+      const well = cityValue(w, id, 'well');
+      return [id, { supply: well.supply, upgrades: well.upgrades.map(({ level, owner, shares }) => ({ level, owner, shares })), today: cityValue(w, id, 'dayLog').p4 }];
+    }));
+    return sendJson(res, 200, { ...w.tokens, caps: capDistribution(w), cities });
+  }
   sendJson(res, 200, { ...w.tokens, supply: w.well.supply, upgrades: w.well.upgrades.map(({ level, owner, shares }) => ({ level, owner, shares })), caps: capDistribution(w), today: w.dayLog.p4 });
 }
 export const adminRoutes = [

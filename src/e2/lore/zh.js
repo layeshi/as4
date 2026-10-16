@@ -22,7 +22,7 @@ const lore = {
 
   // ── 地点（人类的建筑沿用 v1 的名字与描述） ──
   place: Object.fromEntries(Object.entries(v1.place).map(([id, p]) => [id, { name: p.name, desc: DESC[id] ?? p.desc }])),
-  district: v1.district,
+  district: { ...v1.district, 'north-city': '北城', 'west-city': '西城', 'east-city': '东城' }, // 第七前提的三城（荒野沿用 wilds）
   band: v1.band,
   wellBand: v1.wellBand,
   richnessWild: v1.richnessWild,

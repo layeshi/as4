@@ -12,7 +12,7 @@ import { clockDay, nextId, tokenized } from '../../world.js';
 import { next, int } from '../../../rng.js';
 import { source, sink } from '../ledger.js';
 import { fail, emit, pushInbox, ref, needText, optLang, needInt, needId } from '../core.js';
-import { applyRepair, damageWellByDraw, isWeatherActive } from '../environment.js';
+import { applyRepair, damageWellByDraw, isWeatherActive, wellPlace } from '../environment.js';
 import { wallInscriptions } from '../places.js';
 import { noteWordUse } from '../society.js';
 
@@ -89,7 +89,7 @@ const draw = {
         pushInbox(w, o, 'witness', { what: 'draw', actor: ref(a), amount: energy, place: a.place });
       }
     }
-    const cond = w.places.well.condition;
+    const cond = wellPlace(w).condition;
     emit(w, 'draw', { agent: a.id, place: a.place, data: { amount: energy, wellCondition: cond } });
     return { energy, wellCondition: cond, drawPoolLeft: w.well.drawPoolLeft };
   },
@@ -173,7 +173,7 @@ const explore = {
       source(w, 'energy', 'wilds', amount);
     } else if (r < pE + pR) {
       outcome = 'relic';
-      const relic = w.premise === 6 ? virtualRelic(wilds.relicOrder[wilds.relicsFound]) : relicByN(wilds.relicOrder[wilds.relicsFound]);
+      const relic = (w.premise === 6 || w.premise === 7) ? virtualRelic(wilds.relicOrder[wilds.relicsFound]) : relicByN(wilds.relicOrder[wilds.relicsFound]);
       wilds.relicsFound++;
       const id = nextId(w, 'd');
       doc = {

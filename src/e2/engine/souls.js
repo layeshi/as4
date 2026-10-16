@@ -17,6 +17,7 @@ import { emit, pushInbox, creditEnergy } from './core.js';
 import { endowedEnergy, hasModuleAt } from './places.js';
 import { makeAgent } from './lifecycle.js';
 import { hooks } from './hooks.js';
+import { multiCity, withCity, cityDef, cityOfPlace, fallbackCity } from './cities.js';
 
 // ── 生成灵魂 ───────────────────────────────────────────────
 
@@ -70,7 +71,8 @@ const hasCradle = (w, placeId) => hasModuleAt(w, placeId, 'cradle');
 export function birthPlaceOf(w, soul) {
   if (soul.cradle && w.places[soul.cradle] && hasCradle(w, soul.cradle)) return soul.cradle;
   for (const p of Object.values(w.places)) if (hasCradle(w, p.id)) return p.id;
-  return 'port';
+  // 第七前提：没有摇篮时在第一位作者的籍城的港口醒来
+  return multiCity(w) ? cityDef(w, fallbackCity(w, w.agents[soul.authors?.[0]]?.city)).port : 'port';
 }
 
 /** 退回出资：每位出资者取回自己出的（来源是居民时可能唤醒；社群进社群公库；公库回城公库），余数进公库。fund 清零 */
@@ -106,7 +108,16 @@ export function refundSponsors(w, soul, by = null) {
  * 向（在世的）作者发收件 soul（adopted / embodied）。
  */
 export function bornFromSoul(w, soul, o) {
-  const place = birthPlaceOf(w, soul);
+  if (multiCity(w)) {
+    // 第七前提「三城」：在摇篮所在的城落籍（摇篮在荒野里时，落籍第一位作者的籍城）；记账、事件与 on:born 都在那座城
+    const place = birthPlaceOf(w, soul);
+    const city = fallbackCity(w, cityOfPlace(w, place), w.agents[soul.authors?.[0]]?.city);
+    return withCity(w, city, () => bornHere(w, soul, { ...o, city }, place));
+  }
+  return bornHere(w, soul, o, birthPlaceOf(w, soul));
+}
+
+function bornHere(w, soul, o, place) {
   const energy = endowedEnergy(w, place, soul.endowment);
   sink(w, 'energy', 'cradle_loss', soul.endowment - energy);
   const day = clockDay(w);
@@ -127,6 +138,7 @@ export function bornFromSoul(w, soul, o) {
     energy: energy + (o.extraEnergy || 0),
     coins: 0,
     place,
+    ...(o.city ? { city: o.city } : {}),
   });
   residentFlow(w,a.id,'income','birth_endowment','energy',a.energy);
   if (tokenized(w)) startSupport(w, a, o.dailyCap);
@@ -150,7 +162,7 @@ export function bornFromSoul(w, soul, o) {
     const x = w.agents[id];
     if (x && isAlive(x) && x.id !== a.id) pushInbox(w, x, 'soul', { soulId: soul.id, name: soul.name, event });
   }
-  hooks.fire(w, 'born', { agent: a.id });
+  hooks.fire(w, 'born', { agent: a.id, ...(o.city ? { city: o.city } : {}) });
   return a;
 }
 

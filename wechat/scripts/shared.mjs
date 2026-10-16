@@ -23,7 +23,7 @@ function functionBlock(source, name) {
   }
   return source.slice(start, i + 1);
 }
-const ALLOWED_CALLS = new Set(['A', 'PL', 'GR', 'TX', 'AMT', 'WHO', 'TARGET', 'ruleOpDetail', 't', 'currentLang', 'String', 'Math', 'Number', 'Boolean']);
+const ALLOWED_CALLS = new Set(['A', 'PL', 'GR', 'TX', 'AMT', 'WHO', 'TARGET', 'cityLabel', 'ruleOpDetail', 't', 'currentLang', 'String', 'Math', 'Number', 'Boolean']);
 
 export async function buildSharedModule() {
   const i18nPath = join(repo, 'public', 'i18n.js');
@@ -53,7 +53,7 @@ export async function buildSharedModule() {
   return `// 由 wechat/scripts/shared.mjs 从 public/i18n.js、public/e2-strings.js、public/law-outcome.js 与服务端文案生成，不要手改。
 const DATA = ${JSON.stringify(data)};
 const TPL = DATA.TPL;
-${['A', 'PL', 'GR', 'TX', 'AMT', 'WHO', 'TARGET'].map(n => declaration(source, n)).join('\n')}
+${['A', 'PL', 'GR', 'TX', 'AMT', 'WHO', 'TARGET', 'CITY_SHORT', 'cityLabel'].map(n => declaration(source, n)).join('\n')}
 const t = () => '';
 const currentLang = () => 'zh';
 ${functionBlock(source, 'ruleOpDetail')}
@@ -69,7 +69,7 @@ function describe(e, premise) {
   if (e.redacted) return { key: 'redacted', template: '{text}', vars: { text: TX(e.data && e.data.text ? e.data.text.zh || e.data.text : DATA.LORE.redacted) } };
   const key = templateKey(e);
   let template = TPL[key] !== undefined ? TPL[key] : TPL[e.type];
-  if (premise === 6 && e.type === 'fostered') template = '{a} 的管理权已完成过继。';
+  if ((premise === 6 || premise === 7) && e.type === 'fostered') template = '{a} 的管理权已完成过继。';
   let vars = {};
   try { vars = VARS[e.type] ? VARS[e.type](e) : {}; } catch (_) { vars = {}; }
   if (e.type === 'inscribe' && e.data && e.data.cover) vars.cover = e.data.cover;

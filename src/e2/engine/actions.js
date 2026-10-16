@@ -36,6 +36,7 @@ import { politicsHandlers } from './actions/politics.js';
 import { cityHandlers } from './actions/city.js';
 import { descentHandlers } from './actions/descent.js';
 import { standingHandlers } from './actions/standing.js';
+import { multiCity, withCity, cityOfPlace, cityValue, CITY_IDS } from './cities.js';
 
 export { actionCost } from './actions/util.js';
 
@@ -63,7 +64,7 @@ export function registerHandlers(more) {
 }
 
 /** 已注册处理函数的动作（实现进度用；测试会核对它与动作表一致） */
-export const implementedActions = (premise = 0) => tokenized({ premise }) ? actionTable(premise).ORDER.filter(t => HANDLERS[t] || (premise === 5 || premise === 6) && (materialHandlers[t] || serviceHandlers[t])) : Object.keys(HANDLERS).filter(actionTable(premise).isKnown);
+export const implementedActions = (premise = 0) => tokenized({ premise }) ? actionTable(premise).ORDER.filter(t => HANDLERS[t] || (premise === 5 || premise === 6 || premise === 7) && (materialHandlers[t] || serviceHandlers[t])) : Object.keys(HANDLERS).filter(actionTable(premise).isKnown);
 
 export const actionsLeft = (a) => Math.max(0, P.maxActionsPerTick - a.actsThisTick);
 
@@ -112,6 +113,23 @@ function feeTotals(fees) {
  *   6. 收集并施行 after 规则
  */
 function runOne(w, a, type, act, index, lang) {
+  if (multiCity(w)) return withCity(w, actionCity(w, a, type, act), () => runOneHere(w, a, type, act, index, lang));
+  return runOneHere(w, a, type, act, index, lang);
+}
+
+/**
+ * 第七前提「三城」：一个动作在哪座城的上下文里执行（docs/plans/2026-10-16-three-cities.md §2.5–§2.6）。
+ * 城法属地：通常是居民此刻所在的城（荒野为 null）。立法是城自己的事务：表决按提案所属的城，重订与联署按居民的籍城。
+ */
+export function actionCity(w, a, type, act) {
+  if (type === 'refound' || type === 'sign') return a.city;
+  if (type === 'vote' && typeof act.proposal === 'string') {
+    for (const id of CITY_IDS) if (Object.prototype.hasOwnProperty.call(cityValue(w, id, 'proposals'), act.proposal)) return id;
+  }
+  return cityOfPlace(w, a.place);
+}
+
+function runOneHere(w, a, type, act, index, lang) {
   const { NO_BEFORE: NO_BEFORE_ACTIONS, NO_AFTER: NO_AFTER_ACTIONS } = actionTable(w.premise || 0, prayersEnabled(w), cooperationEnabled(w), programsEnabled(w));
   const handler = type === 'program' && programsEnabled(w) ? programHandler : materialsEnabled(w) ? materialHandlers[type] ?? serviceHandlers[type] ?? HANDLERS[type] : HANDLERS[type];
   if (!handler) fail('invalid_args');
@@ -211,7 +229,7 @@ export function runActions(w, a, actions, lang = 'zh') {
     a.actsThisTick++;
     const checkpoint = (usesLawSemantics2(w) || tokenized(w)) ? actionCheckpoint(w) : null;
     try {
-      if (w.premise === 6 && hasCoinInput(act)) fail('invalid_args');
+      if ((w.premise === 6 || w.premise === 7) && hasCoinInput(act)) fail('invalid_args');
       if (!actionTable(w.premise || 0, prayersEnabled(w), cooperationEnabled(w), programsEnabled(w)).isKnown(type)) fail('invalid_args');
       const { data, spent } = runOne(w, a, type, act, i, lang);
       results.push({ index: i, type, ok: true, cost: spent, data });

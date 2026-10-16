@@ -10,6 +10,7 @@ import { materialConservation } from './materials.js';
 
 import { agentList, tokenized, materialsEnabled } from '../world.js';
 import { usesLawSemantics2 } from './law-semantics.js';
+import { multiCity, cityValue, CITY_IDS } from './cities.js';
 
 export const ENERGY_SOURCES = ['startup_grant', 'well_output', 'draw', 'wilds', 'salvage', 'immigrant', 'admin', 'prayer_aid', 'basic_allotment', 'thinking_refund'];
 export const ENERGY_SINKS = [
@@ -22,7 +23,7 @@ export const COIN_SOURCES = ['immigrant', 'mint', 'wilds', 'admin'];
 /** 记一笔来源。kind：energy | coins；n 为整数（admin 可以为负） */
 export function source(w, kind, key, n) {
   if (!n) return;
-  if (w.premise === 6 && kind === "coins") throw new Error("P6 coin issuance is unavailable");
+  if ((w.premise === 6 || w.premise === 7) && kind === "coins") throw new Error("P6 coin issuance is unavailable");
   const bag = w.ledger.src[kind];
   bag[key] = (bag[key] || 0) + n;
 }
@@ -30,7 +31,7 @@ export function source(w, kind, key, n) {
 /** 记一笔去处 */
 export function sink(w, kind, key, n) {
   if (!n) return;
-  if (w.premise === 6 && kind === "coins") throw new Error("P6 coin issuance is unavailable");
+  if ((w.premise === 6 || w.premise === 7) && kind === "coins") throw new Error("P6 coin issuance is unavailable");
   const bag = w.ledger.snk[kind];
   bag[key] = (bag[key] || 0) + n;
 }
@@ -39,8 +40,14 @@ const total = (bag) => Object.values(bag).reduce((s, x) => s + x, 0);
 
 /** 当前所有持有者手里的能量与旧币合计 */
 export function holdings(w) {
-  let energy = w.treasury.energy;
-  let coins = w.treasury.coins ?? 0;
+  // 第七前提「三城」：三座城的公库都算（engine/cities.js 的 cityValue 不必挂城）
+  const treasuries = multiCity(w) ? CITY_IDS.map((id) => cityValue(w, id, 'treasury')) : [w.treasury];
+  let energy = 0;
+  let coins = 0;
+  for (const t of treasuries) {
+    energy += t.energy;
+    coins += t.coins ?? 0;
+  }
   if (usesLawSemantics2(w) && w.$feeEscrow) {
     energy += w.$feeEscrow.energy;
     coins += w.$feeEscrow.coins;

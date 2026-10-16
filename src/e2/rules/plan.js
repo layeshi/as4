@@ -39,7 +39,7 @@ export function normalizeCapacity(value = {}) {
 }
 
 const children = n => n.t === 'field' ? [n.o] : n.t === 'un' ? [n.a] : n.t === 'bin' ? [n.a, n.b] : n.t === 'call' ? n.a : [];
-const builtin = new Set(['min', 'max', 'abs', 'if', 'default', 'count', 'sum', 'filter', 'top', 'sample', 'contains', 'tagged', 'members', 'at', 'has_tag', 'in_group', 'awake', 'is_wild', 'owner', 'agent', 'group', 'soul', 'names', 'weather']);
+const builtin = new Set(['min', 'max', 'abs', 'if', 'default', 'count', 'sum', 'filter', 'top', 'sample', 'contains', 'tagged', 'members', 'at', 'has_tag', 'in_group', 'awake', 'is_wild', 'owner', 'agent', 'group', 'soul', 'names', 'weather', 'city_info', 'treasury_of']);
 const scalarNames = new Set(['city', 'var', 'treasury', 'actor', 'args', 'result', 'here', 'event', 'it', 'yes', 'no', 'abstain', 'voted', 'total', 'turnout']);
 const clamp = n => Math.min(Number.MAX_SAFE_INTEGER, n);
 const plus = (a, b) => clamp(a + b);

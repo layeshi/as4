@@ -32,12 +32,12 @@ const READ_EXAMPLE = {
 /** 失败的动作结果的补充（F4a：read 的用法提示加一个例子；F4b：text_too_long 说清楚是哪一项、上限与现在的长度） */
 function errorFeedback(r, lang, act, premise) {
   const e = r.error;
-  if ((premise === 5 || premise === 6) && r.type === 'offer' && e.code === 'no_module') return {
+  if ((premise === 5 || premise === 6 || premise === 7) && r.type === 'offer' && e.code === 'no_module') return {
     ...r, error: { ...e, message: lang === 'en'
       ? 'There is no functioning trading board here. Funding or construction does not make a module operational; inspect here and the project status.'
       : '此处没有运转中的交易板。工程筹资或施工中不等于模块已运转；请核对现场模块与工程状态。', hint: { look: { what: 'here' } } },
   };
-  if ((premise === 5 || premise === 6) && ['contribute', 'construct', 'project_policy', 'repair', 'initiate'].includes(r.type)) {
+  if ((premise === 5 || premise === 6 || premise === 7) && ['contribute', 'construct', 'project_policy', 'repair', 'initiate'].includes(r.type)) {
     const en = lang === 'en';
     const reasons = {
       wrong_place: en ? 'You are not at the required site; inspect the project location (repair requires the target or a road endpoint).' : '你不在所需现场；核对工程地点，维修须在目标地点或道路端点。',
@@ -96,7 +96,7 @@ function costNote(act, lang, tokens) {
 export function actionFeedback(r, lang = 'zh', { premise = 0, act, tokenValues } = {}) {
   if (tokenized({ premise }) && !r.ok && ['tokens_exhausted', 'cap_reached'].includes(r.error?.code)) {
     const translated = { ...r, error: { ...r.error, message: tokenFmt(tokenLore(lang).errors[r.error.code], r.error) } };
-    return premise === 5 || premise === 6 ? errorFeedback(translated, lang, act, premise) : translated;
+    return premise === 5 || premise === 6 || premise === 7 ? errorFeedback(translated, lang, act, premise) : translated;
   }
   if (premise >= 2 && !r.ok && r.error) return errorFeedback(r, lang, act, premise);
   if (r.type !== 'draft' || !r.ok || !r.data) return r;

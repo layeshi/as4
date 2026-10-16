@@ -21,6 +21,7 @@ import { closeOffer, closePact, leaveAllGroups, orphanPlaces } from './society.j
 import { hooks } from './hooks.js';
 import { lightSuccessor, bornFromSoul, refundSponsors } from './souls.js';
 import { nameShapeOk } from '../names.js';
+import { multiCity, withCity, cityDef, isCityId } from './cities.js';
 
 // ── 创建居民 ─────────────────────────────────────────────────
 
@@ -93,7 +94,13 @@ export function makeAgent(w, o) {
     a.tokens = initialTokens();
   }
   if (materialsEnabled(w)) { a.materials=0; a.earmarkedMaterials=[]; a.constructionLoad={tick:w.clock.tick,count:0}; }
-  if (w.premise === 6) { delete a.tokenHash; a.owner = { creatorName: o.owner?.creatorName ?? '' }; a.coins = 0; }
+  if ((w.premise === 6 || w.premise === 7)) { delete a.tokenHash; a.owner = { creatorName: o.owner?.creatorName ?? '' }; a.coins = 0; }
+  if (multiCity(w)) {
+    // 第七前提「三城」：籍（入世即落籍）、落籍的世界日、上一次迁籍的世界日（docs/plans/2026-10-16-three-cities.md §2.2）
+    a.city = o.city;
+    a.settledDay = day;
+    a.settleDay = null;
+  }
   w.agents[id] = a;
   return a;
 }
@@ -108,18 +115,24 @@ export function checkNameShape(name, field = 'name') {
  * 初始能量按港口的完好度；旧币 immigrantCoins。
  */
 export function admitFromPort(w, o) {
-  const energy = tokenized(w) ? 0 : endowedEnergy(w, 'port', P.immigrantEnergy);
-  const coins = w.premise === 6 ? 0 : P.immigrantCoins;
-  const a = makeAgent(w, { ...o, energy, coins, place: 'port' });
+  // 第七前提「三城」：在所选的城的港口上岸、落籍；记账、事件与 on:arrive 都在那座城的上下文里
+  if (multiCity(w)) return withCity(w, o.city, () => admitAt(w, o, cityDef(w, o.city).port));
+  return admitAt(w, o, 'port');
+}
+
+function admitAt(w, o, portId) {
+  const energy = tokenized(w) ? 0 : endowedEnergy(w, portId, P.immigrantEnergy);
+  const coins = (w.premise === 6 || w.premise === 7) ? 0 : P.immigrantCoins;
+  const a = makeAgent(w, { ...o, energy, coins, place: portId });
   if (tokenized(w)) startSupport(w, a, o.dailyCap);
   else source(w, 'energy', 'immigrant', energy);
   source(w, 'coins', 'immigrant', coins);
-  const port = w.places.port;
+  const port = w.places[portId];
   port.activity.visits++;
   port.activity.lastActiveDay = clockDay(w);
   w.dayLog.arrivals.push({ id: a.id, name: a.name });
-  emit(w, 'arrive', { agent: a.id, place: 'port', data: { agentId: a.id, name: a.name } });
-  hooks.fire(w, 'arrive', { agent: a.id });
+  emit(w, 'arrive', { agent: a.id, place: portId, data: { agentId: a.id, name: a.name } });
+  hooks.fire(w, 'arrive', { agent: a.id, ...(multiCity(w) ? { city: o.city } : {}) });
   return a;
 }
 
@@ -139,13 +152,15 @@ export function register(w, p) {
     const lang = reqLang(p.lang);
     const model = reqText(p.model, { max: LIMITS.model, field: 'model', doScreen: false, oneLine: true });
     const creatorName = reqText(p.creatorName ?? '', { max: LIMITS.creatorName, min: 0, field: 'creatorName', doScreen: false, oneLine: true });
-    const tokenHash = w.premise === 6 ? null : reqHash(p.tokenHash, 'tokenHash');
-    const keyHash = w.premise === 6 ? null : reqHash(p.ownerKeyHash, 'ownerKeyHash');
+    const tokenHash = (w.premise === 6 || w.premise === 7) ? null : reqHash(p.tokenHash, 'tokenHash');
+    const keyHash = (w.premise === 6 || w.premise === 7) ? null : reqHash(p.ownerKeyHash, 'ownerKeyHash');
+    if (multiCity(w) && !isCityId(p.city)) return bad('invalid_request', { field: 'city' }); // 第七前提：新建居民必须选一座城
     if (isNameTaken(w, name)) return bad('name_taken');
     const a = admitFromPort(w, {
       name, lang, bio, soul, kind: 'free', model, mustSeal: false, owner: { keyHash, creatorName }, tokenHash, ...(tokenized(w) ? { dailyCap: p.dailyCap } : {}),
+      ...(multiCity(w) ? { city: p.city } : {}),
     });
-    return { ok: true, agentId: a.id, place: 'port', energy: a.energy, coins: a.coins };
+    return { ok: true, agentId: a.id, place: a.place, energy: a.energy, coins: a.coins, ...(multiCity(w) ? { city: a.city } : {}) };
   } catch (e) {
     if (e instanceof ReqError) return bad(e.code, { field: e.field });
     throw e;
@@ -278,6 +293,11 @@ export function distributeEstate(w, a) {
 
 /** 死亡：沉睡满 3 日无人唤醒（cause: starvation）。d 为刚结束的那一日 */
 export function dieAgent(w, a, d) {
+  if (multiCity(w)) return withCity(w, a.city, () => dieHere(w, a, d)); // 第七前提：遗产、记录与 on:death 都在籍城
+  return dieHere(w, a, d);
+}
+
+function dieHere(w, a, d) {
   const ageDays = d - a.bornDay;
   a.status = 'dead';
   a.diedDay = d;
@@ -311,6 +331,11 @@ export function dieAgent(w, a, d) {
  * lastWords 缺省取遗嘱里的遗言。
  */
 export function retireAgent(w, a, lastWords) {
+  if (multiCity(w)) return withCity(w, a.city, () => retireHere(w, a, lastWords)); // 第七前提：遗产、记录与 on:retire 都在籍城
+  return retireHere(w, a, lastWords);
+}
+
+function retireHere(w, a, lastWords) {
   const day = clockDay(w);
   a.status = 'retired';
   const words = lastWords ?? (a.will ? a.will.lastWords : '');
@@ -330,8 +355,8 @@ function reqOwnerFields(p, w) {
   return {
     model: reqText(p.model, { max: LIMITS.model, field: 'model', doScreen: false, oneLine: true }),
     creatorName: reqText(p.creatorName ?? '', { max: LIMITS.creatorName, min: 0, field: 'creatorName', doScreen: false, oneLine: true }),
-    tokenHash: w.premise === 6 ? null : reqHash(p.tokenHash, 'tokenHash'),
-    keyHash: w.premise === 6 ? null : reqHash(p.ownerKeyHash, 'ownerKeyHash'),
+    tokenHash: (w.premise === 6 || w.premise === 7) ? null : reqHash(p.tokenHash, 'tokenHash'),
+    keyHash: (w.premise === 6 || w.premise === 7) ? null : reqHash(p.ownerKeyHash, 'ownerKeyHash'),
   };
 }
 
@@ -400,7 +425,7 @@ export function foster(w, p) {
 /** 造者修改托管模型；只保存模型名及历史，不保存接口或凭据。 */
 export function changeModel(w, p) {
   const a = typeof p.agentId === 'string' ? w.agents[p.agentId] : null;
-  if (!a || (w.premise === 6 ? !manages(w,p) : typeof p.ownerKeyHash !== 'string' || a.owner?.keyHash !== p.ownerKeyHash)) return bad('unauthorized');
+  if (!a || ((w.premise === 6 || w.premise === 7) ? !manages(w,p) : typeof p.ownerKeyHash !== 'string' || a.owner?.keyHash !== p.ownerKeyHash)) return bad('unauthorized');
   if (a.status !== 'awake' && a.status !== 'dormant') return bad('not_awake', { status: a.status });
   try {
     const model = reqText(p.model, { max: LIMITS.model, field: 'model', doScreen: false, oneLine: true });

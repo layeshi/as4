@@ -2,6 +2,7 @@
 import { materialsEnabled, nextId, clockDay, isAlive } from '../world.js';
 import { P } from '../params.js';
 import { emit, fail, needInt } from './core.js';
+import { multiCity, cityOfPlace, fallbackCity } from './cities.js';
 export const fraction = (n, p, d) =>
   Number((BigInt(n) * BigInt(p)) / BigInt(d));
 export function addSafe(a, b) {
@@ -9,10 +10,10 @@ export function addSafe(a, b) {
   if (!Number.isSafeInteger(n) || n < 0) fail('invalid_args');
   return n;
 }
-export function beneficiary(w, b) {
-  return b.kind === 'group' && (!w.groups[b.id] || w.groups[b.id].dissolved)
-    ? { kind: 'city' }
-    : b;
+export function beneficiary(w, b, placeId) {
+  if (!(b.kind === 'group' && (!w.groups[b.id] || w.groups[b.id].dissolved))) return b;
+  // 第七前提「三城」：已解散的社群的份额归它所在之处的城（荒野里见 fallbackCity）
+  return multiCity(w) ? { kind: 'city', id: fallbackCity(w, placeId ? cityOfPlace(w, placeId) : null) } : { kind: 'city' };
 }
 export function newClaim(w, place, amount, b, source) {
   if (!amount) return null;
@@ -21,7 +22,7 @@ export function newClaim(w, place, amount, b, source) {
     id,
     place,
     amount,
-    beneficiary: structuredClone(beneficiary(w, b)),
+    beneficiary: structuredClone(beneficiary(w, b, place)),
     source,
     createdTick: w.clock.tick,
   };
@@ -116,7 +117,7 @@ export function inheritanceShares(w, a) {
     share: h.share,
     beneficiary:
       h.to === 'treasury'
-        ? { kind: 'city' }
+        ? (multiCity(w) ? { kind: 'city', id: a.city } : { kind: 'city' })
         : w.groups[h.to] && !w.groups[h.to].dissolved
           ? { kind: 'group', id: h.to }
           : w.agents[h.to] && isAlive(w.agents[h.to]) && h.to !== a.id
@@ -176,12 +177,13 @@ export function inheritMaterials(w, a) {
         };
       }
 }
-export function dissolveMaterialRights(w, id) {
+export function dissolveMaterialRights(w, id, city) {
   if (!materialsEnabled(w)) return;
   const fix = (b) => {
     if (b?.kind === 'group' && b.id === id) {
       b.kind = 'city';
-      delete b.id;
+      if (multiCity(w)) b.id = city; // 第七前提：归社群解散时的那座城
+      else delete b.id;
     }
   };
   for (const c of Object.values(w.materialClaims)) fix(c.beneficiary);

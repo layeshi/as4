@@ -7,6 +7,7 @@ import { ep } from './tokens.js';
 
 import { P, MODULE_DEFS, RESEARCH_DEF } from '../params.js';
 import { nameKey } from '../../text.js';
+import { multiCity, currentCity, cityValue } from './cities.js';
 
 /** 地点上装着的某种模块（不论是否运转），没有返回 null */
 export const moduleOf = (place, type) => place.modules.find((m) => m.type === type) || null;
@@ -35,7 +36,13 @@ export function hasModuleAnywhere(w, type) {
   return false;
 }
 
-export const hasRelay = (w) => hasModuleAnywhere(w, 'relay');
+/** 中继：全城生效。第七前提「三城」里只对它所在的城（城外：荒野）生效 */
+export function hasRelay(w) {
+  if (!multiCity(w)) return hasModuleAnywhere(w, 'relay');
+  const here = currentCity(w);
+  for (const p of Object.values(w.places)) if ((p.city ?? null) === here && functioningModule(p, 'relay')) return true;
+  return false;
+}
 
 /** 墙上当前可见的铭刻：未被覆盖、未被遮盖、未随地点消失（lost），按刻写先后 */
 export function wallInscriptions(w, placeId) {
@@ -79,6 +86,7 @@ export function storeCount(w, ownerKind, ownerId) {
   for (const p of Object.values(w.places)) {
     if (p.owner.kind !== ownerKind) continue;
     if (ownerKind !== 'city' && p.owner.id !== ownerId) continue;
+    if (ownerKind === 'city' && multiCity(w) && p.owner.id !== (ownerId ?? currentCity(w))) continue; // 第七前提：只数本城所有的
     if (functioningModule(p, 'store')) n++;
   }
   return n;
@@ -93,7 +101,7 @@ export function reservoirBonus(w, ownerKind, ownerId) {
 
 /** 地点的主人对居民、社群、城的统一视图 */
 export function ownerView(w, o) {
-  if (o.kind === 'city') return { kind: 'city' };
+  if (o.kind === 'city') return multiCity(w) ? { kind: 'city', id: o.id ?? null, name: o.id ? cityValue(w, o.id, 'cityName') : null } : { kind: 'city' };
   if (o.kind === 'group') return { kind: 'group', id: o.id, name: w.groups[o.id] ? w.groups[o.id].name : o.id };
   return { kind: 'agent', id: o.id, name: w.agents[o.id] ? w.agents[o.id].name : o.id };
 }

@@ -44,7 +44,9 @@ export const isProcedureLaw = (law) => !!law.procedure;
  * paidThrough = 今日（生效当日视为已付，§7.9；「今日」的含义见 world.js 的 ruleDay）。
  */
 export function createLaw(w, { title, text, i18n = null, author, rules = [], procedure = null, basedOn = null, proposalId = null }) {
-  const id = nextId(w, 'l');
+  // 三城世界里法律的 ID 按城编号（每城都有 l1–l6 的遗法），挂着的城的 lawSeq 递增（engine/cities.js）
+  const id = w.premise === 7 ? `l${++w.lawSeq}` : nextId(w, 'l');
+  if (w.premise === 7) w.counters.l = (w.counters.l || 0) + 1; // 只作记录表查询的版本号（collections.js），不再用来编号
   const fingerprints = procedure
     ? CLASSES.filter((c) => procedure[c]).map((c) => fingerprintProcClass(procedure[c]))
     : fingerprintRules(rules);

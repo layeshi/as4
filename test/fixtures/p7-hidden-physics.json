@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "regrowth": {
+    "baseByZone": { "scrapyard": 15, "quarry": 12, "solarfield": 10, "datatower": 12, "saltflats": 3, "windfarm": 4, "salvage": 6, "highway": 6 },
+    "thresholdByZone": { "scrapyard": 25, "quarry": 20, "solarfield": 15, "datatower": 20, "saltflats": 5, "windfarm": 6, "salvage": 10, "highway": 10 },
+    "factorPermille": 500
+  },
+  "construction": { "fullActionsPerTick": 2, "factorPermille": 500 }
+}

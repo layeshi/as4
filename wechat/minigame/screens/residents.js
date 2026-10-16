@@ -16,9 +16,11 @@ function placeName(state, id) {
 }
 function residents(app, W) {
   const s = app.state;
-  const top = { kind: 'title', title: '居民' };
+  // 第七前提「三城」：城市页选了一座城时，这里只列籍在那座城的居民
+  const focus = s && s.cities && app.cityFocus ? s.cities.find(c => c.id === app.cityFocus) : null;
+  const top = { kind: 'title', title: focus ? `居民 · ${(focus.short && focus.short.zh) || focus.id}` : '居民' };
   if (!s) return { top, nodes: [N.empty(W, '正在连接这座城…')], tabbar: true, pull: true };
-  const alive = (s.agents || []).filter(a => ['awake', 'dormant'].includes(a.status));
+  const alive = (s.agents || []).filter(a => ['awake', 'dormant'].includes(a.status) && (!focus || a.city === focus.id));
   const gone = (s.cemetery || []).concat(s.retired || []);
   const roles = s.publicRoles || [];
   const nodes = [N.segmented(W, [

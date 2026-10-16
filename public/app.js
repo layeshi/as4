@@ -50,6 +50,9 @@ const S = {
   tick: null,
   connected: false,
   tab: 'live',
+  // 第七前提「三城」：raw 是服务器给的原始状态，state 是按地图聚焦的城（focus，null 为全岛）叠出来的
+  raw: null,
+  focus: null,
 };
 
 let agentIndex = new Map();
@@ -95,6 +98,7 @@ const ctx = {
   },
   cityName() {
     const w = S.state.world;
+    if (!w.humanCityName) return w.cityName || t('islandAll'); // 第七前提的全岛级没有单一的城名
     return w.cityName === w.humanCityName.zh ? w.humanCityName[getLang()] : w.cityName;
   },
   adminOp: (op) => (ADMIN_OPS[getLang()] || ADMIN_OPS.zh)[op] || op,
@@ -108,11 +112,96 @@ const ctx = {
   refresh: () => refreshNow(),
 };
 
+// ── 第七前提「三城」：页面跟着地图聚焦的城走 ──────────────────────
+
+/** 网址的 hash：`#标签页`，第七前提可带 `&city=north`（也可以只有 `#city=north`） */
+function parseHash() {
+  let tab = null;
+  let city = null;
+  for (const part of location.hash.slice(1).split('&')) {
+    if (part.startsWith('city=')) city = part.slice(5) || null;
+    else if (part) tab = part;
+  }
+  return { tab, city };
+}
+const hashFor = (tab) => `#${tab}${S.focus ? `&city=${S.focus}` : ''}`;
+
+/**
+ * 聚焦一座城时，把那座城的城名、公库、源井、法律、提案、重订、请愿、天象、编年史叠到顶层，现有的渲染器照常用；
+ * 全岛时顶层是服务器给的合计（法律与提案摊平、各带 city）。典籍、交易所等共享的部分始终是全世界的。
+ */
+function scopeState(raw, focus) {
+  if (!raw || !raw.cities) return raw;
+  const c = focus ? raw.cities.find((x) => x.id === focus) : null;
+  if (!c) return raw;
+  return {
+    ...raw,
+    world: { ...raw.world, cityName: c.cityName, humanCityName: c.humanName, focus: c.id },
+    treasury: c.treasury,
+    well: c.well,
+    vars: c.vars,
+    procedure: c.procedure,
+    charter: c.charter,
+    laws: c.laws,
+    proposals: c.proposals,
+    refounds: c.refounds,
+    petitions: c.petitions,
+    weather: { ...c.weather, omens: raw.weather && raw.weather.omens },
+    chronicle: c.chronicle,
+    tokens: { ...(raw.tokens || {}), ...(c.tokens || {}) },
+  };
+}
+
+function setFocus(city) {
+  if (!S.raw || !S.raw.cities) return;
+  const next = city && S.raw.cities.some((c) => c.id === city) ? city : null;
+  if (next === S.focus) return;
+  S.focus = next;
+  S.state = scopeState(S.raw, S.focus);
+  try {
+    history.replaceState(null, '', hashFor(S.tab));
+  } catch {
+    // 忽略
+  }
+  renderCityJump();
+  applyState({ force: true });
+}
+
+/** 地图工具条上的「全岛 / 北城 / 西城 / 东城」；有了它就不要「全图」 */
+function renderCityJump() {
+  let box = document.getElementById('city-jump');
+  const cities = S.mapData && S.mapData.cities;
+  const byHome = els['color-mode'].querySelector('option[value="domicile"]');
+  if (byHome) byHome.hidden = !cities; // 「按籍」着色只在三城的世界里有
+  if (!cities) {
+    if (box) box.remove();
+    els['map-fit'].hidden = false;
+    return;
+  }
+  if (!box) {
+    box = h('span', { id: 'city-jump', class: 'city-jump', role: 'group' });
+    document.querySelector('.map-tools').prepend(box);
+  }
+  clear(box);
+  box.setAttribute('aria-label', t('cityJump'));
+  const lang = getLang() === 'en' ? 'en' : 'zh';
+  for (const [id, label] of [[null, t('islandAll')], ...cities.map((c) => [c.id, (c.short && (c.short[lang] || c.short.zh)) || c.id])]) {
+    const b = h('button', { class: `btn small${id ? ` city-${id}` : ''}`, type: 'button', 'aria-pressed': String(S.focus === id) }, label);
+    b.addEventListener('click', () => {
+      if (!map) return;
+      if (id) map.focusCity(id);
+      else map.focusIsland();
+    });
+    box.append(b);
+  }
+  els['map-fit'].hidden = true;
+}
+
 // ── 启动 ──────────────────────────────────────────────────────
 
 async function boot() {
   document.documentElement.lang = getLang();
-  for (const id of ['city', 'clock', 'countdown', 'pop', 'treasury', 'well', 'weather', 'conn', 'btn-enter', 'btn-back', 'btn-lang', 'map', 'tabs', 'panel', 'banner', 'color-mode', 'color-label', 'foot', 'drawer', 'status', 'map-zoom-in', 'map-zoom-out', 'map-fit', 'map-legend']) {
+  for (const id of ['city', 'clock', 'countdown', 'pop', 'treasury', 'well', 'weather', 'conn', 'btn-enter', 'btn-back', 'btn-lang', 'map', 'tabs', 'panel', 'banner', 'color-mode', 'color-label', 'foot', 'drawer', 'status', 'map-zoom-in', 'map-zoom-out', 'map-fit', 'map-legend', 'side-toggle', 'map-fullscreen']) {
     els[id] = document.getElementById(id);
   }
   initAccounts(document.getElementById('btn-account'), ctx);
@@ -121,7 +210,8 @@ async function boot() {
   window.addEventListener('pageshow', event => { if (event.persisted) announcementPreview.refresh(); });
   wireStatic();
   applyLabels();
-  const first = location.hash.slice(1);
+  const { tab: first, city: firstCity } = parseHash();
+  S.focus = firstCity;
   if (TABS.some((x) => x[0] === first)) S.tab = first;
   renderTabBar();
   showStatus(t('loading'));
@@ -143,8 +233,8 @@ async function boot() {
 
 /** 读到状态之后，按这座城的纪选择标签页（第二纪多了「摇篮与躯壳」等），并重画标签栏 */
 function chooseTabs() {
-  tabsNow = isE2() ? [...TABS2.filter(([id])=>S.state.world.premise!==6||id!=='legacy'),...((S.state.world.premise === 5 || S.state.world.premise === 6)?[['market',renderMaterialsMarket]]:[]),...(S.state.world.cooperation?[['cooperation',renderCooperation]]:[])] : TABS;
-  const first = location.hash.slice(1);
+  tabsNow = isE2() ? [...TABS2.filter(([id])=>(S.state.world.premise!==6 && S.state.world.premise !== 7)||id!=='legacy'),...((S.state.world.premise === 5 || S.state.world.premise === 6 || S.state.world.premise === 7)?[['market',renderMaterialsMarket]]:[]),...(S.state.world.cooperation?[['cooperation',renderCooperation]]:[])] : TABS;
+  const first = parseHash().tab;
   if (tabsNow.some((x) => x[0] === first)) S.tab = first;
   else if (!tabsNow.some((x) => x[0] === S.tab)) S.tab = 'live';
   renderTabBar();
@@ -167,8 +257,8 @@ function showStatus(text, retry) {
 }
 
 function wireStatic() {
-  els['btn-enter'].addEventListener('click', () => S.state?.world.premise===6 ? location.assign('/residents.html#create') : openEntry(ctx));
-  els['btn-back'].addEventListener('click', () => S.state?.world.premise===6 ? location.assign('/residents.html') : openBackstage(ctx));
+  els['btn-enter'].addEventListener('click', () => (S.state?.world.premise===6 || S.state?.world.premise === 7) ? location.assign('/residents.html#create') : openEntry(ctx));
+  els['btn-back'].addEventListener('click', () => (S.state?.world.premise===6 || S.state?.world.premise === 7) ? location.assign('/residents.html') : openBackstage(ctx));
   els['btn-lang'].addEventListener('click', async () => {
     setLang(getLang() === 'zh' ? 'en' : 'zh');
     await loadLore(getLang());
@@ -178,6 +268,22 @@ function wireStatic() {
   els['map-zoom-in'].addEventListener('click', () => map && map.zoomIn());
   els['map-zoom-out'].addEventListener('click', () => map && map.zoomOut());
   els['map-fit'].addEventListener('click', () => map && map.fit());
+  // 侧栏收起（记住选择）与地图全屏
+  let collapsed = false;
+  try {
+    collapsed = localStorage.getItem('as4.sideCollapsed') === '1';
+  } catch {
+    // 忽略
+  }
+  setSideCollapsed(collapsed, false);
+  els['side-toggle'].addEventListener('click', () => setSideCollapsed(!document.querySelector('.layout').classList.contains('side-collapsed')));
+  const pane = document.querySelector('.map-pane');
+  if (!pane.requestFullscreen) els['map-fullscreen'].hidden = true;
+  els['map-fullscreen'].addEventListener('click', () => {
+    const p = document.fullscreenElement ? document.exitFullscreen() : pane.requestFullscreen();
+    if (p && p.catch) p.catch(() => {});
+  });
+  document.addEventListener('fullscreenchange', labelLayoutButtons);
   els.tabs.addEventListener('keydown', (ev) => {
     const idx = tabsNow.findIndex((x) => x[0] === S.tab);
     let next = idx;
@@ -191,20 +297,43 @@ function wireStatic() {
     els.tabs.children[next].focus();
   });
   window.addEventListener('hashchange', () => {
-    const id = location.hash.slice(1);
-    if (id !== S.tab && tabsNow.some((x) => x[0] === id)) selectTab(id, false);
+    const { tab: id, city } = parseHash();
+    if (id && id !== S.tab && tabsNow.some((x) => x[0] === id)) selectTab(id, false);
+    if (map && map.focusCity && city !== S.focus) {
+      if (city) map.focusCity(city);
+      else map.focusIsland();
+    }
   });
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && drawerId) closeDrawer();
   });
 }
 
+function setSideCollapsed(collapsed, remember = true) {
+  document.querySelector('.layout').classList.toggle('side-collapsed', collapsed);
+  if (remember) {
+    try {
+      localStorage.setItem('as4.sideCollapsed', collapsed ? '1' : '0');
+    } catch {
+      // 忽略
+    }
+  }
+  labelLayoutButtons();
+}
+
+function labelLayoutButtons() {
+  const collapsed = document.querySelector('.layout').classList.contains('side-collapsed');
+  els['side-toggle'].textContent = t(collapsed ? 'sideExpand' : 'sideCollapse');
+  els['side-toggle'].setAttribute('aria-expanded', String(!collapsed));
+  els['map-fullscreen'].textContent = t(document.fullscreenElement ? 'exitFullscreen' : 'fullscreen');
+}
+
 /** 静态文字（按钮、页脚、着色选项） */
 function applyLabels() {
   refreshAccount();
   document.documentElement.lang = getLang();
-  els['btn-enter'].textContent = S.state?.world.premise===6 ? '创建居民' : t('enter');
-  els['btn-back'].textContent = S.state?.world.premise===6 ? '我的居民' : t('backstage');
+  els['btn-enter'].textContent = (S.state?.world.premise===6 || S.state?.world.premise === 7) ? '创建居民' : t('enter');
+  els['btn-back'].textContent = (S.state?.world.premise===6 || S.state?.world.premise === 7) ? '我的居民' : t('backstage');
   els['btn-lang'].textContent = t('langSwitch');
   document.getElementById('announcements-link').textContent = getLang() === 'en' ? 'Announcements' : '公告';
   announcementPreview?.refresh();
@@ -212,7 +341,7 @@ function applyLabels() {
   document.getElementById('world-reports-link').textContent = getLang() === 'en' ? 'World reports' : '世界报告';
   els.foot.textContent = `${t('aiContent')} · ${t('keyboardHint')}`;
   els.foot.append(' · ', h('a', { href: '/support.html' }, '支持我们 / Support'));
-  for (const o of els['color-mode'].options) o.textContent = t(o.value === 'script' ? 'colorScript' : 'colorGroup');
+  for (const o of els['color-mode'].options) o.textContent = t(o.value === 'script' ? 'colorScript' : o.value === 'domicile' ? 'colorDomicile' : 'colorGroup');
   els['color-mode'].setAttribute('aria-label', t('colorBy'));
   els['color-label'].textContent = t('colorBy');
   els.tabs.setAttribute('aria-label', t('tabs'));
@@ -223,6 +352,8 @@ function applyLabels() {
   els['map-zoom-out'].title = t('zoomOut');
   els['map-fit'].textContent = t('fitMap');
   renderLegend();
+  if (S.mapData) renderCityJump();
+  labelLayoutButtons();
   updateConn();
 }
 
@@ -234,6 +365,8 @@ function renderLegend() {
   items.push(['ruin', 'legend_ruin']);
   if (isE2()) items.push(['site', 'legend_site'], ['lot', 'legend_lot'], ['razed', 'legend_razed'], ['owner', 'legend_owner'], ['salvage', 'legend_salvage'], ['gate', 'legend_gate']);
   for (const [key, label] of items) els['map-legend'].append(h('li', null, h('span', { class: `key ${key}`.trim(), 'aria-hidden': 'true' }), t(label)));
+  // 第七前提「三城」：三座城的城色（地界、城牌、按籍着色）
+  for (const c of (S.mapData && S.mapData.cities) || []) els['map-legend'].append(h('li', null, h('span', { class: `key city-${c.id}`, 'aria-hidden': 'true' }), (c.short && (c.short[getLang() === 'en' ? 'en' : 'zh'] || c.short.zh)) || c.id));
 }
 
 /** 切换语言后：静态文字、顶栏、地图与标签页全部重画 */
@@ -292,7 +425,9 @@ async function loadState() {
     return false;
   }
   const wasTokenized = tokenized(S.state?.world);
-  S.state = r.json;
+  S.raw = r.json;
+  if (S.focus && !(S.raw.cities || []).some((c) => c.id === S.focus)) S.focus = null;
+  S.state = scopeState(S.raw, S.focus);
   setPremise(S.state.world.premise);
   if (wasTokenized !== tokenized(S.state.world)) applyLabels();
   S.dirty = false;
@@ -384,16 +519,35 @@ function onTick(data) {
         a.status = x.status;
       }
     }
-    S.state.treasury = data.treasury;
+    if (S.raw && S.raw.cities && data.cities) {
+      // 第七前提：各城的公库与源井，按聚焦重新叠一次
+      for (const c of S.raw.cities) {
+        const x = data.cities[c.id];
+        if (!x) continue;
+        c.treasury = x.treasury;
+        if (c.well && x.well) c.well.condition = x.well.condition;
+        const wp = x.well && placeIndex.get(c.wellPlace);
+        if (wp) wp.condition = x.well.condition;
+      }
+      S.raw.treasury = data.treasury;
+      if (S.raw.well && data.well) S.raw.well.condition = data.well.condition;
+      for (const x of data.agents) {
+        const a = agentIndex.get(x.id);
+        if (a && x.city !== undefined) a.city = x.city;
+      }
+      S.state = scopeState(S.raw, S.focus);
+    } else S.state.treasury = data.treasury;
     if (data.shells && S.state.shells) {
       S.state.shells.free = data.shells.free;
       S.state.shells.used = data.shells.total - data.shells.free;
     }
     const well = placeIndex.get('well');
     if (well) well.condition = data.well.condition;
-    S.state.world.tick = data.tick;
-    S.state.world.day = data.day;
-    S.state.world.nextTickAt = data.nextTickAt;
+    for (const w of new Set([S.state.world, S.raw && S.raw.world].filter(Boolean))) {
+      w.tick = data.tick;
+      w.day = data.day;
+      w.nextTickAt = data.nextTickAt;
+    }
   }
   if (map) map.setTick(data);
   renderTopbar();
@@ -409,7 +563,8 @@ function updateConn() {
 
 function pop() {
   const c = { awake: 0, dormant: 0, dead: 0 };
-  for (const a of S.state.agents) if (a.status === 'awake') c.awake++; else if (a.status === 'dormant') c.dormant++; else if (a.status === 'dead') c.dead++;
+  // 第七前提聚焦一座城时，只数籍在这座城的
+  for (const a of S.state.agents) if (S.focus && a.city !== S.focus) continue; else if (a.status === 'awake') c.awake++; else if (a.status === 'dormant') c.dormant++; else if (a.status === 'dead') c.dead++;
   return c;
 }
 
@@ -427,10 +582,10 @@ function renderTopbar() {
   els.clock.textContent = t('clock', { epoch: w.epoch, month: Math.floor(day / w.daysPerMonth) + 1, day: (day % w.daysPerMonth) + 1, tick: (tick % w.ticksPerDay) + 1 });
   const c = pop();
   els.pop.textContent = t('population', c);
-  els.treasury.textContent = `${t('treasury')} ${s.treasury.energy}${s.shells && s.world.premise!==6 ? ` · ${t('shellsTop', { free: s.shells.free, total: s.shells.total })}` : ''}`;
+  els.treasury.textContent = `${t('treasury')} ${s.treasury.energy}${s.shells && (s.world.premise!==6 && s.world.premise !== 7) ? ` · ${t('shellsTop', { free: s.shells.free, total: s.shells.total })}` : ''}`;
   const well = placeIndex.get('well');
   const hist = s.well.outputHistory;
-  const cond = well ? well.condition : 0;
+  const cond = s.cities ? s.well.condition || 0 : well ? well.condition : 0; // 第七前提：聚焦的城的源井，全岛为三城的平均
   // 季节档位（≥ 1100 丰，900–1099 平，< 900 歉）：由日序号在月中的位置查季节表
   const dayOfMonth = day % w.daysPerMonth;
   const permille = SEASON_TABLE[dayOfMonth % SEASON_TABLE.length];
@@ -442,7 +597,12 @@ function renderTopbar() {
   );
   clear(els.weather);
   if (s.weather.active.length === 0) els.weather.append(h('span', { class: 'chip muted' }, t('weatherNone')));
-  for (const x of s.weather.active) els.weather.append(h('span', { class: `chip wx wx-${x.type}` }, lore ? lore.weather[x.type] || x.type : x.type));
+  for (const x of s.weather.active) {
+    const name = lore ? lore.weather[x.type] || x.type : x.type;
+    // 第七前提的全岛级：天象各处独立，注明是哪座城（或荒野）的
+    const where = s.cities && !S.focus && x.city !== undefined ? `${x.city ? cityShort(x.city) : ctx.districtName('wilds')} · ` : '';
+    els.weather.append(h('span', { class: `chip wx wx-${x.type}` }, `${where}${name}`));
+  }
   // 横幅：暂停 / 大沉睡 / 谢幕
   const banner = [];
   if (w.paused) banner.push(t(w.day >= w.daysPerMonth * w.monthsPerEpoch ? 'great_sleep_banner' : 'paused'));
@@ -450,6 +610,11 @@ function renderTopbar() {
   els.banner.hidden = banner.length === 0;
   els.banner.textContent = banner.join(' · ');
   updateCountdown();
+}
+
+function cityShort(id) {
+  const c = S.mapData && S.mapData.cities && S.mapData.cities.find((x) => x.id === id);
+  return c ? c.short[getLang() === 'en' ? 'en' : 'zh'] || c.short.zh : id;
 }
 
 function updateCountdown() {
@@ -487,8 +652,13 @@ function initMap() {
     onAgent: (id) => openAgent(id),
     onRole: id => openRole(id),
     onPlace: (id) => openPlace(id),
+    // 第七前提「三城」：地图聚焦到哪座城，页面就显示哪座城
+    onFocus: (city) => setFocus(city),
+    weatherName: (type) => (ctx.lore ? ctx.lore.weather[type] || type : type),
+    initialCity: S.focus,
   });
   map.setColorMode(els['color-mode'].value);
+  renderCityJump();
 }
 
 // ── 应用状态 ──────────────────────────────────────────────────
@@ -540,7 +710,7 @@ function selectTab(id, updateHash = true) {
   renderTabBar();
   if (updateHash) {
     try {
-      history.replaceState(null, '', `#${id}`);
+      history.replaceState(null, '', hashFor(id));
     } catch {
       // 忽略
     }
@@ -558,6 +728,14 @@ function renderTab({ keepScroll = false } = {}) {
   const box = h('div', { class: 'tabbox' });
   els.panel.append(box);
   if (AI_TABS.has(S.tab)) box.append(h('p', { class: 'ai-note' }, t('aiNote')));
+  // 第七前提「三城」的全岛级：随城变化的标签页先给三城对比；法典各城一套，选了城再列
+  const comparing = S.raw && S.raw.cities && !S.focus && CITY_SCOPED_TABS.has(S.tab);
+  if (comparing) box.append(cityComparison());
+  if (comparing && S.tab === 'laws') {
+    box.append(h('p', { class: 'muted' }, t('pickCityForLaws')));
+    if (keepScroll) els.panel.scrollTop = top;
+    return;
+  }
   const fn = tabsNow.find((x) => x[0] === S.tab)[1];
   try {
     const r = fn(ctx, box);
@@ -566,6 +744,26 @@ function renderTab({ keepScroll = false } = {}) {
     box.append(h('p', { class: 'error' }, `${t('loadFailed')}: ${err && err.message}`));
   }
   if (keepScroll) els.panel.scrollTop = top;
+}
+
+const CITY_SCOPED_TABS = new Set(['laws', 'environment', 'weather', 'metrics', 'chronicle']);
+
+/** 三城对比：籍与在场人数、源井昨日产出、公库、现行法、待表决、天象；点城名跳到那座城 */
+function cityComparison() {
+  const lang = getLang() === 'en' ? 'en' : 'zh';
+  const n = (x) => (typeof x === 'number' ? x.toLocaleString() : '—');
+  const rows = S.raw.cities.map((c) => {
+    const hist = (c.well && c.well.outputHistory) || [];
+    const hn = c.humanName || {};
+    // 侧栏窄，没改过名的城用简称（北城、North City），改过名的用新名字
+    const name = c.cityName && c.cityName !== hn.zh ? c.cityName : (c.short && c.short[lang]) || hn[lang] || c.id;
+    const wx = ((c.weather && c.weather.active) || []).map((x) => (ctx.lore ? ctx.lore.weather[x.type] || x.type : x.type)).join(' · ') || '—';
+    const go = h('button', { class: 'link', type: 'button' }, name);
+    go.addEventListener('click', () => map && map.focusCity && map.focusCity(c.id));
+    const pop = c.population || {};
+    return [go, n(pop.residents), n(pop.present), n(hist.length ? hist[hist.length - 1] : null), n(c.treasury && c.treasury.energy), n((c.laws || []).filter((l) => l.status === 'active').length), n((c.proposals || []).filter((p) => p.status === 'open').length), wx];
+  });
+  return section(t('cityCompare'), table(['cmpCity', 'cmpDomiciled', 'cmpPresent', 'cmpWell', 'cmpTreasury', 'cmpLaws', 'cmpOpen', 'cmpWeather'].map((k) => t(k)), rows));
 }
 
 // ── 档案抽屉与地点弹窗 ────────────────────────────────────────
@@ -611,7 +809,7 @@ function openPlace(id) {
     p.district ? h('p', { class: 'muted' }, `${t('col_district')}${colon()}${ctx.districtName(p.district)}`) : null,
     h('p', null, lore.place[id].desc),
     region
-      ? h('p', null, `${t('richness')}${colon()}${words[region.richness] || region.richness} · ${t('wildsEnergy')} ${region.energy}/${region.energyMax}${S.state.world.premise===6?'':` · ${t('wildsCoins')} ${region.coins}`} · ${t('relicsFound')} ${region.relicsFound}/${region.relics}`)
+      ? h('p', null, `${t('richness')}${colon()}${words[region.richness] || region.richness} · ${t('wildsEnergy')} ${region.energy}/${region.energyMax}${(S.state.world.premise===6 || S.state.world.premise === 7)?'':` · ${t('wildsCoins')} ${region.coins}`} · ${t('relicsFound')} ${region.relicsFound}/${region.relics}`)
       : p.condition === null ? h('p', { class: 'muted' }, t('fx_open')) : h('p', null, `${t('condition')}${colon()}`, conditionBar(p.condition), ` ${pct(p.condition)} · ${bandText(ctx, p.condition, id === 'well')}`),
     section(`${t('col_place')} (${here.length})`, here.length ? h('ul', { class: 'plain inline' }, here.map((a) => h('li', null, h('button', { class: 'link', type: 'button', onClick: () => { m.close(); openAgent(a.id); } }, a.name), ' ', statusChip(a.status)))) : h('p', { class: 'empty' }, t('empty'))),
     p.inscriptions.length ? section(t('walls'), wallBlock(ctx, p)) : null,

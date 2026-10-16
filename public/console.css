@@ -461,3 +461,15 @@ a.summary-stat small { color: var(--accent); }
   .announcement-page .console-brand span { overflow-wrap: anywhere; }
   .announcement-preview { padding-left: 16px; padding-right: 16px; }
 }
+
+/* 第七前提「三城」的创建页：选城卡片与带入旧灵魂 */
+.city-pick { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin: 0 0 12px; }
+.city-pick legend { padding: 0 4px; font-weight: 600; }
+.city-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 8px; }
+.city-card { display: flex; flex-direction: column; gap: 4px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.city-card:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.city-card-head { display: flex; align-items: center; gap: 6px; }
+.import-soul { margin: 0 0 12px; }
+.import-soul summary { cursor: pointer; }
+.import-row { display: flex; align-items: center; gap: 6px; }
+.import-row .btn { margin-left: auto; }

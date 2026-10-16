@@ -19,6 +19,10 @@ import { actionTable } from '../lore/actions.js';
 import { P, LIMITS, WEATHER_CODES } from '../params.js';
 import { normalizeText, cpLength } from '../../text.js';
 import { screen } from '../../moderation.js';
+import { CITY_IDS } from '../engine/cities.js';
+import { MATERIAL_ZONES as ISLAND_ZONES } from '../map/island-three.js';
+/** 第七前提的 city 记录里多出的整数字段：八处荒野的物料、在场人数、施工量 */
+const P7_CITY_INT = Object.freeze([...Object.keys(ISLAND_ZONES).map((z) => `materials${z[0].toUpperCase()}${z.slice(1)}`), 'constructionWork', 'present']);
 import { RuleSyntaxError } from './errors.js';
 import { parseExpr, countNodes } from './parser.js';
 import { syntaxMessage, list as listOf, q } from './messages.js';
@@ -26,7 +30,7 @@ import {
   T, FIELDS, TYPE_NAMES, FUNCTION_SIGS, FUNCTION_NAMES, ALL_NAMES, ALL_NAMES_P2, namesFor, elementType, isListType, accepts,
 } from './types.js';
 import {
-  ACTION_ORDER, ACTIONS, EVENTS, EVENT_NAMES, EVENT_FIELDS, NO_BEFORE_ACTIONS, NO_AFTER_ACTIONS, isKnownAction, actionArgNames,
+  ACTION_ORDER, ACTIONS, EVENTS, EVENT_NAMES, eventNamesFor, EVENT_FIELDS, NO_BEFORE_ACTIONS, NO_AFTER_ACTIONS, isKnownAction, actionArgNames,
 } from '../lore/actions.js';
 
 export const MAX_ISSUES = 5;
@@ -83,7 +87,8 @@ export function parseWhen(when, scope) {
   const [, kind, what] = m;
   if (kind === 'on') {
     if (scope.kind === 'place') return bad('地点规则不能用 on: 事件', 'place rules cannot use on: events', { zh: '地点规则可用的时机：enact、daily、monthly、before:动作、after:动作、before:enter', en: 'Place rules can use: enact, daily, monthly, before:<action>, after:<action>, before:enter' });
-    if (!EVENT_NAMES.includes(what)) return bad(`不认识的事件「${what}」`, `unknown event "${what}"`, { zh: `可用的事件：${EVENT_NAMES.join('、')}`, en: `Available events: ${EVENT_NAMES.join(', ')}` });
+    const names = eventNamesFor(scope.premise || 0);
+    if (!names.includes(what)) return bad(`不认识的事件「${what}」`, `unknown event "${what}"`, { zh: `可用的事件：${names.join('、')}`, en: `Available events: ${names.join(', ')}` });
     return { kind: 'on', event: what };
   }
   if (kind === 'before' && what === 'enter') {
@@ -150,8 +155,13 @@ function nameError(n, ctx) {
 }
 
 function fieldType(ot, f, node, ctx) {
-  if (ctx.premise === 6 && /coin/i.test(f)) abort('unknown_field',node.p,'P6 不提供旧币字段','P6 has no coin fields');
+  if ((ctx.premise === 6 || ctx.premise === 7) && /coin/i.test(f)) abort('unknown_field',node.p,'P6 不提供旧币字段','P6 has no coin fields');
   if((ctx.premise === 5 || ctx.premise === 6) && ((ot===T.AGENT&&f==='materials')||(ot===T.CITY&&['materialsWilds','materialsScrapyard','materialsSolarfield','constructionWork'].includes(f))))return T.INT;
+  // 第七前提「三城」：八处荒野的物料、城的 id 与在场人数、居民的籍（city）与所在的城（located，荒野为 null）
+  if (ctx.premise === 7) {
+    if ((ot === T.AGENT && f === 'materials') || (ot === T.CITY && (P7_CITY_INT.includes(f)))) return T.INT;
+    if ((ot === T.CITY && f === 'id') || (ot === T.AGENT && (f === 'city' || f === 'located'))) return T.STR;
+  }
   if (ot === T.ANY || ot === T.VAR || ot === T.RESULT) return T.ANY;
   if (FIELDS[ot]) {
     const t = FIELDS[ot][f];
@@ -282,6 +292,24 @@ function needList(arg, t) {
 
 function callType(n, ctx) {
   const f = n.f;
+  // 第七前提「三城」：city_info('west') 读别的城公开的数字（返回城的记录；不认识的城为 null，读它的字段是类型错误）
+  if (f === 'city_info' && ctx.premise === 7) {
+    arity(n, 1);
+    need(n.a[0], typeOf(n.a[0], ctx), T.STR, ctx, ['city_info 的参数', 'argument of city_info']);
+    if (n.a[0].t === 'str' && !CITY_IDS.includes(n.a[0].v)) {
+      abort('unknown_city', n.a[0].p, `不认识的城「${n.a[0].v}」`, `unknown city "${n.a[0].v}"`, { zh: `可用的城：${CITY_IDS.join(' ')}`, en: `Cities: ${CITY_IDS.join(' ')}` });
+    }
+    return T.CITY;
+  }
+  // 第七前提：treasury_of('west') 是指定的城的公库，只能作为账户（转给别的城的公库；取只能从本城取，见 engine/rules.js 的 inScope）
+  if (f === 'treasury_of' && ctx.premise === 7) {
+    arity(n, 1);
+    need(n.a[0], typeOf(n.a[0], ctx), T.STR, ctx, ['treasury_of 的参数', 'argument of treasury_of']);
+    if (n.a[0].t === 'str' && !CITY_IDS.includes(n.a[0].v)) {
+      abort('unknown_city', n.a[0].p, `不认识的城「${n.a[0].v}」`, `unknown city "${n.a[0].v}"`, { zh: `可用的城：${CITY_IDS.join(' ')}`, en: `Cities: ${CITY_IDS.join(' ')}` });
+    }
+    return T.ACCOUNT;
+  }
   if (!Object.prototype.hasOwnProperty.call(FUNCTION_SIGS, f)) {
     const near = FUNCTION_NAMES.find((x) => x.toLowerCase() === f.toLowerCase());
     abort('unknown_function', n.p, `不认识的函数「${f}」${near ? `（是不是想写 ${near}？）` : ''}`, `unknown function "${f}"${near ? ` (did you mean ${near}?)` : ''}`,
@@ -653,7 +681,7 @@ function checkOp(op, rc, path, issues) {
     return null;
   }
   const name = op.op;
-  if (typeof name !== 'string' || !(OP_NAMES.includes(name) || (rc.scope.premise === 5 || rc.scope.premise === 6) && Object.hasOwn(MATERIAL_OP_FIELDS,name))) {
+  if (typeof name !== 'string' || !(OP_NAMES.includes(name) || (rc.scope.premise === 5 || rc.scope.premise === 6 || rc.scope.premise === 7) && Object.hasOwn(MATERIAL_OP_FIELDS,name))) {
     issues.push(issue(`${path}.op`, 'op.unknown', typeof name === 'string' ? `不认识的操作「${name}」` : '操作缺少 op 字段', typeof name === 'string' ? `unknown operation "${name}"` : 'the operation has no op field',
       { zh: `可用的操作：${OP_NAMES.join(' ')}`, en: `Available operations: ${OP_NAMES.join(' ')}` }));
     return null;
@@ -951,7 +979,7 @@ function screenStrings(strs, issues, path) {
  */
 export function validateRules(rules, opts = {}) {
   const scope = opts.scope || { kind: 'city' };
-  if (scope.premise === 6 && hasCoinInput(rules)) return { ok:false, issues:[issue('rules','coin_unavailable','P6 不提供旧币或铸币','P6 has no coins or minting')], rules:null };
+  if ((scope.premise === 6 || scope.premise === 7) && hasCoinInput(rules)) return { ok:false, issues:[issue('rules','coin_unavailable','P6 不提供旧币或铸币','P6 has no coins or minting')], rules:null };
   const base = opts.path || 'rules';
   const issues = [];
   if (!Array.isArray(rules)) {

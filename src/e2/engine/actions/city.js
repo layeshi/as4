@@ -17,6 +17,7 @@ import { needPlace, needName } from './util.js';
 import { openProjectsAt, roadOrProjectBetween, siteCost, addToProject, pendingSiteNames } from '../projects.js';
 import { nameKey } from '../../../text.js';
 import { dismantleAt } from '../dismantle.js';
+import { multiCity, cityOfPlace, cityOwnerAt } from '../cities.js';
 
 const given = (v) => v !== undefined && v !== null;
 const BUILDS = ['site', 'module', 'road'];
@@ -34,7 +35,13 @@ function mayBuildOn(w, a, place) {
 /** initiate 的 owner 参数：self（缺省）| city | 你担任管事的社群 ID */
 function ownerOf(w, a, arg) {
   if (!given(arg) || arg === 'self') return { kind: 'agent', id: a.id };
-  if (arg === 'city') return { kind: 'city' };
+  if (arg === 'city') {
+    if (!multiCity(w)) return { kind: 'city' };
+    // 第七前提「三城」：归所在的城所有；荒野不属于任何城
+    const city = cityOfPlace(w, a.place);
+    if (city === null) fail('invalid_args', { zh: '荒野不属于任何城：owner 只能是 self 或你担任管事的社群。', en: 'The Wilds belong to no city: owner must be self or a group you steward.' });
+    return { kind: 'city', id: city };
+  }
   if (typeof arg !== 'string') fail('invalid_args');
   const g = Object.prototype.hasOwnProperty.call(w.groups, arg) ? w.groups[arg] : null;
   if (!g || g.dissolved) fail('not_found');
@@ -104,13 +111,13 @@ function planRoad(ctx, args) {
   if (to === a.place) fail('invalid_args', { zh: '道路的另一端不能是此地。', en: 'The other end of a road cannot be this place.' });
   if (roadOrProjectBetween(w, a.place, to)) fail('already');
   const name = given(args.name) ? needName(args.name) : null;
-  return { to, name, owner: { kind: 'city' }, need: ep(w, 'roadCost') };
+  return { to, name, owner: cityOwnerAt(w, a.place), need: ep(w, 'roadCost') };
 }
 
 function planUpgrade(ctx, args) {
   const { w, a } = ctx;
-  if (a.place !== 'well') fail('wrong_place');
-  if (Object.values(w.projects).some(j => j.build === 'upgrade' && j.status === 'open')) fail('already');
+  if (multiCity(w) ? w.places[a.place].landmark !== 'well' : a.place !== 'well') fail('wrong_place');
+  if (Object.values(w.projects).some(j => j.build === 'upgrade' && j.status === 'open' && (!multiCity(w) || j.place === a.place))) fail('already');
   if (w.well.upgrades.length >= P.upgradeMax) fail('invalid_args', { zh: '源井已经改良到头了', en: 'The Well cannot be upgraded further.' });
   if (args.owner !== undefined && !['self', 'city'].includes(args.owner)) fail('invalid_args');
   const level = w.well.upgrades.length + 1;

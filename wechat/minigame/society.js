@@ -40,6 +40,7 @@ class SocietyGame {
     this.sheet = null; this.toast = null; this.error = ''; this.notice = '';
     this.busy = false; this.refreshing = false; this.visible = true; this.pressed = null; this.editing = '';
     this.pendingCount = 0; this.quickTries = 0; this.mapVersion = 0; this.dismissed = {};
+    this.cityFocus = null; // 第七前提「三城」：城市页当前看的城，null 为全岛
     this.moderation = {}; this.loginRequired = {};
     this.navigation = 0; this.readVersions = {};
     this.messageBoard = new MessageBoard(this);
@@ -311,6 +312,7 @@ class SocietyGame {
       case 'back': this.back(); break;
       case 'refresh': await this.refresh({ full: true, pull: !!a.pull }); break;
       case 'filter': this.feedFilter = a.value; break;
+      case 'cityFocus': this.cityFocus = a.city || null; this.mapVersion++; break;
       case 'segment': this.segment = a.value; break;
       case 'sort': this.sort = a.value; break;
       case 'expand': if (this.expanded.has(a.key)) this.expanded.delete(a.key); else this.expanded.add(a.key); break;

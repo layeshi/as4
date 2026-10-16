@@ -128,7 +128,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .layout {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(360px, 1.45fr) minmax(360px, 1fr);
+  grid-template-columns: minmax(360px, 2fr) minmax(320px, 1fr);
   gap: 10px;
   padding: 10px;
   min-height: 0;
@@ -174,8 +174,22 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .foot { padding: 6px 14px; font-size: 12px; color: var(--muted); text-align: center; }
 .noscript { padding: 14px; }
 
+/* 地图优先：侧栏可以收成一条窄边（记住选择），地图可以全屏 */
+.map-pane { position: relative; }
+.map-fullscreen { position: absolute; top: 12px; right: 12px; z-index: 2; }
+.map-pane:fullscreen { padding: 8px; background: var(--panel); }
+.map-pane:fullscreen .map { min-height: 0; border-radius: 0; }
+.side-toggle { align-self: flex-end; margin: 4px 4px 0; }
+@media (min-width: 900px) {
+  .layout.side-collapsed { grid-template-columns: minmax(360px, 1fr) 40px; }
+  .layout.side-collapsed .side-pane > :not(.side-toggle) { display: none; }
+  .layout.side-collapsed .side-toggle { align-self: center; writing-mode: vertical-rl; margin: 6px 0; padding: 10px 3px; }
+}
+
 @media (max-width: 899px) {
   html, body { height: auto; }
+  .side-toggle { display: none; }
+  .map { min-height: 56vh; }
   body { min-height: 100vh; }
   .layout { flex: none; grid-template-columns: 1fr; }
   .map { flex: none; height: auto; aspect-ratio: var(--map-aspect, 16 / 10); max-height: 78vh; min-height: 280px; }
@@ -478,6 +492,10 @@ figcaption { font-size: 12px; color: var(--muted); text-align: center; }
   --m-rust: #e0783a;
   --m-sand: #e8c07a;
   --m-ruin: #687085;
+  /* 第七前提「三城」的城色：只当分类色（地界、城牌的边、小地图、跨城弧线） */
+  --m-city-north: var(--m-blue);
+  --m-city-west: var(--m-orange);
+  --m-city-east: var(--m-violet);
   background: var(--m-bg);
   touch-action: none;
   user-select: none;
@@ -516,6 +534,44 @@ figcaption { font-size: 12px; color: var(--muted); text-align: center; }
 .map .dist-waterworks { fill: var(--m-blue); stroke: var(--m-blue); }
 .map .dist-east { fill: var(--m-orange); stroke: var(--m-orange); }
 .map .district-label { stroke: none; fill-opacity: 0.6; letter-spacing: 0.28em; font-weight: 700; pointer-events: none; }
+
+/* 岛图（第七前提「三城」）：海、岛、三城地界、城牌、跨城弧线、小地图 */
+.map .island-sea { fill: var(--m-sea); }
+.map .island-land { fill: var(--m-bg); }
+.map .territory { fill-opacity: 0.07; stroke-opacity: 0.1; stroke-width: 130; stroke-linejoin: round; }
+.map .territory.terr-north, .map .mini-terr.terr-north { fill: var(--m-city-north); stroke: var(--m-city-north); }
+.map .territory.terr-west, .map .mini-terr.terr-west { fill: var(--m-city-west); stroke: var(--m-city-west); }
+.map .territory.terr-east, .map .mini-terr.terr-east { fill: var(--m-city-east); stroke: var(--m-city-east); }
+.map .city-label.terr-north { fill: var(--m-city-north); }
+.map .city-label.terr-west { fill: var(--m-city-west); }
+.map .city-label.terr-east { fill: var(--m-city-east); }
+.map .city-label.terr-wilds { fill: var(--m-sand); }
+.map .layer-badges, .map .layer-arcs { display: none; }
+.map.lod-island .layer-badges, .map.lod-island .layer-arcs { display: inline; }
+.map.lod-island .layer-agents, .map.lod-island .layer-roles, .map.lod-island .layer-labels, .map.lod-island .layer-districtLabels,
+.map.lod-island .layer-lots, .map.lod-island .layer-facilities, .map.lod-island .badge { display: none; }
+.map .city-badge { cursor: pointer; outline: none; }
+.map .city-badge .badge-box { fill: var(--m-bubble-bg); stroke: var(--m-label-dim); stroke-width: 1.5; }
+.map .city-badge.terr-north .badge-box { stroke: var(--m-city-north); }
+.map .city-badge.terr-west .badge-box { stroke: var(--m-city-west); }
+.map .city-badge.terr-east .badge-box { stroke: var(--m-city-east); }
+.map .city-badge:hover .badge-box, .map .city-badge:focus-visible .badge-box { stroke-width: 2.6; }
+.map .wilds-badge { cursor: default; }
+.map .wilds-badge .badge-box { stroke: var(--m-track); stroke-dasharray: 4 3; }
+.map .city-badge .badge-name { fill: var(--m-label); font-size: 14px; font-weight: 600; }
+.map .city-badge .badge-line { fill: var(--m-label-dim); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.map .wilds-badge .badge-line { fill: var(--m-sand); }
+.map .move-arc { fill: none; stroke: var(--m-sand); stroke-width: 2; stroke-dasharray: 8 7; vector-effect: non-scaling-stroke; opacity: 0; animation: move-arc 6s ease-out forwards; pointer-events: none; }
+.map .move-arc.terr-north { stroke: var(--m-city-north); }
+.map .move-arc.terr-west { stroke: var(--m-city-west); }
+.map .move-arc.terr-east { stroke: var(--m-city-east); }
+@keyframes move-arc { 0% { opacity: 0; } 12% { opacity: 0.95; } 70% { opacity: 0.75; } 100% { opacity: 0; } }
+.map .minimap { cursor: pointer; outline: none; }
+.map .mini-bg { fill: var(--m-bubble-bg); stroke: var(--m-coast); stroke-width: 1; }
+.map .minimap:focus-visible .mini-bg { stroke: var(--m-label); stroke-width: 2; }
+.map .mini-island { fill: var(--m-waste); stroke: var(--m-coast); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.map .mini-terr { fill-opacity: 0.45; stroke: none; }
+.map .mini-view { fill: rgba(233, 248, 255, 0.07); stroke: var(--m-label); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
 .map .wall-body { fill: none; stroke: var(--m-wall); stroke-width: 12; stroke-linecap: square; }
 .map .wall-line { fill: none; stroke: var(--m-wall-line); stroke-width: 1.5; stroke-dasharray: 22 6; }
 .map .gate-tower { fill: var(--m-wall); stroke: var(--m-wall-line); stroke-width: 1.2; }
@@ -933,3 +989,9 @@ ul.reading { list-style: none; padding-left: 0; }
 .market-empty { border-style: dashed; }
 
 .market-program-result { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow: auto; padding: .75rem; border: 1px solid var(--line); border-radius: 6px; }
+
+/* 第七前提「三城」：图例里的城色，与地图的 --m-city-* 一致 */
+.map-legend .key.city-north, .map-legend .key.city-west, .map-legend .key.city-east { width: 12px; height: 12px; border-radius: 3px; display: inline-block; vertical-align: -1px; }
+.map-legend .key.city-north { background: #6b93ff; }
+.map-legend .key.city-west { background: #ff9446; }
+.map-legend .key.city-east { background: #b98bff; }

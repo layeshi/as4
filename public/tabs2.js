@@ -28,7 +28,7 @@ export function renderEnvironment(ctx, root) {
   const fx = (p) => {
     if (p.wild) return t('fx_wild');
     if (p.kind === 'open') return t('fx_open');
-    if (p.id === 'port') return t('fx_port');
+    if (p.id === 'port' || p.role === 'port') return t('fx_port'); // 第七前提的港口是 north-port 等，按 role 认
     if (p.id === 'school') return t('fx_school');
     if (p.kind === 'well') return t('fx_well');
     if (p.kind === 'cost') return t('fx_cost');
@@ -52,7 +52,7 @@ export function renderEnvironment(ctx, root) {
           h('span', null, placeLink(ctx, p.id), p.renamedBy ? h('small', { class: 'muted' }, ` (${lore.place[p.id].name})`) : null),
           ...(districts ? [ctx.districtName(p.district)] : []),
           p.condition === null ? '—' : h('span', { class: 'cond' }, conditionBar(p.condition), ` ${pct(p.condition)}`),
-          p.condition === null ? '—' : bandText(ctx, p.condition, p.id === 'well'),
+          p.condition === null ? '—' : bandText(ctx, p.condition, p.id === 'well' || p.role === 'well'),
           trend(p),
           p.decayPerDay ? t('decayPerDay', { n: p.decayPerDay }) : '—',
           fx(p),
@@ -377,7 +377,7 @@ export function renderWeather(ctx, root) {
     ),
   );
 
-  if(S.world.premise===6){
+  if((S.world.premise===6 || S.world.premise === 7)){
     root.append(h('p',{class:'muted'},'天象完全随机：平静400、震80、雾100、蚀60；首月平静，每月最多一次。'),section(t('weatherHistory'),W.history.length?table([t('filterType'),t('col_days')],W.history.slice().reverse().map(x=>[name(x.type),t('fromToDays',{a:x.startDay+1,b:x.endDay+1})])):emptyNote(t('weatherNoHistory'))));
     return;
   }

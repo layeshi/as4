@@ -9,10 +9,20 @@ import { P } from '../params.js';
 import { clockDay, isAlive } from '../world.js';
 import { pushInbox, creditEnergy, ref, emit } from './core.js';
 import { noteQueued } from './shells.js';
+import { multiCity, cityValue, isCityId } from './cities.js';
+
+/**
+ * 公库账户指向的公库对象。第七前提「三城」里，{ k: 'treasury' } 是当前挂着的城的公库（城外为 null），
+ * { k: 'treasury', city } 是指定的城的公库（engine/cities.js）；其余前提只有一个公库。
+ */
+export function treasuryOf(w, acct) {
+  if (multiCity(w) && acct.city !== undefined) return isCityId(acct.city) ? cityValue(w, acct.city, 'treasury') : null;
+  return w.treasury;
+}
 
 /** Validate captured accounts again before moving assets; souls cannot hold coins. */
 export function accountProblem(w, acct, coins = 0) {
-  if (acct.k === 'treasury') return null;
+  if (acct.k === 'treasury') return treasuryOf(w, acct) ? null : 'invalid_account';
   if (acct.k === 'agent') return w.agents[acct.id] && isAlive(w.agents[acct.id]) ? null : 'invalid_account';
   if (acct.k === 'group') return w.groups[acct.id] && !w.groups[acct.id].dissolved ? null : 'invalid_account';
   if (acct.k === 'soul') return !w.souls[acct.id] ? 'invalid_account' : coins > 0 ? 'unsupported_asset' : null;
@@ -22,7 +32,7 @@ export function accountProblem(w, acct, coins = 0) {
 /** 账户的余额 { energy, coins }（灵魂只有 energy = fund，旧币为 0；居民可转的额度见 transferable） */
 export function balanceOf(w, acct) {
   switch (acct.k) {
-    case 'treasury': return { energy: w.treasury.energy, coins: w.treasury.coins };
+    case 'treasury': { const t = treasuryOf(w, acct); return { energy: t.energy, coins: t.coins }; }
     case 'group': return { energy: w.groups[acct.id].treasury.energy, coins: w.groups[acct.id].treasury.coins };
     case 'agent': return { energy: w.agents[acct.id].energy, coins: w.agents[acct.id].coins };
     case 'soul': return { energy: w.souls[acct.id].fund, coins: 0 };
@@ -33,7 +43,7 @@ export function balanceOf(w, acct) {
 /** 账户的出账：调用者保证余额足够 */
 export function debit(w, acct, energy, coins) {
   switch (acct.k) {
-    case 'treasury': w.treasury.energy -= energy; w.treasury.coins -= coins; return;
+    case 'treasury': { const t = treasuryOf(w, acct); t.energy -= energy; t.coins -= coins; return; }
     case 'group': w.groups[acct.id].treasury.energy -= energy; w.groups[acct.id].treasury.coins -= coins; return;
     case 'agent': w.agents[acct.id].energy -= energy; w.agents[acct.id].coins -= coins; return;
     default: throw new Error(`debit: cannot debit ${acct.k}`);
@@ -41,7 +51,7 @@ export function debit(w, acct, energy, coins) {
 }
 
 /** 账户的来源键（出资者名录 sponsors 的键）：居民 ID、社群 ID 或 'treasury' */
-export const sponsorKey = (acct) => (acct.k === 'treasury' ? 'treasury' : acct.id);
+export const sponsorKey = (acct) => (acct.k === 'treasury' ? (acct.city ? `treasury:${acct.city}` : 'treasury') : acct.id);
 
 /**
  * 账户的入账。居民入账用 creditEnergy（可能唤醒沉睡者，by 是唤醒者）；灵魂入账 = 出资：fund += energy，sponsors[来源] += energy，
@@ -49,7 +59,7 @@ export const sponsorKey = (acct) => (acct.k === 'treasury' ? 'treasury' : acct.i
  */
 export function credit(w, acct, energy, coins, by = null, from = null) {
   switch (acct.k) {
-    case 'treasury': w.treasury.energy += energy; w.treasury.coins += coins; return;
+    case 'treasury': { const t = treasuryOf(w, acct); t.energy += energy; t.coins += coins; return; }
     case 'group': w.groups[acct.id].treasury.energy += energy; w.groups[acct.id].treasury.coins += coins; return;
     case 'agent': {
       const a = w.agents[acct.id];
@@ -82,7 +92,7 @@ export function notifyTransfer(w, acct, { law, energy, coins, direction, counter
 
 /** 对账户的显示引用 { id, name }（居民、社群）或 'treasury' / 灵魂 */
 export function acctRef(w, acct) {
-  if (acct.k === 'treasury') return { id: 'treasury', name: 'treasury' };
+  if (acct.k === 'treasury') return acct.city ? { id: `treasury:${acct.city}`, name: `treasury:${acct.city}` } : { id: 'treasury', name: 'treasury' };
   if (acct.k === 'agent') return ref(w.agents[acct.id]);
   if (acct.k === 'group') return { id: acct.id, name: w.groups[acct.id].name };
   return { id: acct.id, name: w.souls[acct.id].name };
@@ -101,7 +111,7 @@ export function payFee(w, a, fee) {
   const scope = fee.law.startsWith('group:') || fee.law.startsWith('place:') ? fee.law : 'city';
   const owner = scope === 'city' ? fee.law : fee.law.slice(fee.law.indexOf(':') + 1);
   w.dayLog.ruleOps++;
-  emit(w, 'rule_op', { agent: a.id, place: a.place, data: { scope, owner, rule: fee.rule, op: 'fee', ok: true, who: a.id, to: fee.to.k === 'treasury' ? 'treasury' : fee.to.id, energy: fee.energy, coins: fee.coins } });
+  emit(w, 'rule_op', { agent: a.id, place: a.place, data: { scope, owner, rule: fee.rule, op: 'fee', ok: true, who: a.id, to: fee.to.k === 'treasury' ? sponsorKey(fee.to) : fee.to.id, energy: fee.energy, coins: fee.coins } });
   if (fee.to.k === 'agent' && fee.to.id !== a.id) {
     notifyTransfer(w, fee.to, { law: fee.law, energy: fee.energy, coins: fee.coins, direction: 'in', counterparty: ref(a) });
   }

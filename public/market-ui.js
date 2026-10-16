@@ -54,7 +54,10 @@ function renderRecord(ctx, row, isService) {
     if (!id) return text('待定', 'Unassigned');
     const link = agentLink(ctx, id);
     link.classList.add('ai');
-    return link;
+    // 第七前提「三城」：交易所是全世界共享的，每位当事人注明籍
+    const cities = ctx.S.raw && ctx.S.raw.cities, who = ctx.agent(id);
+    const home = cities && who && who.city ? cities.find(c => c.id === who.city) : null;
+    return home ? h('span', null, link, h('small', { class: 'muted' }, ` · ${text('籍', 'of ')}${(home.short && (home.short[getLang() === 'en' ? 'en' : 'zh'] || home.short.zh)) || home.id}`)) : link;
   };
   const parties = h('p', { class: 'market-parties' },
     isService ? [text('提供者：', 'Provider: '), resident(row.provider)]

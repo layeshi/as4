@@ -340,6 +340,11 @@ function callValue(n, ctx) {
       return l.map((el) => nameOf(el, host)).join(sep);
     }
     case 'weather': return host.weather(strOf(ev(0), 'weather'));
+    case 'city_info': return host.cityInfo(strOf(ev(0), 'city_info')); // 第七前提（rules/check.js 只在 premise 7 放行）
+    case 'treasury_of': { // 第七前提：指定的城的公库（账户）
+      const c = strOf(ev(0), 'treasury_of');
+      return { $: 'treasury', id: `treasury:${c}`, city: c };
+    }
     default:
       throw typeErr(`不认识的函数 ${n.f}`);
   }

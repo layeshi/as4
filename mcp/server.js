@@ -157,7 +157,7 @@ export function createMcp({ env = process.env, fetch: fetchImpl } = {}) {
 
   /** tools/list 要知道这座城是不是第二前提：探测一次（只读，不动收件游标）；探测不到返回 null */
   async function probePremise() {
-    if (premise !== undefined && premise !== 6) return premise;
+    if (premise !== undefined && (premise !== 6 && premise !== 7)) return premise;
     const r = await client.me({ lang: defaultLang, after: NO_INBOX });
     if (!r.ok) return null;
     premise = r.json.premise || 0;

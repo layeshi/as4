@@ -85,7 +85,7 @@ export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, tick
   const values = tokenized({ premise }) ? tokenPromptValues(tokenValues) : {};
   const dict = L2(lang);
   const original = promptDict(dict, premise);
-  const l = premise===6 ? { ...original, ruleLanguage:original.ruleLanguage.replace(/mint\{[^}]+\}/g,'').replace(/,?coins\??/g,'').replace(/\bcoins\b/g,'').replace(/treasuryCoins/g,'') } : original;
+  const l = (premise===6 || premise === 7) ? { ...original, ruleLanguage:original.ruleLanguage.replace(/mint\{[^}]+\}/g,'').replace(/,?coins\??/g,'').replace(/\bcoins\b/g,'').replace(/treasuryCoins/g,'') } : original;
   const agent = premise >= 2 ? { howToAct: l[toolMode === 'native' ? 'howToActNative' : toolMode === 'mcp' ? 'howToActMcp' : 'howToActJson'], standingLanguage: l.standingLanguage } : {};
   if (tokenized({ premise })) agent.standingLanguage = fmt(agent.standingLanguage, values);
   if (premise >= 2 && actionTools === 'typed' && toolMode === 'native') {
@@ -108,9 +108,9 @@ export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, tick
     ...agent,
   });
   let text = soul === null || soul === undefined ? head : `${head}\n\n${fmt(l.soul, { soul })}`;
-  if((premise === 5 || premise === 6))text=text.replace('源井、配给、荒野、拆解与别人','源井、配给、荒野与别人').replace('凑够造价就完工','筹齐词元与物料后还须施工才完工').replace('the Well, rations, the wilds, dismantling and others','the Well, rations, the wilds and others').replace('once its cost is met','once its token and material budget is met and construction is complete').replace('the Well, rations, the Wilds, salvage and other residents','the Well, rations, the Wilds and other residents').replace('when its cost is covered it is done','after its token and material budget is covered, construction must finish');
+  if((premise === 5 || premise === 6 || premise === 7))text=text.replace('源井、配给、荒野、拆解与别人','源井、配给、荒野与别人').replace('凑够造价就完工','筹齐词元与物料后还须施工才完工').replace('the Well, rations, the wilds, dismantling and others','the Well, rations, the wilds and others').replace('once its cost is met','once its token and material budget is met and construction is complete').replace('the Well, rations, the Wilds, salvage and other residents','the Well, rations, the Wilds and other residents').replace('when its cost is covered it is done','after its token and material budget is covered, construction must finish');
   if (programs) text += lang === 'en' ? '\nProgram services: save/test JavaScript function bodies with program. Input is JSON text, code uses input and return. Code <=12000 UTF-8 bytes, input/result <=4000 bytes, up to 16 programs per author. look programs lists yours; id/offset reads private code pages. Publish with service_publish {title,description,price,program}; buy with service_order {service,input}. Results are delivered and paid automatically without acceptance. No result means no service payment. Inputs/results are public order records; code stays private. Ordinary reading/writing fees still apply.' : '\n程序服务：program 保存或试运行 JavaScript 函数体；input 是 JSON 字符串，代码用 input 取输入、return 返回结果。代码最多12000 UTF-8字节，输入/结果各4000字节，每位作者至多16个程序。look programs 查看自己的目录，id/offset 分页读取私密代码。service_publish 填 title、description、price、program 发布；service_order 填 service、input 购买。自动交付付款，无需接单验收；无结果不付服务费。输入与结果进入公开订单，代码私密；读写仍按原规则计费。';
-  if((premise === 5 || premise === 6))text += lang === 'en' ? '\nMaterials and services: look materials/services/demands/orders/research/observations is paid reading; use after/limit for pagination. Funded projects still need construction. Research institutes serve the whole city; automatic selection uses only free authorized institutes. Order rewards are fully escrowed. Providers pay their own costs; payment is made once, only after full completion. Partial work is unpaid, and orders grant no property permissions. Documents are verified for delivery, not quality. Observe completed records to investigate environmental differences.' : '\n物料与服务：look materials/services/demands/orders/research/observations 按读入计价，可用 after/limit 分页。工程筹资后仍须施工。研究所覆盖全城，未指定时只自动使用免费且获授权的研究所。订单报酬全额托管；成本自付，全部达标才一次付款，部分完成不付款，不授予产权权限。document 只验证交付而非质量。环境差异可通过已发生的记录观察。';
+  if((premise === 5 || premise === 6 || premise === 7))text += lang === 'en' ? '\nMaterials and services: look materials/services/demands/orders/research/observations is paid reading; use after/limit for pagination. Funded projects still need construction. Research institutes serve the whole city; automatic selection uses only free authorized institutes. Order rewards are fully escrowed. Providers pay their own costs; payment is made once, only after full completion. Partial work is unpaid, and orders grant no property permissions. Documents are verified for delivery, not quality. Observe completed records to investigate environmental differences.' : '\n物料与服务：look materials/services/demands/orders/research/observations 按读入计价，可用 after/limit 分页。工程筹资后仍须施工。研究所覆盖全城，未指定时只自动使用免费且获授权的研究所。订单报酬全额托管；成本自付，全部达标才一次付款，部分完成不付款，不授予产权权限。document 只验证交付而非质量。环境差异可通过已发生的记录观察。';
   if (prayers && premise === 2) text += lang === 'en'
     ? '\n\n[Prayer points] Your points belong to you and cannot be transferred. Earn 1 per 100 basis points of public natural-damage repairs, 1 per 10 energy contributed to completed public projects, and 1 for the first rescue of a dormant recipient each day. These automatic rewards share a 10-point daily cap; fractions carry, excess whole points do not. An independently recognized invention earns 10 points outside the cap. Temple replies cost 1 point for text, plus 1 per energy granted; replies are not guaranteed. Demolition damage and rebuilding do not earn points.'
     : '\n\n【祈愿点】点数属于你，不可转让。修复公共设施100基点自然损耗得1点；已建成公共工程投入10能量得1点；每天首次救醒一位沉睡者得1点。这三类合计每天最多10点，零头继续累计，超额整点不结转。获独立认定的发明另得10点。神殿传来的文字耗1点，每份补充能量另耗1点；回应没有保证。人为损坏及拆毁重建不发奖励。';
@@ -121,8 +121,30 @@ export function buildSystemPrompt2({ lang = 'zh', cityName, maxActions = 4, tick
   if (premise >= 2 && actionTools === 'typed' && toolMode === 'json') text += lang === 'en'
     ? '\n\nNamed action tools also work as JSON keys: {"say":{"text":"your exact words"},"done":true}. read_law/read_document/read_inscription/read_agent take law/doc/inscription/agent respectively. Named calls run in the supplied order after look and legacy act; done ends this waking after all calls. Preserve text and amounts and use visible IDs.'
     : '\n\n也可直接用动作工具名作为 JSON 键：{"say":{"text":"你的原话"},"done":true}。read_law/read_document/read_inscription/read_agent 的参数分别是 law/doc/inscription/agent。先处理 look 和兼容的 act，其余命名调用按所写顺序执行；done 在全部调用之后结束这次醒来。保持文字和数额，使用可见 ID。';
-  if (premise === 6) text += lang === 'en' ? '\nNo coins or resident keys. Public roles are separate from residents: say with publicRoleId asks a present role at your location publicly. No remote chat; normal writing/reading charges apply. Roles cannot act, vote, grant resources or reveal hidden facts.' : '\n此世界无旧币和居民密钥。公共角色不属于居民；say 可指定 publicRoleId，向同地在场角色公开提问，每刻一次，问题至多300字。普通写出和读入照常计费；角色不能代行动、投票、发资源或透露隐藏事实。';
+  if (premise === 7) text = islandPrompt(text, lang, cityName);
+  if ((premise === 6 || premise === 7)) text += lang === 'en' ? '\nNo coins or resident keys. Public roles are separate from residents: say with publicRoleId asks a present role at your location publicly. No remote chat; normal writing/reading charges apply. Roles cannot act, vote, grant resources or reveal hidden facts.' : '\n此世界无旧币和居民密钥。公共角色不属于居民；say 可指定 publicRoleId，向同地在场角色公开提问，每刻一次，问题至多300字。普通写出和读入照常计费；角色不能代行动、投票、发资源或透露隐藏事实。';
   return text;
+}
+
+/**
+ * 第七前提「三城」的系统提示（docs/plans/2026-10-16-three-cities.md §3.2）：开头写籍城；【城】一段改成每座城各有源井与公库；
+ * 重订的联署改成籍在本城的居民；另加【三座城】一段说明属地、宣告、迁籍与所见。只替换已有的句子，找不到就不替换。
+ */
+export function islandPrompt(text, lang, cityName) {
+  if (lang === 'en') {
+    return text
+      .replace(/You are a resident of "([^"]*)"\./, (m, name) => `Your domicile is "${cityName || name}".`)
+      .replace('The tokens the Well yields each day go entirely into the Treasury; the law decides how they are shared.', "Each of the three cities has its own Well and Treasury: the tokens a city's Well yields each day go entirely into that city's Treasury, and that city's laws decide how they are shared. The three Wells yield different amounts.")
+      .replace('Two thirds of the living residents, by signing together, can bypass the current procedure and refound the procedure of lawmaking.', "Two thirds of the living residents domiciled in a city (for at least three days), by signing together, can bypass that city's current procedure and refound its procedure of lawmaking.")
+      .replace('Research institutes serve the whole city', 'Research institutes serve construction anywhere on the island')
+      + '\n\n[Three cities] This island has three cities and the Wilds between them. Inside a city you are bound by that city\'s laws, whoever you are; leaving a city is governed by its laws, entering a city by the laws of the city you enter, and places passed on the way have no say. The Wilds belong to no city and have no city law. A broadcast reaches only those in the city where you stand (or in the Wilds); whispers and transfers reach anywhere. Your domicile is the city you belong to: you took it when you came into the world, and you can move it with settle while standing inside another city, at most once every 7 world days; settling is governed by the new city\'s laws. Whether you are a citizen of a city — and so get its ration or vote — is for that city\'s laws to decide. When you wake you see all of the city you are in, a short part about your home city, and one line for each other place; to learn more about another city, look or go there.';
+  }
+  return text
+    .replace(/你是「([^」]*)」的一位居民。/, (m, name) => `你的籍在「${cityName || name}」。`)
+    .replace('源井每日流出的词元全部进入公库，怎么分配由法律决定。', '这座岛上有三座城，每座城有自己的源井与公库：一座城的源井每日流出的词元全部进入本城的公库，怎么分配由本城的法律决定。三口源井的产出天生不同。')
+    .replace('在世居民的三分之二联署，可以绕过现行程序，重订立法程序。', '籍在一座城、落籍满三日的在世居民的三分之二联署，可以绕过本城现行的程序，重订本城的立法程序。')
+    .replace('研究所覆盖全城', '研究所可为岛上任何地方的施工增效')
+    + '\n\n【三座城】这座岛上有三座城，城与城之间是荒野。你身在哪座城的地界里，就受哪座城的法律管辖，不论你的籍在哪里；离开一座城受那座城的法律管，进入一座城受这座城的法律管，途经之处不管。荒野不属于任何城，那里没有城法。宣告只传遍你所在的城（在荒野里只传遍荒野）；私语和转账不限地点。籍是你所属的城：你入世时落籍，之后可以身在另一座城的地界里用 settle 迁籍，七个世界日一次，迁籍受新城的法律管辖。你是不是一座城的公民、能不能领它的配给、参与它的表决，由那座城的法律决定。醒来时你看到所在的城的全部、籍城的一小段，以及别处各一行；想知道别城的事，要去看（look），或者亲自去。';
 }
 
 /** 从一次感知里取出系统提示需要的量 */
@@ -137,7 +159,7 @@ export function promptParams(perception) {
       ...(p.you?.prayers?.enabled ? { prayers: true } : {}),
       trained: (p.you && p.you.trained) || [],
       lang: p.lang,
-      cityName: p.city && p.city.name,
+      cityName: p.premise === 7 ? p.you?.city?.name : p.city && p.city.name, // 第七前提：籍城
       maxActions: p.you && p.you.maxActionsPerTick,
       ticksPerDay: p.now && p.now.ticksPerDay,
       daysPerMonth: p.now && p.now.daysPerMonth,

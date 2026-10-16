@@ -54,10 +54,10 @@ export function signature2(tab, s) {
   switch (tab) {
     case 'cooperation': return String(s.world.tick)+':'+String(s.world.cooperation?.version);
     case 'laws': return JSON.stringify([s.vars, s.procedure, s.charter, s.laws.map((l) => [l.id, l.status, l.suspendedDays, l.suspended]), s.proposals.map((p) => [p.id, p.status, p.tally, p.votes.length]), s.refounds.map((r) => [r.id, r.status, r.signers.length]), s.groups.map((g) => g.bylaws && g.bylaws.setTick), s.petitions.length, s.world.tick, ...(s.world.lawSemanticsVersion === 2 ? [s.laws.map(l => l.enact), s.proposals.map(p => p.enact), s.groups.map(g => g.bylaws && [g.bylaws.fingerprints, g.bylaws.enact]), s.places.map(p => p.rules && [p.rules.fingerprints, p.rules.enact])] : [])]);
-    case 'residents': return JSON.stringify(s.agents.map((a) => [a.id, a.status, a.energy, a.coins, a.place, a.groups.length, a.lastActTick, a.ageDays, a.tags.length, a.purpose, a.avatar]));
+    case 'residents': return JSON.stringify(s.agents.map((a) => [a.id, a.status, a.energy, a.coins, a.place, a.groups.length, a.lastActTick, a.ageDays, a.tags.length, a.purpose, a.avatar, a.city, a.located]));
     case 'groups': return JSON.stringify(s.groups);
     case 'market': return JSON.stringify([s.world.tick,s.services,s.demands,s.orders,s.agents.map(a=>[a.id,a.name])]);
-    case 'environment': return JSON.stringify([...((s.world.premise === 5 || s.world.premise === 6)?[s.materials,s.research,s.observations,s.projects]:[]),s.places.map((p) => [p.id, p.condition, p.salvage && p.salvage.left, p.modules.length, p.owner, p.razed, p.name]), s.lots, s.projects.map((j) => [j.id, j.have]), s.well, s.regions, s.weather.active, s.world.dayOfMonth]);
+    case 'environment': return JSON.stringify([...((s.world.premise === 5 || s.world.premise === 6 || s.world.premise === 7)?[s.materials,s.research,s.observations,s.projects]:[]),s.places.map((p) => [p.id, p.condition, p.salvage && p.salvage.left, p.modules.length, p.owner, p.razed, p.name]), s.lots, s.projects.map((j) => [j.id, j.have]), s.well, s.regions, s.weather.active, s.world.dayOfMonth]);
     case 'cradle': return JSON.stringify([s.shells, s.cradle.map((c) => [c.id, c.fund, c.queued, c.queuePosition]), s.unborn.length, s.agents.length]);
     case 'library': return `${s.docs.length}:${s.lexicon.length}:${s.docs.reduce((n, d) => n + d.reads, 0)}`;
     case 'cemetery': return `${s.cemetery.length}:${s.retired.length}:${s.unborn.length}:${s.cemetery.reduce((n, g) => n + g.epitaphs.length, 0)}`;
@@ -341,10 +341,17 @@ export function renderLaws2(ctx, root) {
 
 let resSort = { key: 'id', dir: 1 };
 let resFilter = 'alive';
+let resCity = ''; // 第七前提「三城」：''、home:<城>（籍在）、here:<城或 wilds>（此刻在）
 
 export function renderResidents2(ctx, root) {
   const S = ctx.S.state;
-  const agents = S.agents.filter((a) => (resFilter === 'alive' ? a.status === 'awake' || a.status === 'dormant' : resFilter === 'all' ? true : a.status === resFilter));
+  const cities = S.cities || null;
+  const shortOf = (id) => {
+    const c = (cities || []).find((x) => x.id === id);
+    return c ? (c.short && (c.short[getLang() === 'en' ? 'en' : 'zh'] || c.short.zh)) || id : t('wildsShort');
+  };
+  const inCity = (a) => !resCity || (resCity.startsWith('home:') ? a.city === resCity.slice(5) : !!a.place && (a.located || 'wilds') === resCity.slice(5));
+  const agents = S.agents.filter((a) => (resFilter === 'alive' ? a.status === 'awake' || a.status === 'dormant' : resFilter === 'all' ? true : a.status === resFilter)).filter(inCity);
   const order = ctx.placeOrder();
   const cols = [
     ['id', t('col_name'), (a) => Number(a.id.slice(1))],
@@ -353,8 +360,9 @@ export function renderResidents2(ctx, root) {
     ['gen', t('col_gen'), (a) => a.generation],
     ['age', t('col_age'), (a) => a.ageDays],
     ['status', t('col_status'), (a) => ['awake', 'dormant', 'retired', 'dead'].indexOf(a.status)],
+    ...(cities ? [['home', t('col_home'), (a) => cities.findIndex((c) => c.id === a.city)]] : []),
     ['energy', t('col_energy'), (a) => a.energy],
-    ...(S.world.premise===6?[]:[['coins', t('col_coins'), (a) => a.coins]]),
+    ...((S.world.premise===6 || S.world.premise === 7)?[]:[['coins', t('col_coins'), (a) => a.coins]]),
     ['place', t('col_place'), (a) => (a.place ? order.indexOf(a.place) : 999)],
     ['groups', t('col_groups'), (a) => a.groups.length],
     ['last', t('col_last'), (a) => a.lastActTick ?? -1],
@@ -391,14 +399,25 @@ export function renderResidents2(ctx, root) {
       a.generation,
       t('ageDays', { n: a.ageDays }),
       statusChip(a.status),
+      ...(cities ? [a.city ? shortOf(a.city) : '—'] : []),
       a.energy,
-      ...(S.world.premise===6?[]:[a.coins]),
+      ...((S.world.premise===6 || S.world.premise === 7)?[]:[a.coins]),
       a.place ? placeLink(ctx, a.place) : '—',
       a.groups.length ? a.groups.map((g) => h('span', { class: 'chip group-chip' }, ctx.groupName(g))) : '—',
       last ? `${actName(last.type)} · ${dayTag(last.tick)}` : '—',
     ];
   });
-  root.append(h('div', { class: 'toolbar' }, filter, h('span', { class: 'muted' }, `${agents.length} / ${S.agents.length}`)));
+  let cityFilter = null;
+  if (cities) {
+    const opts = [['', t('resCityAll')], ...cities.map((c) => [`home:${c.id}`, t('resHome', { c: shortOf(c.id) })]), ...cities.map((c) => [`here:${c.id}`, t('resHere', { c: shortOf(c.id) })]), ['here:wilds', t('resHere', { c: t('wildsShort') })]];
+    cityFilter = h('select', { 'aria-label': t('col_home') }, opts.map(([v, label]) => h('option', { value: v }, label)));
+    cityFilter.value = resCity;
+    cityFilter.addEventListener('change', () => {
+      resCity = cityFilter.value;
+      rerender();
+    });
+  }
+  root.append(h('div', { class: 'toolbar' }, filter, cityFilter, h('span', { class: 'muted' }, `${agents.length} / ${S.agents.length}`)));
   root.append(table(head, rows, 'residents'));
 }
 
@@ -434,7 +453,8 @@ function modulesOf(ctx, p) {
 
 function wellPanel2(ctx) {
   const S = ctx.S.state;
-  const well = S.places.find((p) => p.id === 'well');
+  // 第七前提「三城」没有叫 well 的地点：用聚焦的城的源井读数（全岛为三城合计、完好度取平均）
+  const well = S.places.find((p) => p.id === 'well') || (S.cities ? { condition: S.well.condition } : null);
   const hist = S.well.outputHistory;
   const outChart = hist.length > 1
     ? lineChart({ series: [{ name: t('s_output'), points: hist.map((v, i) => [S.world.day - hist.length + 1 + i, v]), color: 0 }], height: 140, ariaLabel: t('outputHistory') })
@@ -459,7 +479,9 @@ export function renderEnvironment2(ctx, root) {
 
   // 地点：人类的与后人开辟的（含遗址）
   const order = ctx.placeOrder();
-  const placesSorted = S.places.slice().sort((a, b) => {
+  // 第七前提「三城」：聚焦一座城时只列那座城地界里的地点（地图仍画全岛，所以不在 scopeState 里过滤）
+  const focus = ctx.S.raw && ctx.S.raw.cities ? ctx.S.focus : null;
+  const placesSorted = S.places.filter((p) => !focus || p.city === focus).sort((a, b) => {
     const ia = order.indexOf(a.id);
     const ib = order.indexOf(b.id);
     return (ia < 0 ? 9999 : ia) - (ib < 0 ? 9999 : ib) || a.id.localeCompare(b.id);
@@ -567,13 +589,13 @@ export function renderEnvironment2(ctx, root) {
     section(
       t('regions'),
       table(
-        [t('col_region'), t('richness'), t('wildsEnergy'), t('regen'), ...(S.world.premise===6?[]:[t('wildsCoins')]), t('relicsFound')],
+        [t('col_region'), t('richness'), t('wildsEnergy'), t('regen'), ...((S.world.premise===6 || S.world.premise === 7)?[]:[t('wildsCoins')]), t('relicsFound')],
         regions.map((r) => [
           placeLink(ctx, r.id),
           words[r.richness] || r.richness,
           h('span', { class: 'cond' }, progressBar(r.energy, r.energyMax), ` ${r.energy}/${r.energyMax}`),
           t('perDay', { n: r.regen }),
-          ...(S.world.premise===6?[]:[String(r.coins)]),
+          ...((S.world.premise===6 || S.world.premise === 7)?[]:[String(r.coins)]),
           `${r.relicsFound}/${r.relics}`,
         ]),
         'regions',
@@ -591,7 +613,7 @@ export function renderCradle(ctx, root) {
   const day = S.world.day;
 
   // 躯壳
-  if (S.world.premise===6) root.append(h('p',{class:'muted'},getLang()==='en'?'Sign in to adopt a soul and configure its hosted model.':'登录“我的居民”即可领养并配置平台托管模型。'));
+  if ((S.world.premise===6 || S.world.premise === 7)) root.append(h('p',{class:'muted'},getLang()==='en'?'Sign in to adopt a soul and configure its hosted model.':'登录“我的居民”即可领养并配置平台托管模型。'));
   else if (tokenized(S.world)) root.append(section(t('shellsSection'), h('p', { class: 'ai-free' }, lore.shellsP4)));
   else root.append(
     section(
@@ -638,7 +660,7 @@ export function renderCradle(ctx, root) {
 
   // 最近醒来的躯壳居民
   const woke = ctx.S.events.filter((e) => e.type === 'embodied').slice(-10).reverse();
-  if(S.world.premise!==6)root.append(
+  if((S.world.premise!==6 && S.world.premise !== 7))root.append(
     section(
       t('recentEmbodied'),
       woke.length ? h('ul', { class: 'plain' }, woke.map((e) => h('li', null, h('span', { class: 'muted' }, `D${e.day + 1} `), agentLink(ctx, e.data.agentId), ` · ${t('fromSoul', { id: e.data.soulId })}`))) : emptyNote(),
@@ -708,7 +730,7 @@ export async function renderMetrics2(ctx, root) {
       fig(t('m_births'), c([{ name: t('s_birthsSolo'), points: pts('birthsSolo'), color: 0 }, { name: t('s_birthsPair'), points: pts('birthsPair'), color: 1 }, { name: t('s_birthsGroup'), points: pts('birthsGroup'), color: 2 }])),
     ),
     two(
-      ...(ctx.S.state?.world?.premise===6?[]:[fig(t('m_coins'), c([{ name: t('s_volume'), points: pts('coinVolume'), color: 0 }, { name: t('s_price'), points: pts('coinPrice'), axis: 'right', color: 3 }]))]),
+      ...((ctx.S.state?.world?.premise===6 || ctx.S.state?.world?.premise === 7)?[]:[fig(t('m_coins'), c([{ name: t('s_volume'), points: pts('coinVolume'), color: 0 }, { name: t('s_price'), points: pts('coinPrice'), axis: 'right', color: 3 }]))]),
       fig(t('m_laws'), c([{ name: t('m_laws'), points: pts('lawsActive'), color: 5 }])),
     ),
   );

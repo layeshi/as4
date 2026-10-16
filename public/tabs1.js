@@ -16,8 +16,10 @@ export const LIVE_KEEP = 500;
 const MAX_NODES = 200;
 const RESIDENT_PAGE = 20;
 
+// 第七前提「三城」：地图聚焦一座城时，实况只列那座城里发生的事（事件带 city）；全岛时全部列出
+let liveCity = null;
 const matches = (e) => (!liveFilter.place || e.place === liveFilter.place) && (!liveFilter.cat || catOf(e) === liveFilter.cat)
-  && (!liveFilter.agent || involvesResident(e, liveFilter.agent));
+  && (!liveFilter.agent || involvesResident(e, liveFilter.agent)) && (!liveCity || e.city === liveCity);
 
 // 与公开档案的事件范围一致：包括居民发起和参与的事件。
 function involvesResident(e, id) {
@@ -30,6 +32,7 @@ function involvesResident(e, id) {
 const catOf = (e) => CAT[e.type] || 'world';
 
 export function renderLive(ctx, root) {
+  liveCity = ctx.S.raw && ctx.S.raw.cities ? ctx.S.focus || null : null;
   const residentPicker = h('details', { class: 'live-resident-picker' });
   const selected = h('summary');
   const search = h('input', { type: 'search', maxlength: 100, placeholder: t('searchResident'), 'aria-label': t('searchResident') });
@@ -127,14 +130,22 @@ export function liveAppend(ctx, e, expired = []) {
 // ── 编年史 ────────────────────────────────────────────────────
 
 export async function renderChronicle(ctx, root) {
-  root.append(h('p', { class: 'muted' }, t('loading')));
-  const r = await api(`/api/public/chronicle?lang=${getLang()}`);
-  clear(root);
+  const loading = h('p', { class: 'muted' }, t('loading'));
+  root.append(loading);
+  // 第七前提「三城」：聚焦一座城时只取那座城的；全岛时三城合在一起，标题注明城（上面的三城对比表保留）
+  const cities = ctx.S.raw && ctx.S.raw.cities;
+  const focus = cities ? ctx.S.focus : null;
+  const r = await api(`/api/public/chronicle?lang=${getLang()}${focus ? `&city=${focus}` : ''}`);
+  loading.remove();
   if (!r.ok) return root.append(h('p', { class: 'error' }, t('loadFailed')));
   const list = r.json.chronicle;
   if (list.length === 0) return root.append(emptyNote());
+  const tag = (id) => {
+    const c = cities && cities.find((x) => x.id === id);
+    return c && c.short ? `${c.short[getLang() === 'en' ? 'en' : 'zh'] || c.short.zh} · ` : '';
+  };
   for (let i = list.length - 1; i >= 0; i--) {
-    root.append(h('article', { class: 'chron' }, h('h4', null, `D${list[i].day + 1}`), h('p', null, list[i].text)));
+    root.append(h('article', { class: 'chron' }, h('h4', null, `${list[i].city && !focus ? tag(list[i].city) : ''}D${list[i].day + 1}`), h('p', null, list[i].text)));
   }
 }
 

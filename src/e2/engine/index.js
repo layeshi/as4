@@ -180,9 +180,9 @@ function recoverLaw(w) {
 export function prepareCommand(original, cmd) {
   const w = cloneCommandWorld(original);
   w.commandN = cmd.n !== undefined ? cmd.n : w.commandN + 1;
-  const before = w.premise === 6 ? beforeResidents(w) : null;
+  const before = (w.premise === 6 || w.premise === 7) ? beforeResidents(w) : null;
   const done = out => {
-    if (w.premise === 6) {
+    if ((w.premise === 6 || w.premise === 7)) {
       roleActivity(w,out.events); out.events.push(...drainEvents(w)); out.wakes.push(...drainWakes(w));
       const replayed = cmd.type === 'act' && Object.hasOwn(original.actReceipts, `${cmd.payload?.agentId}:${cmd.payload?.experimentGeneration ?? 0}:${cmd.payload?.requestId}`);
       recordResidents(w,before,cmd,replayed ? { ...out.result, replayed:true } : out.result,out.events);
@@ -197,7 +197,7 @@ export function prepareCommand(original, cmd) {
   const handler = COMMANDS[cmd.type];
   if (!handler) return done({ result: bad('invalid_request', { field: 'type' }), events: drainEvents(w), wakes: drainWakes(w) });
   try {
-    if (w.premise === 6) {
+    if ((w.premise === 6 || w.premise === 7)) {
       if (['register','adopt','foster','release','model','letter','weather_vote'].includes(cmd.type)) return done({ result:bad('unauthorized'),events:[],wakes:[] });
       if (hasCoinInput(cmd.payload)) return done({ result:bad('invalid_request',{field:'coins'}),events:[],wakes:[] });
       coinScratch(w);

@@ -1,6 +1,6 @@
 // Pure metadata: safe to import from runner clients without loading the executor.
 export const PROGRAM_LIMITS = Object.freeze({ count: 16, code: 12000, input: 4000, output: 4000, page: 1200 });
-export const programsEnabled = w => w.premise === 6 && w.programServices?.version === 1;
+export const programsEnabled = w => (w.premise === 6 || w.premise === 7) && w.programServices?.version === 1;
 export const PROGRAM_ACTION = {
   base: 0, place: null, module: null, where: null, inner: true,
   params: 'op, program?, title?, description?, inputDescription?, code?, input?',

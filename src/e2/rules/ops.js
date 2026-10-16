@@ -47,7 +47,7 @@ function evalExpr(src, ctx) {
 /** 账户：城公库、在世的居民、未解散的社群、摇篮中的灵魂（只能作为去向） */
 function account(v, ctx, { dest = false, what = '账户' } = {}) {
   if (!isRef(v)) throw typeErr(`${what}不是一个账户（得到 ${v === null ? 'null' : typeof v}）`);
-  if (v.$ === 'treasury') return { k: 'treasury' };
+  if (v.$ === 'treasury') return v.city ? { k: 'treasury', city: v.city } : { k: 'treasury' };
   if (v.$ === 'soul') {
     if (!dest) throw typeErr('灵魂只能作为转入的一方');
     if (!ctx.host.isLive(v)) throw typeErr(`灵魂 ${v.id} 不在摇篮里`);

@@ -5,7 +5,7 @@ import { section, table, placeLink } from './render.js';
 export { renderMaterialsMarket } from './market-ui.js';
 export function renderMaterialEnvironment(ctx, root) {
   const s = ctx.S.state;
-  if ((s.world.premise !== 5 && s.world.premise !== 6)) return;
+  if ((s.world.premise !== 5 && s.world.premise !== 6 && s.world.premise !== 7)) return;
   root.append(
     section(
       '物料',

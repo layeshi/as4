@@ -21,6 +21,8 @@ import { moveBaseCost, isWildOpen, hasGate, hasEnterRule, defaultMayEnter } from
 import { hasRelay } from '../places.js';
 import { isWeatherActive } from '../environment.js';
 import { needPlace, needAgent, recordUtterance, needName } from './util.js';
+import { multiCity, cityOfPlace, currentCity, isCityId, cityValue } from '../cities.js';
+import { hooks } from '../hooks.js';
 
 const move = {
   validate(ctx, args) {
@@ -106,7 +108,7 @@ const mute = {
     let key;
     // Q38 A：居民仍可叫 anonymous；这个参数始终指所有匿名私语，屏蔽同名居民用 ID。
     if (args.who === 'anonymous') key = 'anonymous';
-    else if (w.premise === 6 && typeof args.who === 'string' && args.who.startsWith('role:') && w.publicRoles[args.who.slice(5)]) key = args.who;
+    else if ((w.premise === 6 || w.premise === 7) && typeof args.who === 'string' && args.who.startsWith('role:') && w.publicRoles[args.who.slice(5)]) key = args.who;
     else {
       const t = findAgent(w, args.who);
       if (!t) fail('not_found');
@@ -143,8 +145,10 @@ const broadcast = {
   apply(ctx, plan) {
     const { w, a } = ctx;
     const script = recordUtterance(ctx, plan.text, { remember: false });
+    // 第七前提「三城」：宣告只传给此刻与发言者同在一座城地界里（荒野里则同在荒野）的人
+    const here = multiCity(w) ? cityOfPlace(w, a.place) : undefined;
     for (const o of Object.values(w.agents)) {
-      if (o.id !== a.id && o.status === 'awake') pushInbox(w, o, 'broadcast', { from: ref(a), text: plan.text });
+      if (o.id !== a.id && o.status === 'awake' && (here === undefined || cityOfPlace(w, o.place) === here)) pushInbox(w, o, 'broadcast', { from: ref(a), text: plan.text });
     }
     emit(w, 'broadcast', { agent: a.id, place: a.place, data: { text: plan.text, script } });
     return {};
@@ -154,6 +158,15 @@ const broadcast = {
 /** give 的接收方：居民（ID 或名字）、社群 ID，或 "treasury" */
 function needRecipient(w, v) {
   needId(v);
+  if (multiCity(w)) {
+    // 第七前提：treasury 是此刻所在的城的公库（荒野里没有）；treasury:north|west|east 指定一座城
+    const m = /^treasury:(.+)$/.exec(v);
+    if (m) { if (!isCityId(m[1])) fail('not_found'); return { kind: 'treasury', city: m[1] }; }
+    if (v === 'treasury') {
+      if (currentCity(w) === null) fail('invalid_args', { zh: '荒野里没有公库：写 "treasury:north" / "treasury:west" / "treasury:east" 指定一座城。', en: 'There is no treasury in the Wilds: write "treasury:north" / "treasury:west" / "treasury:east".' });
+      return { kind: 'treasury', city: currentCity(w) };
+    }
+  }
   if (v === 'treasury') return { kind: 'treasury' };
   const g = Object.prototype.hasOwnProperty.call(w.groups, v) ? w.groups[v] : null;
   if (g) {
@@ -190,9 +203,10 @@ const give = {
     a.coins -= coins;
     let target;
     if (to.kind === 'treasury') {
-      w.treasury.energy += energy;
-      w.treasury.coins += coins;
-      target = 'treasury';
+      const t = to.city ? cityValue(w, to.city, 'treasury') : w.treasury;
+      t.energy += energy;
+      t.coins += coins;
+      target = to.city ? `treasury:${to.city}` : 'treasury';
     } else if (to.kind === 'group') {
       to.group.treasury.energy += energy;
       to.group.treasury.coins += coins;
@@ -368,4 +382,38 @@ const internalize = {
     return { index: plan.index, weight: plan.weight };
   },
 };
-export const basicHandlers = { internalize, impart, mute, move, say, whisper, broadcast, give, remember, forget, diary, will };
+/**
+ * 第七前提「三城」：迁籍（docs/plans/2026-10-16-three-cities.md §2.2）。只能在一座城的地界里发起，目标就是这座城，不能是现在的籍城；
+ * 距上次迁籍须满 7 个世界日。它是这座城地界上的动作，受这座城的 before:settle 管，原城管不着。
+ * 成功后先在原城触发 on:emigrate，再在新城触发 on:settle（遗法 l4 据此去掉、加上公民标签）。
+ */
+export const SETTLE_INTERVAL_DAYS = 7;
+const settle = {
+  validate(ctx) {
+    const { w, a } = ctx;
+    if (!multiCity(w)) fail('invalid_args');
+    const here = cityOfPlace(w, a.place);
+    if (here === null) fail('wrong_place', { zh: '荒野不属于任何城：迁籍须身在一座城的地界里。', en: 'The Wilds belong to no city: you must be inside a city to settle there.' });
+    if (here === a.city) fail('already', { zh: '你的籍已经在这座城。', en: 'Your domicile is already this city.' });
+    const today = clockDay(w);
+    if (a.settleDay !== null && today - a.settleDay < SETTLE_INTERVAL_DAYS) {
+      const until = a.settleDay + SETTLE_INTERVAL_DAYS;
+      fail('cooldown', { zh: `距上次迁籍须满 ${SETTLE_INTERVAL_DAYS} 个世界日，到第 ${until} 日。`, en: `${SETTLE_INTERVAL_DAYS} world days must pass since your last settling: until day ${until}.` }, { untilDay: until });
+    }
+    return { to: here, from: a.city, cost: ctx.cost(1) };
+  },
+  apply(ctx, plan) {
+    const { w, a } = ctx;
+    const day = clockDay(w);
+    a.city = plan.to;
+    a.settledDay = day;
+    a.settleDay = day;
+    (w.dayLog.migrations ??= []).push({ id: a.id, name: a.name, from: plan.from, to: plan.to });
+    emit(w, 'settle', { agent: a.id, place: a.place, data: { agentId: a.id, name: a.name, from: plan.from, to: plan.to } });
+    hooks.fire(w, 'emigrate', { agent: a.id, city: plan.from });
+    hooks.fire(w, 'settle', { agent: a.id, city: plan.to });
+    return { city: plan.to, from: plan.from };
+  },
+};
+
+export const basicHandlers = { internalize, impart, mute, move, say, whisper, broadcast, give, remember, forget, diary, will, settle };

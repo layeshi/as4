@@ -1,5 +1,5 @@
 import { stripCoins } from './p6/coins.js';
-const p6View = (fn) => (w,...args) => { const out=fn(w,...args); return w.premise===6 ? stripCoins(out) : out; };
+const p6View = (fn) => (w,...args) => { const out=fn(w,...args); return (w.premise===6 || w.premise === 7) ? stripCoins(out) : out; };
 import { lawProtectionView } from './engine/law-semantics.js';
 import { premised as isPremised } from './world.js';
 import { weatherCodesFor } from './engine/weather.js';
@@ -24,11 +24,14 @@ import { publicState, publicEvent, ownerEvent, publicAgent, publicMemories, publ
 import { publicMap } from './map/index.js';
 import { researchMetrics } from './metrics.js';
 import { publicLore } from './lore/index.js';
+import { wellPlace } from './engine/environment.js';
+import { multiCity, cityValue, CITY_IDS } from './engine/cities.js';
 
 /** SSE tick 事件的精简状态。nextTickAt 只存在于运行时，由调用者传入；第二纪另带 shells: { free, total } */
 function tickSummary(w, { nextTickAt = null } = {}) {
+  if (multiCity(w)) return islandTickSummary(w, nextTickAt);
   const hist = w.well.outputHistory;
-  const well = w.places.well;
+  const well = wellPlace(w);
   return {
     ...(lawProtectionView(w) ? { lawProtection: lawProtectionView(w) } : {}),
     tick: w.clock.tick,
@@ -37,6 +40,26 @@ function tickSummary(w, { nextTickAt = null } = {}) {
     agents: agentList(w).filter(isAlive).map((a) => ({ id: a.id, place: a.place, energy: a.energy, status: a.status })),
     treasury: { energy: w.treasury.energy, coins: w.treasury.coins },
     well: { condition: well ? well.condition : null, outputYesterday: hist.length ? hist[hist.length - 1] : null },
+    shells: { free: shellsFree(w), total: w.shells.slots },
+  };
+}
+
+/** 第七前提「三城」：每座城一份公库与源井，顶层是全岛合计（源井完好度取三口的平均） */
+function islandTickSummary(w, nextTickAt) {
+  const cities = Object.fromEntries(CITY_IDS.map((id) => {
+    const hist = cityValue(w, id, 'well').outputHistory;
+    return [id, { treasury: { energy: cityValue(w, id, 'treasury').energy }, well: { condition: wellPlace(w, id).condition, outputYesterday: hist.length ? hist[hist.length - 1] : null } }];
+  }));
+  const list = Object.values(cities);
+  return {
+    ...(lawProtectionView(w) ? { lawProtection: lawProtectionView(w) } : {}),
+    tick: w.clock.tick,
+    day: Math.floor(w.clock.tick / P.ticksPerDay),
+    nextTickAt,
+    agents: agentList(w).filter(isAlive).map((a) => ({ id: a.id, place: a.place, energy: a.energy, status: a.status, city: a.city })),
+    treasury: { energy: list.reduce((n, c) => n + c.treasury.energy, 0) },
+    well: { condition: Math.round(list.reduce((n, c) => n + c.well.condition, 0) / list.length), outputYesterday: list.reduce((n, c) => n + (c.well.outputYesterday || 0), 0) },
+    cities,
     shells: { free: shellsFree(w), total: w.shells.slots },
   };
 }

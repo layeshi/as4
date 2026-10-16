@@ -20,7 +20,8 @@ export const pct = (bp) => `${Math.round(bp / 100)}%`;
  * city：按当前语言取好的城名（ctx.cityName()）。返回 { heading, tooltip, document }。
  */
 export function topTitle(world, city) {
-  const human = world.cityName === world.humanCityName.zh ? '' : t('humanCalled', { name: world.humanCityName[getLang()] });
+  // 第七前提的全岛级没有单一的城，humanCityName 为 null
+  const human = !world.humanCityName || world.cityName === world.humanCityName.zh ? '' : t('humanCalled', { name: world.humanCityName[getLang()] });
   if (!tokenized(world)) return { heading: city, tooltip: human, document: `${t('title')} · ${city}` };
   return { heading: t('brandToken'), tooltip: [t('cityNamed', { name: city }), human].filter(Boolean).join(' · '), document: t('brandToken') };
 }

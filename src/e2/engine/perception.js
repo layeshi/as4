@@ -30,7 +30,7 @@ import { truncateCp, cpLength } from '../../text.js';
 import { agentCap } from './economy.js';
 import { metabolismIn, weightOf } from './lifecycle.js';
 import { actionCost, cost4 } from './actions/util.js';
-import { isWeatherActive } from './environment.js';
+import { isWeatherActive, wellPlace } from './environment.js';
 import { omensAt } from './weather.js';
 import { hasRelay, functioningModule, hasModuleAt, isFunctioning, wallInscriptions, costMultiplier, costMultiplierBp, ownerView, moduleOf } from './places.js';
 import { gatedFor, hasGate, isWildOpen } from './movement.js';
@@ -42,6 +42,8 @@ import { usesLawSemantics2, lawProtectionView } from './law-semantics.js';
 import { previewBefore, beforeIndex } from './rules.js';
 import { mayPropose, votersOf, openCityProposals, openRefounds, refoundNeeded, liveSigners, refoundElectorate, procedureHealth, rngCopy } from './legislation.js';
 import { shellsFree, queuePosition } from './shells.js';
+import { multiCity, currentCity, cityDef, cityValue, withCity, atAgent, CITY_IDS } from './cities.js';
+import { mapFor } from '../map/index.js';
 
 const ref = (a) => ({ id: a.id, name: a.name });
 const refId = (w, id) => (id && w.agents[id] ? ref(w.agents[id]) : null);
@@ -80,8 +82,10 @@ const clipText = (text, max) => clip(text, max).text;
  *   nextTickAt  下一刻开始的现实毫秒时间戳（只存在于 HTTP 层，不进入世界状态）
  */
 export function buildPerception(w, agentId, opts = {}) {
-  const out=perceptionRaw(w,agentId,opts);
-  if(w.premise===6&&out) { out.publicRoles=publicRoles(w);stripCoins(out); }
+  const a0 = w.agents[agentId];
+  // 第七前提「三城」：在居民所在之处的城的上下文里看（城法、天象、中继、公库都是那座城的），再加上籍城与别处
+  const out = multiCity(w) && a0 ? atAgent(w, a0, () => islandPerception(w, a0, perceptionRaw(w, agentId, opts), opts)) : perceptionRaw(w,agentId,opts);
+  if((w.premise===6 || w.premise === 7)&&out) { out.publicRoles=publicRoles(w);stripCoins(out); }
   if (out && programsEnabled(w)) out.programServices = { version: 1 };
   if (out && cooperationEnabled(w)) out.cooperation = { version: 1, brief: cooperationBrief(w, agentId, opts.lang) };
   return out;
@@ -261,7 +265,7 @@ function hereView(w, a, l, lang, wallList, openOffers, allAgents, projectsHere) 
     };
   });
   const projects = projectsHere.map((j) => ({
-    ...((w.premise === 5 || w.premise === 6)?{phase:j.phase,needMaterials:j.needMaterials,haveMaterials:j.haveMaterials,needWork:j.needWork,progress:j.progress,access:j.access,participation:projectParticipation(w,j,a)}:{}),
+    ...((w.premise === 5 || w.premise === 6 || w.premise === 7)?{phase:j.phase,needMaterials:j.needMaterials,haveMaterials:j.haveMaterials,needWork:j.needWork,progress:j.progress,access:j.access,participation:projectParticipation(w,j,a)}:{}),
     id: j.id, build: j.build, ...(j.lot ? { lot: j.lot } : {}), ...(j.on ? { on: j.on } : {}), ...(j.module ? { module: j.module } : {}), ...(j.to ? { to: j.to } : {}),
     name: j.name ?? null, need: j.need, have: j.have, contributors: Object.keys(j.contributors).length, expiresDay: j.expiresDay,
     owner: ownerView(w, j.owner), ...(j.inscription ? { inscription: j.inscription } : {}),
@@ -292,10 +296,10 @@ function hereView(w, a, l, lang, wallList, openOffers, allAgents, projectsHere) 
     district: { code: place.district, text: l.district[place.district] },
     description: placeDescription(place, lang),
     owner: ownerView(w, place.owner),
-    condition: place.condition === null ? null : cond(l, place.condition, a.place === 'well'),
+    condition: place.condition === null ? null : cond(l, place.condition, place.landmark === 'well'),
     razed: place.razed,
     costMultiplier: costMultiplier(w, a.place),
-    ...((w.premise === 5 || w.premise === 6)?{materialRecoverable:place.materialRecoverable}:{}),
+    ...((w.premise === 5 || w.premise === 6 || w.premise === 7)?{materialRecoverable:place.materialRecoverable}:{}),
     salvage: place.salvageMax > 0 ? { left: place.salvage, max: place.salvageMax } : null,
     modules,
     gate: gate ? { functioning: isFunctioning(place, gate), youMayEnter: !gatedFor(w, a, a.place) } : null,
@@ -329,14 +333,89 @@ function hereView(w, a, l, lang, wallList, openOffers, allAgents, projectsHere) 
     };
   }
   if (cradle) here.cradle = { functioning: isFunctioning(place, cradle) };
-  if (a.place === 'well') {
+  if (place.landmark === 'well' && w.well) {
     const hist = w.well.outputHistory;
-    here.well = { outputYesterday: hist.length ? hist[hist.length - 1] : null, drawPoolLeft: w.well.drawPoolLeft, condition: cond(l, w.places.well.condition, true), ...(tokenized(w) ? { upgrades: upgradeView(w) } : {}) };
+    here.well = { outputYesterday: hist.length ? hist[hist.length - 1] : null, drawPoolLeft: w.well.drawPoolLeft, condition: cond(l, wellPlace(w).condition, true), ...(tokenized(w) ? { upgrades: upgradeView(w) } : {}) };
   } else if (place.explorable) {
     const band = richnessBand(w.regions[a.place].energy, humanDefs(w)[a.place].wild.energyMax * K(w));
     here.wilds = { richness: band, text: l.richnessWild[band] };
   }
   return here;
+}
+
+// ── 第七前提「三城」：所在的城、籍城、别处 ───────────────────────────
+
+/** 一座城的展示名：仍是人类留下的名字时随语言切换 */
+function islandCityName(w, id, lang) {
+  if (id === null) return lang === 'en' ? 'the Wilds' : '荒野';
+  const def = cityDef(w, id);
+  const name = cityValue(w, id, 'cityName');
+  return name === def.name.zh ? def.name[lang === 'en' ? 'en' : 'zh'] : name;
+}
+
+/** 某一处（城或荒野）的地点 ID */
+const regionPlaces = (w, id) => Object.values(w.places).filter((p) => (p.city ?? null) === id).map((p) => p.id);
+
+/**
+ * 第七前提的感知（docs/plans/2026-10-16-three-cities.md §3.1）：在 perceptionRaw 的结果上——
+ * you 加籍城与所在城；city 换成所在的城（荒野里是荒野）的地点与在场者，地点名单只列这一处和通往别处的出口；
+ * home 是籍城的一小段（籍城不是所在城时）；elsewhere 是别的城与荒野各一行。
+ */
+function islandPerception(w, a, out, opts) {
+  if (!out || !out.city || a.status !== 'awake') return out;
+  const lang = out.lang;
+  const here = currentCity(w);
+  out.you.city = { id: a.city, name: islandCityName(w, a.city, lang), settledDay: a.settledDay, settleDay: a.settleDay };
+  out.you.located = here;
+  const mine = new Set(regionPlaces(w, here));
+  const streets = mapFor(w).streets.map(([x, y]) => [x, y]).concat(w.paths.map((p) => [p.a, p.b]));
+  const exits = new Set();
+  for (const [x, y] of streets) {
+    if (mine.has(x) && !mine.has(y)) exits.add(y);
+    if (mine.has(y) && !mine.has(x)) exits.add(x);
+  }
+  out.city.id = here;
+  out.city.name = islandCityName(w, here, lang);
+  out.city.places = out.city.places.filter((p) => mine.has(p.id) || exits.has(p.id)).map((p) => (exits.has(p.id) ? { ...p, exit: true, city: w.places[p.id].city ?? null } : p));
+  out.city.residents = out.city.residents.filter((r) => mine.has(w.agents[r.id].place));
+  if (here === null) {
+    // 荒野不属于任何城：没有公库、源井、法律与立法程序
+    for (const k of ['treasury', 'wellOutputYesterday', 'vars', 'procedure', 'laws', 'proposals', 'refounds', 'charter', 'charterCanonical', 'petitions', 'shells']) delete out.city[k];
+  }
+  const costs = travelCosts(w, a.place);
+  const regions = [...CITY_IDS, null].filter((id) => id !== here);
+  out.elsewhere = regions.map((id) => {
+    const ids = regionPlaces(w, id);
+    const best = ids.reduce((m, pid) => (costs[pid] !== undefined && (m === null || costs[pid] < m) ? costs[pid] : m), null);
+    const alive = agentList(w).filter(isAlive);
+    return {
+      id, name: islandCityName(w, id, lang),
+      distance: best === null ? null : best * K(w),
+      present: alive.filter((o) => ids.includes(o.place)).length,
+      ...(id === null ? {} : {
+        residents: alive.filter((o) => o.city === id).length,
+        wellOutputYesterday: cityValue(w, id, 'well').outputHistory.slice(-1)[0] ?? null,
+      }),
+    };
+  });
+  if (a.city !== here) {
+    out.home = withCity(w, a.city, () => {
+      const l = L(lang);
+      const proposals = filterValues(w.proposals, (p) => p.status === 'open' && p.voters.includes(a.id), w.counters.p).map((p) => proposalEntry(w, a, p, lang));
+      const refounds = openRefounds(w).filter((r) => !r.electorate || r.electorate.includes(a.id)).map((r) => ({ id: r.id, by: refId(w, r.by), text: r.text, signers: liveSigners(w, r).length, needed: refoundNeeded(w, r), expiresTick: r.expiresTick, signed: r.signers.includes(a.id) }));
+      const last = w.metrics.at(-1)?.cities?.[a.city];
+      void l;
+      return {
+        id: a.city, name: islandCityName(w, a.city, lang),
+        treasury: { energy: w.treasury.energy },
+        wellOutputYesterday: w.well.outputHistory.slice(-1)[0] ?? null,
+        rationYesterday: last ? last.rationPerCapita ?? null : null,
+        weather: w.weather.active.map((x) => ({ code: x.type, daysLeft: x.endDay - clockDay(w) + 1 })),
+        proposals, refounds,
+      };
+    });
+  }
+  return out;
 }
 
 // ── city ───────────────────────────────────────────────────
@@ -400,7 +479,7 @@ function proposalEntry(w, a, p, lang) {
 function cityView(w, a, l, lang, day, costs, allAgents, openProposals, pendingRefounds, activeGroups) {
   const seasonF = SEASON_TABLE[dayOfMonthOf(day)];
   const sBand = seasonBand(seasonF);
-  const hist = w.well.outputHistory;
+  const hist = w.well ? w.well.outputHistory : []; // 第七前提：荒野里没有源井与公库
   const pop = { awake: 0, dormant: 0, dead: 0, retired: 0, cradle: Object.keys(w.souls).length };
   for (const o of allAgents) pop[o.status]++;
   const lexicon = tailRecordValues(w.lexicon, P.lexiconInPerception).map((e) => ({ word: e.word, meaning: e.redacted ? l.redacted : e.meaning }));
@@ -435,7 +514,7 @@ function cityView(w, a, l, lang, day, costs, allAgents, openProposals, pendingRe
     name: cityDisplayName(w.cityName, lang),
     season: { permille: seasonF, band: sBand, text: l.season[sBand] },
     weather: w.weather.active.map((x) => ({ code: x.type, text: l.weather[x.type], daysLeft: x.endDay - day + 1 })),
-    treasury: { energy: w.treasury.energy, coins: w.treasury.coins },
+    treasury: w.treasury ? { energy: w.treasury.energy, coins: w.treasury.coins } : null,
     wellOutputYesterday: hist.length ? hist[hist.length - 1] : null,
     population: pop,
     shells: { free: shellsFree(w), total: w.shells.slots, cost: P.shellCost },
@@ -506,13 +585,13 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, pro
     }
     if (type === 'offer' && !functioningModule(here, 'board')) notes.push({ code: 'noBoard', text: N.noBoard });
     // 物理的可用性
-    if (def.place && !(def.place === 'wilds' ? here.explorable : a.place === def.place)) deny(reasonWrong(type));
+    if (def.place && !(def.place === 'wilds' ? here.explorable : def.place === 'well' && multiCity(w) ? here.landmark === 'well' : a.place === def.place)) deny(reasonWrong(type));
     switch (type) {
       case 'gather':
-        if((w.premise === 5 || w.premise === 6)&&(!w.materialZones[a.place]||!w.materialZones[a.place].stock))deny({code:'nothing_left',text:'请前往有存量的回收地带。'});
+        if((w.premise === 5 || w.premise === 6 || w.premise === 7)&&(!w.materialZones[a.place]||!w.materialZones[a.place].stock))deny({code:'nothing_left',text:'请前往有存量的回收地带。'});
         break;
       case 'construct':
-        if (w.premise === 5 || w.premise === 6) {
+        if (w.premise === 5 || w.premise === 6 || w.premise === 7) {
           const funded = projectsHere.filter(j => j.phase === 'building');
           if (!funded.length) deny({code:'project_unfunded',text:lang === 'en' ? 'No funded project at this site.' : '现场没有资源齐备的工程。'});
           else if (!funded.some(j => projectParticipation(w,j,a).authorized)) deny({code:'not_allowed',text:lang === 'en' ? 'No funded project here permits your participation; inspect project access.' : '现场资源齐备的工程均未授权你施工；请核对参与权限。'});
@@ -526,6 +605,14 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, pro
       case 'move':
         if (Object.keys(costs).length <= 1) deny({ code: 'invalid_args', text: R.nothing });
         break;
+      case 'settle': {
+        // 第七前提：须身在另一座城的地界里，距上次迁籍满 7 个世界日
+        const c = here.city ?? null;
+        if (c === null) deny({ code: 'wrong_place', text: lang === 'en' ? 'The Wilds belong to no city.' : '荒野不属于任何城。' });
+        else if (c === a.city) deny({ code: 'already', text: lang === 'en' ? 'Your domicile is already this city.' : '你的籍已经在这座城。' });
+        else if (a.settleDay !== null && clockDay(w) - a.settleDay < 7) deny({ code: 'cooldown', text: fmt(R.cooldown, { day: a.settleDay + 7 }) });
+        break;
+      }
       case 'broadcast':
         if (eclipse) {
           if (relay) notes.push({ code: 'eclipse', text: N.eclipse });
@@ -607,7 +694,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, pro
         break;
       case 'dismantle':
         if (here.landmark) deny({ code: 'landmark', text: R.landmark });
-        else if (here.open || here.razed || ((w.premise === 5 || w.premise === 6)?here.materialRecoverable:here.salvage) <= 0) deny({ code: 'nothing_left', text: R.nothing_left });
+        else if (here.open || here.razed || ((w.premise === 5 || w.premise === 6 || w.premise === 7)?here.materialRecoverable:here.salvage) <= 0) deny({ code: 'nothing_left', text: R.nothing_left });
         break;
       case 'draw':
         if (entry.available && w.well.drawPoolLeft <= 0) deny({ code: 'pool_exhausted', text: R.pool_exhausted });

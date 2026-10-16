@@ -4,9 +4,9 @@ import { cpLength, truncateCp } from '../../text.js';
 
 export const COOP_LIMITS = Object.freeze({ brief: 400, page: 1200, read: 3600, cards: 32, body: 2000, collaborations: 8, participants: 8, tasks: 8, notes: 32, note: 200 });
 export const COOP_LOOKS = Object.freeze(['cards', 'collaborations', 'relations', 'cooperation_rules']);
-export const cooperationEnabled = w => w.premise === 6 && w.cooperation?.version === 1;
+export const cooperationEnabled = w => (w.premise === 6 || w.premise === 7) && w.cooperation?.version === 1;
 export function enableCooperation(w, args = {}) {
-  if (w.premise !== 6) return bad('not_allowed');
+  if ((w.premise !== 6 && w.premise !== 7)) return bad('not_allowed');
   if (args.version !== 1 || Object.keys(args).some(k => k !== 'version')) return bad('invalid_request', { field: 'version' });
   if (cooperationEnabled(w)) return { ok: true, version: 1, enabledTick: w.cooperation.enabledTick };
   w.cooperation = { version: 1, revision: 1, enabledTick: w.clock.tick, enabledCommand: w.commandN, counters: { card: 0, collaboration: 0, fact: 0 }, cards: {}, collaborations: {}, notes: {}, facts: [], activities: {} };

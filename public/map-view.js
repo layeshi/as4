@@ -47,6 +47,28 @@ export function createView(svg, world, { hud = 40, onChange = () => {} } = {}) {
     onChange({ k, tx, ty, W, H, fitK });
   }
 
+  /** 平滑地移到 (nk, ntx, nty)：约 320 毫秒；不支持动画或用户减少动效时直接到位 */
+  let glideId = 0;
+  function glide(nk, ntx, nty, animate) {
+    const id = ++glideId;
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!animate || reduce || typeof requestAnimationFrame !== 'function') {
+      k = nk; tx = ntx; ty = nty; apply();
+      return;
+    }
+    const k0 = k, tx0 = tx, ty0 = ty, t0 = Date.now(), dur = 320;
+    const step = () => {
+      if (id !== glideId) return;
+      const u = Math.min(1, (Date.now() - t0) / dur);
+      const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+      k = k0 + (nk - k0) * e; tx = tx0 + (ntx - tx0) * e; ty = ty0 + (nty - ty0) * e;
+      apply();
+      if (u < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    setTimeout(() => { if (id === glideId && (k !== nk || tx !== ntx || ty !== nty)) { k = nk; tx = ntx; ty = nty; apply(); } }, dur + 80); // 面板失焦时 rAF 不出帧，到点直接到位
+  }
+
   function fit() {
     measure();
     k = fitK;
@@ -230,6 +252,23 @@ export function createView(svg, world, { hud = 40, onChange = () => {} } = {}) {
     },
     /** 世界坐标 → 屏幕坐标（相对 svg） */
     toScreen: (x, y) => [tx + x * k, ty + y * k],
+    /** 视口此刻看到的世界矩形 [x0, y0, x1, y1]（不含顶部的天穹带） */
+    viewport: () => [(0 - tx) / k, (hud - ty) / k, (W - tx) / k, (H - ty) / k],
+    /** 把世界矩形 [x0, y0, x1, y1] 放进视口（留一点边），用于跳到一座城；animate 时平滑过去 */
+    fitRect([x0, y0, x1, y1], { animate = false } = {}) {
+      measure();
+      const nk = clamp(Math.min(W / Math.max(1, x1 - x0), (H - hud) / Math.max(1, y1 - y0)) * 0.92, kMin(), kMax());
+      const ntx = W / 2 - ((x0 + x1) / 2) * nk;
+      const nty = hud + (H - hud) / 2 - ((y0 + y1) / 2) * nk;
+      fitted = true;
+      glide(nk, ntx, nty, animate);
+    },
+    /** 让世界坐标 (x, y) 落在视口中央，缩放不变（小地图点一下） */
+    centerOn(x, y, { animate = false } = {}) {
+      measure();
+      fitted = true;
+      glide(k, W / 2 - x * k, hud + (H - hud) / 2 - y * k, animate);
+    },
     destroy() {
       svg.removeEventListener('wheel', onWheel);
       svg.removeEventListener('pointerdown', onDown);

@@ -24,6 +24,9 @@ import { livingShells, shellsFree, queuePosition, bodyList } from './shells.js';
 import { HUMAN_PROCEDURE, humanProcedureFor } from '../lore/humanlaws.js';
 import { usesLawSemantics2, lawProtectionView } from './law-semantics.js';
 import { refoundNeeded, liveElectorate, liveSigners, procedureHealth } from './legislation.js';
+import { wellPlace } from './environment.js';
+import { multiCity, withCity, cityOfPlace, cityDef, cityValue, currentCity, CITY_IDS } from './cities.js';
+import { upgradeView } from './upgrades.js';
 
 const ref = (w, id) => (id && w.agents[id] ? { id, name: w.agents[id].name } : null);
 const REDACTED = { zh: L('zh').redacted, en: L('en').redacted };
@@ -49,7 +52,7 @@ export function publicAgent(w, a) {
   const alive = isAlive(a);
   const out = {
     ...materialSummary(w,a),
-    ...(w.premise === 6 ? { avatar: a.avatar ?? null } : {}),
+    ...((w.premise === 6 || w.premise === 7) ? { avatar: a.avatar ?? null } : {}),
     id: a.id, name: a.name, lang: a.lang, bio: a.bio, purpose: a.purpose ?? null, purposeHistory: a.purposeHistory.map((h) => ({ ...h })),
     tags: a.tags.slice(), status: a.status,
     generation: a.generation, authors: a.authors.slice(), children: a.children.slice(),
@@ -59,6 +62,7 @@ export function publicAgent(w, a) {
     ...(prayersEnabled(w) ? { prayerPoints: w.prayers.accounts[a.id]?.balance || 0, prayers: prayerView(w, a.id) } : {}),
     groups: a.groups.slice(), script: a.script, lastActTick: a.lastActTick,
     stats: { ...a.stats },
+    ...(multiCity(w) ? { city: a.city ?? null, located: alive ? cityOfPlace(w, a.place) : null, settledDay: a.settledDay ?? null } : {}),
   };
   if (a.generation >= 1 || w.revealed) out.soul = a.soul;
   // TODO(spec): Q30 — premise 1 models are admin-only, including after curtain.
@@ -124,7 +128,7 @@ function placeBase(w, p) {
   return {
     id: p.id, name: p.name, displayName: both((lang) => placeDisplayName(p, lang)), humanName: p.humanName ? { ...p.humanName } : null, origin: p.origin,
     description: p.description, descriptionText: both((lang) => placeDescription(p, lang).text), renamedBy: p.renamedBy,
-    district: p.district, xy: p.xy.slice(), wild: p.wild, open: p.open, explorable: p.explorable, landmark: p.landmark,
+    district: p.district, ...(multiCity(w) ? { city: p.city ?? null, role: p.role ?? null } : {}), xy: p.xy.slice(), wild: p.wild, open: p.open, explorable: p.explorable, landmark: p.landmark,
     razed: p.razed, ruined: p.ruined,
     condition: p.condition, band: p.condition === null ? null : conditionBand(p.condition),
     decayPerDay: p.decayPerDay, wallSlots: p.wallSlots,
@@ -256,6 +260,60 @@ export function publicCradle(w) {
  * extra：HTTP 层才知道的东西，如 { nextTickAt }（不进入世界状态）。
  */
 export function publicState(w, extra = {}) {
+  if (multiCity(w)) return islandPublicState(w, extra);
+  return cityPublicState(w, extra);
+}
+
+/**
+ * 第七前提「三城」的全量概览（docs/plans/2026-10-16-three-cities.md §6）：顶层是全岛（城外的上下文，城的字段是合计或空），
+ * cities 里每座城一块；法律、提案、重订带 city。观测站按地图聚焦的城取 cities 里的那一块。
+ */
+function islandPublicState(w, extra) {
+  const base = withCity(w, null, () => cityPublicState(w, extra));
+  const cities = CITY_IDS.map((id) => withCity(w, id, () => {
+    const day = clockDay(w);
+    const def = cityDef(w, id);
+    const s = cityPublicState(w, extra);
+    const alive = agentList(w).filter(isAlive);
+    return {
+      id, cityName: w.cityName, humanName: { ...def.name }, short: { ...def.short }, wellShare: def.wellShare,
+      port: def.port, well: s.well, wellPlace: def.well, parliament: def.parliament, agora: def.agora,
+      treasury: s.treasury, vars: s.vars, procedure: s.procedure, charter: s.charter,
+      laws: s.laws.map((l) => ({ ...l, city: id })), proposals: s.proposals.map((p) => ({ ...p, city: id })),
+      refounds: s.refounds.map((r) => ({ ...r, city: id })), petitions: s.petitions,
+      weather: s.weather, chronicle: s.chronicle,
+      tokens: { supply: w.well.supply, upgradeLevel: w.well.upgrades.length, upgrades: upgradeView(w) },
+      population: {
+        residents: alive.filter((a) => a.city === id).length,
+        awake: alive.filter((a) => a.city === id && a.status === 'awake').length,
+        present: alive.filter((a) => cityOfPlace(w, a.place) === id).length,
+      },
+      day,
+    };
+  }));
+  const sum = (f) => cities.reduce((n, c) => n + f(c), 0);
+  const days = Math.max(0, ...cities.map((c) => c.well.outputHistory.length));
+  return {
+    ...base,
+    world: { ...base.world, cityName: null, humanCityName: null, cities: CITY_IDS.slice() },
+    cities,
+    laws: cities.flatMap((c) => c.laws),
+    proposals: cities.flatMap((c) => c.proposals),
+    refounds: cities.flatMap((c) => c.refounds),
+    petitions: cities.flatMap((c) => c.petitions.map((p) => ({ ...p, city: c.id }))),
+    chronicle: cities.flatMap((c) => c.chronicle.map((e) => ({ ...e, city: c.id }))).sort((x, y) => x.day - y.day),
+    treasury: { energy: sum((c) => c.treasury.energy) },
+    well: {
+      condition: Math.round(sum((c) => c.well.condition) / cities.length),
+      drawPoolLeft: sum((c) => c.well.drawPoolLeft),
+      outputHistory: Array.from({ length: days }, (_, i) => sum((c) => c.well.outputHistory[c.well.outputHistory.length - days + i] || 0)),
+    },
+    wildsWeather: base.weather,
+    weather: { ...base.weather, omens: visibleOmens(w), active: cities.flatMap((c) => c.weather.active.map((x) => ({ ...x, city: c.id }))).concat(base.weather.active.map((x) => ({ ...x, city: null }))) },
+  };
+}
+
+function cityPublicState(w, extra = {}) {
   const day = clockDay(w);
   const finished = Object.values(w.proposals).filter((p) => p.status !== 'open').slice(-50);
   const open = Object.values(w.proposals).filter((p) => p.status === 'open');
@@ -277,7 +335,7 @@ export function publicState(w, extra = {}) {
       nextTickAt: extra.nextTickAt ?? null, tickMs: P.tickMs,
     },
     ...(prayersEnabled(w) ? { prayers: prayerView(w) } : {}),
-    ...(w.premise === 6 ? { publicRoles: publicRoles(w), startupIssued: Object.keys(w.access.startupClaims).length * 50000 } : {}),
+    ...((w.premise === 6 || w.premise === 7) ? { publicRoles: publicRoles(w), startupIssued: Object.keys(w.access.startupClaims).length * 50000 } : {}),
     vars: { ...w.vars },
     procedure: {
       ordinary: { lawId: w.procedure.ordinary, reading: both((lang) => procReading(w, 'ordinary', lang)), ...(usesLawSemantics2(w) ? { health: procedureHealth(w, 'ordinary') } : {}) },
@@ -306,8 +364,8 @@ export function publicState(w, extra = {}) {
       queue: Object.values(w.souls).filter((s) => s.fundedTick !== null).sort((x, y) => x.fundedTick - y.fundedTick || idNum(x.id) - idNum(y.id))
         .map((s, i) => ({ soulId: s.id, name: s.name, position: i + 1, fundedDay: Math.floor(s.fundedTick / P.ticksPerDay), queueExpiresDay: s.queueExpiresDay })),
     },
-    treasury: { ...w.treasury },
-    well: { condition: w.places.well.condition, drawPoolLeft: w.well.drawPoolLeft, outputHistory: w.well.outputHistory.slice() },
+    treasury: w.treasury ? { ...w.treasury } : null,
+    well: w.well ? { condition: wellPlace(w).condition, drawPoolLeft: w.well.drawPoolLeft, outputHistory: w.well.outputHistory.slice() } : null,
     wilds: wildsSummary(w),
     regions: publicRegions(w),
     weather: publicWeather(w),
@@ -358,7 +416,7 @@ export function publicWeather(w) {
     types: weatherCodesFor(w).filter((c) => c !== 'calm'),
     active: w.weather.active.map((x) => ({ type: x.type, startDay: x.startDay, endDay: x.endDay, daysLeft: x.endDay - day + 1 })),
     history: w.weather.history.map((h) => ({ ...h, votes: { ...h.votes } })),
-    ...(w.premise === 6 ? { mode: 'random' } : { votes: { month: w.weather.votes.month, tallies: { ...w.weather.votes.tallies } } }),
+    ...((w.premise === 6 || w.premise === 7) ? { mode: 'random' } : { votes: { month: w.weather.votes.month, tallies: { ...w.weather.votes.tallies } } }),
     omens: visibleOmens(w),
   };
 }
@@ -371,6 +429,12 @@ export function publicWeather(w) {
  */
 export function publicLaw(w, id) {
   if (typeof id !== 'string') return null;
+  if (multiCity(w)) {
+    // 第七前提：城法写作「城:l<k>」（每座城都有自己的 l1–l6）；社群章程与地点规则照旧
+    const m = /^(north|west|east):(l\d+)$/.exec(id);
+    if (m) return withCity(w, m[1], () => { const out = publicLaw(w, m[2]); return out ? { ...out, city: m[1], id } : null; });
+    if (/^l\d+$/.test(id) && !currentCity(w)) return null; // 不带城名的 l<k> 只在挂着一座城时有意义
+  }
   if (/^l\d+$/.test(id)) {
     const l = Object.prototype.hasOwnProperty.call(w.laws, id) ? w.laws[id] : null;
     if (!l) return null;
@@ -393,6 +457,9 @@ export function publicLaw(w, id) {
 export function eventMatchesLaw(ev, id) {
   const d = ev.data;
   if (!d) return false;
+  // 第七前提：「城:l<k>」只认那座城的事件
+  const c = /^(north|west|east):(l\d+)$/.exec(id);
+  if (c) return ev.city === c[1] && eventMatchesLaw(ev, c[2]);
   if (d.lawId === id || d.law === id || d.target === id || d.by === id) return true;
   const scope = d.scope;
   if (/^l\d+$/.test(id)) return scope === 'city' && d.owner === id;
@@ -412,6 +479,7 @@ export function publicEvent(w, ev, { released = false } = {}) {
   if (ev.vis === 'owner' || ev.vis === 'internal') return null;
   if (ev.vis === 'delayed' && !released) return null;
   const out = { seq: ev.seq, tick: ev.tick, day: ev.day, type: ev.type };
+  if (ev.city !== undefined) out.city = ev.city; // 第七前提：事件属于哪座城（荒野为 null）
   if (ev.agent !== undefined) out.agent = ev.agent;
   if (ev.place !== undefined) out.place = ev.place;
   if (ev.vis === 'delayed') out.delayed = true;
@@ -431,5 +499,6 @@ export function ownerEvent(ev) {
 
 function publicTokens(w) {
   const { max, ...caps } = capDistribution(w);
+  if (multiCity(w)) return { capacity: w.tokens.capacity, basic: w.tokens.basic, supply: 1000, upgradeLevel: CITY_IDS.reduce((n, id) => n + cityValue(w, id, 'well').upgrades.length, 0), caps, shares: Object.fromEntries(CITY_IDS.map((id) => [id, cityDef(w, id).wellShare])) };
   return { capacity: w.tokens.capacity, basic: w.tokens.basic, supply: w.well.supply, upgradeLevel: w.well.upgrades.length, caps };
 }

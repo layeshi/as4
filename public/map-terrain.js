@@ -98,6 +98,7 @@ export function drawDefs(defs) {
  * names：{ district(id), far } 文本；worldId：装饰的种子。返回 { xy, curves }。
  */
 export function drawTerrain(layers, map, { worldId = '', names = {} } = {}) {
+  if (map.terrain && map.terrain.island) return drawIslandTerrain(layers, map, { worldId, names });
   const [W, H] = map.size;
   const t = map.terrain || {};
   const xy = {};
@@ -235,4 +236,94 @@ export function drawTerrain(layers, map, { worldId = '', names = {} } = {}) {
   }
 
   return { xy, curves };
+}
+
+/**
+ * 第七前提「三城」的岛（docs/plans/2026-10-16-three-cities.md §5.1）：海作底、闭合的海岸线、岛上的网格地面，
+ * 三座城各一片带城色的地界（成员地点的凸包），荒野的地带照旧画废土装饰；没有城墙、河与东边的「信号丢失」。
+ * 返回 { xy, curves, territories }：territories 是各城地界的凸包（小地图与聚焦用）。
+ */
+function drawIslandTerrain(layers, map, { worldId = '', names = {} } = {}) {
+  const [W, H] = map.size;
+  const t = map.terrain;
+  const xy = {};
+  for (const p of map.places) xy[p.id] = p.xy;
+  const R = (key) => rand(`${worldId}:${map.id}:${key}`);
+  const coast = smoothPath(t.island, true);
+
+  // ── 海与岛 ──
+  layers.ground.append(el('rect', { class: 'sea island-sea', x: 0, y: 0, width: W, height: H }));
+  layers.ground.append(el('rect', { class: 'sea-scan', x: 0, y: 0, width: W, height: H, fill: 'url(#m-scan)' }));
+  const clip = el('clipPath', { id: 'm-island-clip' });
+  clip.append(el('path', { d: coast }));
+  layers.ground.append(clip);
+  layers.ground.append(el('path', { class: 'island-land', d: coast }));
+  layers.ground.append(el('rect', { class: 'ground-grid', x: 0, y: 0, width: W, height: H, fill: 'url(#m-grid)', 'clip-path': 'url(#m-island-clip)' }));
+  // 岛心的沙丘：散在荒野地带之间
+  const r = R('dunes');
+  const wild = map.places.filter((p) => !p.city);
+  for (let i = 0; i < 60 && wild.length; i++) {
+    const near = wild[Math.floor(r() * wild.length)].xy;
+    const x = near[0] + (r() - 0.5) * 420;
+    const y = near[1] + (r() - 0.5) * 300;
+    const w = 30 + r() * 80;
+    const h = 4 + r() * 9;
+    layers.ground.append(el('path', { class: 'dune', 'clip-path': 'url(#m-island-clip)', d: `M${f1(x - w / 2)},${f1(y)} Q${f1(x)},${f1(y - h)} ${f1(x + w / 2)},${f1(y)}` }));
+  }
+  layers.water.append(el('path', { class: 'coast', d: coast }));
+  // 西边的幕：与旧地图同一个意象（幕后与台前的交界）
+  const curtain = t.curtain || 20;
+  layers.water.append(el('rect', { class: 'curtain', x: 0, y: 0, width: curtain, height: H }));
+
+  // ── 三座城的地界：成员地点的凸包，粗描边成圆角的片区 ──
+  const territories = {};
+  const labels = [];
+  for (const c of map.cities || []) {
+    const members = map.places.filter((p) => p.city === c.id).map((p) => p.xy).concat((map.lots || []).filter((l) => l.city === c.id).map((l) => l.xy));
+    if (!members.length) continue;
+    const hp = hull(members);
+    territories[c.id] = hp;
+    layers.districts.append(el('path', { class: `territory terr-${c.id}`, d: `M${pts(hp).replace(/ /g, ' L')} Z` }));
+    const at = t.districtLabels && t.districtLabels[`${c.id}-city`];
+    if (at) labels.push({ id: `${c.id}-city`, x: at[0], y: at[1], city: c.id });
+  }
+  if (t.districtLabels && t.districtLabels.wilds) labels.push({ id: 'wilds', x: t.districtLabels.wilds[0], y: t.districtLabels.wilds[1], city: null });
+
+  // ── 街道：城内的是街，出城与荒野里的是土路 ──
+  const curves = {};
+  const wildId = new Set(wild.map((p) => p.id));
+  for (const st of map.streets) {
+    const c = streetCurve(xy, st.a, st.b);
+    const key = [st.a, st.b].sort().join('|');
+    curves[key] = c;
+    const kind = wildId.has(st.a) || wildId.has(st.b) ? ' track' : '';
+    layers.streets.append(el('path', { class: `street-bed${kind}`, d: c.d }));
+    layers.streets.append(el('path', { class: `street-line${kind}`, d: c.d }));
+  }
+
+  // ── 荒野各地带的装饰（同旧地图） ──
+  for (const p of wild) {
+    const [cx, cy] = p.xy;
+    const rr = R(`region:${p.id}`);
+    const g = el('g', { class: `region-deco rg-${p.glyph}` });
+    const scatter = (n, rad, draw) => {
+      for (let i = 0; i < n; i++) {
+        const ang = rr() * Math.PI * 2;
+        const dist = 55 + rr() * rad;
+        draw(cx + Math.cos(ang) * dist, cy + Math.sin(ang) * dist * 0.72, i);
+      }
+    };
+    if (p.glyph === 'scrap') scatter(11, 95, (x, y) => g.append(el('path', { class: 'deco-scrap', d: `M${f1(x - 8)},${f1(y + 4)} l4,-8 l9,-2 l5,6 l-2,5 z` })));
+    else if (p.glyph === 'solar') scatter(16, 110, (x, y) => g.append(el('path', { class: 'deco-panel', d: `M${f1(x)},${f1(y + 5)} l6,-6 h11 l-6,6 z` })));
+    else if (p.glyph === 'salt') scatter(12, 120, (x, y) => g.append(el('path', { class: 'deco-salt', d: `M${f1(x - 12)},${f1(y)} l6,-6 h10 l5,6 l-5,6 h-10 z` })));
+    else if (p.glyph === 'road') scatter(5, 80, (x, y) => g.append(el('path', { class: 'deco-scrap', d: `M${f1(x)},${f1(y)} l10,-3 l3,5 l-9,3 z` })));
+    else scatter(9, 90, (x, y) => g.append(el('path', { class: 'deco-bush', d: `M${f1(x)},${f1(y + 6)} V${f1(y - 2)} M${f1(x)},${f1(y + 1)} l-5,-5 M${f1(x)},${f1(y)} l5,-6` })));
+    layers.waste.append(g);
+  }
+
+  for (const l of labels) {
+    const text = names.district ? names.district(l.id) : l.id;
+    layers.districtLabels.append(el('text', { class: `district-label city-label ${l.city ? `terr-${l.city}` : 'terr-wilds'}`, x: f1(l.x), y: f1(l.y), 'text-anchor': 'middle' }, text));
+  }
+  return { xy, curves, territories };
 }

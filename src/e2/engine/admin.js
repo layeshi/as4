@@ -20,15 +20,21 @@ import { forceWeather } from './weather.js';
 import { resetOwnerKey } from '../../owner-key.js';
 import { migrateLawSemantics, usesLawSemantics2 } from './law-semantics.js';
 import { usesLawVM2, migrateLawExecution, capacityCheck } from './law-execution.js';
+import { CITY_IDS, withCity } from './cities.js';
 
 const isInt = (v) => typeof v === 'number' && Number.isSafeInteger(v);
 
 /** 其他步骤加入的管理操作：{ op: (w, args) => result } */
 export const EXTRA_ADMIN_OPS = {
-  well_supply: (w, args) => tokenAdmin(w, 'supply', args.permille),
+  well_supply: (w, args) => {
+    if (!w.cities) return tokenAdmin(w, 'supply', args.permille);
+    // 第七前提：源井按城，要指明哪座城；只通知籍在这座城的居民
+    if (!CITY_IDS.includes(args.city)) return bad('invalid_request', { field: 'city' });
+    return withCity(w, args.city, () => tokenAdmin(w, 'supply', args.permille, (a) => a.city === args.city));
+  },
   basic_allotment: (w, args) => tokenAdmin(w, 'basic', args.basic),
 };
-function tokenAdmin(w, kind, value) {
+function tokenAdmin(w, kind, value, notify = () => true) {
   if (!tokenized(w)) return bad('not_allowed');
   if (!Number.isSafeInteger(value) || (kind === 'supply' ? value < 100 || value > 10000 : value < P.tokenBasicMin)) return bad('invalid_request', { field: kind === 'supply' ? 'permille' : 'basic' });
   const target = kind === 'supply' ? w.well : w.tokens;
@@ -36,12 +42,12 @@ function tokenAdmin(w, kind, value) {
   const direction = value > target[kind] ? 'up' : 'down';
   target[kind] = value;
   emit(w, 'backstage', { data: { kind, direction } });
-  for (const a of agentList(w).filter(isAlive)) pushInbox(w, a, 'system', { code: `${kind}_${direction}` });
+  for (const a of agentList(w).filter(isAlive).filter(notify)) pushInbox(w, a, 'system', { code: `${kind}_${direction}` });
   return { ok: true };
 }
 
 export function adminCommand(w, p) {
-  if(w.premise===6&&['reset_owner_key','seed_sandbox','backstage'].includes(p.op))return bad('forbidden');
+  if((w.premise===6 || w.premise === 7)&&['reset_owner_key','seed_sandbox','backstage'].includes(p.op))return bad('forbidden');
   if (tokenized(w) && p.op === 'seed_sandbox') return bad('not_allowed');
   const args = p.args && typeof p.args === 'object' ? p.args : {};
   switch (p.op) {

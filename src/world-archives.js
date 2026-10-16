@@ -39,7 +39,9 @@ export async function publishWorldArchive(root, id, codeVersion) {
   if(last!==w.commandN)throw Error('World is not at a clean offline snapshot boundary');
   const engine=engineOf(w),destination=archiveDirectory(root,id),temporary=`${destination}.tmp`;
   mkdirSync(temporary,{recursive:true,mode:0o700});
-  if(w.premise===6)durableFile(join(temporary,'relations.json'),JSON.stringify(w.access.residents));
+  if((w.premise===6 || w.premise === 7))durableFile(join(temporary,'relations.json'),JSON.stringify(w.access.residents));
+  // 私有：居民的灵魂原文与形象，只供原管理者或创作者在新世界新建居民时带入（docs/plans/2026-10-16-three-cities.md 决定 25），不公开
+  if((w.premise===6 || w.premise === 7))durableFile(join(temporary,'souls.json'),JSON.stringify(Object.fromEntries(Object.values(w.agents).map(a=>[a.id,{name:a.name,lang:a.lang,bio:a.bio??'',soul:a.soul,avatar:a.avatar??null,status:a.status}]))));
   durableFile(join(temporary,'state.json'),JSON.stringify(engine.publicState(w,{nextTickAt:null})));
   const fd=openSync(join(temporary,'events.jsonl'),'w',0o600);
   let lastEvent=0;

@@ -8,6 +8,7 @@ import { agentList, tokenized } from '../world.js';
 import { source, sink } from './ledger.js';
 import { wellOutput, tokenWellStep } from './environment.js';
 import { reservoirBonus } from './places.js';
+import { multiCity, eachCity } from './cities.js';
 
 // ── 腐坏上限 ────────────────────────────────────────────────
 
@@ -56,10 +57,14 @@ export function decayEnergy(w) {
       sink(w, 'energy', 'decay', loss);
     }
   }
-  const excess = w.treasury.energy - treasuryCap(w);
-  if (excess > 0) {
-    const loss = decayOf(excess);
-    w.treasury.energy -= loss;
-    sink(w, 'energy', 'decay', loss);
-  }
+  const decayTreasury = () => {
+    const excess = w.treasury.energy - treasuryCap(w);
+    if (excess > 0) {
+      const loss = decayOf(excess);
+      w.treasury.energy -= loss;
+      sink(w, 'energy', 'decay', loss);
+    }
+  };
+  if (multiCity(w)) eachCity(w, decayTreasury); // 第七前提：每座城的公库各按本城的腐坏上限
+  else decayTreasury();
 }

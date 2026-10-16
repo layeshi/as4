@@ -13,10 +13,11 @@ import { emit, pushInbox, bad, HASH_RE } from './core.js';
 import { applyDamage } from './environment.js';
 import { hasModuleAt } from './places.js';
 import { hooks } from './hooks.js';
+import { multiCity, currentCity, cityOfPlace, cityDef, withCity, CITY_IDS } from './cities.js';
 
 const P1_CODES = Object.freeze(WEATHER_CODES.filter((c) => c !== 'aurora' && c !== 'migration'));
 export const P4_CODES = Object.freeze(P1_CODES.filter(c => c !== 'drought' && c !== 'bounty'));
-export const weatherCodesFor = (w) => w.premise === 6 ? ['calm', 'quake', 'fog', 'eclipse'] : tokenized(w) ? P4_CODES : premised(w) ? P1_CODES : WEATHER_CODES;
+export const weatherCodesFor = (w) => (w.premise === 6 || w.premise === 7) ? ['calm', 'quake', 'fog', 'eclipse'] : tokenized(w) ? P4_CODES : premised(w) ? P1_CODES : WEATHER_CODES;
 const DEFAULT_WEIGHTS = WEATHER_CODES.map((c) => [c, WEATHER_DEFS[c].weight]);
 
 // ── 投票（命令 weather_vote） ─────────────────────────────────
@@ -26,7 +27,7 @@ const DEFAULT_WEIGHTS = WEATHER_CODES.map((c) => [c, WEATHER_DEFS[c].weight]);
  * 载荷：voterHash（投票者指纹的哈希，由 HTTP 层生成）、type。
  */
 export function weatherVote(w, p) {
-  if (w.premise === 6) return bad('not_found');
+  if ((w.premise === 6 || w.premise === 7)) return bad('not_found');
   if (typeof p.voterHash !== 'string' || !HASH_RE.test(p.voterHash)) return bad('invalid_request', { field: 'voterHash' });
   if (typeof p.type !== 'string' || !weatherCodesFor(w).includes(p.type)) return bad('invalid_request', { field: 'type' });
   const v = w.weather.votes;
@@ -54,11 +55,11 @@ function voteWinner(w) {
  */
 export function scheduleMonth(w, month) {
   const rng = w.rng.weather;
-  const weights = w.premise === 6 ? [['calm',400],['quake',80],['fog',100],['eclipse',60]] : premised(w) ? DEFAULT_WEIGHTS.filter(([c]) => weatherCodesFor(w).includes(c)) : DEFAULT_WEIGHTS;
+  const weights = (w.premise === 6 || w.premise === 7) ? [['calm',400],['quake',80],['fog',100],['eclipse',60]] : premised(w) ? DEFAULT_WEIGHTS.filter(([c]) => weatherCodesFor(w).includes(c)) : DEFAULT_WEIGHTS;
   let type;
   let decidedBy;
   let startDom = null;
-  if (w.premise === 6) {
+  if ((w.premise === 6 || w.premise === 7)) {
     type = pickWeighted(rng, weights); decidedBy = 'random';
   } else if (WEATHER.mode === 'schedule') {
     const entry = WEATHER.schedule.find((s) => s.month === month);
@@ -77,7 +78,7 @@ export function scheduleMonth(w, month) {
       decidedBy = 'random';
     }
   }
-  const votes = w.premise === 6 ? {} : { ...w.weather.votes.tallies };
+  const votes = (w.premise === 6 || w.premise === 7) ? {} : { ...w.weather.votes.tallies };
   w.weather.scheduled = null;
   if (type !== 'calm') {
     if (startDom === null) startDom = 3 + int(rng, 18); // dayOfMonth ∈ [3, 20]
@@ -86,7 +87,7 @@ export function scheduleMonth(w, month) {
     w.weather.scheduled = { month, type, startDay, lead, decidedBy, votes };
     emit(w, 'weather_scheduled', { vis: 'internal', data: { month, type, startDay, lead, decidedBy } });
   }
-  if (w.premise !== 6) w.weather.votes = { month, tallies: {}, voters: [] };
+  if ((w.premise !== 6 && w.premise !== 7)) w.weather.votes = { month, tallies: {}, voters: [] };
 }
 
 /**
@@ -94,7 +95,7 @@ export function scheduleMonth(w, month) {
  * month 缺省为当前月；dayOfMonth 缺省为「今天 + lead + 1」；开始日必须在未来（≥ 明天）。
  */
 export function forceWeather(w, { type, month, dayOfMonth, lead }) {
-  if (w.premise === 6) return bad('forbidden');
+  if ((w.premise === 6 || w.premise === 7)) return bad('forbidden');
   if (typeof type !== 'string' || !(type in WEATHER_DEFS) || type === 'calm' || !weatherCodesFor(w).includes(type)) return bad('invalid_request', { field: 'type' });
   const today = clockDay(w);
   const m = month === undefined || month === null ? monthOfDay(today) : month;
@@ -116,6 +117,14 @@ const OMEN_ID = (s) => `m${s.month}`;
 
 /** 征兆出现的地点：震在所有（没有成为遗址的）地点，其余各有固定地点（人类的地点，成为遗址后就没有了） */
 export function omenPlaces(w, type) {
+  if (multiCity(w)) {
+    // 第七前提「三城」：征兆只出现在当前挂着的那一处（城或荒野）。震在那一处的所有地点；雾在那座城的港口；蚀在那座城的议会；荒野里在所有荒野地点
+    const here = currentCity(w);
+    const live = (p) => !p.razed && (p.city ?? null) === here;
+    if (type === 'quake' || here === null) return Object.values(w.places).filter(live).map((p) => p.id);
+    const at = type === 'fog' ? cityDef(w, here).port : type === 'eclipse' ? cityDef(w, here).parliament : null;
+    return at && w.places[at] && !w.places[at].razed ? [at] : [];
+  }
   const at = WEATHER_DEFS[type].omenPlace;
   if (at === 'all') return Object.values(w.places).filter((p) => !p.razed).map((p) => p.id);
   return at && w.places[at] && !w.places[at].razed ? [at] : [];
@@ -134,18 +143,23 @@ function announceOmens(w) {
 }
 
 function notifyAwake(w, code, event) {
-  for (const a of agentList(w)) if (a.status === 'awake') pushInbox(w, a, 'weather', { code, event });
+  const here = currentCity(w);
+  for (const a of agentList(w)) if (a.status === 'awake' && (!multiCity(w) || cityOfPlace(w, a.place) === here)) pushInbox(w, a, 'weather', { code, event });
 }
 
 /** 天象开始时的一次性效果：震、忘川、迁徙潮 */
 function startEffects(w, type) {
   if (type === 'quake') {
     // 所有有完好度的地点与全部道路各受损 1000 + floor(2000 × (10000 − 完好度) / 10000) 基点（不低于 0）
+    // 第七前提：只伤震发生的那一处（城或荒野）的地点，以及一端在那里的道路
+    const here = currentCity(w);
+    const inHere = (id) => !multiCity(w) || cityOfPlace(w, id) === here;
     for (const p of Object.values(w.places)) {
-      if (p.open || p.condition === null) continue;
+      if (p.open || p.condition === null || !inHere(p.id)) continue;
       applyDamage(w, p, p.id, p.id, 1000 + Math.floor((2000 * (10000 - p.condition)) / 10000), 'natural');
     }
     for (const r of Object.values(w.roads)) {
+      if (!inHere(r.a) && !inHere(r.b)) continue;
       applyDamage(w, r, r.id, r.a, 1000 + Math.floor((2000 * (10000 - r.condition)) / 10000), 'natural');
     }
   } else if (type === 'amnesia') {
@@ -202,6 +216,7 @@ export function stepWeather(w, d) {
  * - 观测：startDay − 3 ≤ 今日 < startDay，身在有运转中的观测模块的地点，能看到征兆文本并附带「约 N 日后」。
  */
 export function omensAt(w, placeId) {
+  if (multiCity(w) && cityOfPlace(w, placeId) !== currentCity(w)) return withCity(w, cityOfPlace(w, placeId), () => omensAt(w, placeId));
   const s = w.weather.scheduled;
   if (!s) return [];
   const place = w.places[placeId];
@@ -217,6 +232,11 @@ export function omensAt(w, placeId) {
 
 /** 观众能看到的：当前有征兆的地点与文本（看不到排期） */
 export function visibleOmens(w) {
+  if (multiCity(w) && !w.$omensAll) {
+    // 第七前提：观众看得到四处（三座城与荒野）各自的征兆
+    Object.defineProperty(w, '$omensAll', { value: true, configurable: true, writable: true });
+    try { return [...CITY_IDS, null].flatMap((id) => withCity(w, id, () => visibleOmens(w))); } finally { delete w.$omensAll; }
+  }
   const s = w.weather.scheduled;
   if (!s) return [];
   const today = clockDay(w);

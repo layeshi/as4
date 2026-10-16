@@ -14,6 +14,18 @@ function kindOf(p) {
   if (p.ruined || p.razed || SHELLS.has(p.id)) return 'shell';
   return 'facility';
 }
+/** 取景：旧地图铺满整张图；第七前提「三城」的岛图全岛时框住整座岛，选了城就框住那座城（地点与空地外扩一圈） */
+function frame(map, focus, w, h, pad = 14) {
+  const [mw, mh] = map.size || [1200, 900], terrain = map.terrain || {};
+  const pts = map.cities && focus ? (map.places || []).filter(p => p.city === focus).map(p => p.xy).concat((map.lots || []).filter(l => l.city === focus).map(l => l.xy)) : terrain.island || null;
+  let box = [0, 0, mw, mh];
+  if (pts && pts.length) {
+    const m = map.cities && focus ? 90 : 20, xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    box = [Math.min(...xs) - m, Math.min(...ys) - m, Math.max(...xs) + m, Math.max(...ys) + m];
+  }
+  const bw = box[2] - box[0], bh = box[3] - box[1], s = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh);
+  return { s, ox: (w - bw * s) / 2 - box[0] * s, oy: (h - bh * s) / 2 - box[1] * s };
+}
 function placeLabel(p) {
   const name = p.displayName && typeof p.displayName === 'object' ? p.displayName.zh : p.displayName || p.name;
   return usable(name) ? name : '地名暂未显示';
@@ -26,7 +38,7 @@ class CityMap {
    * 返回 { canvas, hits }。
    */
   render(model, w, h, dpr, version) {
-    const key = [version, w, h, dpr].join('|');
+    const key = [version, w, h, dpr, model.focus || '', JSON.stringify(model.moves || [])].join('|');
     if (this.canvas && key === this.key) return { canvas: this.canvas, hits: this.hits };
     if (!this.canvas) this.canvas = this.createCanvas();
     const canvas = this.canvas;
@@ -37,15 +49,59 @@ class CityMap {
     this.key = key;
     return { canvas, hits: this.hits };
   }
-  draw(ctx, { map, state, active, avatar }, w, h) {
+  draw(ctx, model, w, h) {
+    const hits = this.drawBase(ctx, model, w, h), { map, state, focus } = model;
+    if (!map || !state || !map.cities || focus) return hits;
+    // 全岛：每座城一块城牌（城名、籍与在场人数），点城牌就切到那座城
+    const { s, ox, oy } = frame(map, null, w, h), cities = state.cities || [];
+    const cityOf = {};
+    (map.places || []).concat(state.places || []).forEach(p => { cityOf[p.id] = p.city || null; });
+    const alive = (state.agents || []).filter(a => ['awake', 'dormant'].includes(a.status));
+    // 跨城的移动（最近一刻）：一道偏向岛心的虚线弧
+    const xyOf = {};
+    (map.places || []).concat(state.places || []).forEach(p => { if (p.xy) xyOf[p.id] = p.xy; });
+    ctx.strokeStyle = 'rgba(242,182,94,0.75)'; ctx.lineWidth = 1.5;
+    if (ctx.setLineDash) ctx.setLineDash([4, 4]);
+    for (const [a, b] of model.moves || []) {
+      if ((cityOf[a] || null) === (cityOf[b] || null) || !xyOf[a] || !xyOf[b]) continue;
+      const ax = ox + s * xyOf[a][0], ay = oy + s * xyOf[a][1], bx = ox + s * xyOf[b][0], by = oy + s * xyOf[b][1];
+      const mx = (ax + bx) / 2, my = (ay + by) / 2, len = Math.hypot(bx - ax, by - ay) || 1;
+      let nx = -(by - ay) / len, ny = (bx - ax) / len;
+      if ((mx + nx - w / 2) ** 2 + (my + ny - h / 2) ** 2 > (mx - w / 2) ** 2 + (my - h / 2) ** 2) { nx = -nx; ny = -ny; }
+      const k = Math.min(60, len * 0.22);
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx + nx * k, my + ny * k, bx, by); ctx.stroke();
+    }
+    if (ctx.setLineDash) ctx.setLineDash([]);
+    for (const c of map.cities) {
+      const pts = (map.places || []).filter(p => p.city === c.id).map(p => p.xy);
+      if (!pts.length) continue;
+      const cx = ox + s * pts.reduce((n, p) => n + p[0], 0) / pts.length, cy = oy + s * pts.reduce((n, p) => n + p[1], 0) / pts.length;
+      const block = cities.find(x => x.id === c.id) || {}, short = (c.short && c.short.zh) || c.id;
+      const line = `籍 ${alive.filter(a => a.city === c.id).length} · 在场 ${alive.filter(a => cityOf[a.place] === c.id).length}`;
+      const f1 = font(13, {}), f2 = font(11, {}), bw = Math.max(T.measure(ctx, f1, short), T.measure(ctx, f2, line)) + 20, bh = 40;
+      const bx = Math.max(4, Math.min(w - bw - 4, cx - bw / 2)), by = Math.max(4, Math.min(h - bh - 4, cy - bh / 2));
+      P.fillRound(ctx, bx, by, bw, bh, 8, 'rgba(10,21,32,0.86)');
+      P.strokeRound(ctx, bx, by, bw, bh, 8, C.map.label || C.moon, 1);
+      P.text(ctx, block.cityName && block.humanName && block.cityName !== block.humanName.zh ? block.cityName : short, bx + 10, by + 13, f1, C.text);
+      P.text(ctx, line, bx + 10, by + 29, f2, C.text2);
+      hits.push({ x: bx, y: by, w: bw, h: bh, action: { type: 'cityFocus', city: c.id } });
+    }
+    return hits;
+  }
+  drawBase(ctx, { map, state, active, avatar, focus }, w, h) {
     const hits = [];
     ctx.fillStyle = C.map.land; ctx.fillRect(0, 0, w, h);
     if (!map || !state) return hits;
-    const [mw, mh] = map.size || [1200, 900], pad = 14;
-    const s = Math.min((w - pad * 2) / mw, (h - pad * 2) / mh);
-    const ox = (w - mw * s) / 2, oy = (h - mh * s) / 2;
+    const [mw, mh] = map.size || [1200, 900];
+    const { s, ox, oy } = frame(map, focus, w, h);
     const X = v => ox + v * s, Y = v => oy + v * s;
     const terrain = map.terrain || {};
+    // 第七前提的岛：海作底，岛是陆地
+    if (terrain.island) {
+      ctx.fillStyle = C.map.sea; ctx.fillRect(0, 0, w, h);
+      ctx.beginPath(); terrain.island.forEach(([x, y], i) => (i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)))); ctx.closePath();
+      ctx.fillStyle = C.map.land; ctx.fill();
+    }
     const coords = {}, places = {};
     (map.places || []).concat(state.places || []).forEach(p => { if (p.xy) coords[p.id] = { x: X(p.xy[0]), y: Y(p.xy[1]) }; });
     (state.places || []).forEach(p => { places[p.id] = p; });

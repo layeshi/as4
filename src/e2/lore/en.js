@@ -21,7 +21,7 @@ const lore = {
   unreadableInscription: v1.unreadableInscription,
 
   place: Object.fromEntries(Object.entries(v1.place).map(([id, p]) => [id, { name: p.name, desc: DESC[id] ?? p.desc }])),
-  district: v1.district,
+  district: { ...v1.district, 'north-city': 'North City', 'west-city': 'West City', 'east-city': 'East City' }, // the three cities of premise 7 (the Wilds keep wilds)
   band: v1.band,
   wellBand: v1.wellBand,
   richnessWild: v1.richnessWild,
