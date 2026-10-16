@@ -4,8 +4,44 @@ import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { boot } from './http-helpers.js';
 import { AccountStore } from '../src/accounts/store.js';
+import { verifyLoginTurnstile } from '../src/http/accounts.js';
+import { loadConfig } from '../src/config.js';
 const pass = 'a-long-test-password';
 const person = (username, extra = {}) => ({ username, displayName: `User ${username}`, password: pass, ...extra });
+test('Turnstile configuration requires both keys', () => {
+  assert.throws(() => loadConfig({ TURNSTILE_SITE_KEY: 'site' }, []));
+  assert.throws(() => loadConfig({ TURNSTILE_SECRET_KEY: 'secret' }, []));
+  assert.equal(loadConfig({ TURNSTILE_SITE_KEY: 'site', TURNSTILE_SECRET_KEY: 'secret' }, []).turnstileSiteKey, 'site');
+});
+test('Turnstile Siteverify checks token and action, and fails closed on upstream errors', async () => {
+  let sent;
+  const good = async (url, options) => {
+    sent = { url, options };
+    return { ok: true, json: async () => ({ success: true, action: 'login' }) };
+  };
+  await verifyLoginTurnstile('secret', 'token', '192.0.2.1', good);
+  await verifyLoginTurnstile('secret', 'token', '192.0.2.1', async () => ({ ok: true, json: async () => ({ success: true }) }));
+  assert.equal(sent.url, 'https://challenges.cloudflare.com/turnstile/v0/siteverify');
+  assert.equal(sent.options.body.get('secret'), 'secret');
+  assert.equal(sent.options.body.get('response'), 'token');
+  assert.equal(sent.options.body.get('remoteip'), '192.0.2.1');
+  await assert.rejects(verifyLoginTurnstile('secret', '', '192.0.2.1', good), { code: 'turnstile_required' });
+  await assert.rejects(verifyLoginTurnstile('secret', 'bad', '192.0.2.1', async () => ({ ok: true, json: async () => ({ success: false }) })), { code: 'turnstile_failed' });
+  await assert.rejects(verifyLoginTurnstile('secret', 'wrong-action', '192.0.2.1', async () => ({ ok: true, json: async () => ({ success: true, action: 'register' }) })), { code: 'turnstile_failed' });
+  await assert.rejects(verifyLoginTurnstile('secret', 'token', '192.0.2.1', async () => { throw new Error('offline'); }), { code: 'turnstile_unavailable' });
+});
+test('configured login requires a verified token before password validation', async () => {
+  const e = await boot({ turnstileSiteKey: 'site', turnstileSecretKey: 'secret' });
+  const c = client(e);
+  try {
+    assert.equal((await c.call('/api/account')).json.turnstileSiteKey, 'site');
+    await c.call('/api/account/register', person('alice'));
+    await c.call('/api/account/logout', {});
+    assert.equal((await c.call('/api/account/login', person('alice'))).json.error.code, 'turnstile_required');
+    e.app.ctx.verifyLoginTurnstile = async (_secret, token) => { assert.equal(token, 'valid'); };
+    assert.equal((await c.call('/api/account/login', person('alice', { turnstileToken: 'valid' }))).status, 200);
+  } finally { await e.close(); }
+});
 function client(e) {
   let cookie = '';
   return {

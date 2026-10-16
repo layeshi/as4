@@ -893,6 +893,7 @@ ul.reading { list-style: none; padding-left: 0; }
 .account-summary { border-bottom: 1px solid var(--line, #ddd); margin-bottom: 1rem; padding-bottom: .75rem; }
 .account-form { margin-bottom: 1.5rem; }
 .account-message { min-height: 1.5em; margin: .5rem 0; }
+.login-turnstile { min-height: 65px; margin: .75rem 0; }
 .account-toolbar, .account-search, .account-row { display: flex; align-items: center; gap: .75rem; }
 .account-toolbar, .account-row { justify-content: space-between; }
 .account-toolbar { flex-wrap: wrap; margin-bottom: 1rem; }

@@ -94,6 +94,35 @@ test('登录页：登录提交用户名与密码，成功后去 next（带上浏
   } finally { env.restore(); }
 });
 
+test('登录页：配置 Turnstile 后提交令牌，失败后重置，切换标签时移除控件', async () => {
+  const previousWindow = globalThis.window;
+  const lifecycle = [];
+  globalThis.window = { turnstile: {
+    render: (_node, options) => { assert.equal(options.action, 'login'); return 'widget'; },
+    getResponse: () => 'challenge-token',
+    reset: (id) => lifecycle.push(['reset', id]),
+    remove: (id) => lifecycle.push(['remove', id]),
+  } };
+  const env = setup({ ...openAccount, turnstileSiteKey: 'test-site-key' }, {
+    '/api/account/login': () => reply(401, { error: { message: '用户名或密码错误。' } }),
+  });
+  try {
+    await env.mount();
+    await settle();
+    assert.ok(env.root.querySelector('.login-turnstile'));
+    fill(env.root, { username: 'alice', password: 'wrong-password' });
+    await submit(env.root);
+    assert.equal(env.calls.find((call) => call.url === '/api/account/login').body.turnstileToken, 'challenge-token');
+    assert.deepEqual(lifecycle, [['reset', 'widget']]);
+    env.root.querySelectorAll('.login-tab')[1].click();
+    assert.deepEqual(lifecycle, [['reset', 'widget'], ['remove', 'widget']]);
+  } finally {
+    env.restore();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+});
+
 test('登录页：next 不可信时回首页；next 自带哈希时不重复；没有 next 回首页', async () => {
   const cases = [['?next=https%3A%2F%2Fevil.example%2F', '', '/'], ['?next=%2F%2Fevil.example', '', '/'], ['?next=%2Fadmin.html%23users', '#other', '/admin.html#users'], ['', '', '/'], ['', '#chronicle', '/#chronicle'], ['?next=%2Flogin.html', '', '/']];
   for (const [search, hash, expected] of cases) {
@@ -408,7 +437,7 @@ test('登录页的文件：走 CSP、不写内联样式或脚本，页面里有 
   assert.doesNotMatch(js, /innerHTML|document\.write|eval\(/);
   // 登录页不引入观测站的模块：首屏轻，也不会因它们的改动而坏
   const imports = [...js.matchAll(/from '\.\/([\w-]+)\.js'/g)].map((m) => m[1]).sort();
-  assert.deepEqual(imports, ['announcement-preview', 'api', 'dom', 'i18n', 'wechat-login']);
+  assert.deepEqual(imports, ['announcement-preview', 'api', 'dom', 'i18n', 'turnstile', 'wechat-login']);
   const e = await boot();
   try {
     const r = await e.call('/login.html');

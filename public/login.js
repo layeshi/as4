@@ -7,6 +7,7 @@ import { mountWechatLogin } from './wechat-login.js';
 import { h, clear } from './dom.js';
 import { getLang, setLang } from './i18n.js';
 import { api, errorText, LOGIN_PAGE } from './api.js';
+import { mountLoginChallenge } from './turnstile.js';
 
 const tr = (zh, en) => (getLang() === 'en' ? en : zh);
 const MODES = ['login', 'register', 'wechat'];
@@ -67,8 +68,9 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
   const params = new URLSearchParams(search);
   let mode = MODES.includes(params.get('mode')) ? params.get('mode') : 'login';
   let account = null; // GET /api/account 的结果
-  let generation = 0, qr = null;
+  let generation = 0, qr = null, challenge = null;
   const stopQr = () => { qr?.dispose(); qr = null; };
+  const stopChallenge = () => { challenge?.dispose(); challenge = null; };
   const show = id => { mode = id; render(); };
 
   const target = () => {
@@ -78,7 +80,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
 
   async function load() {
     const version = ++generation;
-    stopQr();
+    stopQr(); stopChallenge();
     clear(root).append(h('p', { class: 'login-loading' }, tr('正在确认登录状态…', 'Checking your sign-in…')));
     const r = await api('/api/account');
     if (version !== generation) return;
@@ -103,7 +105,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
   }
 
   function render() {
-    const version = ++generation; stopQr();
+    const version = ++generation; stopQr(); stopChallenge();
     const tabs = [['login', tr('登录', 'Sign in'), tr('登录', 'Sign in')]];
     if (account.registrationOpen) tabs.push(['register', tr('注册', 'Register'), tr('注册并进入', 'Register and enter')]);
     if (account.wechatQrEnabled) tabs.push(['wechat', tr('微信扫码', 'WeChat'), '']);
@@ -136,6 +138,9 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
     } else {
       add('password', tr('密码', 'Password'), 'password', { maxlength: 128, autocomplete: 'current-password' });
     }
+    const challengeNode = mode === 'login' && account.turnstileSiteKey ? h('div', { class: 'login-turnstile', role: 'status', 'aria-live': 'polite' }) : null;
+    let formChallenge = null;
+    if (challengeNode) fields.push(challengeNode);
 
     const submit = h('button', { class: 'btn primary', type: 'submit' }, tabs.find(([id]) => id === mode)[2]);
     const form = h('form', { class: 'form login-form' }, fields, h('div', { class: 'form-actions' }, submit), message);
@@ -144,6 +149,14 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
       if (submit.disabled) return;
       const val = (key) => String(inputs[key].value ?? '');
       const body = { username: val('username').trim(), password: val('password') };
+      if (challengeNode) {
+        body.turnstileToken = formChallenge?.token() || '';
+        if (!body.turnstileToken) {
+          message.className = 'account-message error';
+          message.textContent = tr('请完成人机验证后重试。', 'Complete verification and try again.');
+          return;
+        }
+      }
       if (creating) {
         if (val('password') !== val('confirmPassword')) {
           message.className = 'account-message error';
@@ -157,6 +170,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
       message.className = 'account-message';
       message.textContent = tr('正在处理…', 'Working…');
       const r = await api(`/api/account/${mode}`, { method: 'POST', body });
+      if (challengeNode) formChallenge?.reset();
       if (version !== generation) return;
       if (r.ok) {
         message.textContent = tr('成功，正在进入…', 'Success. Taking you in…');
@@ -177,6 +191,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
       h('h2', { class: 'login-card-title' }, tr('登录后观看这座城', 'Sign in to watch the city')),
       h('p', { class: 'login-card-lead' }, wall ? tr('观看之前请先登录；还没有账号，注册一个只要几秒。', 'Please sign in before you watch. No account yet? Registering takes a few seconds.') : tr('登录你的账号，或注册一个新账号。', 'Sign in to your account, or register a new one.')),
       tablist, form, ...notes));
+    if (challengeNode) challenge = formChallenge = mountLoginChallenge(challengeNode, account.turnstileSiteKey);
     inputs.username.focus();
   }
 
@@ -184,7 +199,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
   return {
     show: (id) => { if (account && !account.user) show(id); },
     get mode() { return mode; },
-    dispose: () => { generation++; stopQr(); },
+    dispose: () => { generation++; stopQr(); stopChallenge(); },
     /** 换语言后重画：不必再读一次账号 */
     relabel: () => (account && !account.user ? render() : load()),
   };

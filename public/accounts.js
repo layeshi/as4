@@ -4,6 +4,7 @@ import { api, errorText, leaveForLogin } from './api.js';
 import { openModal, openBackstage, savedOwners } from './modals.js';
 import { accountAgentsPanel } from './account-usage-ui.js';
 import { prayerAuditPanel } from './prayers-ui.js';
+import { mountLoginChallenge } from './turnstile.js';
 // 人类账号：登录 / 注册弹窗、用户中心（只做导航，不放管理功能）、账户设置表单。
 // 管理功能都在管理后台（admin.html）；居民、余额与充值各有自己的页面。
 const tr = (zh, en) => getLang() === 'en' ? en : zh;
@@ -86,7 +87,8 @@ export async function signOut() {
 }
 /** 登录 / 注册弹窗；已登录时是用户中心。hub = false：登录成功后只关闭弹窗（会员页自己会重画） */
 export async function openAccount({ hub = true } = {}) {
-  const modal = openModal(tr('用户中心', 'Account'), 'account-modal');
+  let challenge = null;
+  const modal = openModal(tr('用户中心', 'Account'), 'account-modal', () => { challenge?.dispose(); challenge = null; });
   modal.body.append(h('p', { class: 'muted' }, tr('正在加载…', 'Loading…')));
   const r = await refreshAccount();
   clear(modal.body);
@@ -101,19 +103,30 @@ export async function openAccount({ hub = true } = {}) {
   const modes = [['login', tr('登录', 'Sign in')]];
   if (r.json.registrationOpen) modes.push(['register', tr('注册', 'Register')]);
   function show(mode) {
+    challenge?.dispose();
+    challenge = null;
     clear(pane);
     for (const b of tabs.children) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
     const creating = mode !== 'login';
     const fields = creating ? identity() : [field(tr('用户名', 'Username'), 'username', 'text', '', { autocomplete: 'username', maxlength: 32 })];
     fields.push(creating ? password() : field(tr('密码', 'Password'), 'password', 'password', '', { autocomplete: 'current-password', maxlength: 128 }));
     if (creating) fields.push(password('confirmPassword', tr('确认密码', 'Confirm password')));
+    const challengeNode = mode === 'login' && r.json.turnstileSiteKey ? h('div', { class: 'login-turnstile', role: 'status', 'aria-live': 'polite' }) : null;
+    let formChallenge = null;
+    if (challengeNode) fields.push(challengeNode);
     pane.append(form(fields, modes.find(([id]) => id === mode)[1], async (body, msg) => {
       if (creating && body.password !== body.confirmPassword) return { ok: false, json: { error: { message: tr('两次密码不一致。', 'Passwords do not match.') } } };
       delete body.confirmPassword;
+      if (challengeNode) {
+        body.turnstileToken = formChallenge?.token() || '';
+        if (!body.turnstileToken) return { ok: false, json: { error: { message: tr('请完成人机验证后重试。', 'Complete verification and try again.') } } };
+      }
       const result = await request(`/api/account/${mode}`, body);
+      if (challengeNode) formChallenge?.reset();
       if (result.ok) { await refreshAccount(); modal.close(); if (hub) openAccount(); }
       return result;
     }));
+    if (challengeNode) challenge = formChallenge = mountLoginChallenge(challengeNode, r.json.turnstileSiteKey);
   }
   for (const [id, label] of modes) tabs.append(h('button', { type: 'button', class: 'btn', dataset: { mode: id }, onClick: () => show(id) }, label));
   show('login');

@@ -12,7 +12,7 @@ import { usagePanel, usageOverview } from './usage-ui.js';
 let stack = [];
 
 /** 打开一个弹窗，返回 { body, close } */
-export function openModal(title, cls = '') {
+export function openModal(title, cls = '', onClose = () => {}) {
   const opener = document.activeElement;
   const body = h('div', { class: 'modal-body' });
   const closeBtn = h('button', { class: 'icon-btn', type: 'button', 'aria-label': t('close') }, '×');
@@ -28,6 +28,7 @@ export function openModal(title, cls = '') {
   };
   function close() {
     document.removeEventListener('keydown', onKey);
+    onClose();
     backdrop.remove();
     stack = stack.filter((x) => x !== close);
     if (opener && opener.focus) opener.focus();

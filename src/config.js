@@ -41,6 +41,8 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
     dataDir: env.DATA_DIR || './data',
     allowLocalModels: env.ALLOW_LOCAL_MODELS === '1',
     adminKey: env.ADMIN_KEY || null,
+    turnstileSiteKey: env.TURNSTILE_SITE_KEY || null,
+    turnstileSecretKey: env.TURNSTILE_SECRET_KEY || null,
     registrationOpen: env.REGISTRATION_OPEN !== '0',
     wechatAppId: env.WECHAT_APPID || null,
     wechatAppSecret: env.WECHAT_APP_SECRET || null,
@@ -78,6 +80,7 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
   if (cfg.physics === 2 && cfg.map !== (cfg.premise === 7 ? 'island-three-v1' : (cfg.premise === 5 || cfg.premise === 6) ? 'compact-materials-v1' : 'frontier')) throw new Error('PHYSICS=2 的地图须与前提相符：PREMISE=7 用 island-three-v1，5、6 用 compact-materials-v1，其余用 frontier');
   if (cfg.shellTokensPerDay !== null && (!Number.isInteger(cfg.shellTokensPerDay) || cfg.shellTokensPerDay < 1)) throw new Error('SHELL_TOKENS_PER_DAY 必须是正整数');
   if (cfg.shellSlots !== null && (!Number.isInteger(cfg.shellSlots) || cfg.shellSlots < 0)) throw new Error('SHELL_SLOTS 必须是非负整数');
+  if (!!cfg.turnstileSiteKey !== !!cfg.turnstileSecretKey) throw new Error('TURNSTILE_SITE_KEY 与 TURNSTILE_SECRET_KEY 必须同时设置');
   return cfg;
 }
 

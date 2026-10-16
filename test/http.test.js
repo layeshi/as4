@@ -1005,7 +1005,7 @@ test('静态文件：只服务 public/ 下的文件；index.html 带 CSP；防�
     const root = await env.call('/');
     assert.equal(root.status, 200);
     assert.match(root.headers.get('content-type'), /text\/html/);
-    assert.equal(root.headers.get('content-security-policy'), "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'");
+    assert.equal(root.headers.get('content-security-policy'), "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self' https://challenges.cloudflare.com; connect-src 'self'; frame-src https://challenges.cloudflare.com");
     assert.equal(root.headers.get('x-content-type-options'), 'nosniff');
     assert.ok(root.text.includes('<title>'));
     assert.equal((await env.call('/index.html')).status, 200);

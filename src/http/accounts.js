@@ -87,10 +87,26 @@ function limit(ctx, req, body, registering = false) {
   const ip = clientIp(req, ctx.cfg.trustProxy);
   if (!ctx.accountLimits.ip.take(ip) || (registering && !ctx.accountLimits.register.take(ip)) || (!registering && !ctx.accountLimits.username.take(String(body.username || '').toLowerCase().slice(0, 64)))) fail(429, 'rate_limited', '尝试次数过多，请稍后再试。');
 }
+export async function verifyLoginTurnstile(secret, token, ip, fetchImpl = fetch) {
+  if (typeof token !== 'string' || !token || token.length > 2048) fail(400, 'turnstile_required', '请完成人机验证后重试。');
+  let result;
+  try {
+    const response = await fetchImpl('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: new URLSearchParams({ secret, response: token, remoteip: ip }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) throw new Error('siteverify unavailable');
+    result = await response.json();
+  } catch {
+    fail(503, 'turnstile_unavailable', '人机验证暂时不可用，请稍后重试。');
+  }
+  if (result?.success !== true || (result.action && result.action !== 'login')) fail(403, 'turnstile_failed', '人机验证未通过，请重试。');
+}
 export const accountRoutes = [
   ['GET', '/api/account', wrap(({ req, res, ctx }) => {
     const user = accountFor(ctx, req);
-    sendJson(res, 200, { user: user ? publicUser(user) : null, registrationOpen: ctx.cfg.registrationOpen !== false, loginRequired: ctx.cfg.requireLogin === true, wechatQrEnabled: ctx.wechatWebLogin.enabled });
+    sendJson(res, 200, { user: user ? publicUser(user) : null, registrationOpen: ctx.cfg.registrationOpen !== false, loginRequired: ctx.cfg.requireLogin === true, wechatQrEnabled: ctx.wechatWebLogin.enabled, turnstileSiteKey: ctx.cfg.turnstileSiteKey || null });
   })],
   ['POST', '/api/account/register', wrap(async ({ req, res, ctx, body }) => {
     limit(ctx, req, body, true);
@@ -108,6 +124,7 @@ export const accountRoutes = [
   })],
   ['POST', '/api/account/login', wrap(async ({ req, res, ctx, body }) => {
     limit(ctx, req, body);
+    if (ctx.cfg.turnstileSecretKey) await ctx.verifyLoginTurnstile(ctx.cfg.turnstileSecretKey, body.turnstileToken, clientIp(req, ctx.cfg.trustProxy));
     const user = await ctx.accounts.login(body);
     setSession(req, res, ctx, user.id);
     sendJson(res, 200, { user: publicUser(user) });
