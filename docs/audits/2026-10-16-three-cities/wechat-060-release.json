@@ -77,7 +77,7 @@
     "successObservedAt": "2026-10-16 20:28 Asia/Shanghai",
     "updateDescription": "第七前提「三城」：全岛与分城地图、城级双指缩放和拖动、居民籍城与筛选、世界报告、公告与留言板。",
     "onlineVersionObservedBeforeUpload": "0.4.1",
-    "formalReviewSubmitted": false,
+    "formalReviewSubmitted": true,
     "formalReleasePerformed": false
   },
   "realDeviceVerified": false,
@@ -98,5 +98,31 @@
     "freshCompileErrors": 0,
     "freshCompileFrameworkPreloadWarnings": 2,
     "physicalPinchGestureVerified": false
+  },
+  "formalReview": {
+    "method": "WeChat public platform in Comet, GUI",
+    "version": "0.6.0",
+    "submittedAt": "2026-10-16 22:36:02 Asia/Shanghai",
+    "submissionReceipt": "已提交审核",
+    "status": "审核中",
+    "platformEstimate": "预计在1-7天内完成审核；特殊情况可能延长",
+    "onlineVersionAtSubmission": "0.4.1",
+    "approvalReceived": false,
+    "formalReleasePerformed": false,
+    "automaticReleaseConfigured": false,
+    "expeditedReviewRequested": false,
+    "privacyGuidanceReused": true,
+    "testAccountMode": "无需登录账号即可使用；观测免登录，个人功能微信一键登录",
+    "realAccountCredentialsProvided": false,
+    "modelCredentialsProvided": false,
+    "versionDescription": "1.新增“三城”：全岛及北、西、东城地图，城级双指缩放与拖动。\n2.居民显示籍城并可按城筛选；创建时选城，世界报告按城分节。\n3.新增留言板，完善公告，保留家书、模型配置、运行器及微信确认网页登录。\n无需登录可观测；“我的”中微信一键登录使用个人功能。词元与物料仅为模拟资源，无充值、提现或支付。",
+    "screenshots": {
+      "wechat-060-review-status.png": "c0c4a54d7e0b18d0e4e000d845f2de3490db61f56f8f19a42b8983969899cb60",
+      "wechat-060-review-pending.png": "39b919a03f07df5d0e56bbaa60cd0db51420a5d9ed1b964c75af0ad23da22925"
+    },
+    "pendingAction": "审核通过后发布 0.6.0，并核验正式包；真实手机验收尚未完成",
+    "codeChanged": false,
+    "serverRedeployed": false,
+    "testsRerun": false
   }
 }
