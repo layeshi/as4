@@ -267,6 +267,7 @@ export function youHead({ p, d, P, you, code }) {
   const head = tokenized(p) ? tokenHeadParts({ code, d, you }) : [you.name, d.status[you.status] || you.status, d.energy(you.energy, you.energyCap, you.floor), d.coins(you.coins), d.age(you.ageDays), p.premise >= 1 ? d.metabW(you.metabolism, you.weight.soul, you.weight.memories) : d.metab(you.metabolism)];
   if (you.tags && you.tags.length) head.push(`${d.tags}${P.col}${you.tags.join(P.sep)}`);
   if (you.purpose) head.push(`${d.purpose}${P.col}${you.purpose}`);
+  if (p.premise === 7 && you.city) head.push(code === 'en' ? `domicile ${you.city.name}` : `籍 ${you.city.name}`); // 第七前提：籍城
   if (you.prayers?.enabled) head.push(`${p.lang === 'en' ? 'prayer points' : '祈愿点'} ${you.prayerPoints}`);
   head.push(tokenized(p) ? (code === 'en' ? `${you.actionsLeft} actions left this tick` : `本刻还能做 ${you.actionsLeft} 个动作`) : d.left(you.actionsLeft));
   lines.push(`${d.you}${head.join(' · ')}`);
@@ -387,7 +388,7 @@ export function secHere(c) {
   const h = p.here;
   if (!h) return [];
   const lines = [...hereLine(c)];
-  if(p.premise===6)for(const r of p.publicRoles??[])if(r.place===p.you.place)lines.push(`  公共角色 ${r.id} · ${r.name} · ${r.duty}；say 指定 publicRoleId 公开提问。`);
+  if((p.premise===6 || p.premise === 7))for(const r of p.publicRoles??[])if(r.place===p.you.place)lines.push(`  公共角色 ${r.id} · ${r.name} · ${r.duty}；say 指定 publicRoleId 公开提问。`);
   if (h.origin === 'agent' && h.description && h.description.text) lines.push(`  ${h.description.text}`);
   if (h.modules && h.modules.length) lines.push(`  ${d.modules}${P.col}${h.modules.map((m) => `${moduleName(m.type)}${P.open}${m.functioning ? d.functioning : d.notFunctioning}${P.close}${m.inscription ? `${d.inscription}${P.col}${m.inscription}` : ''}`).join(P.sep)}`);
   if (h.gate) lines.push(`  ${d.gate}${P.col}${h.gate.functioning ? d.functioning : d.notFunctioning}${P.open}${h.gate.youMayEnter ? d.gateOk : d.gateNo}${P.close}`);
@@ -457,9 +458,16 @@ export function secInbox({ p, code, d, f }) {
 // 【全城】：每一项一个函数，secCity 按原来的顺序拼起来；展开（look）可以单独取用
 
 /** 【全城】的头行：公库、源井、人口、躯壳 */
-export function cityHead({ p, d }) {
+export function cityHead({ p, d, code }) {
   const c = p.city;
   const pop = c.population;
+  if (p.premise === 7) {
+    // 第七前提「三城」：标题写所在的城（荒野里写荒野），人数只数此处在场的；荒野没有公库与源井
+    const en = code === 'en';
+    const here = (c.residents || []).length;
+    if (!c.id) return [`${en ? `[Where you are: ${c.name}]` : `【所在之处：${c.name}】`}${en ? `no city law, treasury or Well here · ${here} present` : `不属于任何城：没有城法、公库与源井 · 在场 ${here} 位`}`];
+    return [`${en ? `[The city you are in: ${c.name}]` : `【所在的城：${c.name}】`}${[d.treasuryLine(c.treasury.energy, c.treasury.coins), d.wellYesterday(c.wellOutputYesterday), en ? `${here} present` : `在场 ${here} 位`].join(' · ')}`];
+  }
   const head2 = [d.treasuryLine(c.treasury.energy, c.treasury.coins), d.wellYesterday(c.wellOutputYesterday), d.pop(pop.awake, pop.dormant, pop.dead)];
   if (pop.retired) head2.push(d.retiredN(pop.retired));
   if (pop.cradle) head2.push(d.cradleN(pop.cradle));

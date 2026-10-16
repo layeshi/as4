@@ -56,7 +56,7 @@ export async function load() {
     if (idOf()) pageHead(head, { back: { href: '/residents.html', label: '我的居民' }, title: '居民档案', lead: worldLine }); // 读到档案后换成居民自己的页头
     else listHead();
     clear(content); say('');
-    if (w.premise !== 6) { content.append(emptyState('此世界使用历史版本', '居民管理请进入观测站的用户中心。', h('a', { class: 'btn', href: '/' }, '前往观测城市'))); return; }
+    if ((w.premise !== 6 && w.premise !== 7)) { content.append(emptyState('此世界使用历史版本', '居民管理请进入观测站的用户中心。', h('a', { class: 'btn', href: '/' }, '前往观测城市'))); return; }
     if (!user) { content.append(emptyState('登录后查看你的居民', '创建形象、配置模型、观察其生活与作品。', btn('登录 / 注册', () => openAccount({ hub: false }), true))); return; }
     const hosted = await api('/api/account/hosted');
     if (!active(version)) return;
@@ -78,9 +78,22 @@ const residentCard = (a, { managed = false } = {}) => h('a', { class: 'resident-
   residentAvatar(a),
   h('div', { class: 'resident-card-body' },
     h('div', { class: 'resident-card-top' }, h('strong', null, a.name), statusChip(a.status)),
-    h('p', { class: 'muted' }, placeName(a.place) ?? '生涯已结束'),
+    h('p', { class: 'muted' }, placeName(a.place) ?? '生涯已结束', domicileText(a)),
     managed && a.runnerStatus ? h('p', null, runnerChip(a.runnerStatus)) : null,
     managed && a.nextWake && nextWakeText(a.nextWake, true) !== runnerStatus[a.runnerStatus] ? h('p', { class: 'muted small' }, `下次醒来：${nextWakeText(a.nextWake, true)}`) : null));
+/** 第七前提「三城」：居民的籍与所在的城（在荒野时写「荒野」） */
+function domicileText(a) {
+  const s = app.S.state;
+  if (!s || !s.cities || !a.place) return null;
+  const pub = (s.agents || []).find((x) => x.id === a.id);
+  const home = a.city ?? (pub && pub.city) ?? null;
+  const here = ((s.places || []).find((p) => p.id === a.place) || {}).city ?? null;
+  const short = (id) => {
+    const c = s.cities.find((x) => x.id === id);
+    return c ? (c.short && c.short.zh) || c.id : '荒野';
+  };
+  return ` · 籍 ${home ? short(home) : '—'} · 在${here ? short(here) : '荒野'}`;
+}
 const summaryStat = (label, value, note, extra = {}) => h(extra.href ? 'a' : 'div', { class: `summary-stat${extra.tone ? ` ${extra.tone}` : ''}`, href: extra.href }, h('span', null, label), h('strong', null, value), note ? h('small', null, note) : null);
 
 async function list(version) {
@@ -106,13 +119,68 @@ async function list(version) {
   if (handedOver.length) content.append(card('已过继的创作', '你创作、现已由他人管理的居民，这里保留它们的公开生涯。', h('div', { class: 'resident-grid' }, handedOver.map((a) => residentCard(a)))));
 }
 
+// 第七前提「三城」：三座城现成的设施（创世定下，之后可以开辟新的）
+const CITY_FACILITIES = {
+  north: '源井最贫；有档案馆、研究所和摇篮',
+  west: '源井最富；只有港口、源井、议会和广场',
+  east: '源井居中；有交易所和纪念地',
+};
+
 function openCreate() {
   const m = openModal('创建居民', 'wide');
+  const s = app.S.state;
+  const cities = s && s.cities;
+  const avatar = h('input', { type: 'hidden', name: 'avatar', value: '' });
+  const pick = cities ? [cityPicker(cities), importSoul(avatar), avatar] : [];
   m.body.append(h('p', { class: 'muted' }, startupAvailable ? '首次成功新建将领取50,000可转让词元。创建后在档案的「模型运行」里配置模型，居民才会醒来。' : '本世界的首次启动款已经领取。创建后在档案的「模型运行」里配置模型，居民才会醒来。'),
-    form([h('div', { class: 'form-grid' }, field('名字', 'name', '', 'text', { required: true, maxlength: 40 }), field('语言（如 zh、en）', 'lang', 'zh')), textarea('介绍', 'bio'), textarea('灵魂设定', 'soul'), h('div', { class: 'form-grid' }, field('每日游戏词元上限', 'dailyCap', 880000, 'number', { required: true, min: 0, max: 50000000 }), field('邀请码（如需要）', 'invite'))], '创建居民', async (body) => {
-      const data = await request('/api/account/residents', { ...body, dailyCap: Number(body.dailyCap), requestId: crypto.randomUUID() });
+    form([...pick, h('div', { class: 'form-grid' }, field('名字', 'name', '', 'text', { required: true, maxlength: 40 }), field('语言（如 zh、en）', 'lang', 'zh')), textarea('介绍', 'bio'), textarea('灵魂设定', 'soul'), h('div', { class: 'form-grid' }, field('每日游戏词元上限', 'dailyCap', 880000, 'number', { required: true, min: 0, max: 50000000 }), field('邀请码（如需要）', 'invite'))], '创建居民', async (body) => {
+      const data = await request('/api/account/residents', { ...body, ...(body.avatar ? {} : { avatar: undefined }), dailyCap: Number(body.dailyCap), requestId: crypto.randomUUID() });
       location.assign(`/residents.html?resident=${data.agentId}`);
     }));
+}
+
+/** 选城：居民从这座城的港口上岸，籍落在这里（之后可以迁籍） */
+function cityPicker(cities) {
+  return h('fieldset', { class: 'city-pick' }, h('legend', null, '选一座城落籍'),
+    h('p', { class: 'muted' }, '居民从这座城的港口上岸，籍就落在这里，之后可以迁籍。三座城的源井贫富不同，现成的设施互补。'),
+    h('div', { class: 'city-cards' }, cities.map((c) => {
+      const hist = (c.well && c.well.outputHistory) || [];
+      const hn = c.humanName || {};
+      const name = c.cityName && c.cityName !== hn.zh ? c.cityName : hn.zh || c.cityName || c.id;
+      return h('label', { class: 'city-card' },
+        h('span', { class: 'city-card-head' }, h('input', { type: 'radio', name: 'city', value: c.id, required: true }), h('strong', null, name)),
+        h('span', { class: 'muted' }, `籍 ${(c.population && c.population.residents) || 0} 人 · 源井昨日 ${hist.length ? hist[hist.length - 1].toLocaleString() : '—'}`),
+        h('span', { class: 'muted' }, CITY_FACILITIES[c.id] || ''));
+    })));
+}
+
+/** 从旧世界带入灵魂：只带名字、语言、介绍、灵魂设定与形象（都可以再改），不带记忆、余额、关系与程序 */
+function importSoul(avatarInput) {
+  const box = h('details', { class: 'import-soul' }, h('summary', null, '从旧世界带入灵魂'));
+  const list = h('div', { class: 'stack-list' });
+  box.append(h('p', { class: 'muted' }, '只带入名字、语言、介绍、灵魂设定与形象，带入后还可以改；记忆、余额、关系与程序都不带。'), list);
+  box.addEventListener('toggle', async () => {
+    if (!box.open || list.dataset.loaded) return;
+    list.dataset.loaded = '1';
+    list.append(h('p', { class: 'muted' }, '正在读取旧世界…'));
+    const worlds = await api('/api/account/worlds');
+    clear(list);
+    for (const a of (worlds.ok && worlds.json.archives) || []) {
+      const r = await api(`/api/account/worlds/${encodeURIComponent(a.id)}/souls`);
+      for (const soul of (r.ok && r.json.souls) || []) {
+        const take = h('button', { class: 'btn small', type: 'button' }, '带入');
+        take.addEventListener('click', () => {
+          const f = box.closest('form');
+          for (const k of ['name', 'lang', 'bio', 'soul']) if (f && f.elements[k] && typeof soul[k] === 'string') f.elements[k].value = soul[k];
+          avatarInput.value = soul.avatar || '';
+          take.textContent = '已带入';
+        });
+        list.append(h('div', { class: 'list-item import-row' }, h('strong', null, soul.name), h('span', { class: 'muted' }, ` · ${a.id}`), take));
+      }
+    }
+    if (!list.children.length) list.append(h('p', { class: 'muted' }, '旧世界里没有你创建或管理的居民，或者那些存档还没有灵魂记录。'));
+  });
+  return box;
 }
 
 // ── 单个居民 ──────────────────────────────────────────────────

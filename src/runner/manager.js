@@ -70,7 +70,7 @@ export class RunnerManager {
     this.rt = rt; this.cfg = cfg; this.records = {}; this.jobs = new Map(); this.states = new Map(); this.serverURL = null; this.closing = false;
     this.file = join(rt.dir, 'runners.enc'); this.keyFile = join(rt.dir, 'runners.key');
     // Token usage is telemetry, not a credential: it lives beside the encrypted records, in plain numbers.
-    this.usage = new UsageStore({ file: join(rt.dir, 'runner-usage.json'), timezone: cfg.shellTz, permanent:rt.w.premise===6 });
+    this.usage = new UsageStore({ file: join(rt.dir, 'runner-usage.json'), timezone: cfg.shellTz, permanent:(rt.w.premise===6 || rt.w.premise === 7) });
     if (existsSync(this.file)) {
       if (!existsSync(this.keyFile)) throw new Error('托管凭据加密密钥缺失，无法恢复 runners.enc。');
       this.key = readFileSync(this.keyFile);
@@ -93,14 +93,14 @@ export class RunnerManager {
   }
   valid(id) {
     const r = this.records[id], a = this.rt.w.agents[id];
-    if (this.rt.w.premise === 6) {
+    if ((this.rt.w.premise === 6 || this.rt.w.premise === 7)) {
       const link=relation(this.rt.w,id), user=this.ctx?.accounts.get(r?.accountId);
       return !!(r&&a&&link&&link.managerAccountId===r.accountId&&link.ownershipRevision===r.ownershipRevision&&user?.status==='active'&&!user.mergePending&&user.revision===r.accountRevision);
     }
     return !!(r && a && a.tokenHash === hash(r.token) && a.owner?.keyHash === r.ownerHash);
   }
   syncOwnerKey(id) {
-    if(this.rt.w.premise===6)return;
+    if((this.rt.w.premise===6 || this.rt.w.premise === 7))return;
     const r = this.records[id], a = this.rt.w.agents[id];
     // A creator-key reset preserves the agent token. A transfer replaces it,
     // so an old owner's runner must never be rebound after a transfer.
@@ -117,7 +117,7 @@ export class RunnerManager {
   }
   /** Token usage of a hosted resident. `tracked: false` when the server does not drive it: a self-hosted runner is invisible to us. */
   usageView(id) {
-    if(this.rt.w.premise===6){const r=relation(this.rt.w,id);return {tracked:this.usage.has(id),...this.usage.view(`${id}@${r?.managerAccountId}`),lifetime:this.usage.view(id).total};}
+    if((this.rt.w.premise===6 || this.rt.w.premise === 7)){const r=relation(this.rt.w,id);return {tracked:this.usage.has(id),...this.usage.view(`${id}@${r?.managerAccountId}`),lifetime:this.usage.view(id).total};}
     return this.valid(id) ? { tracked: true, ...this.usage.view(id) } : { tracked: false };
   }
   /**
@@ -135,7 +135,7 @@ export class RunnerManager {
       if (!this.valid(id)) continue;
       const a = this.rt.w.agents[id], u = this.usage.view(id);
       add(total, u.total); add(today, u.today);
-      u.days.forEach((d, i) => { if(this.rt.w.premise!==6) add(days[i], d); else { let bucket=days.find(x=>x.day===d.day);if(!bucket){bucket={day:d.day,...zero()};days.push(bucket);}add(bucket,d); } });
+      u.days.forEach((d, i) => { if((this.rt.w.premise!==6 && this.rt.w.premise !== 7)) add(days[i], d); else { let bucket=days.find(x=>x.day===d.day);if(!bucket){bucket={day:d.day,...zero()};days.push(bucket);}add(bucket,d); } });
       agents.push({
         agentId: id, name: a.name, status: a.status, model: this.records[id].config.model, creatorName: a.owner ? a.owner.creatorName ?? null : null,
         runnerStatus: this.view(id).status,
@@ -240,10 +240,10 @@ export class RunnerManager {
       if (['dead', 'retired'].includes(agent.status)) {
         this.records[id].enabled = false; this.states.set(id, { status: 'stopped', logs: [] }); this.persist(); continue;
       }
-      if (this.rt.w.premise!==6 && agent.body.model !== this.records[id].config.model) this.rt.exec('model', { agentId: id, ownerKeyHash: this.records[id].ownerHash, model: this.records[id].config.model });
+      if ((this.rt.w.premise!==6 && this.rt.w.premise !== 7) && agent.body.model !== this.records[id].config.model) this.rt.exec('model', { agentId: id, ownerKeyHash: this.records[id].ownerHash, model: this.records[id].config.model });
       if (this.records[id].enabled) this.start(id);
     }
-    if(this.rt.w.premise!==6)for (const id of this.usage.ids()) if (!this.records[id]) this.usage.drop(id); // usage of a runner that no longer exists
+    if((this.rt.w.premise!==6 && this.rt.w.premise !== 7))for (const id of this.usage.ids()) if (!this.records[id]) this.usage.drop(id); // usage of a runner that no longer exists
   }
   start(id) {
     if (this.closing) throw new RunnerError('服务器正在关闭。', 503);
@@ -262,12 +262,12 @@ export class RunnerManager {
     let reservation = null, balanceLow = false;
     const controller = new AbortController();
     const state = { ...this.states.get(id), status: 'starting', lastError: null, logs: [] };
-    if (this.rt.w.premise === 6) { delete state.nextWakeTick; delete state.wakeEvery; }
+    if ((this.rt.w.premise === 6 || this.rt.w.premise === 7)) { delete state.nextWakeTick; delete state.wakeEvery; }
     this.states.set(id, state);
     const log = makeLogger(id, { secrets: [r.token, config.apiKey], quiet: true, out: () => {}, err: () => {} });
     const promise = Promise.resolve().then(async () => {
       const provider = await (hosted ? hosted.provider(config) : this.provider(config));
-      const client = this.rt.w.premise === 6 ? managedClient(this.ctx,id,()=>this.records[id]===r&&this.valid(id)&&!this.rt.w.paused,controller.signal) : null;
+      const client = (this.rt.w.premise === 6 || this.rt.w.premise === 7) ? managedClient(this.ctx,id,()=>this.records[id]===r&&this.valid(id)&&!this.rt.w.paused,controller.signal) : null;
       if (hosted && client) {
         const wake = client.wake;
         client.wake = async args => {
@@ -289,7 +289,7 @@ export class RunnerManager {
           if (balanceLow) state.status = 'hosted_balance_low';
           return !!reservation;
         } } : {}),
-        ...(tokenized(this.rt.w) ? { refundWake: async wakeId => { if(this.rt.w.premise===6&&(this.records[id]!==r||!this.valid(id)))return {ok:false};return this.rt.exec('meter', { op: 'refund', agentId: id, wakeId, day: earthDay(Date.now(), this.cfg.shellTz || 'Asia/Shanghai').key }).result; } } : {}),
+        ...(tokenized(this.rt.w) ? { refundWake: async wakeId => { if((this.rt.w.premise===6 || this.rt.w.premise === 7)&&(this.records[id]!==r||!this.valid(id)))return {ok:false};return this.rt.exec('meter', { op: 'refund', agentId: id, wakeId, day: earthDay(Date.now(), this.cfg.shellTz || 'Asia/Shanghai').key }).result; } } : {}),
         onUsage: (_agentId, usage, meta) => {
           if (hosted) {
             hosted.billing.settle(reservation, usage, { ...meta, cancelled: meta.cancelled || controller.signal.aborted });
@@ -298,10 +298,10 @@ export class RunnerManager {
           // A request we cancelled ourselves (pause, saving new settings, shutdown, the tick boundary) is not a provider failure.
           if (!meta.ok && (controller.signal.aborted || meta.cancelled)) return;
           this.usage.record(id, usage, meta, config.model);
-          if(this.rt.w.premise===6)this.usage.record(`${id}@${r.accountId}`,usage,meta,config.model);
+          if((this.rt.w.premise===6 || this.rt.w.premise === 7))this.usage.record(`${id}@${r.accountId}`,usage,meta,config.model);
         },
-        waitWake: this.rt.w.premise===6?async args=>this.records[id]===r&&this.valid(id)?managedClient(this.ctx,id,()=>this.records[id]===r&&this.valid(id),controller.signal).wait(args):{ok:false,status:401}:this.waitWake(id),
-        onWaking: (_agentId, rec) => { if(this.rt.w.premise!==6)this.traces?.append(id, rec, r.config.model); }, // 观察用的轨迹（第二前提，SPEC-P2 §14.1）；没有 traces 时什么也不做
+        waitWake: (this.rt.w.premise===6 || this.rt.w.premise === 7)?async args=>this.records[id]===r&&this.valid(id)?managedClient(this.ctx,id,()=>this.records[id]===r&&this.valid(id),controller.signal).wait(args):{ok:false,status:401}:this.waitWake(id),
+        onWaking: (_agentId, rec) => { if((this.rt.w.premise!==6 && this.rt.w.premise !== 7))this.traces?.append(id, rec, r.config.model); }, // 观察用的轨迹（第二前提，SPEC-P2 §14.1）；没有 traces 时什么也不做
         onState: (event) => {
           if (controller.signal.aborted) return;
           Object.assign(state, event);
@@ -350,6 +350,6 @@ export class RunnerManager {
       if (this.records[id].enabled && this.valid(id) && ['awake', 'dormant'].includes(this.rt.w.agents[id].status)) this.start(id);
     }
   }
-  async remove(id) { await this.stop(id); delete this.records[id]; if(this.rt.w.premise!==6)this.usage.drop(id); this.states.delete(id); if (this.key) this.persist(); }
+  async remove(id) { await this.stop(id); delete this.records[id]; if((this.rt.w.premise!==6 && this.rt.w.premise !== 7))this.usage.drop(id); this.states.delete(id); if (this.key) this.persist(); }
   async close() { this.closing = true; await Promise.all([...this.jobs.keys()].map((id) => this.stop(id))); }
 }

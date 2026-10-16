@@ -18,6 +18,8 @@ import { bodyList, isShell } from './bodies.js';
 import { livingShells } from './shells.js';
 import { STEPS } from './tick.js';
 import { writeChronicle } from '../chronicle.js';
+import { wellPlace } from './environment.js';
+import { multiCity, eachCity, cityValue, CITY_IDS } from './cities.js';
 
 // ═══════════════════════════════════════════════════════════════
 // 每日指标（SPEC-E2 §20.1）
@@ -105,7 +107,7 @@ export function dailyMetrics(w, d) {
     gini: gini(alive.map((a) => a.energy)),
     coinVolume: g.coinVolume,
     coinPrice: g.coinTrade.coins > 0 ? round(g.coinTrade.energy / g.coinTrade.coins) : null,
-    wellCondition: w.places.well.condition,
+    wellCondition: wellPlace(w).condition,
     meanCondition: buildings.length ? round(buildings.reduce((s, p) => s + p.condition, 0) / buildings.length, 1) : 0,
     ruins: buildings.filter((p) => p.condition === 0).length + Object.values(w.roads).filter((r) => r.condition === 0).length,
     modules,
@@ -280,7 +282,7 @@ export function computeLegacy(w, d) {
   const share0 = alive.length ? alive.filter((a) => a.generation === 0).length / alive.length : 0;
   items.push(entry('humanNames', 'humanNames', {}, share0 === 1 ? 'legacy' : share0 === 0 ? 'abandoned' : 'transformed', 'humanNames', { pct: round(share0 * 100, 1) }, round(share0)));
   // 源井：完好度与近 7 日趋势
-  const cond = w.places.well.condition;
+  const cond = wellPlace(w).condition;
   const back = metrics.length > 7 ? metrics[metrics.length - 8].wellCondition : metrics.length ? metrics[0].wellCondition : cond;
   const delta = Math.round((cond - back) / 100);
   items.push(entry('well', 'well', {}, conditionBand(cond), 'well', (lang) => {
@@ -297,10 +299,71 @@ export function computeLegacy(w, d) {
 // ═══════════════════════════════════════════════════════════════
 
 STEPS.metrics = (w, d) => {
+  if (multiCity(w)) {
+    // 第七前提「三城」：每座城一份指标与编年史，全岛的指标是三城与城外的合计（docs/plans/2026-10-16-three-cities.md §2.9）
+    w.metrics.push(islandMetrics(w, d));
+    w.legacy = null;
+    eachCity(w, () => { w.chronicle.push(writeChronicle(w, d)); });
+    return;
+  }
   w.metrics.push(dailyMetrics(w, d)); // 16 指标快照与人类遗产存活表
-  w.legacy = w.premise === 6 ? null : computeLegacy(w, d);
+  w.legacy = (w.premise === 6 || w.premise === 7) ? null : computeLegacy(w, d);
   w.chronicle.push(writeChronicle(w, d)); // 17 史官
 };
+
+// ── 第七前提「三城」的指标 ───────────────────────────────────
+
+/** 来自当日日志的计数：全岛的值是三城与城外四处之和 */
+const DAYLOG_SUMS = {
+  arrivals: (g) => g.arrivals.length, births: (g) => g.births.length, deaths: (g) => g.deaths.length, fades: (g) => g.fades.length,
+  output: (g) => g.output, drawn: (g) => g.drawn, proposals: (g) => g.proposals, passed: (g) => g.passed, rejected: (g) => g.rejected,
+  reads: (g) => g.reads, canonReads: (g) => g.canonReads, utterances: (g) => g.utterances.length, inscriptions: (g) => g.inscriptions,
+  covered: (g) => g.covered, epitaphs: (g) => g.epitaphs, reveals: (g) => g.reveals, upkeepPaid: (g) => g.upkeepPaid,
+  lawsSuspended: (g) => g.suspended.length, ruleErrors: (g) => g.ruleErrors, ruleOps: (g) => g.ruleOps, salvaged: (g) => g.salvaged,
+  embodiments: (g) => g.embodiments.length, adoptions: (g) => g.adoptions.length, purposeChanges: (g) => g.purposeChanges,
+  publicInvestment: (g) => g.repairSpent + g.contributeSpent, migrations: (g) => (g.migrations || []).length,
+};
+/** 来自城的状态的计数：全岛的值是三城之和 */
+const CITY_SUMS = ['treasuryEnergy', 'lawsActive', 'votersOrdinary', 'rulesActive', 'ruleNodes', 'procedureChanges', 'refounds', 'reverts'];
+
+function islandMetrics(w, d) {
+  const cities = eachCity(w, (id) => {
+    const m = dailyMetrics(w, d);
+    // 人口按籍计；present 是日终时身在本城地界的人数
+    const mine = agentList(w).filter((a) => isAlive(a) && a.city === id);
+    m.awake = mine.filter((a) => a.status === 'awake').length;
+    m.dormant = mine.filter((a) => a.status === 'dormant').length;
+    m.present = agentList(w).filter((a) => isAlive(a) && w.places[a.place]?.city === id).length;
+    m.migrationsIn = (w.dayLog.migrations || []).length;
+    m.migrations = m.migrationsIn;
+    return m;
+  });
+  const base = dailyMetricsWorld(w, d, cities.north);
+  const logs = [...CITY_IDS.map((id) => cityValue(w, id, 'dayLog')), w.dayLog];
+  for (const [key, f] of Object.entries(DAYLOG_SUMS)) base[key] = logs.reduce((n, g) => n + f(g), 0);
+  for (const key of CITY_SUMS) base[key] = CITY_IDS.reduce((n, id) => n + (cities[id][key] || 0), 0);
+  base.wellCondition = Math.round(CITY_IDS.reduce((n, id) => n + cities[id].wellCondition, 0) / CITY_IDS.length);
+  base.rationPerCapita = null;
+  base.publicInvestmentRate = null;
+  base.cities = Object.fromEntries(CITY_IDS.map((id) => [id, cityMetricView(cities[id])]));
+  return base;
+}
+
+/** 全岛的指标：以某座城的快照为底（居民、社群、地点这些全世界的统计每座城算出来都一样），城的数字随后由合计覆盖 */
+function dailyMetricsWorld(w, d, sample) {
+  const out = { ...sample };
+  delete out.present;
+  delete out.migrationsIn;
+  const all = agentList(w);
+  for (const k of ['awake', 'dormant', 'dead', 'retired']) out[k] = all.filter((a) => a.status === k).length;
+  return out;
+}
+
+/** 每座城的指标里保留的字段（其余是全世界的，不重复存） */
+const CITY_METRIC_KEYS = ['awake', 'dormant', 'present', 'arrivals', 'births', 'deaths', 'output', 'rationPerCapita', 'treasuryEnergy', 'wellCondition',
+  'drawn', 'proposals', 'passed', 'rejected', 'lawsActive', 'votersOrdinary', 'reads', 'utterances', 'scriptEntropy', 'upkeepPaid', 'lawsSuspended',
+  'ruleErrors', 'ruleOps', 'rulesActive', 'refounds', 'reverts', 'migrationsIn', 'publicInvestment'];
+const cityMetricView = (m) => Object.fromEntries(CITY_METRIC_KEYS.filter((k) => k in m).map((k) => [k, m[k]]));
 
 /** 第二前提的指标（SPEC-P2 §5.8）：常驻指令、匿名私语与屏蔽 */
 function agenticMetrics(w) {

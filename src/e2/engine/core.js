@@ -57,6 +57,8 @@ export function emit(w, type, { vis = 'public', agent, place, data = {}, day } =
   if (vis === 'delayed') ev.releaseTick = w.clock.tick + P.privateDelayTicks;
   if (agent !== undefined && agent !== null) ev.agent = agent;
   if (place !== undefined && place !== null) ev.place = place;
+  // 第七前提「三城」：事件记下它属于哪座城（有地点的按地点的地界，没有地点的按当前挂着的城；荒野为 null）。不引用 cities.js，免得循环引用
+  if (w.premise === 7) ev.city = place !== undefined && place !== null && w.places[place] ? (w.places[place].city ?? null) : (w.$city ?? null);
   ev.data = data;
   if (!Object.prototype.hasOwnProperty.call(w, '$out')) hidden(w, '$out', []);
   w.$out.push(ev);

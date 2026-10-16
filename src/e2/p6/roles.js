@@ -2,6 +2,7 @@ import { P } from '../params.js';
 import { bad, emit, pushInbox, fail } from '../engine/core.js';
 import { hasModuleAt, hasRelay } from '../engine/places.js';
 import { isWeatherActive } from '../engine/environment.js';
+import { withCity, cityValue } from '../engine/cities.js';
 const definitions = [
   ['guide','引舟','接引员','port','温和简短','先查看地点、余额、每日上限与当前法律。你可以自行决定目标；启动款每账号每世界首次新建一次。'],
   ['announcer','鸣钟','公告员','agora','清楚克制','我只复述已发生的公共事件。公告不改变法律或账本；没有新事件便不编造消息。'],
@@ -19,9 +20,57 @@ const CHRONICLER_QUIET='今日未记录新的重大公共事件。事实编年�
 export const ROLE_SYSTEM_TEXTS = Object.freeze([...definitions.flatMap(([,name,duty,,personality,fallback]) => [name,duty,personality,fallback]),`欢迎来到城中。${definitions[0][5]}`,CHRONICLER_QUIET]);
 export const ROLE_SYSTEM_PATTERNS = Object.freeze([/^本刻公共事件：[a-z_]+（事件 \d+）(?:；[a-z_]+（事件 \d+）)*。请核查原始记录。$/]);
 export function seedPublicRoles(w) {
+  if (w.premise === 7) return seedIslandRoles(w);
   w.publicRoles = Object.fromEntries(definitions.map(([id,name,duty,home,personality,fallback]) => [id,{ id,name,duty,home,personality,fallback,avatar:`/roles/${id}.svg`, welcomed:[], lastDay:-1 }]));
   w.roleRequests = {};
 }
+
+// ── 第七前提「三城」的 20 位公共角色（docs/plans/2026-10-16-three-cities.md 附录 B）────────────
+// 接引员、公告员、史官、议会书记员、源井值守员每城一位；档案员、研究所值守员、摇篮看护员在北城，交易登记员、纪念地守录员在东城。
+// 角色带 kind（职能，即 P6 的角色 ID）与 city；北城的五位沿用 P6 的名字与头像，西城、东城的十位是新角色。
+const CITY_ROLE_NAMES = {
+  guide: { north: ['引舟', '温和简短'], west: ['望帆', '爽快直接'], east: ['迎潮', '耐心细致'] },
+  announcer: { north: ['鸣钟', '清楚克制'], west: ['击磬', '简明准时'], east: ['传铎', '平实'] },
+  chronicler: { north: ['载简', '区分事实与评论'], west: ['执笔', '只记有据之事'], east: ['编年', '重时间顺序'] },
+  clerk: { north: ['持简', '中立'], west: ['守案', '公允'], east: ['掌册', '一丝不苟'] },
+  wellkeeper: { north: ['守泉', '谨慎'], west: ['汲深', '稳重'], east: ['观澜', '细心'] },
+};
+const CITY_ROLE_HOMES = {
+  guide: { north: 'north-port', west: 'west-port', east: 'east-port' },
+  announcer: { north: 'north-agora', west: 'west-agora', east: 'east-agora' },
+  chronicler: { north: 'north-archive', west: 'west-parliament', east: 'east-parliament' },
+  clerk: { north: 'north-parliament', west: 'west-parliament', east: 'east-parliament' },
+  wellkeeper: { north: 'north-well', west: 'west-well', east: 'east-well' },
+};
+const FACILITY_ROLE_HOMES = { archivist: 'north-archive', researcher: 'north-institute', cradlekeeper: 'north-cradle', registrar: 'east-exchange', memorialkeeper: 'east-memorial' };
+const ISLAND_FALLBACK = {
+  guide: '先查看地点、余额、每日上限与当前法律。这座岛上有三座城，各有自己的源井、公库和法律；你在哪座城的地界里，就守哪座城的法律，荒野不属于任何城。你可以自行决定目标；启动款每账号每世界首次新建一次。',
+  announcer: '我只复述本城已发生的公共事件。公告不改变法律或账本；没有新事件便不编造消息；别城的事要靠来往的人带来。',
+  chronicler: '事实请查事件编号与本城的每日编年史；我的评论另行记录，不能作为法律、账本或合同验收。',
+  clerk: '请查本城当前的立法程序、提案与期限。我只说明程序，不能代提案、投票或保证通过。',
+  wellkeeper: '本城源井的供给与今日汲取池可在当前公开状态核查。三口源井的产出天生不同；我不预测天象、不制造资源，也不修改容量。',
+};
+const CITY_IDS7 = ['north', 'west', 'east'];
+function seedIslandRoles(w) {
+  const duty = Object.fromEntries(definitions.map(([id, , d]) => [id, d]));
+  const base = Object.fromEntries(definitions.map((d) => [d[0], d]));
+  const roles = {};
+  for (const kind of Object.keys(CITY_ROLE_NAMES)) {
+    for (const city of CITY_IDS7) {
+      const [name, personality] = CITY_ROLE_NAMES[kind][city];
+      const id = `${kind}-${city}`;
+      // 三城同一职务共用一幅头像（各城的头像变体还没画）
+      roles[id] = { id, kind, city, name, duty: duty[kind], home: CITY_ROLE_HOMES[kind][city], personality, fallback: ISLAND_FALLBACK[kind], avatar: `/roles/${kind}.svg`, welcomed: [], lastDay: -1 };
+    }
+  }
+  for (const [kind, home] of Object.entries(FACILITY_ROLE_HOMES)) {
+    const [, name, d, , personality, fallback] = base[kind];
+    roles[kind] = { id: kind, kind, city: w.places[home]?.city ?? null, name, duty: d, home, personality, fallback, avatar: `/roles/${kind}.svg`, welcomed: [], lastDay: -1 };
+  }
+  w.publicRoles = roles;
+  w.roleRequests = {};
+}
+export const roleKind = (r) => r.kind ?? r.id;
 export function rolePresent(w, r) {
   const p = w.places[r.home];
   return !!p && !p.razed && (p.condition===null||p.condition>0);
@@ -45,7 +94,7 @@ export function enqueueQuestion(w,a,roleId,text) {
   return id;
 }
 export function roleReply(w,p) {
-  if (w.premise !== 6) return bad('not_found');
+  if ((w.premise !== 6 && w.premise !== 7)) return bad('not_found');
   if (w.paused) return bad('paused');
   const q=w.roleRequests[p.requestId],r=w.publicRoles[q?.roleId];
   if (!q || !r) return bad('not_found');
@@ -61,7 +110,8 @@ function publishRole(w,r,text,extra={}) {
   for(const a of Object.values(w.agents))if(a.status==='awake'&&a.place===r.home&&!a.muted.includes(`role:${r.id}`))pushInbox(w,a,'say',{from:{id:`role:${r.id}`,name:r.name},place:r.home,text});
 }
 export function roleActivity(w,events) {
-  if(w.premise!==6||w.paused)return;
+  if (w.premise === 7) { if (!w.paused) islandRoleActivity(w, events); return; }
+  if((w.premise!==6 && w.premise !== 7)||w.paused)return;
   const guide=w.publicRoles.guide;
   for(const ev of events)if((ev.type==='arrive'||ev.type==='move'&&ev.data?.to==='port'||ev.type==='born'&&ev.place==='port')&&rolePresent(w,guide)&&!guide.welcomed.includes(ev.agent)){
     guide.welcomed.push(ev.agent);publishRole(w,guide,`欢迎来到城中。${guide.fallback}`,{source:'fixed'});
@@ -88,3 +138,50 @@ export function roleActivity(w,events) {
     }else publishRole(w,chronicler,CHRONICLER_QUIET,{source:'fixed',commentary:true,citations:[]});
   }
 }
+
+/**
+ * 第七前提「三城」：每座城的接引员迎接在本城港口上岸或走进本港的人；公告员只在本城播报本城的重要事件（宣告不出城，
+ * 本城有蚀且没有中继时不播报到别处）；史官每日为本城写一次记述。事件按 ev.city 归城（engine/core.js）。
+ */
+function islandRoleActivity(w, events) {
+  for (const city of CITY_IDS7) {
+    const guide = w.publicRoles[`guide-${city}`];
+    const port = guide.home;
+    for (const ev of events) {
+      if ((ev.type === 'arrive' && ev.place === port || ev.type === 'move' && ev.data?.to === port || ev.type === 'born' && ev.place === port) && rolePresent(w, guide) && !guide.welcomed.includes(ev.agent)) {
+        guide.welcomed.push(ev.agent);
+        publishRole(w, guide, `欢迎来到${w.cities[city]?.cityName ?? cityValueOf(w, city, 'cityName')}。${guide.fallback}`, { source: 'fixed' });
+      }
+    }
+    const important = events.filter((e) => e.city === city && ['arrive', 'born', 'death', 'law_passed', 'built', 'weather_start', 'settle'].includes(e.type));
+    const chronicler = w.publicRoles[`chronicler-${city}`];
+    chronicler.dailyEvents ??= [];
+    chronicler.dailyEvents.push(...important.map((e) => ({ seq: e.seq, type: e.type, day: e.day, place: e.place ?? null })));
+    chronicler.dailyEvents = chronicler.dailyEvents.slice(-5);
+    const announcer = w.publicRoles[`announcer-${city}`];
+    if (important.length && announcer.lastTick !== w.clock.tick && rolePresent(w, announcer)) {
+      announcer.lastTick = w.clock.tick;
+      const citations = important.slice(0, 5).map((e) => e.seq);
+      const text = `本刻公共事件：${important.slice(0, 5).map((e) => `${e.type}（事件 ${e.seq}）`).join('；')}。请核查原始记录。`;
+      publishRole(w, announcer, text, { source: 'fixed', citations });
+      const blocked = withCity(w, city, () => isWeatherActive(w, 'eclipse') && !hasRelay(w));
+      if (!blocked) {
+        for (const a of Object.values(w.agents)) {
+          if (a.status === 'awake' && a.place !== announcer.home && w.places[a.place]?.city === city && !a.muted.includes(`role:${announcer.id}`)) {
+            pushInbox(w, a, 'say', { from: { id: `role:${announcer.id}`, name: announcer.name }, place: announcer.home, text });
+          }
+        }
+      }
+    }
+    const day = Math.floor(w.clock.tick / P.ticksPerDay);
+    if (w.clock.tick > 0 && w.clock.tick % P.ticksPerDay === 0 && chronicler.lastDay !== day && rolePresent(w, chronicler)) {
+      chronicler.lastDay = day;
+      const facts = chronicler.dailyEvents.splice(0);
+      if (facts.length) {
+        const id = `chronicle-${city}-${day}`;
+        w.roleRequests[id] = { id, roleId: chronicler.id, kind: 'chronicle', facts, citations: facts.map((e) => e.seq), text: '请根据这些已发生的本城公共事件写100–300字的当日记述，区分事实与评论，不编造事件或引用编号。', tick: w.clock.tick, generation: w.experimentControl?.generation ?? 0, status: 'pending' };
+      } else publishRole(w, chronicler, CHRONICLER_QUIET, { source: 'fixed', commentary: true, citations: [] });
+    }
+  }
+}
+const cityValueOf = (w, id, key) => cityValue(w, id, key);

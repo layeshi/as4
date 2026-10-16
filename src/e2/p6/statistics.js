@@ -5,7 +5,7 @@ export function beforeResidents(w) {
   return Object.fromEntries(Object.values(w.agents).map(a=>[a.id,{...balances(a),assets:assetPosition(w,a)}]));
 }
 export function recordResidents(w,before,cmd,result,events) {
-  if(w.premise!==6)return;
+  if((w.premise!==6 && w.premise !== 7))return;
   const day=Math.floor(w.clock.tick/P.ticksPerDay);
   for(const a of Object.values(w.agents)) {
     const initial=before[a.id]??{energy:0,basic:0,materials:0};

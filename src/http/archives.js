@@ -14,9 +14,20 @@ export const archiveRoutes=[
   ['GET',/^\/api\/account\/worlds\/([^/]+)\/residents$/,wrap(async({res,ctx,actor,params,authorize})=>{
     const id=params[0],publicState=await state(ctx,id);
     const links=ctx.accounts.linksOf(actor.id,id),ids=new Set(links.map(l=>l.agentId));
-    if(entry(ctx,id).premise===6){const relations=JSON.parse(await readFile(join(archiveDirectory(ctx.cfg.dataDir,id),'relations.json'),'utf8'));for(const [agentId,r]of Object.entries(relations))if(r.managerAccountId===actor.id||r.creatorAccountId===actor.id)ids.add(agentId);}
+    if([6,7].includes(entry(ctx,id).premise)){const relations=JSON.parse(await readFile(join(archiveDirectory(ctx.cfg.dataDir,id),'relations.json'),'utf8'));for(const [agentId,r]of Object.entries(relations))if(r.managerAccountId===actor.id||r.creatorAccountId===actor.id)ids.add(agentId);}
     authorize();
     sendJson(res,200,{world:id,archived:true,residents:publicState.agents.filter(a=>ids.has(a.id)),publicState});
+  })],
+  // 新世界新建居民时「从旧世界带入」：只列出本账号在那个世界管理或创作过的居民的灵魂原文与形象（决定 25）
+  ['GET',/^\/api\/account\/worlds\/([^/]+)\/souls$/,wrap(async({res,ctx,actor,params,authorize})=>{
+    const id=params[0],a=entry(ctx,id);
+    if(![6,7].includes(a.premise)){authorize();sendJson(res,200,{world:id,souls:[]});return;}
+    const dir=archiveDirectory(ctx.cfg.dataDir,id);
+    const relations=JSON.parse(await readFile(join(dir,'relations.json'),'utf8'));
+    let souls={};try{souls=JSON.parse(await readFile(join(dir,'souls.json'),'utf8'));}catch{souls={};}
+    authorize();
+    const mine=Object.entries(relations).filter(([,r])=>r.managerAccountId===actor.id||r.creatorAccountId===actor.id).map(([agentId])=>agentId);
+    sendJson(res,200,{world:id,souls:mine.filter(agentId=>souls[agentId]).map(agentId=>({agentId,...souls[agentId]}))});
   })],
   ['GET',/^\/api\/public\/worlds\/([^/]+)\/state$/,accountWrap(async({res,ctx,params})=>sendJson(res,200,await state(ctx,params[0])))],
   ['GET',/^\/api\/public\/worlds\/([^/]+)\/agents\/([^/]+)\/events$/,accountWrap(async({res,ctx,params,url})=>{

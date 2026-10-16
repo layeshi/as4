@@ -13,6 +13,7 @@ import { hooks } from './hooks.js';
 import { applyDamage } from './environment.js';
 import { closeOffer } from './society.js';
 import { abandonProject, openProjectsAt } from './projects.js';
+import { cityOwnerAt } from './cities.js';
 
 /** 取消某地告示板上的公开交易，托管退回发起者（告示板被拆除，或地点成为遗址） */
 export function cancelBoardOffers(w, placeId) {
@@ -43,7 +44,7 @@ export function razePlace(w, p) {
   p.modules = [];
   p.wallSlots = 0;
   p.rules = null;
-  p.owner = { kind: 'city' };
+  p.owner = cityOwnerAt(w, p.id); // 第七前提：遗址归地点所在的城（荒野里无主）
   p.salvage = 0;
   p.salvageMax = 0;
   p.ruined = false;

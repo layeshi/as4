@@ -16,6 +16,25 @@ function cityName(state) {
   return w.humanCityName && usable(w.humanCityName.zh) ? w.humanCityName.zh : '后人纪';
 }
 function living(state) { return (state.agents || []).filter(a => ['awake', 'dormant'].includes(a.status)); }
+// 第七前提「三城」：选了一座城时，统计、标题和事件流都只看那座城（居民按籍）；全岛时是合计
+function scoped(app) {
+  const s = app.state, f = app.cityFocus, c = s && s.cities && f ? s.cities.find(x => x.id === f) : null;
+  if (!c) return s;
+  return Object.assign({}, s, { treasury: c.treasury, well: c.well, agents: (s.agents || []).filter(a => a.city === f), world: Object.assign({}, s.world, { cityName: c.cityName, humanCityName: c.humanName }) });
+}
+function eventsOf(app) { return app.cityFocus && app.state && app.state.cities ? app.events.filter(e => e.city === app.cityFocus) : app.events; }
+function citySwitch(app, W) {
+  const items = [[null, '全岛']].concat(app.state.cities.map(c => [c.id, (c.short && c.short.zh) || c.id]));
+  return N.node(34, (g, x, y) => {
+    const ctx = g.ctx, f = font(13, {}), gap = 8, cw = (W - gap * (items.length - 1)) / items.length;
+    items.forEach(([id, label], i) => {
+      const cx = x + i * (cw + gap), on = (app.cityFocus || null) === id;
+      P.fillRound(ctx, cx, y + 1, cw, 32, 16, on ? C.moon : 'rgba(255,255,255,0.06)');
+      P.text(ctx, label, cx + cw / 2, y + 17, f, on ? C.ink : C.text, 'center');
+      g.hit(cx, y + 1, cw, 32, { type: 'cityFocus', city: id });
+    });
+  });
+}
 function segs(list, extra = {}) { return (list || []).map(s => Object.assign({ text: s.text, color: ROLE_COLOR[s.role] || extra.color || C.text2, bold: s.role === 'agent', action: s.action || null })); }
 
 function liveRow(app, W) {
@@ -31,14 +50,17 @@ function liveRow(app, W) {
   });
 }
 function mapCard(app, W) {
-  const H = Math.round(W * 0.75), s = app.state;
+  const H = Math.round(W * 0.75), s = scoped(app);
   const latest = Math.max(-1, ...app.events.map(e => e.tick));
   const active = new Set(app.events.filter(e => e.tick === latest && e.place && e.type !== 'day').map(e => e.place));
   const people = living(s), awake = people.filter(a => a.status === 'awake').length;
   const chip = people.length ? `${people.length} 位居民 · ${awake === people.length ? '全部醒着' : awake + ' 位醒着'}` : '还没有居民';
   return N.node(H, (g, x, y) => {
     const ctx = g.ctx;
-    const { canvas, hits } = app.cityMap.render({ map: app.map, state: s, active, avatar: g.avatar }, W, H, app.ratio, app.mapVersion);
+    app.cityMapArea = { x, y, w: W, h: H };
+    // 全岛：最近一刻的移动交给地图画跨城弧线
+    const moves = app.state.cities && !app.cityFocus ? app.events.filter(e => e.type === 'move' && e.tick === latest && e.data && e.data.from && e.data.to).map(e => [e.data.from, e.data.to]) : [];
+    const { canvas, hits } = app.cityMap.render({ map: app.map, state: app.state, active, avatar: g.avatar, focus: app.cityFocus, moves }, W, H, app.ratio, app.mapVersion);
     ctx.save(); P.roundRect(ctx, x, y, W, H, 18); ctx.clip();
     ctx.drawImage(canvas, x, y, W, H);
     ctx.restore();
@@ -65,7 +87,7 @@ function legend(W) {
   });
 }
 function stats(app, W) {
-  const s = app.state, people = living(s), awake = people.filter(a => a.status === 'awake').length;
+  const s = scoped(app), people = living(s), awake = people.filter(a => a.status === 'awake').length;
   const treasury = s.treasury ? (s.treasury.energy !== undefined ? s.treasury.energy : s.treasury.tokens) : null;
   const well = s.well || {}, out = (well.outputHistory || []).slice(-1)[0];
   return N.columns(W, [
@@ -76,7 +98,7 @@ function stats(app, W) {
 }
 function filters(app, W, items) {
   const present = new Set();
-  for (const it of buildFeed(app.events, app.state, 'all')) { if (it.cat) present.add(it.cat); if (it.events) it.events.forEach(e => present.add(e.cat)); }
+  for (const it of buildFeed(eventsOf(app), app.state, 'all')) { if (it.cat) present.add(it.cat); if (it.events) it.events.forEach(e => present.add(e.cat)); }
   const cats = shared.CATEGORIES.filter(c => c !== 'admin' && (present.has(c) || c === app.feedFilter));
   return N.chipStrip(W, [{ label: '全部', action: { type: 'filter', value: 'all' }, selected: app.feedFilter === 'all' }]
     .concat(cats.map(c => ({ label: shared.CATEGORY_LABELS[c], action: { type: 'filter', value: c }, selected: app.feedFilter === c }))), app.filterScroller);
@@ -159,7 +181,7 @@ function daySummary(app, W, it) {
   }, { pad: 14 });
 }
 function feedNodes(app, W) {
-  const items = buildFeed(app.events, app.state, app.feedFilter);
+  const items = buildFeed(eventsOf(app), app.state, app.feedFilter);
   if (!items.length) return [N.empty(W, '这一刻很安静', app.feedFilter === 'all' ? '还没有公开的动静。' : '这一类还没有动静，换个分类看看。')];
   return items.map(it => it.kind === 'group' ? N.rule(W, it.label) : it.kind === 'bubble' ? bubble(app, W, it) : it.kind === 'merged' ? merged(app, W, it) : it.kind === 'day' ? daySummary(app, W, it) : action(app, W, it));
 }
@@ -178,11 +200,13 @@ function city(app, W) {
   const nodes = announcementPreview(app, W);
   if (!app.wechatVerified && !app.dismissed.login) nodes.push(loginBanner(app, W));
   if ((s.agents || []).some(a => !usable(a.name))) nodes.push(N.text(W, '部分居民名字暂未展示，暂用居民编号区分。', { style: 'caption', color: C.text3 }));
-  nodes.push(liveRow(app, W), mapCard(app, W), legend(W), stats(app, W));
+  nodes.push(liveRow(app, W));
+  if (s.cities) nodes.push(citySwitch(app, W));
+  nodes.push(mapCard(app, W), legend(W), stats(app, W));
   const count = app.events.length;
   nodes.push(N.section(W, '此刻', { sub: count ? `最近 ${count} 条公开记录` : '', link: { label: '世界报告', action: { type: 'historyReports' } } }), filters(app, W));
   nodes.push(...feedNodes(app, W));
-  return { top: { kind: 'brand', title: cityName(s) }, nodes, tabbar: true, pull: true, gap: 12 };
+  return { top: { kind: 'brand', title: s.cities && !app.cityFocus ? '后人纪 · 全岛' : cityName(scoped(app)) }, nodes, tabbar: true, pull: true, gap: 12 };
 }
 
 // ── 点地点弹出的底部卡片 ──

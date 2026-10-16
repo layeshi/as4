@@ -5,7 +5,7 @@ import { usesLawSemantics2 } from '../engine/law-semantics.js';
 import { jsonWeight } from '../engine/tokens.js';
 
 export function enablePrograms(w, args = {}) {
-  if (w.premise !== 6 || !usesLawSemantics2(w)) return bad('not_allowed');
+  if ((w.premise !== 6 && w.premise !== 7) || !usesLawSemantics2(w)) return bad('not_allowed');
   if (args.version !== 1 || Object.keys(args).some(k => k !== 'version')) return bad('invalid_request');
   if (!programsEnabled(w)) {
     w.programServices = { version: 1, enabledTick: w.clock.tick, enabledCommand: w.commandN, nextId: 0, programs: {} };

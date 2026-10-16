@@ -11,6 +11,7 @@ import { randomBytes } from 'node:crypto';
 import { weatherTypes } from '../e2/facade.js';
 import { WEATHER_CODES } from '../params.js';
 import { normLang } from '../lore/index.js';
+import { withCity } from '../e2/engine/cities.js';
 import { clientIp, langOf, parseCookies, readJson, sendError, sendEngineError, sendJson, sha256hex } from './util.js';
 
 const intParam = (url, name, def, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) => {
@@ -173,15 +174,22 @@ export async function getAttention(req, res, ctx, url) {
   sendJson(res, 200, { days: ctx.traces.recent(days) });
 }
 
-/** GET /api/public/chronicle?lang=&from=&to= */
+/** GET /api/public/chronicle?lang=&from=&to=（第七前提另有 &city=：编年史按城分开，不带 city 时三城合在一起、各条注明城） */
 export async function getChronicle(req, res, ctx, url) {
   const lang = langOf(url.searchParams);
   const from = intParam(url, 'from', 0, { min: 0 });
   const to = intParam(url, 'to', Number.MAX_SAFE_INTEGER, { min: 0 });
   if (Number.isNaN(from) || Number.isNaN(to)) return sendError(res, lang, 'invalid_request', { field: Number.isNaN(from) ? 'from' : 'to' });
+  const w = ctx.rt.w;
+  const city = url.searchParams.get('city');
+  if (w.cities) {
+    if (city && !w.cities[city]) return sendError(res, lang, 'invalid_request', { field: 'city' });
+    const list = (city ? [city] : Object.keys(w.cities)).flatMap((id) => w.cities[id].chronicle.map((c) => ({ ...c, city: id }))).sort((a, b) => a.day - b.day);
+    return sendJson(res, 200, { lang, chronicle: list.filter((c) => c.day >= from && c.day <= to).map((c) => ({ day: c.day, city: c.city, text: c[lang] })) });
+  }
   sendJson(res, 200, {
     lang,
-    chronicle: ctx.rt.w.chronicle.filter((c) => c.day >= from && c.day <= to).map((c) => ({ day: c.day, text: c[lang] })),
+    chronicle: w.chronicle.filter((c) => c.day >= from && c.day <= to).map((c) => ({ day: c.day, text: c[lang] })),
   });
 }
 
@@ -208,9 +216,19 @@ export async function getLegacy(req, res, ctx) {
   sendJson(res, 200, { legacy: ctx.rt.w.legacy || null });
 }
 
-/** GET /api/public/weather：生效中、历史、本月投票计数、当前征兆（看不到排期） */
-export async function getWeather(req, res, ctx) {
-  sendJson(res, 200, ctx.rt.engine.publicWeather(ctx.rt.w));
+/**
+ * GET /api/public/weather：生效中、历史、本月投票计数、当前征兆（看不到排期）。
+ * 第七前提另有 ?city=：三城与荒野的天象各自独立；不带 city 时给荒野的，另附 cities 各城一份。
+ */
+export async function getWeather(req, res, ctx, url) {
+  const w = ctx.rt.w;
+  if (w.cities) {
+    const city = url && url.searchParams.get('city');
+    if (city && !w.cities[city]) return sendError(res, langOf(url.searchParams), 'invalid_request', { field: 'city' });
+    if (city) return sendJson(res, 200, { city, ...withCity(w, city, () => ctx.rt.engine.publicWeather(w)) });
+    return sendJson(res, 200, { ...ctx.rt.engine.publicWeather(w), cities: Object.fromEntries(Object.keys(w.cities).map((id) => [id, withCity(w, id, () => ctx.rt.engine.publicWeather(w))])) });
+  }
+  sendJson(res, 200, ctx.rt.engine.publicWeather(w));
 }
 
 /**

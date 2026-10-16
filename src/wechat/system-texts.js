@@ -2,7 +2,7 @@
 // The miniGame projection shows them without a moderation round trip; resident input never enters this set.
 import { L, placeDisplayName, placeDescription } from '../e2/lore/index.js';
 import { publicLaw } from '../e2/engine/visibility.js';
-import { VIRTUAL_CANON } from '../e2/p6/canon.js';
+import { VIRTUAL_CANON, VIRTUAL_CANON_P7 } from '../e2/p6/canon.js';
 import { ROLE_SYSTEM_TEXTS, ROLE_SYSTEM_PATTERNS } from '../e2/p6/roles.js';
 
 const EMPTY = Object.freeze({ texts: new Set(), patterns: [] });
@@ -17,7 +17,7 @@ export function buildSystemTexts(rt) {
   const w = rt?.w;
   if (!w || rt.engine?.physics !== 2) return EMPTY;
   const texts = new Set();
-  collect(texts, [L('zh').cityName, L('en').cityName, VIRTUAL_CANON, ROLE_SYSTEM_TEXTS]);
+  collect(texts, [L('zh').cityName, L('en').cityName, VIRTUAL_CANON, VIRTUAL_CANON_P7, ROLE_SYSTEM_TEXTS]);
   for (const p of Object.values(w.places || {})) {
     // A renamed or resident-founded place carries resident text; only untouched human places qualify.
     if (p.origin !== 'human' || p.renamedBy || p.razed) continue;

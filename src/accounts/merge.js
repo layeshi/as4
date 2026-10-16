@@ -9,7 +9,7 @@ export class AccountMerger {
   validate(from, to) {
     const { rt, accounts, wechat, hosted } = this.ctx;
     const source = accounts.get(from), target = accounts.get(to);
-    if (rt.w.premise !== 6) fail(409, 'merge_unsupported', '当前世界暂不支持账号合并。');
+    if ((rt.w.premise !== 6 && rt.w.premise !== 7)) fail(409, 'merge_unsupported', '当前世界暂不支持账号合并。');
     if (!source || !target || from === to) fail(409, 'same_account', '两端已经是同一个账号，无需合并。');
     if ([source, target].some(u => u.status !== 'active' || u.mergePending || u.mergedTo || u.role !== 'user')) fail(409, 'merge_unavailable', '仅支持两个正常使用的普通账号合并。');
     const bindings = [...wechatBindings(target, wechat.appid), ...wechatBindings(source, wechat.appid)];
@@ -64,7 +64,7 @@ export class AccountMerger {
   }
   finish(plan) {
     const { rt, hosted, runners, accounts } = this.ctx;
-    if (rt.w.id !== plan.world || rt.w.premise !== 6) throw new Error('Account merge requires its original world');
+    if (rt.w.id !== plan.world || (rt.w.premise !== 6 && rt.w.premise !== 7)) throw new Error('Account merge requires its original world');
     hosted.billing.mergeAccounts(plan.id, plan.from, plan.to);
     const result = rt.exec('account', { op: 'merge_accounts', accountId: plan.to, from: plan.from, requestId: plan.id }).result;
     if (!result.ok) throw new Error('Account merge world receipt failed');

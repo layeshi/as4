@@ -1,0 +1,328 @@
+{
+  "date": "2026-10-16",
+  "branch": "claude/three-cities-design",
+  "browser": "headed Google Chrome",
+  "source": "local P7 world at 127.0.0.1:8797",
+  "matrix": {
+    "checks": [
+      {
+        "width": 1280,
+        "colorScheme": "dark",
+        "lang": "zh",
+        "overflow": false,
+        "mapBackground": "rgb(7, 10, 18)",
+        "entry": "创建居民"
+      },
+      {
+        "width": 1280,
+        "colorScheme": "light",
+        "lang": "zh",
+        "overflow": false,
+        "mapBackground": "rgb(7, 10, 18)",
+        "entry": "创建居民"
+      },
+      {
+        "width": 375,
+        "colorScheme": "dark",
+        "lang": "zh",
+        "overflow": false,
+        "mapBackground": "rgb(7, 10, 18)",
+        "entry": "创建居民"
+      },
+      {
+        "width": 375,
+        "colorScheme": "light",
+        "lang": "zh",
+        "overflow": false,
+        "mapBackground": "rgb(7, 10, 18)",
+        "entry": "创建居民"
+      },
+      {
+        "width": 1280,
+        "colorScheme": "dark",
+        "lang": "en",
+        "overflow": false,
+        "mapBackground": "rgb(7, 10, 18)",
+        "entry": "Create a resident"
+      },
+      {
+        "width": 1280,
+        "colorScheme": "light",
+        "lang": "en",
+        "overflow": false,
+        "mapBackground": "rgb(7, 10, 18)",
+        "entry": "Create a resident"
+      },
+      {
+        "width": 375,
+        "colorScheme": "dark",
+        "lang": "en",
+        "overflow": false,
+        "mapBackground": "rgb(7, 10, 18)",
+        "entry": "Create a resident"
+      },
+      {
+        "width": 375,
+        "colorScheme": "light",
+        "lang": "en",
+        "overflow": false,
+        "mapBackground": "rgb(7, 10, 18)",
+        "entry": "Create a resident"
+      }
+    ],
+    "collapsed": "layout side-collapsed",
+    "fullscreen": {
+      "active": true,
+      "mapHeight": 901,
+      "paneHeight": 1000,
+      "viewportHeight": 1000
+    }
+  },
+  "wechatBrowserPreview": [
+    {
+      "device": "iphone15",
+      "width": 390,
+      "gesture": {
+        "zoom": 2,
+        "pan": 20,
+        "scroll": 0
+      }
+    },
+    {
+      "device": "se",
+      "width": 375,
+      "gesture": {
+        "zoom": 2,
+        "pan": 20,
+        "scroll": 0
+      }
+    },
+    {
+      "device": "android",
+      "width": 393,
+      "gesture": {
+        "zoom": 2,
+        "pan": 20,
+        "scroll": 0
+      }
+    }
+  ],
+  "metrics": {
+    "cityFigures": 8,
+    "cityFirstChart": "250000187500125000625000D2D4D6D8D8实际拨款102197日结法律拨款／在世居民",
+    "allFigures": 18,
+    "comparisonPreserved": true,
+    "overflow2560": false
+  },
+  "residentFilters": {
+    "hereEast": 3,
+    "homeWest": 2
+  },
+  "decisions": {
+    "weather": "random; voting disabled",
+    "letter": "unchanged"
+  },
+  "notVerified": [
+    "real archived soul import",
+    "real model P7 report",
+    "WeChat DevTools and physical devices"
+  ],
+  "screenshots": [
+    {
+      "file": "city-1280-dark-zh.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "collapsed-1280-dark-en.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "create-1280-dark-en.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "create-1280-light-en.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "create-375-dark-en.png",
+      "width": 375,
+      "height": 1000
+    },
+    {
+      "file": "create-375-light-en.png",
+      "width": 375,
+      "height": 1000
+    },
+    {
+      "file": "cross-city-1280-dark-en.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "fullscreen-1280-dark-en.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "island-1280-dark-en.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "island-1280-dark-zh.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "island-1280-light-en.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "island-1280-light-zh.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "island-375-dark-en.png",
+      "width": 375,
+      "height": 1359
+    },
+    {
+      "file": "island-375-dark-zh.png",
+      "width": 375,
+      "height": 1232
+    },
+    {
+      "file": "island-375-light-en.png",
+      "width": 375,
+      "height": 1359
+    },
+    {
+      "file": "island-375-light-zh.png",
+      "width": 375,
+      "height": 1232
+    },
+    {
+      "file": "market-1280-dark-en.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "metrics-2560-dark-zh.png",
+      "width": 2560,
+      "height": 1440
+    },
+    {
+      "file": "metrics-city-1280-dark-zh.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "metrics-island-1280-dark-zh.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "my-residents-375-light-en.png",
+      "width": 375,
+      "height": 985
+    },
+    {
+      "file": "place-1280-dark-zh.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "profile-1280-dark-en.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "residents-filter-1280-dark-en.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "residents-filter-1280-dark-zh.png",
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "file": "wechat-375-city.png",
+      "width": 376,
+      "height": 668
+    },
+    {
+      "file": "wechat-375-island.png",
+      "width": 376,
+      "height": 668
+    },
+    {
+      "file": "wechat-375-zoom.png",
+      "width": 376,
+      "height": 668
+    },
+    {
+      "file": "wechat-390-city.png",
+      "width": 390,
+      "height": 845
+    },
+    {
+      "file": "wechat-390-island.png",
+      "width": 390,
+      "height": 845
+    },
+    {
+      "file": "wechat-390-zoom.png",
+      "width": 390,
+      "height": 845
+    },
+    {
+      "file": "wechat-393-city.png",
+      "width": 394,
+      "height": 852
+    },
+    {
+      "file": "wechat-393-island.png",
+      "width": 394,
+      "height": 852
+    },
+    {
+      "file": "wechat-393-zoom.png",
+      "width": 394,
+      "height": 852
+    }
+  ],
+  "verification": {
+    "npmTest": {
+      "tests": 1846,
+      "pass": 1845,
+      "fail": 0,
+      "skipped": 1,
+      "durationMs": 173767.517584
+    },
+    "p7Dedicated": {
+      "tests": 16,
+      "pass": 16,
+      "fail": 0
+    },
+    "uiAndP7": {
+      "tests": 52,
+      "pass": 52,
+      "fail": 0
+    },
+    "wechat": {
+      "tests": 57,
+      "pass": 57,
+      "fail": 0
+    },
+    "offlineMiniprogram": "passed",
+    "offlineMinigame": "passed"
+  }
+}

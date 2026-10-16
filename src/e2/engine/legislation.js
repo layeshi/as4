@@ -14,7 +14,8 @@ import { P } from '../params.js';
 import { budgetForExpression } from './law-execution.js';
 import { nextId, clockDay, isAlive } from '../world.js';
 import { onGenesis } from '../genesis.js';
-import { HUMAN_LAWS, humanProcedureFor, SYSTEM_LAW_TEXT } from '../lore/humanlaws.js';
+import { HUMAN_LAWS, humanLawsFor, humanProcedureFor, SYSTEM_LAW_TEXT } from '../lore/humanlaws.js';
+import { cityDef, currentCity, multiCity } from './cities.js';
 import { validateRules, validateProcedure } from '../rules/check.js';
 import { parseCached } from '../rules/parser.js';
 import { evaluate, agentRef, asBool, asInt } from '../rules/eval.js';
@@ -36,7 +37,9 @@ const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
 /** 创建世界时：依次生成遗法 l1–l6，执行它们的 enact（不产生事件），设 w.procedure */
 export function seedHumanLaws(w) {
-  for (const def of HUMAN_LAWS) {
+  // 三城世界：在当前挂着的城里种下这座城的一份遗法（world.js 的 createCities 逐城调用）
+  const defs = w.premise === 7 ? humanLawsFor(w, cityDef(w, currentCity(w))) : HUMAN_LAWS;
+  for (const def of defs) {
     let rules = [];
     let procedure = null;
     if (def.rules) {
@@ -444,7 +447,16 @@ export const openRefounds = (w) => filterValues(w.refounds, (r) => r.status === 
 /** 入城满 refoundResidenceDays 的在世居民数（重订的分母） */
 export function refoundResidents(w) {
   const today = clockDay(w);
-  return Object.values(w.agents).filter((a) => isAlive(a) && a.bornDay <= today - P.refoundResidenceDays).length;
+  return Object.values(w.agents).filter((a) => isAlive(a) && residentOfHere(w, a, today)).length;
+}
+
+/**
+ * 重订的资格：入城满三日的在世居民。第七前提「三城」里是「籍在当前挂着的城、落籍满三日」（docs/plans/2026-10-16-three-cities.md §2.6），
+ * 迁出的居民也就不再算在原城的有效名单里。
+ */
+function residentOfHere(w, a, today) {
+  if (multiCity(w)) return a.city === currentCity(w) && a.settledDay <= today - P.refoundResidenceDays;
+  return a.bornDay <= today - P.refoundResidenceDays;
 }
 
 /** 重订所需的联署数：ceil(2n / 3)；n 为 0 时不可能成功（返回 null） */
@@ -454,9 +466,9 @@ export function refoundNeeded(w, r = null) {
 }
 
 /** 仍在世的联署者 */
-export const refoundElectorate = w => Object.values(w.agents).filter(a => isAlive(a) && a.bornDay <= clockDay(w) - P.refoundResidenceDays).map(a => a.id);
-export const liveElectorate = (w, r) => (r.electorate || []).filter(id => w.agents[id] && isAlive(w.agents[id]));
-export const liveSigners = (w, r) => r.signers.filter((id) => w.agents[id] && isAlive(w.agents[id]) && (!usesLawSemantics2(w) || r.electorate?.includes(id)));
+export const refoundElectorate = w => Object.values(w.agents).filter(a => isAlive(a) && residentOfHere(w, a, clockDay(w))).map(a => a.id);
+export const liveElectorate = (w, r) => (r.electorate || []).filter(id => w.agents[id] && isAlive(w.agents[id]) && (!multiCity(w) || w.agents[id].city === currentCity(w)));
+export const liveSigners = (w, r) => r.signers.filter((id) => w.agents[id] && isAlive(w.agents[id]) && (!usesLawSemantics2(w) || r.electorate?.includes(id)) && (!multiCity(w) || w.agents[id].city === currentCity(w)));
 
 /** 发起一次重订（发起者已通过各项校验并付过代价）：发起者自动联署，向全体在世居民发收件 refound（opened），然后检查 */
 export function openRefound(w, a, { text, procedure }) {

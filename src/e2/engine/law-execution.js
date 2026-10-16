@@ -2,13 +2,33 @@ import { newBudget } from '../rules/eval.js';
 import { certifyRule, certifyRules, expressionCost, normalizeCapacity } from '../rules/plan.js';
 import { parseCached } from '../rules/parser.js';
 import { LIMITS, P } from '../params.js';
+import { CITY_IDS, cityValue, multiCity } from './cities.js';
 
 export const usesLawVM2 = w => w.physics === 2 && w.premise >= 2 && w.ruleExecution?.version === 2;
 export class CapacityError extends Error {
   constructor(detail) { super('law execution capacity'); this.detail = detail; }
 }
 
+/** 一座城（或非三城世界）的法律、提案、重订；prefix 是三城世界里路径前面的城名 */
+function citySets(laws, proposals, refounds, prefix = '') {
+  const sets = Object.values(laws).filter(l => l.status === 'active').map(l => ({ path: `${prefix}${l.id}`, rules: l.rules, procedure: l.procedure }));
+  for (const p of Object.values(proposals)) if (p.status === 'open') {
+    sets.push({ path: p.id, rules: p.rules || [], procedure: p.procedure });
+    if (p.spec) sets.push({ path: `${p.id}.ballot`, rules: [], procedure: { ballot: p.spec } });
+  }
+  for (const r of Object.values(refounds)) if (r.status === 'open' && r.procedure && r.procedure !== 'humans') sets.push({ path: r.id, rules: [], procedure: r.procedure });
+  return sets;
+}
+
 export function ruleSets(w) {
+  if (multiCity(w)) {
+    const sets = [];
+    for (const id of CITY_IDS) sets.push(...citySets(cityValue(w, id, 'laws'), cityValue(w, id, 'proposals'), cityValue(w, id, 'refounds'), `${id}:`));
+    for (const g of Object.values(w.groups)) if (!g.dissolved && g.bylaws) sets.push({ path: g.id, rules: g.bylaws.rules });
+    for (const p of Object.values(w.places)) if (p.rules) sets.push({ path: p.id, rules: p.rules.rules });
+    for (const g of Object.values(w.groups)) for (const p of Object.values(g.proposals || {})) if (p.status === 'open') sets.push({ path: `${g.id}:${p.id}`, rules: p.rules || [] });
+    return sets;
+  }
   const sets = Object.values(w.laws).filter(l => l.status === 'active').map(l => ({ path: l.id, rules: l.rules, procedure: l.procedure }));
   for (const g of Object.values(w.groups)) if (!g.dissolved && g.bylaws) sets.push({ path: g.id, rules: g.bylaws.rules });
   for (const p of Object.values(w.places)) if (p.rules) sets.push({ path: p.id, rules: p.rules.rules });

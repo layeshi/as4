@@ -40,6 +40,7 @@ class SocietyGame {
     this.sheet = null; this.toast = null; this.error = ''; this.notice = '';
     this.busy = false; this.refreshing = false; this.visible = true; this.pressed = null; this.editing = '';
     this.pendingCount = 0; this.quickTries = 0; this.mapVersion = 0; this.dismissed = {};
+    this.cityFocus = null; // 第七前提「三城」：城市页当前看的城，null 为全岛
     this.moderation = {}; this.loginRequired = {};
     this.navigation = 0; this.readVersions = {};
     this.messageBoard = new MessageBoard(this);
@@ -79,7 +80,7 @@ class SocietyGame {
     this.wx.onTouchStart(e => this.touchStart(e));
     this.wx.onTouchMove(e => this.touchMove(e));
     this.wx.onTouchEnd(e => this.touchEnd(e));
-    if (this.wx.onTouchCancel) this.wx.onTouchCancel(() => { this.scroller().dragging = false; this.filterScroller.dragging = false; this.touch = null; this.pressed = null; this.render(); });
+    if (this.wx.onTouchCancel) this.wx.onTouchCancel(() => this.touchCancel());
     this.wx.onHide(() => this.hide());
     this.wx.onShow(() => { this.visible = true; this.refresh(); });
     if (this.wx.onWindowResize) this.wx.onWindowResize(() => { this.measure(); this.invalidate(); this.render(); });
@@ -105,6 +106,8 @@ class SocietyGame {
     clearTimeout(this.clockTimer); this.clockTimer = null;
     if (this.frame) { if (raf && caf) caf(this.frame); else clearTimeout(this.frame); this.frame = null; }
     this.animating = false;
+    this.cityMap.endGesture(); this.touch = null; this.pressed = null;
+    this.scroller().dragging = false; this.filterScroller.dragging = false;
     this.clearSecrets();
   }
   clearSecrets() {
@@ -311,6 +314,7 @@ class SocietyGame {
       case 'back': this.back(); break;
       case 'refresh': await this.refresh({ full: true, pull: !!a.pull }); break;
       case 'filter': this.feedFilter = a.value; break;
+      case 'cityFocus': this.cityFocus = a.city || null; this.cityMap.resetView(); this.mapVersion++; break;
       case 'segment': this.segment = a.value; break;
       case 'sort': this.sort = a.value; break;
       case 'expand': if (this.expanded.has(a.key)) this.expanded.delete(a.key); else this.expanded.add(a.key); break;
@@ -486,10 +490,26 @@ class SocietyGame {
   contentTop() { return this.page && this.page.fullscreen ? 0 : this.navTop + this.navH; }
   contentBottom() { const p = this.page || {}; return this.height - (p.tabbar ? this.tabH : p.footer ? p.footer.height + 16 + this.bottomInset : this.bottomInset + 16); }
   hitAt(x, y) { for (let i = this.hits.length - 1; i >= 0; i--) { const h = this.hits[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) return h; } return null; }
+  mapPoints(e) {
+    const a = this.cityMapArea;
+    return (e.touches || []).slice(0, 2).map(t => ({ x: t.clientX - a.x, y: t.clientY - a.y }));
+  }
+  mapTouchAt(e) {
+    const a = this.cityMapArea;
+    return this.tab === 'city' && this.state?.world.premise === 7 && this.cityFocus && !this.sheet && a && e.touches.every(t => t.clientX >= a.x && t.clientX <= a.x + a.w && t.clientY >= Math.max(a.y, this.contentTop()) && t.clientY <= Math.min(a.y + a.h, this.contentBottom()));
+  }
   touchStart(e) {
     const t = e.touches && e.touches[0]; if (!t) return;
     const now = Date.now();
     if (this.frame) { if (raf && caf) caf(this.frame); else clearTimeout(this.frame); this.frame = null; this.animating = false; }
+    if (this.mapTouchAt(e)) {
+      const moved = e.touches.length > 1 || !!this.touch?.moved, hit = this.hitAt(t.clientX, t.clientY);
+      this.touch = { x: t.clientX, y: t.clientY, map: true, moved };
+      this.pressed = moved ? null : hit && hit.action;
+      this.scroller().dragging = false; this.scroller().v = 0;
+      this.cityMap.startGesture(this.mapPoints(e));
+      this.render(); return;
+    }
     this.touch = { x: t.clientX, y: t.clientY, moved: false, scroll: !this.sheet && t.clientY >= this.contentTop() && t.clientY <= this.contentBottom() };
     const area = this.horizontalAreas.find(h => t.clientX >= h.x && t.clientX <= h.x + h.w && t.clientY >= h.y && t.clientY <= h.y + h.h);
     if (area && this.touch.scroll) { this.touch.horizontal = area.scroller; area.scroller.start(t.clientX, now); }
@@ -501,6 +521,11 @@ class SocietyGame {
   touchMove(e) {
     const t = e.touches && e.touches[0]; if (!t || !this.touch) return;
     const dx = Math.abs(t.clientX - this.touch.x), dy = Math.abs(t.clientY - this.touch.y);
+    if (this.touch.map) {
+      if (e.touches.length > 1 || dx + dy > 8) this.touch.moved = true;
+      if (this.touch.moved) { this.pressed = null; this.cityMap.moveGesture(this.mapPoints(e)); }
+      this.render(); return;
+    }
     if (!this.touch.moved && dx + dy > 8) {
       this.touch.moved = true; this.pressed = null;
       this.touch.axis = this.touch.horizontal && dx > dy ? 'horizontal' : 'vertical';
@@ -511,17 +536,32 @@ class SocietyGame {
     }
     this.render();
   }
-  touchEnd() {
+  touchEnd(e = {}) {
+    if (this.touch?.map && e.touches?.length) {
+      this.touch.moved = true; this.pressed = null;
+      this.cityMap.startGesture(this.mapPoints(e));
+      return;
+    }
     const touch = this.touch; this.touch = null;
     if (!touch) return;
     const action = touch.moved ? null : this.pressed;
     this.pressed = null;
+    if (touch.map) {
+      this.cityMap.endGesture();
+      if (action) { this.haptic(); this.dispatch(action); }
+      this.render(); return;
+    }
     const horizontal = touch.axis === 'horizontal', sc = horizontal ? touch.horizontal : this.scroller();
     if (touch.horizontal && !horizontal) touch.horizontal.dragging = false;
     if (horizontal) this.scroller().dragging = false;
     if (touch.scroll) { const pull = sc.end(Date.now()); if (!horizontal && pull && this.page && this.page.pull && !this.refreshing) this.dispatch({ type: 'refresh', pull: true }); }
     if (action) { this.haptic(); this.dispatch(action); }
     this.kick(sc);
+  }
+  touchCancel() {
+    this.cityMap.endGesture();
+    this.scroller().dragging = false; this.filterScroller.dragging = false;
+    this.touch = null; this.pressed = null; this.render();
   }
   kick(scroller = this.scroller()) {
     if (this.animating) return;
@@ -560,7 +600,7 @@ class SocietyGame {
     if (!this.ctx) return;
     if (this.dirty || !this.page) this.build();
     const ctx = this.ctx, page = this.page;
-    this.hits = []; this.horizontalAreas = [];
+    this.hits = []; this.horizontalAreas = []; this.cityMapArea = null;
     ctx.fillStyle = C.bg; ctx.fillRect(0, 0, this.width, this.height);
     const top = this.contentTop(), bottom = this.contentBottom(), sc = this.scroller();
     sc.setMax(page.height - (bottom - top));

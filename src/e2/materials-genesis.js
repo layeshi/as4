@@ -1,11 +1,14 @@
 // Private genesis validation. This module supplies no production defaults.
 import { mapFor } from './map/index.js';
+import { MATERIAL_ZONES as ISLAND_ZONES } from './map/island-three.js';
 export const MATERIAL_ZONES = Object.freeze({
   wilds: [60, 120],
   scrapyard: [150, 300],
   solarfield: [90, 180],
 });
-export function validateHiddenPhysics(h) {
+/** 物料地带 { id: [初始储量, 上限] }：三城岛图有八处，其余地图三处 */
+export const materialZonesFor = (map) => (map === 'island-three-v1' ? ISLAND_ZONES : MATERIAL_ZONES);
+export function validateHiddenPhysics(h, map) {
   const int = (n, min, max) => Number.isSafeInteger(n) && n >= min && n <= max;
   if (!h || h.version !== 1 || !h.regrowth || !h.construction)
     throw new Error('PREMISE=5 requires hiddenPhysics version 1');
@@ -17,7 +20,7 @@ export function validateHiddenPhysics(h) {
     !int(c.fullActionsPerTick, 1, 3)
   )
     throw new Error('Invalid hiddenPhysics parameters');
-  for (const [z, [, cap]] of Object.entries(MATERIAL_ZONES)) {
+  for (const [z, [, cap]] of Object.entries(materialZonesFor(map))) {
     const b = r.baseByZone?.[z],
       t = r.thresholdByZone?.[z];
     if (
@@ -36,13 +39,14 @@ export function initializeMaterials(w, h) {
   w.orderEvidence = {};
   w.actReceipts = {};
   w.observations = [];
+  const zones = materialZonesFor(w.map);
   w.materialZones = Object.fromEntries(
-    Object.entries(MATERIAL_ZONES).map(([id, [stock, capacity]]) => [
+    Object.entries(zones).map(([id, [stock, capacity]]) => [
       id,
       { stock, capacity, stockAtStart: stock, harvestedThisDay: 0 },
     ])
   );
-  let initial = 300;
+  let initial = Object.values(zones).reduce((n, [stock]) => n + stock, 0);
   for (const def of mapFor(w).places) {
     const p = w.places[def.id];
     p.materialRecoverable = def.materialRecoverable;

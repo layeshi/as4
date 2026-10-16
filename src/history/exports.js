@@ -13,7 +13,7 @@ export function owns(ctx, archive, user, branchId, agentId) {
   if (!archived || !user) return false;
   if (branchId === archive.branchId) {
     const a = ctx.rt.w.agents[agentId], r = ctx.rt.w.access?.residents?.[agentId];
-    if (ctx.rt.w.premise === 6) return r?.managerAccountId === user.id;
+    if ((ctx.rt.w.premise === 6 || ctx.rt.w.premise === 7)) return r?.managerAccountId === user.id;
     return !!a?.owner && ctx.accounts.linksOf(user.id, ctx.rt.w.id).some(l => l.agentId === agentId && l.token === a.tokenHash);
   }
   if (archived.managerId) {

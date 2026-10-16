@@ -27,6 +27,23 @@ function setup(response) {
 const ok = json => ({ ok: true, status: 200, json: async () => json });
 const button = (root, name) => root.querySelectorAll('button').find(n => n.textContent === name);
 
+test('P7 exchange renders shared trades and identifies each party’s domicile', async () => {
+  const env = setup(() => ok([order('so1')]));
+  try {
+    env.ctx.S.state.world.premise = 7;
+    env.ctx.S.state.agents[0].city = 'north';
+    env.ctx.S.state.agents[1].city = 'west';
+    env.ctx.S.raw = { cities: [{ id: 'north', short: { zh: '北城', en: 'North City' } }, { id: 'west', short: { zh: '西城', en: 'West City' } }] };
+    renderMaterialsMarket(env.ctx, env.dom.root);
+    assert.ok(button(env.dom.root, '全部订单'), 'P7 must expose the exchange');
+    button(env.dom.root, '全部订单').click(); await tick();
+    assert.match(env.dom.root.querySelector('.market-parties').textContent, /甲居民 · 籍北城.*乙居民 · 籍西城/);
+    setLang('en'); env.dom.root.replaceChildren();
+    renderMaterialsMarket(env.ctx, env.dom.root); await tick();
+    assert.match(env.dom.root.querySelector('.market-parties').textContent, /of North City.*of West City/);
+  } finally { env.restore(); }
+});
+
 test('market filters combine before pagination and preserve settled history without mutating the world', () => {
   const w = { premise: 6, orders: {}, services: {} };
   for (let i = 1; i <= 45; i++) w.orders[`so${i}`] = order(`so${i}`);

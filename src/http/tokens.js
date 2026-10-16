@@ -1,4 +1,5 @@
 import { programsEnabled } from '../e2/programs/catalog.js';
+import { cityDef, cityValue } from '../e2/engine/cities.js';
 import { programLook } from '../e2/programs/core.js';
 import { cooperationEnabled, COOP_LOOKS, COOP_LIMITS } from '../e2/cooperation/core.js';
 import { cooperationText } from '../e2/cooperation/views.js';
@@ -57,10 +58,18 @@ export function rulesCore(ctx, id, lang = 'zh') {
   if (!tokenized(w)) return failure(lang, 'not_found');
   lang = normLang(lang);
   return { status: 200, json: { system: buildSystemPrompt({ protocol: 2, premise: w.premise, lang,
-    cityName: cityDisplayName(w.cityName, lang), maxActions: P.maxActionsPerTick,
+    cityName: promptCityName(w, w.agents[id], lang), maxActions: P.maxActionsPerTick,
     ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, memorySlots: P.memorySlots,
     floor: ep(w, 'lawFloor'), soul: null, trained: bodyOf(w, w.agents[id]).trained.map(entry => entry.text),
     toolMode: 'mcp', prayers: false, cooperation: cooperationEnabled(w), programs: programsEnabled(w), tokenValues: tokenValues(w) }) } };
+}
+/** 提示词里的城名；第七前提用居民籍城的名字（没改过名时按语言给默认名） */
+function promptCityName(w, a, lang) {
+  if (!w.cities) return cityDisplayName(w.cityName, lang);
+  const def = a && a.city ? cityDef(w, a.city) : null;
+  if (!def) return '';
+  const name = cityValue(w, a.city, 'cityName');
+  return !name || name === def.name.zh ? def.name[lang === 'en' ? 'en' : 'zh'] : name;
 }
 function perception(ctx, id, lang) {
   const { rt } = ctx, a = rt.w.agents[id];
@@ -74,7 +83,7 @@ function perception(ctx, id, lang) {
 }
 function prompt(ctx, id, p, lang, toolMode = 'native', actionTools = 'legacy', trained = p.you.trained) {
   const w = ctx.rt.w;
-  return buildSystemPrompt({ ...promptParams(p), premise: w.premise, lang, cityName: cityDisplayName(w.cityName, lang),
+  return buildSystemPrompt({ ...promptParams(p), premise: w.premise, lang, cityName: promptCityName(w, w.agents[id], lang),
     toolMode, actionTools, trained, prayers: false, cooperation: cooperationEnabled(w), programs: programsEnabled(w), tokenValues: tokenValues(w) });
 }
 export function wakeCore(ctx, id, body, lang) {

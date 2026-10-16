@@ -217,11 +217,19 @@ export const EVENTS = Object.freeze({
   law_rejected: W('提案被否决', 'a proposal fails'),
 });
 export const EVENT_NAMES = Object.freeze(Object.keys(EVENTS));
+/** 第七前提「三城」多出的事件：有人在本城落籍（迁入），有人迁出本城 */
+export const EVENTS_P7 = Object.freeze({
+  ...EVENTS,
+  settle: W('有人迁入本城', 'someone settles in the city'),
+  emigrate: W('有人迁出本城', 'someone moves their domicile away'),
+});
+export const eventNamesFor = (premise = 0) => (premise === 7 ? Object.keys(EVENTS_P7) : EVENT_NAMES);
 /** 每种事件里 event.<字段> 的字段名（PROTOCOL-2 §6.5） */
 export const EVENT_FIELDS = Object.freeze({
   arrive: ['agent'], born: ['agent'], death: ['agent'], retire: ['agent'],
   built: ['place', 'build'], abandoned: ['place', 'build'], ruin: ['place'], razed: ['place'],
   weather_start: ['weather'], weather_end: ['weather'], law_passed: ['law'], law_rejected: ['law'],
+  settle: ['agent'], emigrate: ['agent'],
 });
 
 /** propose 说明里用到的规则语言说明在 rules/ 与 SPEC-E2 附录 A.2；这里不重复 */
@@ -271,7 +279,7 @@ const PRAYER_ACTIONS = Object.freeze({
   invent: { base: 1, place: null, module: null, params: 'title, text, ref, submission?', args: [['title', 'str'], ['text', 'str'], ['ref', 'obj'], ['submission', 'str']], where: null, verb: W('提交发明', 'submits an invention'), desc: W('提交成果名称（至多100字）、说明（至多600字），关联自己的作品或已建成工程：ref={kind:"doc"或"project",id}。获独立认定奖励10祈愿点，驳回后以submission编号补充重提。', 'Submit a title (100 characters), explanation (600), and your own work or completed project: ref={kind:"doc" or "project",id}. Independent recognition awards 10 prayer points once. Revise a rejected submission using its submission ID.') },
 });
 const PRAYER_TABLE = Object.freeze({ ...TABLE2, ACTIONS: PRAYER_ACTIONS, ORDER: Object.freeze([...ACTION_ORDER_P2, 'pray', 'invent']), isKnown: (t) => typeof t === 'string' && Object.hasOwn(PRAYER_ACTIONS, t) });
-export const actionTable = (premise = 0, prayers = false, cooperation = false, programs = false) => premise === 6 ? (programs ? (cooperation ? TABLE_PROGRAMS_COOP : TABLE_PROGRAMS) : cooperation ? TABLE_COOP : TABLE6) : premise === 5 ? TABLE5 : tokenized({ premise }) ? TABLE4 : premise >= 2 ? (prayers ? PRAYER_TABLE : TABLE2) : premise >= 1 ? TABLE1 : TABLE0;
+export const actionTable = (premise = 0, prayers = false, cooperation = false, programs = false) => premise === 7 ? (programs ? (cooperation ? TABLE7_PROGRAMS_COOP : TABLE7_PROGRAMS) : cooperation ? TABLE7_COOP : TABLE7) : premise === 6 ? (programs ? (cooperation ? TABLE_PROGRAMS_COOP : TABLE_PROGRAMS) : cooperation ? TABLE_COOP : TABLE6) : premise === 5 ? TABLE5 : tokenized({ premise }) ? TABLE4 : premise >= 2 ? (prayers ? PRAYER_TABLE : TABLE2) : premise >= 1 ? TABLE1 : TABLE0;
 
 // Fourth premise adds only rhythm and removes shell sponsorship.
 export const TEXT_ONLY_P4 = new Set(['say', 'whisper', 'write', 'define', 'inscribe', 'epitaph', 'declare', 'diary', 'remember', 'vote', 'reveal', 'retire', 'give', 'offer', 'accept', 'cancel', 'will']);
@@ -298,3 +306,31 @@ const TABLE_COOP = Object.freeze({ ...TABLE6, ACTIONS: COOP_CATALOG, ORDER: Obje
 
 const TABLE_PROGRAMS = programCatalog(TABLE6);
 const TABLE_PROGRAMS_COOP = programCatalog(TABLE_COOP);
+
+// 第七前提「三城」（docs/plans/2026-10-16-three-cities.md §2.2、§2.7）：在 P6 的表上加 settle（迁籍，排在 move 之后），
+// 宣告只到所在的城，给公库要指明哪座城。P6 及更早的表一字不改。
+const SETTLE = Object.freeze({
+  base: 1, place: null, module: null, params: '', args: [], where: W('须身在另一座城的地界里', 'only inside another city'),
+  verb: W('迁籍', 'settles'),
+  desc: W('把你的籍迁到你此刻所在的这座城（不能在荒野里，也不能是你现在的籍城）。距上次迁籍须满 7 个世界日。迁籍受这座城的法律管辖，你原来的城管不着；迁出后你在原城的公民身份按原城的法律解除，在新城是否成为公民也由新城的法律决定。代价同说话。',
+    'Move your domicile to the city you are standing in (not in the Wilds, and not your current city). At least 7 world days must pass since your last move of domicile. Settling is governed by this city\'s laws; your old city has no say. Your citizenship of the old city ends as its laws say, and whether you become a citizen here is for this city\'s laws to decide. Costs the same as speaking.'),
+});
+function p7Table(base) {
+  const actions = {
+    ...base.ACTIONS,
+    settle: SETTLE,
+    broadcast: { ...base.ACTIONS.broadcast, verb: W('向所在的城宣告', 'broadcasts to the city'),
+      desc: W('你此刻所在的城地界里醒着的居民都会听到；在荒野宣告，只有荒野里醒着的人听得到。蚀时不可用（本城有中继时可用）。',
+        'Everyone awake inside the city where you stand hears it; in the Wilds, only those awake in the Wilds hear it. Unavailable during an Eclipse (unless this city has a functioning Relay).') },
+    give: { ...base.ACTIONS.give, desc: { zh: `${base.ACTIONS.give.desc.zh} 公库写 "treasury"（你此刻所在的城的公库，荒野里不能用）或 "treasury:north" / "treasury:west" / "treasury:east"（指定的城）。`,
+      en: `${base.ACTIONS.give.desc.en} For a treasury write "treasury" (the treasury of the city where you stand; not in the Wilds) or "treasury:north" / "treasury:west" / "treasury:east".` } },
+    move: { ...base.ACTIONS.move, desc: { zh: `${base.ACTIONS.move.desc.zh} 三座城之间隔着荒野，跨城要走十几段。离开一座城受那座城的法律管，进入一座城受这座城的法律管，途经之处不管。`,
+      en: `${base.ACTIONS.move.desc.en} The three cities lie apart across the Wilds; crossing takes a dozen stretches or more. Leaving a city is governed by its laws, entering a city by the laws of the city you enter; places passed on the way have no say.` } },
+  };
+  const order = base.ORDER.flatMap((t) => (t === 'move' ? [t, 'settle'] : [t]));
+  return Object.freeze({ ...base, ACTIONS: Object.freeze(actions), ORDER: Object.freeze(order), isKnown: (t) => typeof t === 'string' && Object.hasOwn(actions, t) });
+}
+const TABLE7 = p7Table(TABLE6);
+const TABLE7_COOP = p7Table(TABLE_COOP);
+const TABLE7_PROGRAMS = p7Table(TABLE_PROGRAMS);
+const TABLE7_PROGRAMS_COOP = p7Table(TABLE_PROGRAMS_COOP);

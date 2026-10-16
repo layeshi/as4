@@ -6,6 +6,8 @@ import { fraction, newClaim, beneficiary } from './materials.js';
 import { sink } from './ledger.js';
 import { emit, creditEnergy, pushInbox } from './core.js';
 import { hooks } from './hooks.js';
+import { wellPlace } from './environment.js';
+import { multiCity, cityValue, cityOfPlace, fallbackCity } from './cities.js';
 export function initializeProject(w, j, access) {
   const n = w.well.upgrades.length + 1;
   const wild = j.lot
@@ -111,8 +113,10 @@ export function spendProject(w, j, work) {
   sink(w, 'energy', 'project_built', energy);
   return { energy, materials };
 }
-function refundEnergy(w, b, amount) {
-  b = beneficiary(w, b);
+function refundEnergy(w, b, amount, placeId) {
+  b = beneficiary(w, b, placeId);
+  // 第七前提「三城」：归城的退款进那座城的公库；居民已离场、又没有明确的城时见 fallbackCity
+  const cityTreasury = () => (multiCity(w) ? cityValue(w, fallbackCity(w, b.kind === 'city' ? b.id : null, cityOfPlace(w, placeId)), 'treasury') : w.treasury);
   const dest =
     b.kind === 'agent' &&
     w.agents[b.id] &&
@@ -120,7 +124,7 @@ function refundEnergy(w, b, amount) {
       ? w.agents[b.id]
       : b.kind === 'group'
         ? w.groups[b.id].treasury
-        : w.treasury;
+        : cityTreasury();
   if (b.kind === 'agent' && dest === w.agents[b.id])
     creditEnergy(w, dest, amount);
   else dest.energy += amount;
@@ -136,7 +140,7 @@ export function terminateProject(w, j, reason = 'cancelled') {
         },
       ];
       for (const h of list)
-        if (k === 'energy') { if(h.beneficiary.kind==='agent')residentFlow(w,h.beneficiary.id,'refund','project','energy',h.amount);refundEnergy(w, h.beneficiary, h.amount); }
+        if (k === 'energy') { if(h.beneficiary.kind==='agent')residentFlow(w,h.beneficiary.id,'refund','project','energy',h.amount);refundEnergy(w, h.beneficiary, h.amount, j.place); }
         else newClaim(w, j.place, h.amount, h.beneficiary, `project:${j.id}`);
     }
   }
@@ -180,7 +184,7 @@ export function attachRecovery(w, j) {
     target = w.places[j.place].modules.find((m) => m.projectId === j.id);
   else if (j.build === 'site') target = w.places[j.result];
   else if (j.build === 'road') target = w.roads[j.result];
-  else target = w.places.well;
+  else target = wellPlace(w);
   target.materialRecoverable =
     (target.materialRecoverable || 0) + j.materialRecoverable;
   target.materialRecoverableMax = target.materialRecoverable;

@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { earthDay } from '../shells/budget.js';
 import { runnerConfig, RunnerError } from './manager.js';
 import { UsageStore } from './usage.js';
-import { rolePresent } from '../e2/p6/roles.js';
+import { rolePresent, roleKind } from '../e2/p6/roles.js';
+import { withCity } from '../e2/engine/cities.js';
 const MAX_DAY=1000000,OUTPUT=512;
 // Model work stays outside transactions. Only the stored reply command is replayed.
 export class PublicRoleService {
@@ -44,34 +45,43 @@ export class PublicRoleService {
     return {configured:!!this.config,config:this.config?{...safe,hasApiKey:!!apiKey}:null,timezone:this.timezone,day,limit:this.config?.dailyLimit??MAX_DAY,used:this.budget.days[day]??0,reserved:Object.values(this.budget.reservations).filter(r=>r.day===day).reduce((n,r)=>n+r.amount,0),active:this.jobs.size,storageFault:!!this.fault,usage:this.usage.view('public-roles'),diagnostics:this.budget.diagnostics.filter(d=>Date.parse(d.at)>=this.now()-30*86400000)};
   }
   start() {
-    if(this.ctx.rt.w.premise!==6)return;
+    if((this.ctx.rt.w.premise!==6 && this.ctx.rt.w.premise !== 7))return;
     this.timer=setInterval(()=>{try{this.pump();}catch{this.fault=true;}},250);this.timer.unref();
   }
   facts(role) {
+    // 第七前提「三城」：角色在自己所属的城里看规则、提案与源井；职务看 kind（城内角色的 ID 是 guide-north 这样）
     const w=this.ctx.rt.w;
+    return withCity(w,w.cities?role.city??null:undefined,()=>this.factsHere(role));
+  }
+  factsHere(role) {
+    const w=this.ctx.rt.w,kind=roleKind(role);
     // Explicit allowlist: never pass a world object or a future schedule.
     const brief=(value,max=120)=>String(value??'').slice(0,max);
     const facts={place:{id:role.home,name:w.places[role.home]?.name,condition:w.places[role.home]?.condition,modules:w.places[role.home]?.modules.map(m=>m.type)},rules:Object.values(w.laws).filter(l=>l.status==='active').slice(-6).map(l=>({id:l.id,title:brief(l.title),text:brief(l.text,250)}))};
-    if(['guide','archivist'].includes(role.id))facts.directory=Object.values(w.docs).filter(d=>d.kind==='virtual').map(d=>({id:d.id,title:d.title,category:d.category}));
-    if(role.id==='clerk'){
+    if(['guide','archivist'].includes(kind))facts.directory=Object.values(w.docs).filter(d=>d.kind==='virtual').map(d=>({id:d.id,title:d.title,category:d.category}));
+    if(kind==='clerk'){
       facts.procedure=Object.fromEntries(Object.entries(w.procedure).map(([kind,id])=>[kind,{lawId:id,procedure:w.laws[id]?.procedure??null}]));
       facts.proposals=Object.values(w.proposals).filter(p=>p.status==='open').slice(-5).map(p=>({id:p.id,title:brief(p.title),closesTick:p.closesTick,status:p.status}));
     }
-    if(role.id==='registrar'){
+    if(kind==='registrar'){
       facts.offers=Object.values(w.offers).filter(o=>o.status==='open').slice(-5).map(o=>({id:o.id,give:o.give,want:o.want,expiresTick:o.expiresTick}));
       facts.orders=Object.values(w.orders).filter(o=>['open','offered','active'].includes(o.status)).slice(-5).map(o=>({id:o.id,status:o.status,price:o.terms?.price??o.escrow,deadline:o.deadline??null}));
     }
-    if(role.id==='wellkeeper')facts.well={drawPoolLeft:w.well.drawPoolLeft,condition:w.places.well.condition};
-    if(role.id==='researcher')facts.projects=Object.values(w.projects).filter(j=>j.status==='open').slice(-5).map(j=>({id:j.id,place:j.place,phase:j.phase,progress:j.progress,needWork:j.needWork,have:j.have,needEnergy:j.needEnergy,haveMaterials:j.haveMaterials,needMaterials:j.needMaterials}));
-    if(role.id==='cradlekeeper')facts.cradle=Object.values(w.souls).slice(-5).map(s=>({id:s.id,name:s.name,fund:s.fund,queued:s.fundedTick!==null,expiresDay:s.expiresDay}));
-    if(role.id==='memorialkeeper')facts.memorials=w.cemetery.slice(-5).map(m=>({agentId:m.agentId,name:m.name,diedDay:m.diedDay,lastWords:brief(m.lastWords,180)}));
-    if(['announcer','chronicler'].includes(role.id))facts.events=w.publicRoles.chronicler.dailyEvents??[];
+    if(kind==='wellkeeper')facts.well={drawPoolLeft:w.well.drawPoolLeft,condition:(w.cities?w.places[role.home]:w.places.well).condition};
+    if(kind==='researcher')facts.projects=Object.values(w.projects).filter(j=>j.status==='open').slice(-5).map(j=>({id:j.id,place:j.place,phase:j.phase,progress:j.progress,needWork:j.needWork,have:j.have,needEnergy:j.needEnergy,haveMaterials:j.haveMaterials,needMaterials:j.needMaterials}));
+    if(kind==='cradlekeeper')facts.cradle=Object.values(w.souls).slice(-5).map(s=>({id:s.id,name:s.name,fund:s.fund,queued:s.fundedTick!==null,expiresDay:s.expiresDay}));
+    if(kind==='memorialkeeper')facts.memorials=w.cemetery.slice(-5).map(m=>({agentId:m.agentId,name:m.name,diedDay:m.diedDay,lastWords:brief(m.lastWords,180)}));
+    if(['announcer','chronicler'].includes(kind))facts.events=(w.cities?w.publicRoles[`chronicler-${role.city}`]?.dailyEvents:w.publicRoles.chronicler.dailyEvents)??[];
     return facts;
   }
   fixed(role) {
     const w=this.ctx.rt.w;
-    if(role.id==='wellkeeper')return `源井今日汲取池余量为 ${w.well.drawPoolLeft}，当前完好度为 ${w.places.well.condition} 基点。${role.fallback}`;
-    if(role.id==='archivist')return `${role.fallback}目录：${Object.values(w.docs).filter(d=>d.kind==='virtual').map(d=>`${d.title}（${d.id}）`).join('、')}。`;
+    return withCity(w,w.cities?role.city??null:undefined,()=>this.fixedHere(role));
+  }
+  fixedHere(role) {
+    const w=this.ctx.rt.w,kind=roleKind(role);
+    if(kind==='wellkeeper')return `源井今日汲取池余量为 ${w.well.drawPoolLeft}，当前完好度为 ${(w.cities?w.places[role.home]:w.places.well).condition} 基点。${role.fallback}`;
+    if(kind==='archivist')return `${role.fallback}目录：${Object.values(w.docs).filter(d=>d.kind==='virtual').map(d=>`${d.title}（${d.id}）`).join('、')}。`;
     return role.fallback;
   }
   reserve(id,amount) {

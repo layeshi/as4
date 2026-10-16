@@ -111,8 +111,10 @@ export function renderProfile2(ctx, data) {
     [t('col_gen'), t('generation', { n: a.generation })],
     [t('col_age'), t('ageDays', { n: a.ageDays })],
     [t('col_energy'), String(a.energy)],
-    ...(S.world?.premise===6?[]:[[t('col_coins'), String(a.coins)]]),
+    ...((S.world?.premise===6 || S.world?.premise === 7)?[]:[[t('col_coins'), String(a.coins)]]),
     [t('col_place'), a.place ? placeLink(ctx, a.place) : '—'],
+    // 第七前提「三城」：籍（与落籍的世界日）
+    ...(ctx.S.raw && ctx.S.raw.cities && a.city ? [[t('col_home'), `${((ctx.S.raw.cities.find((c) => c.id === a.city) || {}).short || {})[getLang() === 'en' ? 'en' : 'zh'] || a.city}${Number.isInteger(a.settledDay) ? ` · D${a.settledDay + 1}` : ''}`]] : []),
     [t('col_groups'), a.groups.length ? a.groups.map((g) => [groupChip(ctx, g), ' ']) : '—'],
     [t('col_tags'), a.tags.length ? a.tags.map((x) => [h('span', { class: `chip tag${x === 'exiled' ? ' exile' : ''}` }, x), ' ']) : '—'],
   ];
@@ -186,10 +188,10 @@ export function openPlace2(ctx, id) {
     h('p', { class: 'muted' }, `${t('col_district')}${colon()}${ctx.districtName(p.district)} · ${t('col_origin')}${colon()}${t(`origin_${p.origin}`)}${p.founder ? ` · ${t('founder')}${colon()}` : ''}`, p.founder ? agentLink(ctx, p.founder.id) : null, p.foundedDay !== null && p.foundedDay !== undefined ? ` · ${t('foundedDay', { n: p.foundedDay + 1 })}` : ''),
     desc ? h('p', p.origin === 'agent' && !p.razed ? { class: 'ai' } : null, desc) : null,
     region
-      ? h('p', null, `${t('richness')}${colon()}${(lore.richnessWild || {})[region.richness] || region.richness} · ${t('wildsEnergy')} ${region.energy}/${region.energyMax}${S.world?.premise===6?'':` · ${t('wildsCoins')} ${region.coins}`} · ${t('relicsFound')} ${region.relicsFound}/${region.relics}`)
+      ? h('p', null, `${t('richness')}${colon()}${(lore.richnessWild || {})[region.richness] || region.richness} · ${t('wildsEnergy')} ${region.energy}/${region.energyMax}${(S.world?.premise===6 || S.world?.premise === 7)?'':` · ${t('wildsCoins')} ${region.coins}`} · ${t('relicsFound')} ${region.relicsFound}/${region.relics}`)
       : p.razed ? h('p', { class: 'muted' }, t('mapRazed'))
         : p.condition === null ? h('p', { class: 'muted' }, t('fx_open'))
-          : h('p', null, `${t('condition')}${colon()}`, conditionBar(p.condition), ` ${pct(p.condition)} · ${bandText(ctx, p.condition, id === 'well')}`),
+          : h('p', null, `${t('condition')}${colon()}`, conditionBar(p.condition), ` ${pct(p.condition)} · ${bandText(ctx, p.condition, id === 'well' || p.role === 'well')}`),
     !p.razed && !p.open ? h('p', null, `${t('col_owner')}${colon()}`, p.owner.kind === 'city' ? t('owner_city') : p.owner.kind === 'group' ? t('owner_group', { name: ctx.groupName(p.owner.id) }) : t('owner_agent', { name: ctx.agentName(p.owner.id) })) : null,
     p.salvage ? h('p', null, `${t('col_salvage')}${colon()}`, progressBar(p.salvage.left, p.salvage.max), ` ${p.salvage.left}/${p.salvage.max}`) : null,
     p.gate ? h('p', null, `${t('col_gate')}${colon()}${p.gate.functioning ? t('gateOn') : t('gateOff')}`) : null,

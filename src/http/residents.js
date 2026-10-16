@@ -16,7 +16,7 @@ import { runnerConfig, RunnerError } from '../runner/manager.js';
 import { earthDayKey, usedToday } from './tokens.js';
 import { P } from '../e2/params.js';
 
-function p6(ctx) { if(ctx.rt.w.premise!==6)fail(404,'not_found','此世界不提供账号居民管理。'); }
+function p6(ctx) { if((ctx.rt.w.premise!==6 && ctx.rt.w.premise !== 7))fail(404,'not_found','此世界不提供账号居民管理。'); }
 function owned(ctx,actor,id) {
   p6(ctx); const r=relation(ctx.rt.w,id);
   if(!r||r.managerAccountId!==actor.id)fail(403,'forbidden','你没有此居民的管理权。');
@@ -92,9 +92,13 @@ export const residentRoutes=[
   ['POST','/api/account/residents',wrap(({req,res,ctx,actor,body})=>{
     if(!ctx.limits.port.take(clientIp(req,ctx.cfg.trustProxy)))fail(429,'rate_limited','创建过于频繁，请稍后重试。');
     if(ctx.cfg.inviteCode&&body.invite!==ctx.cfg.inviteCode)fail(403,'invite_required','入城需要邀请码。');
-    const allowed=['requestId','name','bio','soul','lang','dailyCap','creatorName'];
+    const allowed=['requestId','name','bio','soul','lang','dailyCap','creatorName','city'];
     const p=Object.fromEntries(allowed.filter(k=>Object.hasOwn(body,k)).map(k=>[k,body[k]]));
-    sendJson(res,201,command(ctx,actor,{...p,op:'create',model:'待配置',creatorName:actor.displayName}));
+    // 第七前提：可以带入旧居民的形象（只接受某个世界里已有的图片哈希）
+    const avatar=typeof body.avatar==='string'&&/^[a-f0-9]{64}$/.test(body.avatar)&&[ctx.rt.dir,...archivedWorlds(ctx.cfg.dataDir).map(a=>join(ctx.cfg.dataDir,a.id))].some(dir=>existsSync(join(dir,'avatars',`${body.avatar}.webp`)))?body.avatar:null;
+    const result=command(ctx,actor,{...p,op:'create',model:'待配置',creatorName:actor.displayName});
+    if(avatar&&result.agentId)command(ctx,actor,{op:'avatar',agentId:result.agentId,avatar,requestId:`${String(p.requestId??result.agentId).slice(0,100)}-avatar`});
+    sendJson(res,201,result);
   })],
   ['POST','/api/account/residents/adopt',wrap(({res,ctx,actor,body})=>sendJson(res,201,command(ctx,actor,{op:'adopt',soulId:body.soulId,dailyCap:body.dailyCap,requestId:body.requestId,model:'待配置',creatorName:actor.displayName})))],
   ['GET',/^\/api\/account\/residents\/([^/]+)$/,wrap(({res,ctx,actor,params})=>{

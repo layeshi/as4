@@ -17,6 +17,7 @@ import { isWeatherActive, decayAll } from './environment.js';
 import { checkConservation, closeLedgerDay } from './ledger.js';
 import { stepWeather, scheduleMonth } from './weather.js';
 import { wildZoneIds, humanDefs } from '../map/index.js';
+import { multiCity, withCity, eachCity, CITY_IDS } from './cities.js';
 
 /** 每步结算里可以由后面的步骤接入的函数；缺省什么都不做 */
 export const STEPS = {
@@ -41,8 +42,14 @@ export function tickWorld(w) {
   for (const a of agentList(w)) a.actsThisTick = 0;
   sweepOrders(w);
   expireOffersAndPacts(w); // 2 到期的交易与孕育之约（退回托管）
-  STEPS.tallyProposals(w); // 3 计票
-  STEPS.expireRefounds(w); // 4 到期的重订
+  if (multiCity(w)) {
+    // 第七前提「三城」：每座城各自计票、各自处理到期的重订（engine/cities.js）
+    eachCity(w, () => STEPS.tallyProposals(w)); // 3
+    eachCity(w, () => STEPS.expireRefounds(w)); // 4
+  } else {
+    STEPS.tallyProposals(w); // 3 计票
+    STEPS.expireRefounds(w); // 4 到期的重订
+  }
   STEPS.founders(w); // 5 先民入城
   let settled = false;
   if (w.clock.tick % P.ticksPerDay === 0) {
@@ -75,7 +82,9 @@ function restoreDaily(w) {
     const spec = humanDefs(w)[id].wild;
     pool.energy = Math.min(spec.energyMax * K(w), pool.energy + spec.regen * K(w));
   }
-  w.well.drawPoolLeft = ep(w, 'wellDrawPoolPerDay');
+  // 第七前提：每口井的汲取池按它的份额
+  if (multiCity(w)) eachCity(w, () => { w.well.drawPoolLeft = Math.floor(ep(w, 'wellDrawPoolPerDay') * w.well.share / 1000); });
+  else w.well.drawPoolLeft = ep(w, 'wellDrawPoolPerDay');
   for (const a of agentList(w)) {
     a.drawnToday = 0;
     a.repairedToday = 0;
@@ -94,6 +103,7 @@ function recordPlaceHistory(w) {
 
 /** 每日结算（§14.2 的 19 步）。d 为刚结束的那一日 */
 export function dailySettlement(w, d) {
+  if (multiCity(w)) return dailySettlementCities(w, d);
   setSettling(w, d);
   setBoundary(w, false); // 结算从这里开始：先付 d + 1 日的维持费，之后规则的「今日」就是 d + 1
   const auroraToday = isWeatherActive(w, 'aurora'); // 结算开始时记下：极光在第 12 步可能已到期被移除，但最后一晚仍算
@@ -132,6 +142,55 @@ export function dailySettlement(w, d) {
     w.dayLog = newDayLog(premised(w), agentic(w), tokenized(w)); // 18
     if (d + 1 === epochDays()) {
       // 19 纪元结束：暂停并记「大沉睡」（快照由运行时在命令结束后写入）
+      w.paused = true;
+      emit(w, 'great_sleep', { data: { epoch: w.epoch } });
+    }
+  } finally {
+    setSettling(w, undefined);
+  }
+}
+
+/** 城外（荒野）与三座城：天象与当日日志按这四处各自处理 */
+const CONTEXTS = [...CITY_IDS, null];
+
+/**
+ * 第七前提「三城」的每日结算（docs/plans/2026-10-16-three-cities.md §2、§7）：步骤与顺序同上，
+ * 与城有关的步骤（源井、城法的维持费与 daily 规则、自动回退、汲取池、天象、指标）逐城执行，其余在城外的上下文里执行一次。
+ */
+function dailySettlementCities(w, d) {
+  setSettling(w, d);
+  setBoundary(w, false);
+  for (const id of CONTEXTS) withCity(w, id, () => { w.dayLog.activeWeather = w.weather.active.map((x) => x.type); });
+  try {
+    const output = Object.values(eachCity(w, () => produceWell(w, d))).reduce((n, x) => n + x, 0); // 1 三口井的日产各进本城公库
+    STEPS.upkeep(w, d); // 2 维持费（城法逐城，其余一次）
+    STEPS.dailyRules(w, d); // 3 daily 与 monthly 规则（城法逐城，章程与地点规则见 rules.js）
+    decayEnergy(w); // 5 腐坏（居民、社群；公库逐城）
+    applyDeaths(w, d); // 6 沉睡满 3 日者死亡
+    completeTraining(w);
+    decayAll(w); // 7 地点与道路衰败
+    STEPS.abandonProjects(w, d); // 8 烂尾
+    STEPS.shells(w, d); // 9
+    eachCity(w, () => STEPS.revert(w, d)); // 10 自动回退（每座城的立法程序）
+    restoreDaily(w); // 11
+    settleTokens(w, d); // 11.5
+    for (const id of CONTEXTS) withCity(w, id, () => stepWeather(w, d)); // 12 天象：四处各自
+    if ((d + 1) % P.daysPerMonth === 0) {
+      const month = (d + 1) / P.daysPerMonth;
+      emit(w, 'month', { data: { month } });
+      for (const id of CONTEXTS) withCity(w, id, () => scheduleMonth(w, month)); // 13
+    }
+    recordPlaceHistory(w); // 15
+    STEPS.metrics(w, d); // 15–16 指标快照与史官（records.js 逐城处理）
+    emit(w, 'day', { data: { day: d, output, population: population(w) } });
+    const chk = checkConservation(w); // 17
+    if (!chk.ok) {
+      w.ledger.mismatches++;
+      emit(w, 'ledger_mismatch', { vis: 'internal', data: chk });
+    }
+    closeLedgerDay(w);
+    for (const id of CONTEXTS) withCity(w, id, () => { w.dayLog = newDayLog(true, true, true); }); // 18
+    if (d + 1 === epochDays()) {
       w.paused = true;
       emit(w, 'great_sleep', { data: { epoch: w.epoch } });
     }

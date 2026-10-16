@@ -43,8 +43,21 @@ export async function mountReports() {
     if (r.status !== 'ready') { root.append(emptyState(reportStatus(r), tr('报告正在后台处理，请稍后刷新。', 'The report is being processed. Refresh later.'))); return; }
     const data = r.content, summary = r.sources.find(s => s.id === 'period');
     root.append(card(data.title, `${reportKind(r.kind)} · ${reportRange(r)}${r.partial ? tr(' · 未满一年', ' · Partial year') : ''}`, h('p', { class: 'ai-note' }, tr('AI 生成 · 事实与分析分别展示', 'AI generated · Facts and analysis are shown separately')), h('p', { class: 'report-prose' }, ai(data.overview)), metrics([[tr('覆盖世界日', 'World days'), r.toDay - r.fromDay + 1], [tr('公开事件', 'Public events'), Object.values(summary?.eventCounts ?? {}).reduce((n, v) => n + v, 0)], [tr('历史分支', 'History branch'), r.branchId.slice(0, 8)]])));
-    const section = (title, items) => card(title, null, ...items.map(item => h('article', { class: 'report-entry' }, h('p', { class: 'report-prose' }, ai(item.text)), h('div', { class: 'form-actions' }, item.sources.map(source => h('a', { class: 'link', href: `#source-${source.replaceAll(':', '-')}` }, `${tr('来源', 'Source')} ${source === 'period' ? tr('周期统计', 'Period statistics') : source.replace('event:', tr('事件 ', 'Event '))}`))))));
-    root.append(section(tr('历史事实', 'Historical facts'), data.facts), section(tr('AI 观察与分析', 'AI observations and analysis'), data.analysis));
+    const entry = item => h('article', { class: 'report-entry' }, h('p', { class: 'report-prose' }, ai(item.text)), h('div', { class: 'form-actions' }, item.sources.map(source => h('a', { class: 'link', href: `#source-${source.replaceAll(':', '-')}` }, `${tr('来源', 'Source')} ${source === 'period' ? tr('周期统计', 'Period statistics') : source.replace('event:', tr('事件 ', 'Event '))}`))));
+    const section = (title, items) => card(title, null, ...items.map(entry));
+    // 第七前提「三城」：先全岛与城际往来，再分北城、西城、东城；每节里事实与分析仍分开
+    const SECTION_TITLES = { island: tr('全岛与城际往来', 'Island and inter-city'), north: tr('北城', 'North City'), west: tr('西城', 'West City'), east: tr('东城', 'East City') };
+    const all = [...data.facts, ...data.analysis];
+    if (all.some(item => item.city)) {
+      const keys = Object.keys(SECTION_TITLES).filter(k => all.some(item => (item.city || 'island') === k));
+      root.append(h('nav', { class: 'form-actions report-jump', 'aria-label': tr('按城跳转', 'Jump to a city') }, keys.map(k => h('a', { class: 'link', href: `#report-${k}` }, SECTION_TITLES[k]))));
+      for (const k of keys) {
+        const facts = data.facts.filter(item => (item.city || 'island') === k), analysis = data.analysis.filter(item => (item.city || 'island') === k);
+        const box = card(SECTION_TITLES[k], null, ...facts.map(entry), ...(analysis.length ? [h('h4', { class: 'report-sub' }, tr('AI 观察与分析', 'AI observations and analysis')), ...analysis.map(entry)] : []));
+        box.id = `report-${k}`;
+        root.append(box);
+      }
+    } else root.append(section(tr('历史事实', 'Historical facts'), data.facts), section(tr('AI 观察与分析', 'AI observations and analysis'), data.analysis));
     root.append(card(tr('历史依据', 'Historical sources'), `${r.worldId} · ${tr('纪元', 'Era')} ${r.epoch} · ${r.branchId}`, h('p', { class: 'muted' }, r.sampledSources ? tr('统计覆盖整个周期，正文使用其中的代表性事件。', 'Statistics cover the whole period; prose uses representative events.') : tr('以下记录是报告引用的公开资料。', 'These are the public records cited by this report.')),
       ...r.sources.map(s => h('details', { class: 'list-item', id: `source-${s.id.replaceAll(':', '-')}` }, h('summary', null, s.id === 'period' ? tr('周期统计', 'Period statistics') : s.id.replace('event:', tr('事件 ', 'Event '))), h('pre', null, JSON.stringify(s, null, 2))))));
   }

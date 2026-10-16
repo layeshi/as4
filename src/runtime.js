@@ -103,7 +103,7 @@ export class Runtime {
       rt.exec('prayer_enable');
       rt.snapshot();
     }
-    if (created && w.physics === 2 && w.premise === 6) rt.exec('admin', { op: 'program_services', args: { version: 1 } });
+    if (created && w.physics === 2 && (w.premise === 6 || w.premise === 7)) rt.exec('admin', { op: 'program_services', args: { version: 1 } });
     if (created && onCreate) onCreate(rt); // 例如创建沙盘脑（走命令日志，回放才能重建）
     return rt;
   }
@@ -268,7 +268,7 @@ function genesisInputs(cfg) {
     out.shellSlots = 0;
     out.tokens = { capacity, basic };
   }
-  if ((cfg.premise === 5 || cfg.premise === 6)) {
+  if ((cfg.premise === 5 || cfg.premise === 6 || cfg.premise === 7)) {
     if (!cfg.hiddenPhysicsFile) throw new Error('PREMISE=5 requires HIDDEN_PHYSICS_FILE');
     out.hiddenPhysics = JSON.parse(readFileSync(cfg.hiddenPhysicsFile, 'utf8'));
   }

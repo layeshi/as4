@@ -140,3 +140,41 @@ export const HUMAN_LAWS = Object.freeze([
     ],
   },
 ]);
+
+/**
+ * 第七前提「三城」（docs/plans/2026-10-16-three-cities.md §2.2、§2.5）：每座城一份同样的遗法，只改三处——
+ * l2 指本城的议会；l4 改为「在本城落籍者为公民」（上岸、出生、迁入都算落籍，迁出即不再是本城公民）；
+ * l5、l6 的文字说明本城（规则本身不变：城法属地，l5 只在离开或进入本城时生效；owner(...) == 'city' 指本城所有）。
+ * city：地图里这座城的定义（cities[*]）。其余前提用 HUMAN_LAWS。
+ */
+export function humanLawsFor(w, city) {
+  if (w.premise !== 7) return HUMAN_LAWS;
+  return HUMAN_LAWS.map((def) => {
+    if (def.id === 'l2') {
+      return { ...def, rules: [{ ...def.rules[0], if: `actor.place != '${city.parliament}'`,
+        do: [{ op: 'deny', reason: { zh: `法案只能在${city.short.zh}议会提出（人类遗法 l2）`, en: `Bills may only be proposed in the Parliament of ${city.short.en} (human law l2)` } }] }] };
+    }
+    if (def.id === 'l4') {
+      return {
+        id: 'l4',
+        title: '公民',
+        text: '凡在本城落籍者，皆为公民，权利平等；迁出本城者，不再是本城公民。',
+        en: { title: 'Citizens', text: 'All whose domicile is this city are citizens, equal in rights; whoever moves their domicile away is no longer a citizen of this city.' },
+        rules: [
+          { when: 'on:arrive', do: [{ op: 'tag', who: 'event.agent', tag: 'citizen' }] },
+          { when: 'on:born', do: [{ op: 'tag', who: 'event.agent', tag: 'citizen' }] },
+          { when: 'on:settle', do: [{ op: 'tag', who: 'event.agent', tag: 'citizen' }] },
+          { when: 'on:emigrate', do: [{ op: 'untag', who: 'event.agent', tag: 'citizen' }] },
+        ],
+      };
+    }
+    if (def.id === 'l5') {
+      return { ...def, text: '被本城放逐者不得进入本城，只能去往荒野。', en: { title: 'Exile', text: 'Those exiled by this city may not enter it; they may only go to the Wilds.' } };
+    }
+    if (def.id === 'l6') {
+      return { ...def, text: '财产归其持有者；本城所有之物，未经本城法律许可，不得拆毁。',
+        en: { title: 'Common Property', text: 'Property belongs to its holder; what belongs to this city may not be torn down without the permission of its law.' } };
+    }
+    return def;
+  });
+}

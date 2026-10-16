@@ -329,6 +329,22 @@ test('指标：从接口取回每日指标，画出人口、源井、公库、�
   setLang('zh');
 });
 
+test('P7 指标保留三城对比，聚焦一城只画该城的指标', async () => {
+  const fetch = globalThis.fetch, ctx = makeCtx(), root = fresh();
+  ctx.S.state = { ...ctx.S.state, world: { ...ctx.S.state.world, premise: 7 } };
+  ctx.S.focus = 'north';
+  const compare = document.createElement('p'); compare.textContent = '三城对比'; root.append(compare);
+  const city = { awake: 2, dormant: 1, output: 100, wellCondition: 10000, treasuryEnergy: 123, rationPerCapita: 42, dailyDistributionEnergy: 126, otherLawPaymentsEnergy: 0, lawsActive: 6, rulesActive: 8, upkeepPaid: 1, lawsSuspended: 0, ruleErrors: 0 };
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ metrics: [{ day: 0, awake: 99, rationPerCapita: 9999, cities: { north: city } }] }) });
+  try {
+    setLang('zh'); await renderMetrics2(ctx, root);
+    assert.ok(root.children.includes(compare), '异步指标不能清空上面的对比表');
+    assert.equal(root.querySelectorAll('figure').length, 8, '单城只显示城级指标');
+    assert.match(root.querySelector('figure').textContent, /42/);
+    assert.doesNotMatch(root.textContent, /9999/);
+  } finally { globalThis.fetch = fetch; }
+});
+
 test('沿用第一纪的页面（实况、编年史、典籍、墓园、遗产、天象）在第二纪的数据上同样渲染成功', async () => {
   const ctx = makeCtx();
   for (const lang of LANGS) {
@@ -478,6 +494,20 @@ test('地点详情（弹窗）：人类的建筑、后人开辟的地点（来�
 // ═══════════════════════════════════════════════════════════════
 // 地图
 // ═══════════════════════════════════════════════════════════════
+
+test('P7 带城网址在首次地图帧尚未到达时，也能切回全岛页面范围', async () => {
+  const raf = globalThis.requestAnimationFrame, focused = [];
+  globalThis.requestAnimationFrame = () => 1;
+  const physics = JSON.parse(readFileSync(new URL('./fixtures/p7-hidden-physics.json', import.meta.url), 'utf8'));
+  const world = eng.createWorld({ id: 'p7-ui', seed: 'p7-ui', premise: 7, hiddenPhysics: physics });
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); dom.root.append(svg);
+  const map = createMap2(svg, { mapData: json(eng.publicMap(world)), initialCity: 'east', placeName: id => id, humanName: id => id, districtName: id => id, onFocus: city => focused.push(city) });
+  try {
+    map.focusIsland({ animate: false });
+    await new Promise(resolve => setTimeout(resolve, 180));
+    assert.deepEqual(focused, [null], '全岛按钮必须清掉网址带入的城范围');
+  } finally { map.destroy(); globalThis.requestAnimationFrame = raf; }
+});
 
 test('地图：人类的建筑与后人开辟的地点、遗址、空地块、道路与小路、居民；主人描边、残料环、模块图标；点击回调；状态更新后增量重画', () => {
   const ctx = makeCtx();

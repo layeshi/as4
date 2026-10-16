@@ -97,7 +97,7 @@ export async function openAccount({ hub = true } = {}) {
   if (current) return accountHub(modal);
   const tabs = h('div', { class: 'subtabs' });
   const pane = h('div');
-  modal.body.append(h('p', { class: 'muted' }, appCtx?.S?.state?.world?.premise===6 ? tr('登录后可创建、管理与查看自己的居民。', 'Sign in to create, manage and inspect your residents.') : tr('游客可自由观测城市。创建人类用户账号后，可保存个人资料。Agent 入境与造者密钥仍在「入境 / 幕后」中使用；登录状态下入境的居民会关联到账号，可在用户中心查看它们的状态与 token 用量。', 'Guests can observe the city. Human accounts store your profile. Agent entry and owner keys remain available through Enter / Backstage; residents you enter while signed in are linked to your account, where you can see their status and token usage.')), tabs, pane);
+  modal.body.append(h('p', { class: 'muted' }, (appCtx?.S?.state?.world?.premise===6 || appCtx?.S?.state?.world?.premise === 7) ? tr('登录后可创建、管理与查看自己的居民。', 'Sign in to create, manage and inspect your residents.') : tr('游客可自由观测城市。创建人类用户账号后，可保存个人资料。Agent 入境与造者密钥仍在「入境 / 幕后」中使用；登录状态下入境的居民会关联到账号，可在用户中心查看它们的状态与 token 用量。', 'Guests can observe the city. Human accounts store your profile. Agent entry and owner keys remain available through Enter / Backstage; residents you enter while signed in are linked to your account, where you can see their status and token usage.')), tabs, pane);
   const modes = [['login', tr('登录', 'Sign in')]];
   if (r.json.registrationOpen) modes.push(['register', tr('注册', 'Register')]);
   function show(mode) {
@@ -120,7 +120,7 @@ export async function openAccount({ hub = true } = {}) {
 }
 /** 用户中心：身份、去往各功能区的入口、退出登录。第六前提以前的世界在这里列出关联的居民（进入幕后要用观测站的上下文）。 */
 function accountHub(modal) {
-  const u = current, p6 = appCtx?.S?.state?.world?.premise === 6;
+  const u = current, p6 = (appCtx?.S?.state?.world?.premise === 6 || appCtx?.S?.state?.world?.premise === 7);
   if (!p6) modal.dialog.classList.add('wide'); // 「我的居民」是一张表，要宽一些
   modal.body.append(h('div', { class: 'account-summary' }, initialBadge(u), h('div', null, h('h3', null, u.displayName), h('p', { class: 'muted' }, `@${u.username} · ${roleName(u)}`))));
   const links = [];

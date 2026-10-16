@@ -7,6 +7,18 @@ import { prayersEnabled, recordNaturalDamage, consumeNaturalRepair } from './pra
 import { P, SEASON_TABLE, WEATHER_DEFS, MODULE_DEFS, RESEARCH_DEF } from '../params.js';
 import { emit } from './core.js';
 import { hooks } from './hooks.js';
+import { multiCity, currentCity, cityDef } from './cities.js';
+
+/**
+ * 源井那处地点。第七前提「三城」里每城一口：缺省是当前挂着的城的井（engine/cities.js），也可以指明城；
+ * 其余前提只有一口，ID 是 'well'。
+ */
+export function wellPlace(w, cityId) {
+  if (!multiCity(w)) return w.places.well;
+  const id = cityId === undefined ? currentCity(w) : cityId;
+  if (!id) throw new Error('wellPlace: no city mounted');
+  return w.places[cityDef(w, id).well];
+}
 
 // ── 天象与源井 ──────────────────────────────────────────────
 
@@ -26,11 +38,15 @@ export function weatherFactor(w) {
 
 /** 源井系数（千分比）：完好度 / 10，但不低于 20% */
 export function wellFactor(w) {
-  return Math.max(Math.floor(w.places.well.condition / 10), P.wellFloorPermille);
+  return Math.max(Math.floor(wellPlace(w).condition / 10), P.wellFloorPermille);
 }
 
 /** 源井在第 d 日（dayOfMonth 按 d 计）的产出：基础产出 × 完好度（下限 20%）× 季节 × 天象 */
-export const tokenWellUnit = (w) => Math.floor(w.tokens.capacity * w.well.supply * wellFactor(w) / 1000000);
+// 第七前提：每口井只占世界容量的一份（w.well.share 千分比，3:2:1）；其余前提没有 share，产出不变
+export const tokenWellUnit = (w) => {
+  const unit = Math.floor(w.tokens.capacity * w.well.supply * wellFactor(w) / 1000000);
+  return w.well.share === undefined ? unit : Math.floor(unit * w.well.share / 1000);
+};
 export const tokenWellStep = (w) => Math.floor(tokenWellUnit(w) * P.upgradeStepPermille / 1000);
 
 export function wellOutput(w, d) {
@@ -112,5 +128,6 @@ export function decayAll(w) {
 
 /** 汲取：每汲取 1 能量，源井完好度下降 drawDamageBp 基点 */
 export function damageWellByDraw(w, amount) {
-  return applyDamage(w, w.places.well, 'well', 'well', Math.floor(P.drawDamageBp * amount / K(w)));
+  const well = wellPlace(w);
+  return applyDamage(w, well, well.id, well.id, Math.floor(P.drawDamageBp * amount / K(w)));
 }

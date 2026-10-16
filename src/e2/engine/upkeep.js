@@ -16,6 +16,7 @@ import { emit, pushInbox } from './core.js';
 import { sink } from './ledger.js';
 import { persistentCount } from './laws.js';
 import { STEPS } from './tick.js';
+import { multiCity, withCity, CITY_IDS } from './cities.js';
 
 /** 一份规则每日的维持费 */
 export const upkeepOf = (rules, w = {}) => ep(w, 'ruleUpkeep') * persistentCount(rules);
@@ -42,7 +43,17 @@ function pay(w, holder, cost, account, d) {
 }
 
 export function payUpkeep(w, d) {
-  // 城法
+  // 城法（第七前提：每座城的法律从本城公库付；其余在城外的上下文里付一次）
+  if (multiCity(w)) {
+    for (const id of CITY_IDS) withCity(w, id, () => payCityLaws(w, d));
+    withCity(w, null, () => payOthers(w, d));
+    return;
+  }
+  payCityLaws(w, d);
+  payOthers(w, d);
+}
+
+function payCityLaws(w, d) {
   for (const law of Object.values(w.laws)) {
     if (law.status !== 'active') continue;
     if (law.procedure) {
@@ -51,6 +62,9 @@ export function payUpkeep(w, d) {
     }
     if (!pay(w, law, upkeepOf(law.rules, w), w.treasury, d)) suspend(w, d, law, 'city', law.id, law.title);
   }
+}
+
+function payOthers(w, d) {
   // 社群章程
   for (const g of Object.values(w.groups)) {
     if (g.dissolved || !g.bylaws) continue;

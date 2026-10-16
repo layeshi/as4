@@ -40,6 +40,7 @@ import { hasGate } from './movement.js';
 import { repealLaw, isSuspended } from './laws.js';
 import { addToProject } from './projects.js';
 import { STEPS } from './tick.js';
+import { multiCity, currentCity, cityOfPlace, withCity, CITY_IDS, cityDef } from './cities.js';
 
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const idNum = (id) => Number(String(id).slice(1)) || 0;
@@ -111,6 +112,7 @@ function timingOf(rule) {
     // 第二前提里的 before:standing、after:standing 才解析得出来（SPEC-P2 §5.3）
     t = parseWhen(rule.when, { kind: 'city', premise: 2, prayers: true });
     if (t.error) t = parseWhen(rule.when, { kind: 'place', premise: 2, prayers: true }); // before:enter 只有地点规则才有
+    if (t.error) t = parseWhen(rule.when, { kind: 'city', premise: 7 }); // 第七前提的 settle 动作与 on:settle、on:emigrate
     if (t.error) throw new Error(`stored rule has an invalid timing: ${rule.when}`);
     TIMING.set(rule, t);
   }
@@ -288,7 +290,13 @@ function collect(w, set, idx, rule, run) {
  *   地点规则：主人、执行者（fee 只能交给主人）。
  */
 function inScope(w, set, acct, role, run) {
-  if (set.kind === 'city') return true;
+  if (set.kind === 'city') {
+    if (!multiCity(w) || role !== 'from') return true;
+    // 第七前提「三城」：给不限地点；取只限本城的公库与此刻身在本城地界的居民（docs/plans/2026-10-16-three-cities.md §2.5）
+    if (acct.k === 'treasury') return acct.city === undefined || acct.city === currentCity(w);
+    if (acct.k === 'agent') return !!w.agents[acct.id] && cityOfPlace(w, w.agents[acct.id].place) === currentCity(w);
+    return false;
+  }
   if (set.kind === 'group') {
     const g = set.group;
     if (acct.k === 'group') return acct.id === g.id;
@@ -331,6 +339,20 @@ export function collectBefore(w, a, type, args, plan) {
   for (const set of sets) {
     const r = runBeforeRules(w, a, set, isBefore, run, get, fees);
     if (r) return { denied: r, fees: [] };
+  }
+  // 第七前提「三城」：移动由出发地所在的城管离开（上面已执行），由目的地所在的城管进入；同一座城只执行一次，途经的城不参与
+  if (type === 'move' && plan && plan.to && multiCity(w)) {
+    const dest = cityOfPlace(w, plan.to);
+    if (dest !== null && dest !== currentCity(w)) {
+      const r = withCity(w, dest, () => {
+        for (const set of cityRuleSets(w)) {
+          const denied = runBeforeRules(w, a, set, isBefore, run, get, fees);
+          if (denied) return denied;
+        }
+        return null;
+      });
+      if (r) return { denied: r, fees: [] };
+    }
   }
   // move：目的地有运转中的门时，另用目的地的 before:enter（城法与章程的 before:move 已在上面照常执行）
   if (type === 'move' && plan && plan.to && hasGate(w, plan.to)) {
@@ -418,12 +440,22 @@ export function runAfter(w, a, type, args, data, plan, startPlace) {
   const sets = [...cityRuleSets(w), ...groupRuleSetsOf(w, a)];
   const here = placeRuleSetAt(w, startPlace ?? a.place);
   if (here) sets.push(here);
-  if (sets.length === 0) return;
   const match = (t) => t.kind === 'after' && t.action === type;
+  const crossing = type === 'move' && multiCity(w) && cityOfPlace(w, a.place) !== null && cityOfPlace(w, a.place) !== currentCity(w);
+  if (sets.length === 0 && !crossing) return;
   // 先看有没有会跑的规则，免得白白建环境
-  if (!sets.some((s) => s.rules.some((r) => match(timingOf(r))))) return;
+  if (!crossing && !sets.some((s) => s.rules.some((r) => match(timingOf(r))))) return;
   const run = { env: actionEnv(w, a, type, args, data), actor: a, here: startPlace ?? a.place };
   for (const set of sets) runApply(w, set, match, run);
+  // 第七前提「三城」：进入另一座城的移动，再执行目的地那座城的 after:move
+  if (type === 'move' && multiCity(w)) {
+    const dest = cityOfPlace(w, a.place);
+    if (dest !== null && dest !== currentCity(w)) {
+      withCity(w, dest, () => {
+        for (const set of cityRuleSets(w)) if (set.rules.some((r) => match(timingOf(r)))) runApply(w, set, match, run);
+      });
+    }
+  }
 }
 
 /**
@@ -432,6 +464,19 @@ export function runAfter(w, a, type, args, data, plan, startPlace) {
  */
 export function fireEvent(w, type, data) {
   if (isRuling(w)) return;
+  if (multiCity(w)) {
+    // 第七前提「三城」：事件在发生地所在的城触发；长眠、归隐在当事人的籍城；data.city 可以直接指明（迁籍的 on:settle / on:emigrate）
+    const a = data.agent ? w.agents[data.agent] : null;
+    const city = data.city !== undefined ? data.city
+      : (type === 'death' || type === 'retire') && a ? a.city
+        : data.place ? cityOfPlace(w, data.place)
+          : currentCity(w);
+    return withCity(w, city, () => fireEventHere(w, type, data));
+  }
+  return fireEventHere(w, type, data);
+}
+
+function fireEventHere(w, type, data) {
   const match = (t) => t.kind === 'on' && t.event === type;
   const sets = cityRuleSets(w).filter((s) => s.rules.some((r) => match(timingOf(r))));
   if (data.agent) {
@@ -473,6 +518,7 @@ export function runEnact(w, set, { quiet = false } = {}) {
  * 若 (d + 1) % daysPerMonth == 0，接着以同样的顺序执行 monthly。停摆的（维持费没付到今天）不执行。
  */
 export function dailyRules(w, d) {
+  if (multiCity(w)) return dailyRulesCities(w, d);
   const passes = ['daily'];
   if ((d + 1) % P.daysPerMonth === 0) passes.push('monthly');
   for (const kind of passes) {
@@ -488,6 +534,30 @@ export function dailyRules(w, d) {
       if (!set.rules.some((r) => match(timingOf(r)))) continue;
       const run = { env: {}, actor: null, here: set.kind === 'place' ? set.place.id : null };
       runApply(w, set, match, run);
+    }
+  }
+}
+
+/**
+ * 第七前提「三城」的 daily / monthly：每座城的城法（城 north west east，法律 ID 升序）→ 社群章程（城外）→ 地点规则（各在地点所在的城里执行）。
+ */
+function dailyRulesCities(w, d) {
+  const passes = ['daily'];
+  if ((d + 1) % P.daysPerMonth === 0) passes.push('monthly');
+  for (const kind of passes) {
+    const match = (t) => t.kind === kind;
+    const run1 = (set) => {
+      if (!set.rules.some((r) => match(timingOf(r)))) return;
+      runApply(w, set, match, { env: {}, actor: null, here: set.kind === 'place' ? set.place.id : null });
+    };
+    for (const id of CITY_IDS) withCity(w, id, () => { for (const set of cityRuleSets(w)) run1(set); });
+    withCity(w, null, () => {
+      for (const g of Object.values(w.groups)) {
+        if (!g.dissolved && g.bylaws && g.bylaws.rules.length > 0 && !isSuspended(w, g.bylaws)) run1(groupSet(g));
+      }
+    });
+    for (const p of Object.values(w.places)) {
+      if (p.rules && p.rules.rules.length > 0 && p.owner.kind !== 'city' && !isSuspended(w, p.rules)) withCity(w, p.city ?? null, () => run1(placeSet(p)));
     }
   }
 }
@@ -650,7 +720,7 @@ export function intentSummary(it) {
 }
 
 /** 账户的键：'treasury' | 居民 ID | 社群 ID | 灵魂 ID */
-export const acctKey = (acct) => (acct.k === 'treasury' ? 'treasury' : acct.id);
+export const acctKey = (acct) => (acct.k === 'treasury' ? (acct.city ? `treasury:${acct.city}` : 'treasury') : acct.id);
 
 // ═══════════════════════════════════════════════════════════════
 // 操作的施行（§7.7）
@@ -788,7 +858,8 @@ function opSet(w, set, idx, it, run) {
 
 function opTag(w, set, idx, it, run) {
   const a = w.agents[it.who];
-  const tag = set.kind === 'group' ? `${set.group.id}:${it.tag}` : it.tag;
+  // 第七前提「三城」：城法的标签存为「城:标签」，按发出它的城分开（社群章程照旧带社群前缀）
+  const tag = set.kind === 'group' ? `${set.group.id}:${it.tag}` : multiCity(w) && currentCity(w) ? `${currentCity(w)}:${it.tag}` : it.tag;
   let res;
   if (set.kind === 'group' && !set.group.members.includes(a.id)) res = fail('not_in_scope');
   else if (it.op === 'tag') {
@@ -813,12 +884,14 @@ function opTag(w, set, idx, it, run) {
 /** 宣告的收件人：在世居民，按 ID 升序。章程只能发给成员（取交集）；社群章程里的 tag: 是带前缀的标签 */
 function audienceOf(w, set, to, run) {
   let list;
-  if (to === 'all') list = Object.values(w.agents).filter(isAlive);
+  // 第七前提「三城」：城法的 all 只到此刻身在本城地界的人（同居民的宣告）
+  if (to === 'all' && multiCity(w)) list = Object.values(w.agents).filter((a) => isAlive(a) && cityOfPlace(w, a.place) === currentCity(w));
+  else if (to === 'all') list = Object.values(w.agents).filter(isAlive);
   else if (to === 'here') {
     const pid = set.kind === 'place' ? set.place.id : run.here;
     list = pid ? Object.values(w.agents).filter((a) => isAlive(a) && a.place === pid) : [];
   } else if (to.startsWith('tag:')) {
-    const tag = set.kind === 'group' ? `${set.group.id}:${to.slice(4)}` : to.slice(4);
+    const tag = set.kind === 'group' ? `${set.group.id}:${to.slice(4)}` : multiCity(w) && currentCity(w) ? `${currentCity(w)}:${to.slice(4)}` : to.slice(4);
     list = Object.values(w.agents).filter((a) => isAlive(a) && a.tags.includes(tag));
   } else if (to.startsWith('group:')) {
     const g = w.groups[to.slice(6)];
@@ -868,14 +941,20 @@ function opAnnounce(w, set, idx, it, run) {
 
 function opExile(w, set, idx, it, run) {
   const a = w.agents[it.who];
+  // 第七前提「三城」：放逐是本城的标签；此刻身在本城地界的人送到本城的放逐去处（荒野地带），在别处的只打标签
+  const island = multiCity(w) && currentCity(w);
+  const tag = island ? `${currentCity(w)}:exiled` : 'exiled';
   let res;
-  if (a.tags.includes('exiled')) res = { ok: true, note: 'already' };
+  if (a.tags.includes(tag)) res = { ok: true, note: 'already' };
   else {
-    a.tags.push('exiled');
-    a.place = 'wilds';
-    w.places.wilds.activity.visits++;
+    a.tags.push(tag);
+    const sendTo = !island ? 'wilds' : cityOfPlace(w, a.place) === currentCity(w) ? cityDef(w, currentCity(w)).exile : null;
+    if (sendTo) {
+      a.place = sendTo;
+      w.places[sendTo].activity.visits++;
+    }
     pushInbox(w, a, 'exile', { lawId: set.key });
-    emit(w, 'exile', { agent: a.id, place: 'wilds', data: { lawId: set.key, scope: set.scopeStr, agentId: a.id } });
+    emit(w, 'exile', { agent: a.id, place: a.place, data: { lawId: set.key, scope: set.scopeStr, agentId: a.id } });
     res = OK;
   }
   opEvent(w, set, idx, it, res, run, { who: a.id });
@@ -884,10 +963,11 @@ function opExile(w, set, idx, it, run) {
 
 function opPardon(w, set, idx, it, run) {
   const a = w.agents[it.who];
+  const tag = multiCity(w) && currentCity(w) ? `${currentCity(w)}:exiled` : 'exiled';
   let res;
-  if (!a.tags.includes('exiled')) res = { ok: true, note: 'not_exiled' };
+  if (!a.tags.includes(tag)) res = { ok: true, note: 'not_exiled' };
   else {
-    a.tags = a.tags.filter((x) => x !== 'exiled');
+    a.tags = a.tags.filter((x) => x !== tag);
     pushInbox(w, a, 'pardon', { lawId: set.key });
     emit(w, 'pardon', { agent: a.id, place: a.place, data: { lawId: set.key, scope: set.scopeStr, agentId: a.id } });
     res = OK;
@@ -962,7 +1042,7 @@ function opAmend(w, set, idx, it, run) {
     if (it.canonical !== null && !w.charter.some((art) => it.canonical in art.versions)) res = fail('no_such_version');
     else {
       w.charterCanonical = it.canonical;
-      emit(w, 'amend', { place: 'parliament', data: { lawId: set.key, canonical: it.canonical } });
+      emit(w, 'amend', { place: parliamentId(w), data: { lawId: set.key, canonical: it.canonical } });
     }
   } else {
     const max = w.charter.length;
@@ -981,7 +1061,7 @@ function opAmend(w, set, idx, it, run) {
         art.history.push({ lawId: set.key, lang: it.lang, text: it.text });
       }
     }
-    if (res.ok) emit(w, 'amend', { place: 'parliament', data: { lawId: set.key, article: it.article, lang: it.lang, text: it.text } });
+    if (res.ok) emit(w, 'amend', { place: parliamentId(w), data: { lawId: set.key, article: it.article, lang: it.lang, text: it.text } });
   }
   opEvent(w, set, idx, it, res, run, 'canonical' in it ? { canonical: it.canonical } : { article: it.article, lang: it.lang });
   return res;
@@ -1026,11 +1106,18 @@ function opCede(w, set, idx, it, run) {
   const p = has(w.places, it.place) ? w.places[it.place] : null;
   let res;
   if (!p) res = fail('target_gone');
-  else if (p.owner.kind !== 'city') res = fail('not_city_owned');
+  else if (p.owner.kind !== 'city' || (multiCity(w) && p.owner.id !== currentCity(w))) res = fail('not_city_owned');
   else if (p.open) res = fail('not_ownable');
   else {
-    p.owner = { kind: it.to.k, id: it.to.id };
-    emit(w, 'cede', { place: p.id, data: { lawId: set.key, scope: set.scopeStr, place: p.id, from: { kind: 'city' }, to: { kind: it.to.k, id: it.to.id } } });
+    if (multiCity(w)) {
+      // 第七前提：让给某座城（treasury_of('west')）即归那座城所有
+      const from = { ...p.owner };
+      p.owner = it.to.k === 'treasury' ? { kind: 'city', id: it.to.city ?? currentCity(w) } : { kind: it.to.k, id: it.to.id };
+      emit(w, 'cede', { place: p.id, data: { lawId: set.key, scope: set.scopeStr, place: p.id, from, to: { ...p.owner } } });
+    } else {
+      p.owner = { kind: it.to.k, id: it.to.id };
+      emit(w, 'cede', { place: p.id, data: { lawId: set.key, scope: set.scopeStr, place: p.id, from: { kind: 'city' }, to: { kind: it.to.k, id: it.to.id } } });
+    }
     res = OK;
   }
   opEvent(w, set, idx, it, res, run, { place: it.place, to: acctKey(it.to) }, p ? p.id : undefined);
@@ -1042,11 +1129,12 @@ function opSeize(w, set, idx, it, run) {
   let res;
   if (!p) res = fail('target_gone');
   else if (p.owner.kind === 'city') res = fail('already_city');
+  else if (multiCity(w) && cityOfPlace(w, p.id) !== currentCity(w)) res = fail('not_in_scope'); // 第七前提：只能收归本城地界里的地点
   else {
     const from = { kind: p.owner.kind, id: p.owner.id };
-    p.owner = { kind: 'city' };
+    p.owner = multiCity(w) ? { kind: 'city', id: currentCity(w) } : { kind: 'city' };
     p.rules = null; // 全城所有的地点没有地点规则
-    emit(w, 'seize', { place: p.id, data: { lawId: set.key, scope: set.scopeStr, place: p.id, from, to: { kind: 'city' } } });
+    emit(w, 'seize', { place: p.id, data: { lawId: set.key, scope: set.scopeStr, place: p.id, from, to: multiCity(w) ? { ...p.owner } : { kind: 'city' } } });
     res = OK;
   }
   opEvent(w, set, idx, it, res, run, { place: it.place }, p ? p.id : undefined);
@@ -1060,6 +1148,9 @@ function opPetition(w, set, idx, it, run) {
   opEvent(w, set, idx, it, res, run);
   return res;
 }
+
+/** 修宪事件的地点：本城的议会（第七前提），其余前提是 parliament */
+const parliamentId = (w) => (multiCity(w) && currentCity(w) ? cityDef(w, currentCity(w)).parliament : 'parliament');
 
 // ═══════════════════════════════════════════════════════════════
 // 接入物理引擎
@@ -1079,12 +1170,12 @@ function opMaterialPolicy(w,set,idx,it,run){
  else if(it.op==='material_policy')w.materialPolicy={cityClaimRestricted:it.restricted};
  else if(it.op==='research_policy'){
   const p=w.places[it.place],m=p?.modules?.find(m=>m.type==='research');
-  if(!m||p.owner.kind!=='city')res=fail('not_city_owned');
+  if(!m||p.owner.kind!=='city'||(multiCity(w)&&p.owner.id!==currentCity(w)))res=fail('not_city_owned');
   else {try{m.policy=validateResearchPolicy(it);}catch(e){if(e.code)res=fail(e.code);else throw e;}}
  }else {
   const j=w.projects[it.project];
   if(!j||j.status!=='open')res=fail('target_gone');
-  else if(j.owner.kind!=='city')res=fail('not_city_owned');
+  else if(j.owner.kind!=='city'||(multiCity(w)&&j.owner.id!==currentCity(w)))res=fail('not_city_owned');
   else if(it.op==='cancel_project')terminateProject(w,j);
   else if(!['public','owner','group'].includes(it.access))res=fail('invalid_args');
   else j.access=it.access;

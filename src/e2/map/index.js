@@ -9,7 +9,8 @@ import { K } from '../engine/tokens.js';
 import { P } from '../params.js';
 import MAP from './frontier-e2.js';
 import COMPACT from './compact-materials.js';
-export const mapFor = w => w.map === COMPACT.id ? COMPACT : MAP;
+import ISLAND from './island-three.js';
+export const mapFor = w => w.map === COMPACT.id ? COMPACT : w.map === ISLAND.id ? ISLAND : MAP;
 export const humanDefs = w => Object.fromEntries(mapFor(w).places.map(p => [p.id,p]));
 export const lotDefs = w => Object.fromEntries(mapFor(w).lots.map(p => [p.id,p]));
 export const wildZoneIds = w => mapFor(w).places.filter(p => p.wild).map(p => p.id);
@@ -85,9 +86,11 @@ export function publicMap(w = {}) {
     places: mapFor(w).places.map((p) => ({
       id: p.id, district: p.district, xy: p.xy.slice(), glyph: p.glyph, landmark: p.landmark, open: p.open,
       wild: p.wild ? { energyMax: p.wild.energyMax * K(w), regen: p.wild.regen * K(w) } : null,
+      ...(mapFor(w).cities ? { city: p.city, role: p.role } : {}),
     })),
     streets: mapFor(w).streets.map(([a, b, cost = 1]) => ({ a, b, cost })),
-    lots: mapFor(w).lots.map((l) => ({ id: l.id, district: l.district, xy: l.xy.slice(), near: l.near.slice(), wild: l.district === 'wilds' })),
+    lots: mapFor(w).lots.map((l) => ({ id: l.id, district: l.district, xy: l.xy.slice(), near: l.near.slice(), wild: l.district === 'wilds', ...(mapFor(w).cities ? { city: l.city } : {}) })),
+    ...(mapFor(w).cities ? { cities: mapFor(w).cities.map((c) => ({ id: c.id, name: { ...c.name }, short: { ...c.short }, wellShare: c.wellShare, port: c.port, well: c.well, parliament: c.parliament, agora: c.agora })) } : {}),
     legacy: mapFor(w).legacy.slice(),
     terrain: JSON.parse(JSON.stringify(mapFor(w).terrain)),
   };

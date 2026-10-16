@@ -1,5 +1,5 @@
 import { stripCoins } from './p6/coins.js';
-import { VIRTUAL_CANON } from './p6/canon.js';
+import { canonFor } from './p6/canon.js';
 import { seedPublicRoles } from './p6/roles.js';
 import { initializeMaterials, validateHiddenPhysics } from './materials-genesis.js';
 // SPEC-E2 §4：第二纪世界的数据模型与创建。世界状态是一个普通的 JSON 对象（整数账本、无 Map/Set/undefined），
@@ -17,10 +17,13 @@ import { nameShapeOk, LANG_RE } from './names.js';
 import { L, CHARTER, CHARTER_LANGS, charterWallText, CANON, LETTER } from './lore/index.js';
 import { mapFor } from './map/index.js';
 import { GENESIS_STEPS } from './genesis.js';
+import { withCity, blankCityState, cityDef, currentCity } from './engine/cities.js';
 
 export const WORLD_VERSION = 2;
-export const tokenized = (w) => w.premise === 4 || (w.premise === 5 || w.premise === 6);
-export const materialsEnabled = w => (w.premise === 5 || w.premise === 6);
+export const tokenized = (w) => w.premise === 4 || (w.premise === 5 || w.premise === 6 || w.premise === 7);
+export const materialsEnabled = w => (w.premise === 5 || w.premise === 6 || w.premise === 7);
+/** 第六前提的账号托管世界（公共角色、虚拟典籍、无旧币）。第七前提「三城」包含它的全部机制 */
+export const accountWorld = (w) => w.premise === 6 || w.premise === 7;
 export const premised = (w) => (w.premise || 0) >= 1;
 /** 第二前提（SPEC-P2 §2.2）：设定版本 2，包含设定 1 的全部机制；第二前提的新判断一律用它 */
 export const agentic = (w) => (w.premise || 0) >= 2;
@@ -145,16 +148,17 @@ export function createWorld({
   id = 'baihua', seed, codeVersion = '0.0.0', sandboxAdoption = false, map,
   founders = [], shellModels = [], sandboxShells = false, shellSlots, premise = 0, lawSemanticsVersion, tokens = {}, hiddenPhysics,
 } = {}) {
-  if ((premise === 5 || premise === 6) && lawSemanticsVersion === undefined) lawSemanticsVersion = 2;
+  if ((premise === 5 || premise === 6 || premise === 7) && lawSemanticsVersion === undefined) lawSemanticsVersion = 2;
   if (shellSlots === undefined) shellSlots = tokenized({ premise }) ? 0 : P.shellSlots;
   if (typeof seed !== 'string' || seed === '') throw new Error('createWorld: seed is required');
   if (lawSemanticsVersion !== undefined && lawSemanticsVersion !== 2) throw new Error('createWorld: lawSemanticsVersion must be 2');
-  map ??= (premise === 5 || premise === 6) ? 'compact-materials-v1' : 'frontier';
-  if ((premise === 5 || premise === 6)) validateHiddenPhysics(hiddenPhysics);
-  if (map !== ((premise === 5 || premise === 6) ? 'compact-materials-v1' : 'frontier')) throw new Error(`createWorld: 第二纪只支持 frontier 地图，得到 ${map}`);
+  const expectedMap = premise === 7 ? 'island-three-v1' : (premise === 5 || premise === 6) ? 'compact-materials-v1' : 'frontier';
+  map ??= expectedMap;
+  if ((premise === 5 || premise === 6 || premise === 7)) validateHiddenPhysics(hiddenPhysics, map);
+  if (map !== expectedMap) throw new Error(`createWorld: 这一前提只支持 ${expectedMap} 地图，得到 ${map}`);
   if (!Number.isSafeInteger(shellSlots) || shellSlots < 0) throw new Error(`createWorld: shellSlots must be a non-negative integer, got ${shellSlots}`);
 
-  if (premise !== 0 && premise !== 1 && premise !== 2 && premise !== 4 && (premise !== 5 && premise !== 6)) throw new Error('PREMISE 只能是 0、1、2 或 4');
+  if (premise !== 0 && premise !== 1 && premise !== 2 && premise !== 4 && (premise !== 5 && premise !== 6 && premise !== 7)) throw new Error('PREMISE 只能是 0、1、2、4、5、6 或 7');
   if (premise >= 1 && founders.length > shellSlots) throw new Error('设定 1 的世界里，先民不能多于躯壳');
   if (tokenized({ premise }) && (shellSlots !== 0 || founders.length || sandboxShells || sandboxAdoption)) throw new Error('PREMISE=4 requires no shells, founders or sandbox');
   const capacity = tokenized({ premise }) ? tokens.capacity ?? 1100000 : 1100000;
@@ -244,11 +248,12 @@ export function createWorld({
     w.well.drawPoolLeft = ep(w, 'wellDrawPoolPerDay');
   }
 
-  if (premise === 6) {
+  if (premise === 6 || premise === 7) {
     w.access = { residents: {}, startupClaims: {}, requests: {}, transfers: {} };
     w.residentStats = {};
     w.weather = { scheduled: null, active: [], history: [] };
   }
+  if (premise === 7) return createCities(w, hiddenPhysics);
   seedPlaces(w);
   seedCharter(w);
   seedLibrary(w);
@@ -260,6 +265,34 @@ export function createWorld({
   return w;
 }
 
+/**
+ * 第七前提「三城」的创世（docs/plans/2026-10-16-three-cities.md §2）：每城一份的字段存进 w.cities，
+ * 世界顶层留下城外的上下文（engine/cities.js）；地点、宪章、遗法、源井按城种下。
+ */
+function createCities(w, hiddenPhysics) {
+  const dayLog = () => newDayLog(true, true, true);
+  w.cities = {};
+  for (const c of mapFor(w).cities) {
+    w.cities[c.id] = blankCityState({
+      cityName: c.name.zh,
+      treasury: { energy: 0, coins: 0 },
+      well: { share: c.wellShare, supply: 1000, upgrades: [], drawPoolLeft: Math.floor(ep(w, 'wellDrawPoolPerDay') * c.wellShare / 1000), outputHistory: [] },
+      dayLog: dayLog(),
+    });
+  }
+  Object.assign(w, blankCityState({ dayLog: dayLog() }));
+  w.legacy = null;
+  seedPlaces(w);
+  for (const c of mapFor(w).cities) withCity(w, c.id, () => seedCharter(w));
+  seedLibrary(w);
+  seedWilds(w);
+  initializeMaterials(w, hiddenPhysics);
+  for (const c of mapFor(w).cities) withCity(w, c.id, () => { for (const step of GENESIS_STEPS) step(w); });
+  seedPublicRoles(w);
+  stripCoins(w);
+  return w;
+}
+
 // ── 创建世界时的种子数据 ──────────────────────────────────────
 
 /** 人类的地点（附录 B.1，按地图顺序）与空地块（B.2） */
@@ -268,11 +301,13 @@ function seedPlaces(w) {
   const en = L('en');
   for (const def of mapFor(w).places) {
     const name = def.name ?? zh.place[def.id].name;
+    const island = w.premise === 7;
     w.places[def.id] = {
       id: def.id,
       name,
-      humanName: { zh: name, en: def.id==='workshop'&&def.name?'Research Institute':en.place[def.id].name },
-      description: def.name ? (def.id==='workshop'?'研究所支持全城获授权居民施工与维修；使用当前授权和收费。':`${def.name}。${def.wild?'可探索与采集物料。':def.id==='tenements'||def.id==='temple'?'可修复和改装的空壳；拆解须符合现行法律。':'城市公共设施。'}`) : null,
+      humanName: { zh: name, en: island ? def.nameEn : def.id==='workshop'&&def.name?'Research Institute':en.place[def.id].name },
+      description: island ? islandDescription(def) : def.name ? (def.id==='workshop'?'研究所支持全城获授权居民施工与维修；使用当前授权和收费。':`${def.name}。${def.wild?'可探索与采集物料。':def.id==='tenements'||def.id==='temple'?'可修复和改装的空壳；拆解须符合现行法律。':'城市公共设施。'}`) : null,
+      ...(island ? { city: def.city, role: def.role } : {}),
       origin: 'human',
       district: def.district,
       xy: def.xy.slice(),
@@ -286,7 +321,7 @@ function seedPlaces(w) {
       modules: def.modules.map((type) => ({ type, salvage: 0, builtDay: null, projectId: null, inherent: true })),
       salvage: def.salvage * K(w),
       salvageMax: def.salvage * K(w),
-      owner: { kind: 'city' },
+      owner: island ? { kind: 'city', id: def.city } : { kind: 'city' },
       rules: null,
       ruined: false,
       razed: false,
@@ -301,7 +336,19 @@ function seedPlaces(w) {
   for (const id of mapFor(w).lots.map(l => l.id)) w.lots[id] = { place: null, project: null };
 }
 
-/** 宪章：9 条，每条 8 种语言版本；议会墙上的 8 条刻文（SPEC-M1 §5.6，第二纪沿用） */
+/** 三城岛图上人类地点的一句说明（按职能） */
+function islandDescription(def) {
+  const by = {
+    port: '港口：新居民从这里上岸，在本城落籍。', well: '源井：本城词元的来源，产出进入本城公库。', parliament: '议会：本城的法律在这里提出。',
+    agora: '广场：空地，在此说话所有在场者都能听到。', archive: '档案馆：可以在此著述、阅读典籍；典籍全世界共有。',
+    research: '研究所：支持获授权居民在任何地方施工与维修；使用当前授权和收费。', cradle: '摇篮：灵魂在此等待身体；在此醒来的居民落籍本城。',
+    board: '交易所：告示板上的公开交易只在这里可见、可成交。', memorial: '纪念地：可以在此写墓志。',
+    shell: '可修复和改装的空壳；拆解须符合现行法律。', wild: '荒野：不属于任何城，可探索与采集物料。',
+  };
+  return `${def.name}。${by[def.role] ?? ''}`;
+}
+
+/** 宪章：9 条，每条 8 种语言版本；议会墙上的 8 条刻文（SPEC-M1 §5.6，第二纪沿用）。三城世界里在当前挂着的城里种下，刻在本城议会墙上 */
 function seedCharter(w) {
   for (let n = 1; n <= 9; n++) {
     const versions = {};
@@ -311,7 +358,7 @@ function seedCharter(w) {
   for (const lang of CHARTER_LANGS) {
     const iid = nextId(w, 'i');
     w.inscriptions[iid] = {
-      id: iid, place: 'parliament', text: charterWallText(lang), lang, author: 'humans', baseCost: 3, tick: 0,
+      id: iid, place: w.premise === 7 ? cityDef(w, currentCity(w)).parliament : 'parliament', text: charterWallText(lang), lang, author: 'humans', baseCost: 3, tick: 0,
       coveredBy: null, coveredTick: null, protectedBy: [], redacted: false, lost: false,
     };
   }
@@ -319,8 +366,8 @@ function seedCharter(w) {
 
 /** 档案：致后来者与人类典籍残篇（典籍全城共有，在任何运转中的档案都能读到） */
 function seedLibrary(w) {
-  if (w.premise === 6) {
-    for (const d of VIRTUAL_CANON) w.docs[d.id] = { ...d, kind: 'virtual', lang: 'zh', author: null, source: d.category, ref: { zh: d.body, en: d.en }, tick: 0, reads: 0, readsByDay: {} };
+  if (accountWorld(w)) {
+    for (const d of canonFor(w.premise)) w.docs[d.id] = { ...d, kind: 'virtual', lang: 'zh', author: null, source: d.category, ref: { zh: d.body, en: d.en }, tick: 0, reads: 0, readsByDay: {} };
     return;
   }
   const letterId = nextId(w, 'd');
@@ -343,7 +390,7 @@ function seedWilds(w) {
     if (!def.wild) continue;
     w.regions[def.id] = {
       energy: def.wild.energyMax * K(w),
-      ...(w.premise === 6 ? {} : { coins: def.wild.coins }),
+      ...(accountWorld(w) ? {} : { coins: def.wild.coins }),
       relicOrder: shuffle(w.rng.world, def.wild.relics.map(String)),
       relicsFound: 0,
     };

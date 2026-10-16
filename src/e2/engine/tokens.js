@@ -89,7 +89,7 @@ export function recordThinking(w, a, parts) {
   let total = 0;
   for (const key of ['reread', 'read', 'write']) {
     const n = parts[key] || 0;
-    if(w.premise===6)residentRecord(w,a.id).thinking[key]+=n;
+    if((w.premise===6 || w.premise === 7))residentRecord(w,a.id).thinking[key]+=n;
     if (a.tokens.bill) a.tokens.bill[key] += n;
     w.dayLog.p4[key] += n;
     total += n;

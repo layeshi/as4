@@ -7,6 +7,7 @@ import { P } from '../params.js';
 import { next, int } from '../../rng.js';
 import { countWord, truncateCp } from '../../text.js';
 import { emit, pushInbox, creditEnergy } from './core.js';
+import { multiCity, currentCity, cityValue, cityOwnerAt, fallbackCity } from './cities.js';
 
 // ── 词典 ───────────────────────────────────────────────────
 
@@ -67,24 +68,27 @@ export function closePact(w, c, reason = 'expired') {
 export function orphanPlaces(w, ownerKind, ownerId) {
   for (const p of Object.values(w.places)) {
     if (p.owner.kind === ownerKind && p.owner.id === ownerId) {
-      p.owner = { kind: 'city' };
+      p.owner = cityOwnerAt(w, p.id); // 第七前提：归地点所在的城（荒野里无主）
       p.rules = null;
-      emit(w, 'place_owner', { place: p.id, data: { placeId: p.id, from: { kind: ownerKind, id: ownerId }, to: { kind: 'city' } } });
+      emit(w, 'place_owner', { place: p.id, data: { placeId: p.id, from: { kind: ownerKind, id: ownerId }, to: { ...p.owner } } });
     }
   }
   for (const j of Object.values(w.projects)) {
-    if (j.status === 'open' && j.owner.kind === ownerKind && j.owner.id === ownerId) { j.owner = { kind: 'city' }; if(materialsEnabled(w))j.access='public'; }
+    if (j.status === 'open' && j.owner.kind === ownerKind && j.owner.id === ownerId) { j.owner = cityOwnerAt(w, j.place); if(materialsEnabled(w))j.access='public'; }
   }
 }
 
 /** 解散一个社群：社群公库并入城公库，章程作废，名下的地点改归全城，成员收到通知 */
 export function dissolveGroup(w, g) {
   const members = g.members.slice();
-  w.treasury.energy += g.treasury.energy;
-  w.treasury.coins += g.treasury.coins;
+  // 第七前提「三城」：社群不属于任何城，公库并入解散时所在的城（在荒野里则是创立者的籍城）
+  const city = multiCity(w) ? fallbackCity(w, currentCity(w), w.agents[g.founder]?.city) : undefined;
+  const treasury = multiCity(w) ? cityValue(w, city, 'treasury') : w.treasury;
+  treasury.energy += g.treasury.energy;
+  treasury.coins += g.treasury.coins;
   g.treasury = { energy: 0, coins: 0 };
   g.dissolved = true;
-  dissolveMaterialRights(w,g.id);
+  dissolveMaterialRights(w,g.id,city);
   g.members = [];
   g.pending = [];
   g.steward = null;

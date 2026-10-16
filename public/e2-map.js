@@ -8,7 +8,7 @@
 import { t, getLang } from './i18n.js';
 import { el, drawGlyph, GLYPH_HUE, TOMB_SLOTS, projectIcon, FLAME_D, starPath } from './map-glyphs.js';
 import { drawSiteGlyph, moduleIcon, lotMarker } from './e2-glyphs.js';
-import { drawDefs, drawTerrain, hash32, streetCurve } from './map-terrain.js';
+import { drawDefs, drawTerrain, hash32, streetCurve, smoothPath } from './map-terrain.js';
 import { createView } from './map-view.js';
 import { clip } from './map.js';
 
@@ -21,8 +21,12 @@ const SCRIPT_HUE = { han: 8, latin: 190, kana: 330, hangul: 300, arabic: 125, cy
 const RING_R = 47;
 const RING_LEN = 2 * Math.PI * RING_R;
 
+/** 按籍着色用的城色：与 style.css 的 --m-city-*（即 --m-blue / --m-orange / --m-violet）一致，SVG 属性里用不了 CSS 变量 */
+const CITY_COLOR = { north: '#6b93ff', west: '#ff9446', east: '#b98bff' };
+
 function agentColor(a, mode) {
   if (a.status === 'dormant') return 'hsl(220 12% 40%)';
+  if (mode === 'domicile') return CITY_COLOR[a.city] || 'hsl(185 55% 82%)';
   if (mode === 'script') {
     const h = a.script && SCRIPT_HUE[a.script] !== undefined ? SCRIPT_HUE[a.script] : null;
     return h === null ? 'hsl(200 20% 72%)' : `hsl(${h} 95% 64%)`;
@@ -37,6 +41,37 @@ function lodOf(k, fitK) {
   return r < 1.45 ? 'far' : r < 2.8 ? 'mid' : 'near';
 }
 const agentScaleFor = (k) => Math.round(clamp(0.95 / k, 1, 2.2) * 10) / 10;
+
+/** 岛图（第七前提「三城」）的四级：island 看全岛的城牌，far 看一座城，mid、near 同旧图 */
+function islandLodOf(k, fitK) {
+  const r = k / fitK;
+  return r < 1.55 ? 'island' : r < 3.4 ? 'far' : r < 5.2 ? 'mid' : 'near';
+}
+/** 全岛级同时挂 lod-far，城级的样式照旧生效 */
+const lodClasses = (l) => (l === 'island' ? ['lod-far', 'lod-island'] : [`lod-${l}`]);
+const boxOf = (points) => {
+  const xs = points.map((p) => p[0]);
+  const ys = points.map((p) => p[1]);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+};
+function inPoly(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+/** 城牌上文字的估算宽度（隐藏的图层量不出 getComputedTextLength） */
+const textWidth = (s, px) => [...s].reduce((n, ch) => n + (ch.charCodeAt(0) > 0x2e80 ? px : px * 0.6), 0);
+const compact = (n) => {
+  try {
+    return new Intl.NumberFormat(getLang() === 'en' ? 'en' : 'zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+  } catch {
+    return String(Math.round(n));
+  }
+};
 
 function timeOfDay(tickOfDay) {
   if (tickOfDay <= 2 || tickOfDay >= 10) return 'night';
@@ -56,12 +91,16 @@ let current = null;
 const savedViews = {};
 
 /**
- * deps：{ mapData, worldId, placeName(id), humanName(id), districtName(id), agentName(id), onAgent(id), onPlace(id) }
- * 返回 { setState, setTick, setColorMode, onEvent, bubble, ripple, zoomIn, zoomOut, fit, placeConditionOf, destroy }
+ * deps：{ mapData, worldId, placeName(id), humanName(id), districtName(id), agentName(id), onAgent(id), onPlace(id),
+ *         岛图另有 onFocus(city | null)、weatherName(type) }
+ * 返回 { setState, setTick, setColorMode, onEvent, bubble, ripple, zoomIn, zoomOut, fit, placeConditionOf, destroy }，
+ * 岛图另有 focusCity(id)、focusIsland()、focus()
  */
 export function createMap2(svg, deps) {
   if (current) current.destroy();
   const map = deps.mapData;
+  // 第七前提「三城」的岛图：全岛级画城牌与荒野人数、跨城移动画弧线、聚焦上报给页面、左下角小地图
+  const island = !!(map.cities && map.terrain && map.terrain.island);
   svg.textContent = '';
   for (const c of [...svg.classList]) if (/^(map-|wx-|tod-|lod-)/.test(c)) svg.classList.remove(c);
   svg.classList.add(`map-${map.id}`, 'map-e2', 'lod-far', 'tod-day');
@@ -76,7 +115,7 @@ export function createMap2(svg, deps) {
   const shake = el('g', { class: 'shake' });
   world.append(shake);
   const L = {};
-  for (const name of ['roles', 'ground', 'water', 'districts', 'wall', 'streets', 'paths', 'roads', 'waste', 'lots', 'places', 'facilities', 'agents', 'weather', 'districtLabels', 'labels', 'fx']) {
+  for (const name of ['roles', 'ground', 'water', 'districts', 'wall', 'streets', 'paths', 'roads', 'waste', 'lots', 'places', 'facilities', 'agents', 'weather', 'districtLabels', 'labels', ...(island ? ['arcs'] : []), 'fx', ...(island ? ['badges'] : [])]) {
     L[name] = el('g', { class: `layer-${name}` });
     shake.append(L[name]);
   }
@@ -84,7 +123,7 @@ export function createMap2(svg, deps) {
   const hud = el('g', { class: 'hud' });
   svg.append(defs, world, hud);
 
-  const { xy: staticXY } = drawTerrain(L, map, {
+  const { xy: staticXY, territories = {} } = drawTerrain(L, map, {
     worldId: deps.worldId || '',
     names: { district: (id) => (deps.districtName ? deps.districtName(id) : id), far: t('mapFar') },
   });
@@ -96,6 +135,189 @@ export function createMap2(svg, deps) {
   // 动态的地点：id → { xy, glyph, wild, open }（来自 state.places）
   const xy = { ...staticXY };
   const placeInfo = {};
+
+  // ── 岛图：各城地界的外包框、城牌、小地图 ──
+  const cityIds = island ? map.cities.map((c) => c.id) : [];
+  const boxes = {};
+  for (const [id, hp] of Object.entries(territories)) boxes[id] = boxOf(hp);
+  const islandBox = island ? boxOf(map.terrain.island) : null;
+  const islandMid = islandBox ? [(islandBox[0] + islandBox[2]) / 2, (islandBox[1] + islandBox[3]) / 2] : null;
+  const placeCity = new Map(island ? map.places.map((p) => [p.id, p.city || null]) : []);
+  const badgeEls = {};
+  if (island) {
+    const at = map.terrain.districtLabels || {};
+    for (const c of map.cities) {
+      const b = boxes[c.id];
+      const pos = at[`${c.id}-city`] || (b ? [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] : null);
+      if (!pos) continue;
+      const g = el('g', { class: `city-badge terr-${c.id}`, tabindex: 0, role: 'button', 'data-city': c.id });
+      const box = el('rect', { class: 'badge-box', rx: 4, ry: 4 });
+      const lines = [0, 1, 2, 3].map((i) => el('text', { class: i ? 'badge-line' : 'badge-name' }));
+      g.append(el('title'), box, ...lines);
+      g.addEventListener('click', () => api.focusCity(c.id));
+      g.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') api.focusCity(c.id);
+      });
+      L.badges.append(g);
+      badgeEls[c.id] = { g, at: pos, box, lines };
+    }
+    if (at.wilds) {
+      const g = el('g', { class: 'city-badge wilds-badge' });
+      const box = el('rect', { class: 'badge-box', rx: 4, ry: 4 });
+      const line = el('text', { class: 'badge-line' });
+      g.append(box, line);
+      L.badges.append(g);
+      badgeEls.wilds = { g, at: at.wilds, box, lines: [line] };
+    }
+  }
+  /** 城牌：每行一句，框按估算宽度画（像素是屏幕像素，组按 1/k 缩放） */
+  function setBadgeText(b, texts) {
+    const sizes = b.lines.length > 1 ? [14, 11.5, 11.5, 11.5] : [11.5];
+    let w = 0;
+    let y = 0;
+    const rows = [];
+    b.lines.forEach((line, i) => {
+      const text = texts[i] || '';
+      line.textContent = text;
+      line.style.display = text ? '' : 'none';
+      if (!text) return;
+      const px = sizes[i];
+      w = Math.max(w, textWidth(text, px));
+      y += i === 0 ? px : px + 5.5;
+      rows.push([line, y]);
+    });
+    const pad = 10;
+    const bw = Math.ceil(w + pad * 2);
+    const bh = Math.ceil(y + pad * 1.6);
+    for (const [line, ly] of rows) {
+      line.setAttribute('x', (-bw / 2 + pad).toFixed(1));
+      line.setAttribute('y', (-bh / 2 + pad * 0.8 + ly - 2).toFixed(1));
+    }
+    b.box.setAttribute('x', (-bw / 2).toFixed(1));
+    b.box.setAttribute('y', (-bh / 2).toFixed(1));
+    b.box.setAttribute('width', bw);
+    b.box.setAttribute('height', bh);
+    b.size = [bw, bh];
+  }
+  function paintBadges() {
+    if (!island || !state) return;
+    const lang = getLang() === 'en' ? 'en' : 'zh';
+    const present = {};
+    const domiciled = {};
+    let wilds = 0;
+    for (const a of agents.values()) {
+      if (a.status === 'dead' || a.status === 'retired' || !a.place) continue;
+      const c = placeCity.get(a.place) ?? null;
+      if (c) present[c] = (present[c] || 0) + 1;
+      else wilds += 1;
+      const home = a.profile && a.profile.city;
+      if (home) domiciled[home] = (domiciled[home] || 0) + 1;
+    }
+    for (const c of state.cities || []) {
+      const b = badgeEls[c.id];
+      if (!b) continue;
+      // 没改过名的城，城名就是默认名的中文；按界面语言显示默认名
+      const hn = c.humanName || {};
+      const name = c.cityName && c.cityName !== hn.zh ? c.cityName : hn[lang] || c.cityName || c.id;
+      const hist = (c.well && c.well.outputHistory) || [];
+      const open = (c.proposals || []).filter((p) => p.status === 'open').length;
+      const wx = ((c.weather && c.weather.active) || []).map((x) => (deps.weatherName ? deps.weatherName(x.type) : x.type)).join(' · ');
+      const texts = [
+        name,
+        t('cityBadgePeople', { n: domiciled[c.id] || 0, m: present[c.id] || 0 }),
+        t('cityBadgeWell', { n: compact(hist.length ? hist[hist.length - 1] : 0), p: Math.round(((c.well && c.well.condition) || 0) / 100) }),
+        [t('cityBadgeTreasury', { n: compact((c.treasury && c.treasury.energy) || 0), p: open }), wx].filter(Boolean).join(' · '),
+      ];
+      // 窄屏（地图宽度 < 560）只写城名与人数，免得三块城牌互相压住
+      const shortName = c.cityName && c.cityName !== hn.zh ? clip(name, lang === 'en' ? 16 : 9) : (c.short && c.short[lang]) || name;
+      setBadgeText(b, W < 560 ? [shortName, `${t('cmpDomiciled')} ${compact(domiciled[c.id] || 0)}`, `${t('cmpPresent')} ${compact(present[c.id] || 0)}`] : texts);
+      b.g.firstChild.textContent = texts.join('\n');
+      b.g.setAttribute('aria-label', texts.join('，'));
+    }
+    if (badgeEls.wilds) setBadgeText(badgeEls.wilds, [t('wildsBadge', { n: wilds })]);
+    const v = view.state();
+    if (v.fitted) placeBadges(v.k, v.tx, v.ty, v.H);
+  }
+  let badgesNarrow = null;
+  function placeBadges(k, tx, ty, H) {
+    if ((W < 560) !== badgesNarrow) {
+      badgesNarrow = W < 560;
+      paintBadges();
+    }
+    const placed = [];
+    for (const b of Object.values(badgeEls)) {
+      let [x, y] = b.at;
+      if (W < 560 && b.size) {
+        const [bw, bh] = b.size;
+        let sx = clamp(tx + x * k, bw / 2 + 6, W - bw / 2 - 6);
+        let sy = clamp(ty + y * k, HUD + bh / 2 + 6, H - bh / 2 - 6);
+        // 荒野人数放在两块下方城牌之外，避免盖住人数。
+        if (b === badgeEls.wilds) {
+          for (const p of placed) if (Math.abs(sx - p.x) < (bw + p.w) / 2 + 6 && Math.abs(sy - p.y) < (bh + p.h) / 2 + 6) sy = p.y + (bh + p.h) / 2 + 8;
+          sy = Math.min(sy, H - bh / 2 - 6);
+        }
+        placed.push({ x: sx, y: sy, w: bw, h: bh });
+        x = (sx - tx) / k; y = (sy - ty) / k;
+      }
+      b.g.setAttribute('transform', `translate(${x} ${y}) scale(${(1 / k).toFixed(4)})`);
+    }
+  }
+
+  /** 跨城的移动：一道飞过荒野的弧线，几秒后淡出（只在全岛级显示） */
+  function arc(from, to) {
+    const a = xy[from];
+    const b = xy[to];
+    if (!a || !b || !islandMid) return;
+    const mx = (a[0] + b[0]) / 2;
+    const my = (a[1] + b[1]) / 2;
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    let nx = -(b[1] - a[1]) / len;
+    let ny = (b[0] - a[0]) / len;
+    // 弧顶偏向岛心
+    if ((mx + nx - islandMid[0]) ** 2 + (my + ny - islandMid[1]) ** 2 > (mx - islandMid[0]) ** 2 + (my - islandMid[1]) ** 2) {
+      nx = -nx;
+      ny = -ny;
+    }
+    const h = Math.min(260, len * 0.22);
+    const city = placeCity.get(to) ?? null;
+    const p = el('path', { class: `move-arc ${city ? `terr-${city}` : 'terr-wilds'}`, d: `M${a[0]},${a[1]} Q${(mx + nx * h).toFixed(1)},${(my + ny * h).toFixed(1)} ${b[0]},${b[1]}` });
+    L.arcs.append(p);
+    setTimeout(() => p.remove(), 6000);
+  }
+
+  // 聚焦：全岛级为 null；否则看视口中心落在哪座城的地界里，落在荒野就取与视口重叠最多的城
+  // 页面可能已按网址的城取了状态；首帧前切回全岛也要上报范围变化。
+  let focusNow = deps.initialCity && cityIds.includes(deps.initialCity) ? deps.initialCity : null;
+  let focusTimer = 0;
+  function computeFocus() {
+    if (lod === 'island' || !view) return null;
+    const [x0, y0, x1, y1] = view.viewport();
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
+    for (const id of cityIds) if (territories[id] && inPoly(cx, cy, territories[id])) return id;
+    let best = null;
+    let bestArea = 0;
+    for (const id of cityIds) {
+      const b = boxes[id];
+      if (!b) continue;
+      const w = Math.min(x1, b[2]) - Math.max(x0, b[0]);
+      const h = Math.min(y1, b[3]) - Math.max(y0, b[1]);
+      if (w > 0 && h > 0 && w * h > bestArea) {
+        bestArea = w * h;
+        best = id;
+      }
+    }
+    return best;
+  }
+  function reportFocus() {
+    clearTimeout(focusTimer);
+    focusTimer = setTimeout(() => {
+      const f = computeFocus();
+      if (f === focusNow) return;
+      focusNow = f;
+      if (deps.onFocus) deps.onFocus(f);
+    }, 150);
+  }
 
   // ── 天象的画面（平时隐藏，按根上的 wx-* 显示） ──
   const [MW, MH] = map.size;
@@ -120,6 +342,46 @@ export function createMap2(svg, deps) {
   sun.append(el('circle', { class: 'corona', cx: 0, cy: HUD / 2, r: 13 }), el('circle', { class: 'disc', cx: 0, cy: HUD / 2, r: 10 }));
   hud.append(sky, aurora, sun, skyLabel, starsG);
 
+  // ── 小地图（岛图）：全岛、三城地界与当前视口，点哪里跳到哪里 ──
+  const mini = island ? { g: el('g', { class: 'minimap', role: 'button', tabindex: 0 }), bg: el('rect', { class: 'mini-bg', x: 0, y: 0, rx: 3, ry: 3 }), inner: el('g'), view: el('rect', { class: 'mini-view' }), s: 0.05, x: 10, y: 10 } : null;
+  if (mini) {
+    mini.inner.append(el('path', { class: 'mini-island', d: smoothPath(map.terrain.island, true) }));
+    for (const [id, hp] of Object.entries(territories)) mini.inner.append(el('path', { class: `mini-terr terr-${id}`, d: `M${hp.map(([x, y]) => `${x},${y}`).join(' L')} Z` }));
+    mini.inner.append(mini.view);
+    mini.g.append(el('title', {}, t('minimap')), mini.bg, mini.inner);
+    mini.g.setAttribute('aria-label', t('minimap'));
+    mini.g.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+    mini.g.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const r = svg.getBoundingClientRect();
+      view.centerOn((ev.clientX - r.left - mini.x) / mini.s, (ev.clientY - r.top - mini.y) / mini.s, { animate: true });
+    });
+    mini.g.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') api.focusIsland();
+    });
+    hud.append(mini.g);
+  }
+  function layoutMini(H) {
+    if (!mini) return;
+    // 窄屏收起小地图：全岛级整岛已在眼前，城级靠「全岛」按钮回去
+    mini.g.style.display = W < 480 ? 'none' : '';
+    const mw = clamp(W * 0.17, 104, 168);
+    mini.s = mw / MW;
+    mini.x = 10;
+    mini.y = Math.max(HUD + 6, H - MH * mini.s - 10);
+    mini.g.setAttribute('transform', `translate(${mini.x} ${mini.y.toFixed(1)})`);
+    mini.bg.setAttribute('width', mw.toFixed(1));
+    mini.bg.setAttribute('height', (MH * mini.s).toFixed(1));
+    mini.inner.setAttribute('transform', `scale(${mini.s.toFixed(5)})`);
+    if (!view) return;
+    const [x0, y0, x1, y1] = view.viewport();
+    const v = [clamp(x0, 0, MW), clamp(y0, 0, MH), clamp(x1, 0, MW), clamp(y1, 0, MH)];
+    mini.view.setAttribute('x', v[0].toFixed(1));
+    mini.view.setAttribute('y', v[1].toFixed(1));
+    mini.view.setAttribute('width', Math.max(0, v[2] - v[0]).toFixed(1));
+    mini.view.setAttribute('height', Math.max(0, v[3] - v[1]).toFixed(1));
+  }
+
   // ── 状态 ──
   let colorMode = 'group';
   let state = null;
@@ -139,7 +401,7 @@ export function createMap2(svg, deps) {
 
   const view = createView(svg, world, {
     hud: HUD,
-    onChange({ k, W: w, fitK }) {
+    onChange({ k, tx, ty, W: w, H: h, fitK }) {
       viewK = k;
       W = w;
       L.labels.setAttribute('font-size', (12.5 / k).toFixed(3));
@@ -147,10 +409,16 @@ export function createMap2(svg, deps) {
       L.districtLabels.setAttribute('font-size', (13 / k).toFixed(3));
       for (const b of bubbles) b.g.setAttribute('transform', `translate(${b.x} ${b.y}) scale(${(1 / k).toFixed(4)})`);
       layoutHud();
-      const next = lodOf(k, fitK);
+      const next = island ? islandLodOf(k, fitK) : lodOf(k, fitK);
       if (next !== lod) {
-        svg.classList.replace(`lod-${lod}`, `lod-${next}`);
+        svg.classList.remove(...lodClasses(lod));
+        svg.classList.add(...lodClasses(next));
         lod = next;
+      }
+      if (island) {
+        placeBadges(k, tx, ty, h);
+        layoutMini(h);
+        reportFocus();
       }
       const s = agentScaleFor(k);
       if (s !== agentScale) {
@@ -548,6 +816,7 @@ export function createMap2(svg, deps) {
     for (const p of s.places) {
       ids.add(p.id);
       paintPlace(p);
+      if (island) placeCity.set(p.id, p.city || null);
     }
     removeMissing(ids);
     const graves = Math.min(TOMB_SLOTS, s.cemetery ? s.cemetery.length : 0);
@@ -571,6 +840,7 @@ export function createMap2(svg, deps) {
       L.roles.append(g);
     }
     layoutAgents({ animate: false });
+    paintBadges();
     applyWeather(s.weather && s.weather.active);
     applyTime(s.world.tick);
     firstState = false;
@@ -582,17 +852,21 @@ export function createMap2(svg, deps) {
     for (const x of tick.agents) {
       const a = agents.get(x.id);
       if (!a) continue;
-      if (a.place !== x.place) moved.add(x.id);
+      if (a.place !== x.place) {
+        moved.add(x.id);
+        if (island && a.place && x.place && (placeCity.get(a.place) ?? null) !== (placeCity.get(x.place) ?? null) && !reduceMotion()) arc(a.place, x.place);
+      }
       a.place = x.place;
       a.energy = x.energy;
       a.status = x.status;
     }
     layoutAgents({ animate: true, moved });
+    paintBadges();
     applyTime(tick.tick);
   }
 
   function setColorMode(mode) {
-    colorMode = mode === 'script' ? 'script' : 'group';
+    colorMode = mode === 'script' ? 'script' : mode === 'domicile' && island ? 'domicile' : 'group';
     layoutAgents({ animate: false });
   }
 
@@ -661,7 +935,11 @@ export function createMap2(svg, deps) {
     }
   }
 
-  requestAnimationFrame(() => view.setState(savedViews[map.id]));
+  requestAnimationFrame(() => {
+    // 网址带着城（#city=north）打开时，先跳到那座城
+    if (island && deps.initialCity && boxes[deps.initialCity] && !savedViews[map.id]) api.focusCity(deps.initialCity, { animate: false });
+    else view.setState(savedViews[map.id]);
+  });
   layoutHud();
 
   const api = {
@@ -673,14 +951,26 @@ export function createMap2(svg, deps) {
     ripple,
     zoomIn: () => view.zoomBy(1.5),
     zoomOut: () => view.zoomBy(1 / 1.5),
-    fit: () => view.fit(),
+    fit: () => (island ? api.focusIsland() : view.fit()),
+    /** 岛图：跳到一座城（外包框外扩一圈）、回到全岛、当前聚焦的城 */
+    focusCity(id, { animate = true } = {}) {
+      const b = boxes[id];
+      if (!b) return;
+      const m = 110;
+      view.fitRect([b[0] - m, b[1] - m, b[2] + m, b[3] + m], { animate });
+    },
+    focusIsland({ animate = true } = {}) {
+      if (!islandBox) return view.fit();
+      view.fitRect([islandBox[0] - 30, islandBox[1] - 30, islandBox[2] + 30, islandBox[3] + 30], { animate });
+    },
+    focus: () => focusNow,
     placeConditionOf: (id) => (state ? state.places.find((p) => p.id === id) : null),
     destroy() {
+      clearTimeout(focusTimer);
       view.destroy();
       if (current === api) current = null;
     },
   };
-  void getLang;
   current = api;
   return api;
 }

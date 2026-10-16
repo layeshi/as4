@@ -71,7 +71,7 @@ const CLAIM_BATCH = 50; // owner keys per claim request (the body limit is 8 KB;
  */
 export function linkedAgents(ctx, user) {
   const w = ctx.rt.w, rows = [], stale = [];
-  if(w.premise===6)return Object.entries(w.access.residents).filter(([,r])=>r.managerAccountId===user.id).map(([id])=>({agentId:id,name:w.agents[id].name,status:w.agents[id].status,runnerStatus:ctx.runners.view(id).status,usage:ctx.runners.usageView(id)}));
+  if((w.premise===6 || w.premise === 7))return Object.entries(w.access.residents).filter(([,r])=>r.managerAccountId===user.id).map(([id])=>({agentId:id,name:w.agents[id].name,status:w.agents[id].status,runnerStatus:ctx.runners.view(id).status,usage:ctx.runners.usageView(id)}));
   for (const link of ctx.accounts.linksOf(user.id, w.id)) {
     const a = Object.prototype.hasOwnProperty.call(w.agents, link.agentId) ? w.agents[link.agentId] : null;
     if (!a || !a.owner || a.tokenHash !== link.token) { stale.push(link.agentId); continue; }

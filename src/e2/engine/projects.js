@@ -22,6 +22,7 @@ import { hooks } from './hooks.js';
 import { STEPS } from './tick.js';
 import { placeNameTaken } from './places.js';
 import { nameKey } from '../../text.js';
+import { cityOwnerAt, cityOwnerHere } from './cities.js';
 
 // ── 查询 ───────────────────────────────────────────────────
 
@@ -44,14 +45,14 @@ export function roadOrProjectBetween(w, a, b) {
 export const siteCost = (wild) => (wild ? P.siteCostWild : P.siteCostCity);
 
 /** 所有者是否仍然有效（居民在世、社群未解散）；无效则改归全城 */
-export function validOwner(w, owner) {
+export function validOwner(w, owner, placeId) {
   if (owner.kind === 'agent') {
     const a = w.agents[owner.id];
-    return a && isAlive(a) ? owner : { kind: 'city' };
+    return a && isAlive(a) ? owner : cityOwnerAt(w, placeId);
   }
   if (owner.kind === 'group') {
     const g = w.groups[owner.id];
-    return g && !g.dissolved ? owner : { kind: 'city' };
+    return g && !g.dissolved ? owner : cityOwnerAt(w, placeId);
   }
   return owner;
 }
@@ -106,7 +107,7 @@ function siteFields(w, j, exceptId = null) {
     modules: [],
     salvage,
     salvageMax: salvage,
-    owner: validOwner(w, j.owner),
+    owner: validOwner(w, j.owner, j.place),
     rules: null,
     ruined: false,
     razed: false,
@@ -128,6 +129,7 @@ function buildSite(w, j) {
       id,
       humanName: null,
       district: lot.district,
+      ...(lot.city !== undefined ? { city: lot.city } : {}), // 第七前提：新地点属于空地所在的地界
       xy: lot.xy.slice(),
       wild,
       ...fields,
@@ -203,7 +205,7 @@ export function buildProject(w, j) {
  * who：出资者的 ID，或 'treasury'。凑够造价即建成。返回 { built, result }。
  */
 export function addToProject(w, j, who, amount) {
-  if (materialsEnabled(w)) return contributeMaterials(w,j,who,amount,0,who === 'treasury' ? {kind:'city'} : {kind:'agent',id:who});
+  if (materialsEnabled(w)) return contributeMaterials(w,j,who,amount,0,who === 'treasury' ? cityOwnerHere(w) : {kind:'agent',id:who});
   j.have += amount;
   j.contributors[who] = (j.contributors[who] || 0) + amount;
   if (j.have >= j.need) return { built: true, result: buildProject(w, j) };

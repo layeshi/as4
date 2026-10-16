@@ -237,6 +237,37 @@ function cityBrief(c) {
   return lines;
 }
 
+/** 第七前提「三城」：【你的籍城】一小段（籍城不是所在城时）：公库、源井、待你表决的提案、你在名单里的重订 */
+function homeBrief(c) {
+  const { p, code, d } = c;
+  const h = p.home;
+  if (p.premise !== 7 || !h) return [];
+  const en = code === 'en';
+  const t = D2[code].city;
+  const lines = [`${en ? `[Your home city: ${h.name}]` : `【你的籍城：${h.name}】`}${[en ? `treasury ${h.treasury.energy}` : `公库 ${h.treasury.energy}`, en ? `Well yesterday ${h.wellOutputYesterday ?? '—'}` : `源井昨日 ${h.wellOutputYesterday ?? '—'}`, ...(h.rationYesterday !== null && h.rationYesterday !== undefined ? [en ? `ration yesterday ${h.rationYesterday} each` : `昨日配给每人 ${h.rationYesterday}`] : [])].join(' · ')}`];
+  for (const q of h.proposals || []) {
+    const vote = q.yourVote ? d.youVoted(q.yourVote.choice) : q.eligible ? d.canVote : d.notEligible;
+    lines.push(`  ${t.proposal(q.id, q.title, d.classes[q.class] || q.class, q.tally.yes, q.tally.no, q.tally.abstain, q.ticksLeft, vote)}`);
+  }
+  for (const r of h.refounds || []) lines.push(`  ${t.refound(r.id, r.signers, r.needed)}${r.signed ? (en ? ' (signed)' : '（已联署）') : ''}`);
+  if (!(h.proposals || []).length && !(h.refounds || []).length) lines.push(en ? '  Nothing awaits your vote there.' : '  那里没有等你表决的事。');
+  return lines;
+}
+
+/** 第七前提「三城」：【别处】别的城与荒野各一行——路程、在场、籍人口、源井昨日的产出 */
+function elsewhereBrief(c) {
+  const { p, code } = c;
+  if (p.premise !== 7 || !Array.isArray(p.elsewhere)) return [];
+  const en = code === 'en';
+  const lines = [en ? '[Elsewhere]' : '【别处】'];
+  for (const x of p.elsewhere) {
+    const parts = [en ? `distance ${x.distance ?? '—'}` : `路程 ${x.distance ?? '—'}`, en ? `${x.present} present` : `在场 ${x.present}`];
+    if (x.id) parts.push(en ? `${x.residents} domiciled` : `籍 ${x.residents} 位`, en ? `Well yesterday ${x.wellOutputYesterday ?? '—'}` : `源井昨日 ${x.wellOutputYesterday ?? '—'}`);
+    lines.push(`  ${x.name}${en ? ': ' : '：'}${parts.join(' · ')}`);
+  }
+  return lines;
+}
+
 /** 一条摘要的时刻：第 M 月第 D 日第 T 刻 */
 function tickText(tick, now) {
   const perDay = now.ticksPerDay || 12;
@@ -298,7 +329,7 @@ export function renderBrief(p, { lang, history = [], missed = null, brief } = {}
   if (tokenized(p) && (brief ?? p.you.tokens.routine.brief) === 'short') return [...lines, ...youHead(c), ...tokenInbox(c), ...secMemories(c), ...(p.cooperation?.brief ? [p.cooperation.brief] : [])].join('\n');
   lines.push(...youHead(c), ...youCounts(c), ...youTraining(c));
   lines.push(...hereLine(c), ...herePresent(c), ...hereCounts(c), ...hereWell(c), ...hereWilds(c), ...hereOmens(c));
-  lines.push(...(tokenized(p) ? tokenInbox(c) : secInbox(c)), ...cityBrief(c), ...secMemories(c), ...secActions(c));
+  lines.push(...(tokenized(p) ? tokenInbox(c) : secInbox(c)), ...cityBrief(c), ...homeBrief(c), ...elsewhereBrief(c), ...secMemories(c), ...secActions(c));
   if (p.cooperation?.brief) lines.push(p.cooperation.brief);
   if (!tokenized(p)) lines.push(...renderHistory(history, { code, now: p.now || {}, missed }));
   return lines.join('\n');
@@ -463,8 +494,8 @@ export function renderActResult(p, { results, notes = [], arrived = [], moved = 
     if (tokenized(p)) {
       const n = x => Number(x ?? 0).toLocaleString('en-US');
       lines.push(code === 'en'
-        ? `Now: ${y.status}, tokens ${n(y.energy)} (basic ${n(y.basic)}), body today ${n(y.usedToday)} / ${n(y.cap)}, ${p.premise===6?'':`coins ${n(y.coins)}, `} ${y.actionsLeft} action(s) left, at ${placeText(p)}.`
-        : `此刻：${y.status === 'awake' ? '醒着' : y.status}，词元 ${n(y.energy)}（基本额度 ${n(y.basic)}），身体今天 ${n(y.usedToday)} / ${n(y.cap)}，${p.premise===6?'':`旧币 ${n(y.coins)}，`}本刻还可行动 ${y.actionsLeft} 次，在 ${placeText(p)}。`);
+        ? `Now: ${y.status}, tokens ${n(y.energy)} (basic ${n(y.basic)}), body today ${n(y.usedToday)} / ${n(y.cap)}, ${(p.premise===6 || p.premise === 7)?'':`coins ${n(y.coins)}, `} ${y.actionsLeft} action(s) left, at ${placeText(p)}.`
+        : `此刻：${y.status === 'awake' ? '醒着' : y.status}，词元 ${n(y.energy)}（基本额度 ${n(y.basic)}），身体今天 ${n(y.usedToday)} / ${n(y.cap)}，${(p.premise===6 || p.premise === 7)?'':`旧币 ${n(y.coins)}，`}本刻还可行动 ${y.actionsLeft} 次，在 ${placeText(p)}。`);
     } else lines.push(res.now({ status: y.status, energy: y.energy, coins: y.coins, actionsLeft: y.actionsLeft, place: placeText(p) }));
   }
   if (fresh) lines.push(...renderArrived(p, arrived, { lang: code }));

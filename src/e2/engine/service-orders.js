@@ -124,7 +124,7 @@ export function settleOrder(w, o, status, reason) {
   addSafe(a.energy, n);
   creditEnergy(w, a, n);
   emit(w, 'order_settled', {
-    data: { order: o.id, status, reason, to, amount: n, ...(w.premise===6?{requester:o.requester,provider:o.provider}:{}) },
+    data: { order: o.id, status, reason, to, amount: n, ...((w.premise===6 || w.premise === 7)?{requester:o.requester,provider:o.provider}:{}) },
   });
   for (const id of [o.requester, o.provider])
     if (w.agents[id] && isAlive(w.agents[id]))

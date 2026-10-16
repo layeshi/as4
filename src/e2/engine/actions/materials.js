@@ -28,6 +28,8 @@ import { buildProject } from '../projects.js';
 import { sink } from '../ledger.js';
 import { applyDamage } from '../environment.js';
 import { razePlace, cancelBoardOffers } from '../dismantle.js';
+import { cityOwnerHere } from '../cities.js';
+import { defaultTagNs } from '../rulehost.js';
 const own = (table, id) =>
   typeof id === 'string' && Object.hasOwn(table, id) ? table[id] : null;
 const positive = (v) => needInt(v, { min: 1 });
@@ -84,7 +86,7 @@ const claim = {
     if (
       b.kind === 'city' &&
       w.materialPolicy?.cityClaimRestricted &&
-      !a.tags.includes('public_builder')
+      !a.tags.includes(`${defaultTagNs(w)}public_builder`)
     )
       fail('not_allowed');
     const n = positive(args.amount ?? c.amount);
@@ -273,7 +275,7 @@ const repair = {
         a,
         materials,
         args.claim,
-        obj.owner ?? { kind: 'city' }
+        obj.owner ?? cityOwnerHere(w)
       );
     return {
       obj,

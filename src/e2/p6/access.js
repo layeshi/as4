@@ -12,7 +12,7 @@ export function manages(w, p) {
 }
 const fingerprint = p => createHash('sha256').update(JSON.stringify(p)).digest('hex');
 export function accountCommand(w, p) {
-  if (w.premise !== 6 || typeof p.accountId !== 'string' || !p.accountId || typeof p.requestId !== 'string' || !/^[\w-]{8,128}$/.test(p.requestId)) return bad('invalid_request');
+  if ((w.premise !== 6 && w.premise !== 7) || typeof p.accountId !== 'string' || !p.accountId || typeof p.requestId !== 'string' || !/^[\w-]{8,128}$/.test(p.requestId)) return bad('invalid_request');
   const key = `${p.accountId}:${p.requestId}`, digest = fingerprint(Object.fromEntries(Object.entries(p).filter(([k])=>k!=='now')));
   const receipt = w.access.requests[key];
   if (receipt) return receipt.digest === digest ? structuredClone(receipt.result) : bad('conflict');

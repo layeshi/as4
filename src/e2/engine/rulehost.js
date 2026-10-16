@@ -12,6 +12,8 @@ import { agentRef, groupRef, soulRef, isRef } from '../rules/eval.js';
 import { int } from '../../rng.js';
 import { isWeatherActive } from './environment.js';
 import { livingShells, shellsFree } from './shells.js';
+import { multiCity, currentCity, cityOfPlace, cityValue, isCityId } from './cities.js';
+import { wellPlace } from './environment.js';
 
 export { livingShells, shellsFree };
 
@@ -21,6 +23,7 @@ const byIdNum = (a, b) => idNum(a) - idNum(b);
 
 /** 规则里的 city 记录（PROTOCOL-2 §6.5）。今日 = 钟面上的今天（日终结算中它已是刚开始的那一日） */
 export function cityRecord(w) {
+  if (multiCity(w)) return islandCityRecord(w, currentCity(w));
   const day = clockDay(w);
   const dom = dayOfMonthOf(day);
   let awake = 0;
@@ -31,7 +34,7 @@ export function cityRecord(w) {
   }
   const hist = w.well.outputHistory;
   return {
-    ...(materialsEnabled(w)?{materialsWilds:w.materialZones.wilds.stock,materialsScrapyard:w.materialZones.scrapyard.stock,materialsSolarfield:w.materialZones.solarfield.stock,constructionWork:Object.values(w.projects).reduce((n,j)=>n+j.progress,0)}:{}),
+    ...(materialsEnabled(w)?{...Object.fromEntries(Object.entries(w.materialZones).map(([id,z])=>[`materials${id[0].toUpperCase()}${id.slice(1)}`,z.stock])),constructionWork:Object.values(w.projects).reduce((n,j)=>n+j.progress,0)}:{}),
     day,
     dayOfMonth: dom,
     month: monthOfDay(day),
@@ -39,12 +42,51 @@ export function cityRecord(w) {
     treasury: w.treasury.energy,
     treasuryCoins: w.treasury.coins,
     wellOutput: hist.length ? hist[hist.length - 1] : 0,
-    wellCondition: w.places.well.condition,
+    wellCondition: wellPlace(w).condition,
     awake,
     dormant,
     residents: awake + dormant,
     shellsFree: shellsFree(w),
     shellsTotal: w.shells.slots,
+  };
+}
+
+/**
+ * 第七前提「三城」：一座城的 city 记录（docs/plans/2026-10-16-three-cities.md §2.5）。人口按籍计；present 是此刻身在本城地界的在世居民数。
+ * id 为 null（城外：社群章程、荒野里的地点规则）时只有时间与全世界的人口，没有公库与源井（读到它们是类型错误）。
+ */
+export function islandCityRecord(w, id) {
+  const day = clockDay(w);
+  const dom = dayOfMonthOf(day);
+  const time = { day, dayOfMonth: dom, month: monthOfDay(day), season: SEASON_TABLE[dom] };
+  let awake = 0;
+  let dormant = 0;
+  let present = 0;
+  for (const a of Object.values(w.agents)) {
+    if (!isAlive(a)) continue;
+    if (id === null || a.city === id) {
+      if (a.status === 'awake') awake++;
+      else dormant++;
+    }
+    if (id !== null && cityOfPlace(w, a.place) === id) present++;
+  }
+  if (id === null) return { ...time, awake, dormant, residents: awake + dormant };
+  const treasury = cityValue(w, id, 'treasury');
+  const well = cityValue(w, id, 'well');
+  const hist = well.outputHistory;
+  return {
+    id,
+    ...(materialsEnabled(w)?{...Object.fromEntries(Object.entries(w.materialZones).map(([z,m])=>[`materials${z[0].toUpperCase()}${z.slice(1)}`,m.stock])),constructionWork:Object.values(w.projects).reduce((n,j)=>n+j.progress,0)}:{}),
+    ...time,
+    treasury: treasury.energy,
+    wellOutput: hist.length ? hist[hist.length - 1] : 0,
+    wellCondition: wellPlace(w, id).condition,
+    awake,
+    dormant,
+    residents: awake + dormant,
+    present,
+    shellsFree: 0,
+    shellsTotal: 0,
   };
 }
 
@@ -63,6 +105,8 @@ function agentField(w, a, name) {
     case 'age': return clockDay(w) - a.bornDay;
     case 'generation': return a.generation;
     case 'place': return a.place;
+    case 'city': return multiCity(w) ? a.city : undefined; // 第七前提：籍
+    case 'located': return multiCity(w) ? cityOfPlace(w, a.place) : undefined; // 第七前提：所在的城（荒野为 null）
     case 'status': return a.status;
     case 'drawnToday': return a.drawnToday;
     case 'repairedToday': return a.repairedToday;
@@ -99,6 +143,8 @@ function soulField(w, s, name) {
 }
 
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+/** 第七前提：城法与地点规则读写标签时的前缀（「城:标签」，标签按发出它的城分开）；社群章程与其余前提为空 */
+export const defaultTagNs = (w) => (multiCity(w) && currentCity(w) ? `${currentCity(w)}:` : '');
 
 /**
  * 为一次调用建立宿主。
@@ -106,7 +152,7 @@ const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
  *   vars  规则里 var 读到的变量（城法：w.vars；社群章程：该社群的 vars；地点规则：城的 vars）
  *   rng   sample 用的随机数流（缺省为 w.rng.world；试算与感知的预求值传一份副本，不推进真正的流）
  */
-export function makeHost(w, { vars = w.vars, rng = w.rng.world } = {}) {
+export function makeHost(w, { vars = w.vars, rng = w.rng.world, tagNs = defaultTagNs(w) } = {}) {
   let agentsCache = null;
   let cityCache = null;
 
@@ -131,7 +177,7 @@ export function makeHost(w, { vars = w.vars, rng = w.rng.world } = {}) {
       return agentsCache.slice();
     },
     cradle: () => Object.keys(w.souls).sort(byIdNum).map((id) => soulRef(id)),
-    tagged: (tag) => agentRefs((a) => a.tags.includes(tag)),
+    tagged: (tag) => agentRefs((a) => a.tags.includes(tagNs + tag)),
     members(gid) {
       const g = has(w.groups, gid) ? w.groups[gid] : null;
       if (!g || g.dissolved) return [];
@@ -139,15 +185,19 @@ export function makeHost(w, { vars = w.vars, rng = w.rng.world } = {}) {
     },
     at: (pid) => agentRefs((a) => a.place === pid),
     // 事件里的当事人（on:death、on:retire）已不在世，读它的标签 / 名字等仍然可以；只有账户与操作的目标要求在世（isLive）
-    hasTag: (r, tag) => has(w.agents, r.id) && w.agents[r.id].tags.includes(tag),
+    hasTag: (r, tag) => has(w.agents, r.id) && w.agents[r.id].tags.includes(tagNs + tag),
     inGroup: (r, gid) => has(w.agents, r.id) && w.agents[r.id].groups.includes(gid),
     isAwake: (r) => has(w.agents, r.id) && w.agents[r.id].status === 'awake',
     isWild: (pid) => has(w.places, pid) && w.places[pid].wild,
     ownerOf(pid) {
       if (!has(w.places, pid)) return null;
       const o = w.places[pid].owner;
+      // 第七前提：本城所有为 'city'，别城所有为那座城的 ID，荒野（无主）为 null
+      if (multiCity(w) && o.kind === 'city') return o.id === null ? null : o.id === currentCity(w) ? 'city' : o.id;
       return o.kind === 'city' ? 'city' : o.id;
     },
+    /** 第七前提：别的城公开的数字（city_info('west').treasury 等）；不认识的城为 null */
+    cityInfo: (id) => (multiCity(w) && isCityId(id) ? islandCityRecord(w, id) : null),
     weather: (code) => isWeatherActive(w, code),
     lookup(kind, text) {
       if (kind === 'agent') {

@@ -4,9 +4,11 @@ import { P } from '../params.js';
 import { isAlive } from '../world.js';
 import { creditEnergy } from './core.js';
 import { source } from './ledger.js';
+import { multiCity, eachCity } from './cities.js';
 
 export function upgradeCost(w, level) {
-  let n = w.tokens.capacity;
+  // 第七前提：造价从本井一天的份额算起（3:2:1），穷井的改良便宜
+  let n = w.well && w.well.share !== undefined ? Math.floor(w.tokens.capacity * w.well.share / 1000) : w.tokens.capacity;
   for (let i = 1; i < level; i++) n = Math.floor(n * P.upgradeGrowthNum / P.upgradeGrowthDen);
   return n;
 }
@@ -36,6 +38,10 @@ export function payDividends(w, amount) {
   }
 }
 export function releaseShares(w, id) {
+  if (multiCity(w)) { eachCity(w, () => releaseSharesHere(w, id)); return; } // 第七前提：三口井的改良各自释放
+  releaseSharesHere(w, id);
+}
+function releaseSharesHere(w, id) {
   for (const upgrade of w.well.upgrades) {
     if (upgrade.owner !== 'private' || !Object.hasOwn(upgrade.shares, id)) continue;
     upgrade.shares.treasury = (upgrade.shares.treasury || 0) + upgrade.shares[id];

@@ -39,10 +39,10 @@ export function toolDefs(lang, { actionTools, premise = 0, prayers = false, coop
     {
       name: 'look',
       description: (tokenized({ premise }) ? t.look.replace('看不花能量', '看到的文字按读入付词元').replace('looking costs no energy', 'what you see is paid for as reading') : t.look) +
-        ((premise === 5 || premise === 6) ? (lang === 'en' ? ' projects lists all project states; project requires id and shows recorded deposits, consumption and your participation checks. Use limit/after to page contributors; lower limit if truncated.' : ' projects 列出所有状态工程；project 须填 id，核对实际出资、消耗和你的参与条件。用 limit/after 分页出资账户，文字截断时减小 limit。') : ''),
+        ((premise === 5 || premise === 6 || premise === 7) ? (lang === 'en' ? ' projects lists all project states; project requires id and shows recorded deposits, consumption and your participation checks. Use limit/after to page contributors; lower limit if truncated.' : ' projects 列出所有状态工程；project 须填 id，核对实际出资、消耗和你的参与条件。用 limit/after 分页出资账户，文字截断时减小 limit。') : ''),
       schema: {
         type: 'object',
-        properties: { what: { type: 'string', enum: [...(tokenized({ premise }) ? LOOK_WHATS_P4 : LOOK_WHATS),...((premise === 5 || premise === 6)?MATERIAL_LOOKS:[]), ...(cooperation ? COOP_LOOKS : []), ...(programs ? ['programs'] : [])] }, id: { type: 'string' }, ...(programs ? {offset:{type:'integer',minimum:0}} : {}),...((premise === 5 || premise === 6)?{kind:{type:'string',enum:['regrowth','construction']},target:{type:'string'},after:{type:'string'},limit:{type:'integer',minimum:1,maximum:50},mine:{type:'boolean'}, ...(cooperation?{offset:{type:'integer',minimum:0},version:{type:'integer',minimum:1},agent:{type:'string'},archived:{type:'boolean'}}:{})}:{}) },
+        properties: { what: { type: 'string', enum: [...(tokenized({ premise }) ? LOOK_WHATS_P4 : LOOK_WHATS),...((premise === 5 || premise === 6 || premise === 7)?MATERIAL_LOOKS:[]), ...(cooperation ? COOP_LOOKS : []), ...(programs ? ['programs'] : [])] }, id: { type: 'string' }, ...(programs ? {offset:{type:'integer',minimum:0}} : {}),...((premise === 5 || premise === 6 || premise === 7)?{kind:{type:'string',enum:['regrowth','construction']},target:{type:'string'},after:{type:'string'},limit:{type:'integer',minimum:1,maximum:50},mine:{type:'boolean'}, ...(cooperation?{offset:{type:'integer',minimum:0},version:{type:'integer',minimum:1},agent:{type:'string'},archived:{type:'boolean'}}:{})}:{}) },
         required: ['what'],
         additionalProperties: false,
       },
@@ -242,7 +242,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
     if (S.looks.n >= limits.looks) return { text: res.looksOut };
     if (p4) {
       const id = args.id === undefined || args.id === null || args.id === '' ? undefined : String(args.id);
-      const r = await client.look({ wakeId: tokenWake.wakeId, turn: rec.turns, what: args.what, id, lang, ...((p0.premise === 5 || p0.premise === 6)?{kind:args.kind,target:args.target,after:args.after,limit:args.limit,mine:args.mine,offset:args.offset,version:args.version,agent:args.agent,archived:args.archived}:{}) });
+      const r = await client.look({ wakeId: tokenWake.wakeId, turn: rec.turns, what: args.what, id, lang, ...((p0.premise === 5 || p0.premise === 6 || p0.premise === 7)?{kind:args.kind,target:args.target,after:args.after,limit:args.limit,mine:args.mine,offset:args.offset,version:args.version,agent:args.agent,archived:args.archived}:{}) });
       if (!r.ok) {
         const code = r.json?.error?.code;
         if (r.status === 402) { ended = 'tokens'; tokenEnded = true; return { text: stoppedTokensLine(code, lang), isError: true }; }
