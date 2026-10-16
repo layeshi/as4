@@ -57,6 +57,7 @@ function mapCard(app, W) {
   const chip = people.length ? `${people.length} 位居民 · ${awake === people.length ? '全部醒着' : awake + ' 位醒着'}` : '还没有居民';
   return N.node(H, (g, x, y) => {
     const ctx = g.ctx;
+    app.cityMapArea = { x, y, w: W, h: H };
     // 全岛：最近一刻的移动交给地图画跨城弧线
     const moves = app.state.cities && !app.cityFocus ? app.events.filter(e => e.type === 'move' && e.tick === latest && e.data && e.data.from && e.data.to).map(e => [e.data.from, e.data.to]) : [];
     const { canvas, hits } = app.cityMap.render({ map: app.map, state: app.state, active, avatar: g.avatar, focus: app.cityFocus, moves }, W, H, app.ratio, app.mapVersion);
