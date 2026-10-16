@@ -13,7 +13,7 @@ initAccounts(null, { onAccountChange: () => load() });
 
 export async function load() {
   const version = ++generation;
-  pageHead(head, { eyebrow: tr('账户', 'Account'), title: tr('账户设置', 'Account settings'), lead: tr('管理昵称与密码，查看自己的祈愿操作记录。', 'Manage your display name and password, and review your prayer actions.') });
+  pageHead(head, { eyebrow: tr('账户', 'Account'), title: tr('账户设置', 'Account settings'), lead: tr('管理联系方式、登录方式与祈愿操作记录。', 'Manage contacts, sign-in methods, and prayer records.') });
   clear(content);
   say(tr('正在加载…', 'Loading…'));
   const account = await refreshAccount({ notify: false });

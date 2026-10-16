@@ -38,6 +38,7 @@ test('fresh WeChat proof opens web login on the same account and revokes old ses
   const r = await e.call('/api/wechat/login', { method: 'POST', headers, body: { code: 'mini-code', appid: mini } });
   assert.equal(r.status, 200); assert.equal(r.json.user.passwordLoginEnabled, false);
   const id = r.json.user.id, oldCookie = cookie(r);
+  s.setContact(id, 'email', 'wechat@example.org');
   s.linkAgent(id, { world: 'history', agentId: 'resident', token: 'resident-hash' });
   const beforeLinks = s.linksOf(id, 'history');
   const set = (code, Cookie = oldCookie, extra = {}) => e.call('/api/wechat/password', { method: 'POST', headers: { ...headers, Cookie }, body: { code, appid: mini, password: 'new-web-password', ...extra } });

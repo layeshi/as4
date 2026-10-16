@@ -8,9 +8,10 @@ import { h, clear } from './dom.js';
 import { getLang, setLang } from './i18n.js';
 import { api, errorText, LOGIN_PAGE } from './api.js';
 import { mountLoginChallenge } from './turnstile.js';
+import { contactVerification, passwordControl } from './account-inputs.js';
 
 const tr = (zh, en) => (getLang() === 'en' ? en : zh);
-const MODES = ['login', 'register', 'wechat'];
+const MODES = ['login', 'register', 'recover', 'wechat'];
 const BOUNCE_KEY = 'houren.loginBounce';
 
 /**
@@ -43,7 +44,7 @@ export function safeNext(raw, origin = 'http://localhost') {
 
 function field(label, name, type, extra = {}) {
   const input = h('input', { name, type, required: true, ...extra });
-  return { input, node: h('label', { class: 'field' }, h('span', null, label), input) };
+  return { input, node: h('label', { class: 'field' }, h('span', null, label), type === 'password' ? passwordControl(input) : input) };
 }
 
 /** 左侧的英雄区：品牌、一句话的设定、登录后能做的三件事。文字都在这里，页面只放容器；换语言时重画。 */
@@ -68,9 +69,10 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
   const params = new URLSearchParams(search);
   let mode = MODES.includes(params.get('mode')) ? params.get('mode') : 'login';
   let account = null; // GET /api/account 的结果
-  let generation = 0, qr = null, challenge = null;
+  let generation = 0, qr = null, challenge = null, contactWidget = null;
   const stopQr = () => { qr?.dispose(); qr = null; };
   const stopChallenge = () => { challenge?.dispose(); challenge = null; };
+  const stopContact = () => { contactWidget?.dispose(); contactWidget = null; };
   const show = id => { mode = id; render(); };
 
   const target = () => {
@@ -80,7 +82,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
 
   async function load() {
     const version = ++generation;
-    stopQr(); stopChallenge();
+    stopQr(); stopChallenge(); stopContact();
     clear(root).append(h('p', { class: 'login-loading' }, tr('正在确认登录状态…', 'Checking your sign-in…')));
     const r = await api('/api/account');
     if (version !== generation) return;
@@ -105,11 +107,11 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
   }
 
   function render() {
-    const version = ++generation; stopQr(); stopChallenge();
+    const version = ++generation; stopQr(); stopChallenge(); stopContact();
     const tabs = [['login', tr('登录', 'Sign in'), tr('登录', 'Sign in')]];
     if (account.registrationOpen) tabs.push(['register', tr('注册', 'Register'), tr('注册并进入', 'Register and enter')]);
     if (account.wechatQrEnabled) tabs.push(['wechat', tr('微信扫码', 'WeChat'), '']);
-    if (!tabs.some(([id]) => id === mode)) mode = 'login';
+    if (mode !== 'recover' && !tabs.some(([id]) => id === mode)) mode = 'login';
     const wall = account.loginRequired === true;
 
     const message = h('p', { role: 'status', 'aria-live': 'polite', class: 'account-message' });
@@ -124,6 +126,25 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
       qr = mountWechatLogin(content, () => navigate(target()));
       return;
     }
+    if (mode === 'recover') {
+      contactWidget = contactVerification({ purpose: 'recover', siteKey: account.turnstileSiteKey, channels: account.verificationChannels });
+      const next = field(tr('新密码（12–128 位）', 'New password (12–128 characters)'), 'password', 'password', { minlength: 12, maxlength: 128, autocomplete: 'new-password' });
+      const again = field(tr('确认新密码', 'Confirm new password'), 'confirmPassword', 'password', { minlength: 12, maxlength: 128, autocomplete: 'new-password' });
+      const submit = h('button', { type: 'submit', class: 'btn primary' }, tr('重置密码', 'Reset password'));
+      const form = h('form', { class: 'form login-form' }, contactWidget.node, next.node, again.node, h('div', { class: 'form-actions' }, submit), message);
+      form.addEventListener('submit', async e => {
+        e.preventDefault();
+        if (!contactWidget.proof) { message.textContent = tr('请先验证邮箱或手机号。', 'Verify your email or phone first.'); return; }
+        if (next.input.value !== again.input.value) { message.textContent = tr('两次密码不一致。', 'Passwords do not match.'); return; }
+        submit.disabled = true;
+        const r = await api('/api/account/recovery', { method: 'POST', body: { proof: contactWidget.proof, password: next.input.value } });
+        if (version !== generation) return;
+        if (r.ok) { show('login'); root.querySelector('.account-message').textContent = tr('密码已重置，请登录。', 'Password reset. Sign in.'); return; }
+        submit.disabled = false; message.className = 'account-message error'; message.textContent = errorText(r, tr('重置失败，请重试。', 'Reset failed. Try again.'));
+      });
+      clear(root).append(h('div', { class: 'login-card card-panel' }, h('h2', { class: 'login-card-title' }, tr('找回密码', 'Reset password')), tablist, form));
+      return;
+    }
     const creating = mode !== 'login';
     const inputs = {};
     const fields = [];
@@ -135,12 +156,16 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
       add('displayName', tr('昵称（可不填，默认用用户名）', 'Display name (optional; defaults to your username)'), 'text', { maxlength: 60, autocomplete: 'nickname', required: false });
       add('password', tr('密码（12–128 位）', 'Password (12–128 characters)'), 'password', { minlength: 12, maxlength: 128, autocomplete: 'new-password' });
       add('confirmPassword', tr('确认密码', 'Confirm password'), 'password', { minlength: 12, maxlength: 128, autocomplete: 'new-password' });
+      contactWidget = contactVerification({ purpose: 'register', siteKey: account.turnstileSiteKey, channels: account.verificationChannels });
+      fields.push(contactWidget.node);
     } else {
       add('password', tr('密码', 'Password'), 'password', { maxlength: 128, autocomplete: 'current-password' });
     }
     const challengeNode = mode === 'login' && account.turnstileSiteKey ? h('div', { class: 'login-turnstile', role: 'status', 'aria-live': 'polite' }) : null;
     let formChallenge = null;
     if (challengeNode) fields.push(challengeNode);
+    const firstLogin = mode === 'login' ? h('div', { class: 'first-login-verification' }) : null;
+    if (firstLogin) fields.push(firstLogin);
 
     const submit = h('button', { class: 'btn primary', type: 'submit' }, tabs.find(([id]) => id === mode)[2]);
     const form = h('form', { class: 'form login-form' }, fields, h('div', { class: 'form-actions' }, submit), message);
@@ -165,6 +190,10 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
         }
         const nick = val('displayName').trim();
         if (nick) body.displayName = nick;
+        if (!contactWidget.proof) { message.textContent = tr('请先验证邮箱或手机号。', 'Verify your email or phone first.'); return; }
+        body.proof = contactWidget.proof;
+      } else if (contactWidget?.proof) {
+        body.proof = contactWidget.proof;
       }
       submit.disabled = true;
       message.className = 'account-message';
@@ -177,12 +206,17 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
         navigate(target());
         return;
       }
+      if (r.status === 428 && !contactWidget) {
+        contactWidget = contactVerification({ purpose: 'first_login', siteKey: account.turnstileSiteKey, channels: account.verificationChannels });
+        firstLogin.append(h('p', { class: 'muted' }, tr('首次登录，请先验证邮箱或手机号。', 'Verify an email or phone before your first sign-in.')), contactWidget.node);
+      }
       submit.disabled = false;
       message.className = 'account-message error';
       message.textContent = r.status === 0 ? tr('无法连接服务器，请稍后重试。', 'Unable to reach the server. Please try again.') : errorText(r, tr('请求失败，请稍后重试。', 'Request failed. Please try again.'));
     });
 
     const notes = [];
+    if (mode === 'login') notes.push(h('button', { type: 'button', class: 'login-forgot', onClick: () => show('recover') }, tr('忘记密码？', 'Forgot password?')));
     if (!account.registrationOpen) notes.push(h('p', { class: 'muted login-note' }, tr('公开注册已关闭，请使用已有账号登录，或联系管理员。', 'Public registration is closed. Sign in with an existing account or contact an administrator.')));
     if (!wall) notes.push(h('p', { class: 'login-note' }, h('a', { href: '/' }, tr('先随便看看 →', 'Just look around →'))));
 
@@ -199,7 +233,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
   return {
     show: (id) => { if (account && !account.user) show(id); },
     get mode() { return mode; },
-    dispose: () => { generation++; stopQr(); stopChallenge(); },
+    dispose: () => { generation++; stopQr(); stopChallenge(); stopContact(); },
     /** 换语言后重画：不必再读一次账号 */
     relabel: () => (account && !account.user ? render() : load()),
   };

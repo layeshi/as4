@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, statSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { boot } from './http-helpers.js';
+import { boot, verifiedBody } from './http-helpers.js';
 
 async function admin(e) {
   const result = await e.call('/api/account/setup', { method: 'POST', headers: { 'X-Houren-Request': '1' }, body: { username: 'chief', displayName: '管理员', password: 'announcement-test-password', adminKey: e.cfg.adminKey } });
@@ -32,7 +32,7 @@ test('公告在登录门开启时对游客公开，写入仅接受管理员会�
     assert.equal(list.headers.get('cache-control'), 'no-store');
     assert.equal(list.json.announcements.length, 1);
     assert.equal(list.json.announcements[0].body, undefined, '列表不下载全部长正文');
-    const guest = await e.call('/api/account/register', { method: 'POST', body: { username: 'reader', displayName: '读者', password: 'announcement-test-password' }, headers: { 'X-Houren-Request': '1' } });
+    const guest = await e.call('/api/account/register', { method: 'POST', body: await verifiedBody(e, { username: 'reader', displayName: '读者', password: 'announcement-test-password' }), headers: { 'X-Houren-Request': '1' } });
     const cookie = guest.headers.get('set-cookie').split(';')[0];
     assert.equal((await e.call('/api/admin/announcements', { headers: { Cookie: cookie } })).status, 403);
     assert.equal((await e.call('/announcements.html')).status, 200);

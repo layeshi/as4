@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync }
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
-import { boot } from './http-helpers.js';
+import { boot, verifiedBody } from './http-helpers.js';
 import { Runtime } from '../src/runtime.js';
 import { stateHash } from '../src/store.js';
 import { replayDir } from '../src/tools/replay.js';
@@ -98,7 +98,7 @@ test('snapshot authorization, CSRF, input validation and path isolation', async 
       assert.equal((await e.call('/api/admin/snapshots', options)).status, 401);
       assert.equal((await e.call('/api/admin/snapshots', { ...options, method: 'POST', body: {} })).status, 401);
     }
-    const user = await e.call('/api/account/register', { method: 'POST', body: { username: 'ordinary', password: 'long-user-password' }, headers: { 'X-Houren-Request': '1' } });
+    const user = await e.call('/api/account/register', { method: 'POST', body: await verifiedBody(e, { username: 'ordinary', password: 'long-user-password' }), headers: { 'X-Houren-Request': '1' } });
     assert.equal((await e.call('/api/admin/snapshots', { headers: { Cookie: user.headers.get('set-cookie').split(';')[0] } })).status, 403);
     assert.equal((await call('/api/admin/snapshots', { method: 'POST', body: {}, headers: { 'X-Houren-Request': '' } })).status, 403);
     assert.equal((await call('/api/admin/snapshots', { method: 'POST', body: {}, headers: { 'Sec-Fetch-Site': 'cross-site' } })).status, 403);

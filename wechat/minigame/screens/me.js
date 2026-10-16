@@ -80,24 +80,42 @@ function link(app, W) {
   return { top: { kind: 'back', title: '登录网站账号' }, tabbar: false, nodes: [
     N.text(W, '已有网站账号的造者，可先登录，再在「我的」里关联微信。关联不会复制其他账号的居民。', { style: 'action', color: C.text2 }),
     N.field(W, '用户名', f.username || '', { type: 'field', name: 'username', max: 32 }),
-    N.field(W, '密码', f.password || '', { type: 'field', name: 'password', max: 128 }, { secret: true }),
+    N.field(W, '密码', f.password || '', { type: 'field', name: 'password', max: 128 }, { secret: !f.showPassword }),
+    N.checkbox(W, '显示密码', !!f.showPassword, { type: 'toggle', name: 'showPassword' }),
     N.checkbox(W, '我已阅读并同意', !!f.accepted, { type: 'toggle', name: 'accepted' }, privacyLink),
     N.button(W, '登录', { type: 'auth' }, { variant: 'primary' }),
   ] };
 }
 function webLogin(app, W) {
   const f = app.form;
-  return { top: { kind: 'back', title: '网页登录' }, tabbar: false, nodes: [
+  const contacts = app.user.contacts || {};
+  const nodes = [
     N.text(W, '小程序和网页共用这个账号，居民和余额无需迁移。请在网页使用下方用户名和你设置的密码登录。', { style: 'action', color: C.text2 }),
     N.text(W, '网站：' + config.apiBase, { style: 'meta' }),
     N.text(W, '用户名：' + app.user.username, { style: 'meta' }),
     N.button(W, '复制用户名', { type: 'copyUsername' }, { variant: 'secondary' }),
+  ];
+  if (!contacts.email && !contacts.phone) {
+    nodes.push(N.section(W, '先验证联系方式', { small: true }),
+      N.chips(W, ['邮箱', '+86 手机'].map((label, index) => ({ label, selected: (f.contactChannel || 'email') === (index ? 'phone' : 'email'), action: { type: 'contactChannel', channel: index ? 'phone' : 'email' } }))),
+      N.field(W, f.contactChannel === 'phone' ? '+86 手机号' : '邮箱地址', f.contactValue || '', { type: 'field', name: 'contactValue', max: 254 }),
+      N.button(W, '发送验证码', { type: 'sendContactCode' }, { variant: 'secondary' }),
+      N.field(W, '验证码', f.contactCode || '', { type: 'field', name: 'contactCode', max: 6 }),
+      N.button(W, '验证并绑定', { type: 'verifyContactCode' }, { variant: 'secondary' }));
+    if (app.user.passwordLoginEnabled) nodes.push(
+      N.field(W, '当前密码', f.currentPassword || '', { type: 'field', name: 'currentPassword', max: 128 }, { secret: !f.showPassword }),
+      N.checkbox(W, '显示密码', !!f.showPassword, { type: 'toggle', name: 'showPassword' }));
+    if (f.contactProof) nodes.push(N.text(W, '联系方式已验证，可以设置网页登录密码。', { style: 'meta', color: C.text2 }));
+  } else nodes.push(N.text(W, `已验证：${[contacts.email, contacts.phone].filter(Boolean).join(' · ')}`, { style: 'meta' }));
+  nodes.push(
     N.text(W, '设置密码会重新验证当前微信身份，并使其他设备上的登录失效。已存在的其他网站账号不会自动合并。', { style: 'caption', color: C.text3 }),
-    N.field(W, '新密码（12–128 个字符）', f.password || '', { type: 'field', name: 'password', max: 128 }, { secret: true }),
-    N.field(W, '确认新密码', f.confirmPassword || '', { type: 'field', name: 'confirmPassword', max: 128 }, { secret: true }),
+    N.field(W, '新密码（12–128 个字符）', f.password || '', { type: 'field', name: 'password', max: 128 }, { secret: !f.showPassword }),
+    N.field(W, '确认新密码', f.confirmPassword || '', { type: 'field', name: 'confirmPassword', max: 128 }, { secret: !f.showPassword }),
+    N.checkbox(W, '显示密码', !!f.showPassword, { type: 'toggle', name: 'showPassword' }),
     N.checkbox(W, '我已阅读并同意', !!f.accepted, { type: 'toggle', name: 'accepted' }, privacyLink),
     N.button(W, '验证微信并设置密码', { type: 'saveWebPassword' }, { variant: 'primary' }),
-  ] };
+  );
+  return { top: { kind: 'back', title: '网页登录' }, tabbar: false, nodes };
 }
 function mergeAccount(app, W) {
   const f = app.form, preview = app.mergePreview;
@@ -113,7 +131,8 @@ function mergeAccount(app, W) {
   return { top: { kind: 'back', title: '合并已有网站账号' }, tabbar: false, nodes: [
     N.text(W, '将当前微信账号合并到你已有的网站账号。先验证网站密码和当前微信身份，核对迁移内容后再确认。', { style: 'action', color: C.text2 }),
     N.field(W, '保留的网站用户名', f.username || '', { type: 'field', name: 'username', max: 32 }),
-    N.field(W, '网站账号密码', f.password || '', { type: 'field', name: 'password', max: 128 }, { secret: true }),
+    N.field(W, '网站账号密码', f.password || '', { type: 'field', name: 'password', max: 128 }, { secret: !f.showPassword }),
+    N.checkbox(W, '显示密码', !!f.showPassword, { type: 'toggle', name: 'showPassword' }),
     N.checkbox(W, '我已阅读并同意', !!f.accepted, { type: 'toggle', name: 'accepted' }, privacyLink),
     N.button(W, '验证两端身份并预览', { type: 'previewMerge' }, { variant: 'primary' }),
   ] };

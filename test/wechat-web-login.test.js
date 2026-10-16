@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm';
 import { boot } from './http-helpers.js';
 import { WechatService } from '../src/wechat/service.js';
 import { QR_TTL } from '../src/wechat/web-login.js';
+import { identityHash } from '../src/wechat/service.js';
 const mini = 'wx83d31aa7fc9a797e';
 const cfg = { requireLogin: true, wechatAppId: 'wx216f3fb724629f67', wechatAppSecret: 'game-secret', wechatMiniprogramAppId: mini, wechatMiniprogramAppSecret: 'mini-secret' };
 const headers = { 'X-Houren-Request': '1' };
@@ -60,6 +61,25 @@ test('different accounts, password-only sessions and wrong app cannot approve a 
   assert.equal((await call('scan', { scene }, cookie(other))).status, 409);
   assert.equal((await call('confirm', { scene, approve: true }, cookie(other))).status, 409);
 });
+test('unlinking WeChat revokes QR and phone sessions while keeping a password session', async t => {
+  const { e, call, login, scene, browser } = await setup(t);
+  const first = await login();
+  const store = e.app.ctx.accounts;
+  store.setContact(first.json.user.id, 'email', 'qr@example.org');
+  await store.setWechatPassword(first.json.user.id, identityHash(mini, 'test-owner-wechat'), 'web-login-password');
+  const phone = await login();
+  await call('scan', { scene }, cookie(phone));
+  await call('confirm', { scene, approve: true }, cookie(phone));
+  const qr = await call('consume', { scene }, browser);
+  assert.equal(qr.status, 200);
+  const web = await e.call('/api/account/login', { method: 'POST', headers, body: { username: first.json.user.username, password: 'web-login-password' } });
+  assert.equal(web.status, 200);
+  const removed = await e.call('/api/account/wechat/' + mini, { method: 'DELETE', headers: { ...headers, Cookie: cookie(web) }, body: { currentPassword: 'web-login-password' } });
+  assert.equal(removed.status, 200, removed.text);
+  assert.equal((await e.call('/api/account', { headers: { Cookie: cookie(qr) } })).json.user, null);
+  assert.equal((await e.call('/api/account', { headers: { Cookie: cookie(phone) } })).json.user, null);
+  assert.equal((await e.call('/api/account', { headers: { Cookie: cookie(web) } })).json.user.id, first.json.user.id);
+});
 test('refresh, expiry and cancellation invalidate requests; cannot replay approval after a password change', async t => {
   const { e, call, login, scene, browser } = await setup(t);
   const p = await login(), phone = cookie(p);
@@ -70,6 +90,7 @@ test('refresh, expiry and cancellation invalidate requests; cannot replay approv
   const fresh = await call('create', { previousScene: scene }, browser), b = cookie(fresh), s = fresh.json.scene;
   assert.equal((await call('status', { scene }, browser)).status, 410);
   await call('scan', { scene: s }, phone); await call('confirm', { scene: s, approve: true }, phone);
+  e.app.ctx.accounts.setContact(p.json.user.id, 'email', 'refresh@example.org');
   await e.app.ctx.accounts.update(p.json.user.id, { password: 'changed-password' }, { admin: true });
   assert.equal((await call('consume', { scene: s }, b)).status, 409);
   const last = await call('create', {}, b);

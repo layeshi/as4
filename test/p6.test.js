@@ -10,7 +10,7 @@ import { stateHash } from '../src/store.js';
 import { replayDir } from '../src/tools/replay.js';
 import { validateRules,checkExpression } from '../src/e2/rules/check.js';
 import { typedActionTools } from '../runner/action-tools.js';
-import { boot } from './http-helpers.js';
+import { boot, verifiedBody } from './http-helpers.js';
 import { PublicRoleService } from '../src/runner/public-roles.js';
 import { UsageStore } from '../src/runner/usage.js';
 const hiddenPhysics={version:1,regrowth:{baseByZone:{wilds:20,scrapyard:15,solarfield:10},thresholdByZone:{wilds:30,scrapyard:25,solarfield:15},factorPermille:500},construction:{fullActionsPerTick:2,factorPermille:500}};
@@ -80,7 +80,11 @@ test('P6 same-place role question, limit, separate reply and normal paid inbox',
 });
 
 async function environment(){const dir=mkdtempSync(join(tmpdir(),'as4-p6-')),file=join(dir,'physics.json');writeFileSync(file,JSON.stringify(hiddenPhysics));return boot({physics:2,premise:6,map:'compact-materials-v1',shellSlots:0,hiddenPhysicsFile:file},{dir});}
-async function user(env,name,admin=false){const r=await env.call(`/api/account/${admin?'setup':'register'}`,{method:'POST',headers:{'X-Houren-Request':'1'},body:{username:name,displayName:name,password:'test-password-1234',...(admin?{adminKey:'test-admin-key'}:{})}});assert.equal(r.status,201,r.text);return {id:r.json.user.id,cookie:r.headers.get('set-cookie').split(';')[0]};}
+async function user(env,name,admin=false){
+  const body={username:name,displayName:name,password:'test-password-1234',...(admin?{adminKey:'test-admin-key'}:{})};
+  const r=await env.call(`/api/account/${admin?'setup':'register'}`,{method:'POST',headers:{'X-Houren-Request':'1'},body:admin?body:await verifiedBody(env,body)});
+  assert.equal(r.status,201,r.text);return {id:r.json.user.id,cookie:r.headers.get('set-cookie').split(';')[0]};
+}
 const headers=u=>({'X-Houren-Request':'1',Cookie:u.cookie});
 test('P6 HTTP authentication, binary image validation, paged archives, transfer and replay',async()=>{
   const env=await environment();

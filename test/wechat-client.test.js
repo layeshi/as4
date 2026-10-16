@@ -94,6 +94,16 @@ for (const miniprogram of [false, true]) test('P6 ' + (miniprogram ? 'Mini Progr
   assert.equal(g.wechatLinked, true);
   const accountId = g.user.id, accountName = g.user.username;
   await g.dispatch({type:'webLogin'});
+  const verificationCodes = [];
+  env.app.ctx.verification.delivery = { emailReady: true, phoneReady: true,
+    async sendEmail(address, code) { verificationCodes.push({ address, code }); },
+    async sendSms() { throw new Error('unexpected SMS'); }, async checkSms() { return false; } };
+  g.form.contactValue = 'creator@example.org';
+  await g.dispatch({type:'sendContactCode'}); assert.equal(g.error, '');
+  assert.equal(verificationCodes.at(-1).address, 'creator@example.org');
+  g.form.contactCode = verificationCodes.at(-1).code;
+  await g.dispatch({type:'verifyContactCode'}); assert.equal(g.error, '');
+  assert.ok(g.user.contacts.email);
   g.form.password = 'shared-web-password'; g.form.confirmPassword = 'different-password';
   await g.dispatch({type:'saveWebPassword'}); assert.match(g.error, /不一致/);
   g.form.confirmPassword = 'shared-web-password';
@@ -105,6 +115,18 @@ for (const miniprogram of [false, true]) test('P6 ' + (miniprogram ? 'Mini Progr
   assert.equal(webLogin.status, 200); assert.equal(webLogin.json.user.id, accountId);
   const webResident = await env.call('/api/account/residents/' + id + '/private', { headers: { Cookie: webLogin.headers.get('set-cookie').split(';')[0] } });
   assert.equal(webResident.status, 200, webResident.text);
+  env.app.ctx.accounts.commit(users => { delete users.find(user => user.id === accountId).contacts; });
+  await g.loadAccount();
+  await g.dispatch({ type: 'webLogin' });
+  g.form.contactValue = 'legacy@example.org';
+  await g.dispatch({ type: 'sendContactCode' });
+  g.form.contactCode = verificationCodes.at(-1).code;
+  g.form.currentPassword = 'wrong-password';
+  await g.dispatch({ type: 'verifyContactCode' }); assert.match(g.error, /密码/);
+  g.form.currentPassword = 'shared-web-password';
+  await g.dispatch({ type: 'verifyContactCode' }); assert.equal(g.error, '');
+  assert.equal(g.user.contacts.email, 'le***@example.org');
+  assert.equal(g.form.currentPassword, '');
   const mergeTarget = await env.app.ctx.accounts.create({ username: 'merge_target', password: 'merge-target-password' });
   await g.dispatch({type:'mergeAccount'}); g.form.username = 'merge_target'; g.form.password = 'wrong-password';
   await g.dispatch({type:'previewMerge'}); assert.match(g.error, /密码/); assert.equal(g.user.id, accountId);

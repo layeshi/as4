@@ -74,17 +74,19 @@ function request(path, options = {}) {
     });
   });
 }
-function wechatProof(path, data) {
+function wechatProof(path, data, codeKey = 'code') {
   const generation = sessionGeneration, session = cookies.houren_session;
   return new Promise((resolve, reject) => {
     wx.login({ timeout: 10000, success: result => result.code ? resolve(result.code) : reject(new Error('微信登录失败，请重试')), fail: () => reject(new Error('微信登录失败，请重试')) });
   }).then(code => {
     if (!sessionCurrent(generation, session)) throw new Error('登录会话已变更，请重试');
-    return request(path, { method: 'POST', timeout: 30000, data: { ...data, code, ...(config.appid ? { appid: config.appid } : {}) } });
+    return request(path, { method: 'POST', timeout: 30000, data: { ...data, [codeKey]: code, ...(config.appid ? { appid: config.appid } : {}) } });
   });
 }
 function loginWeChat(bindCurrent) { return wechatProof('/api/wechat/login', { bindCurrent: !!bindCurrent }); }
 function setWebPassword(password) { return wechatProof('/api/wechat/password', { password }); }
+function setContactByWechat(proof) { return wechatProof('/api/account/contacts', { proof }, 'wechatCode'); }
+function setContactByPassword(proof, currentPassword) { return request('/api/account/contacts', { method: 'POST', data: { proof, currentPassword } }); }
 function previewMerge(username, password) { return wechatProof('/api/wechat/merge/preview', { username, password }); }
 function requestId() {
   // Idempotency identifier, not an authentication credential.
@@ -110,4 +112,4 @@ function download(path) {
   });
 }
 
-module.exports = { request, download, restoreSession, clearSession, loginWeChat, setWebPassword, previewMerge, requestId };
+module.exports = { request, download, restoreSession, clearSession, loginWeChat, setWebPassword, setContactByWechat, setContactByPassword, previewMerge, requestId };

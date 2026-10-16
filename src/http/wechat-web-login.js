@@ -9,6 +9,7 @@ function phone(ctx, req, actor) {
   const identity = ctx.accounts.sessionMetadata(parseCookies(req.headers.cookie).houren_session)?.wechat;
   if (!identity || identity.appid !== ctx.wechat.miniprogram?.appid || !hasWechatIdentity(actor, identityHash(identity.appid, identity.openid))) fail(401, 'wechat_login_required', '请先验证当前微信身份。');
   ctx.wechat.requireIdentity(identity);
+  return identity;
 }
 function browserCookie(req, ctx, scene, value) {
   const secure = req.socket.encrypted || ctx.cfg.trustProxy && req.headers['x-forwarded-proto'] === 'https';
@@ -46,15 +47,16 @@ export const wechatWebLoginRoutes = [
   })],
   ['POST', '/api/wechat/qr/consume', accountWrap(({ req, res, ctx, body }) => {
     if (accountFor(ctx, req)) fail(409, 'already_signed_in', '网页已登录，请刷新页面。');
+    const row = ctx.wechatWebLogin.browser(body.scene, proof(req, body.scene));
     const user = ctx.wechatWebLogin.consume(body.scene, proof(req, body.scene));
     // Browser sessions are independent from the phone session and moderation proof.
-    setSession(req, res, ctx, user.id);
+    setSession(req, res, ctx, user.id, { wechatIdentity: row.wechatIdentity });
     res.setHeader('Set-Cookie', [res.getHeader('Set-Cookie'), browserCookie(req, ctx, body.scene, '')]);
     sendJson(res, 200, { user: publicUser(user) });
   })],
   ['POST', '/api/wechat/qr/scan', accountWrap(({ req, res, ctx, body, actor }) => {
-    phone(ctx, req, actor);
-    sendJson(res, 200, ctx.wechatWebLogin.scan(body.scene, actor));
+    const identity = phone(ctx, req, actor);
+    sendJson(res, 200, ctx.wechatWebLogin.scan(body.scene, actor, identityHash(identity.appid, identity.openid)));
   }, { signedIn: true })],
   ['POST', '/api/wechat/qr/confirm', accountWrap(({ req, res, ctx, body, actor }) => {
     phone(ctx, req, actor);

@@ -25,6 +25,8 @@ import { checkBackstage } from '../backstage.js';
 import http from 'node:http';
 import { ExperimentControl } from '../experiment-control.js';
 import { AccountStore } from '../accounts/store.js';
+import { AliyunDelivery } from '../accounts/aliyun-delivery.js';
+import { VerificationService } from '../accounts/verification.js';
 import { ServerStatusSampler, registeredUserCounts } from '../server-status.js';
 import { accountRoutes, accountLimits, verifyLoginTurnstile } from './accounts.js';
 import { AnnouncementStore } from '../announcements.js';
@@ -153,11 +155,12 @@ async function serveStatic(req, res, url, dir, gateCtx) {
  * @param rt Runtime
  * @param cfg 配置（loadConfig 的结果，另可带 trustProxy）
  */
-export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, backstageRoot } = {}) {
+export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, backstageRoot, verificationDelivery } = {}) {
   const ctx = {
     rt,
     cfg,
     accounts: new AccountStore(cfg.dataDir),
+    verification: new VerificationService(verificationDelivery || new AliyunDelivery(cfg), { smsDailyLimit: cfg.smsDailyLimit || 100, counterFile: join(cfg.dataDir, 'verification-sms-budget.json') }),
     messageBoard: new MessageBoard(cfg.dataDir),
     announcements: new AnnouncementStore(cfg.dataDir),
     announcementLimits: announcementLimits(),

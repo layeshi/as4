@@ -36,11 +36,11 @@ export class WechatWebLogin {
     if (!u || u.status !== 'active' || u.mergePending || u.mergedTo || u.revision !== row.revision || (u.authRevision || 0) !== row.authRevision) fail(409, 'qr_account_changed', '账号已变化，请重新扫码登录。');
     return u;
   }
-  scan(scene, user) {
+  scan(scene, user, identity) {
     const row = this.get(scene);
     if (!['pending', 'scanned'].includes(row.state) || row.userId && row.userId !== user.id) fail(409, 'qr_claimed', '此二维码已处理或已被其他账号扫描，请刷新网页。');
     if (row.userId) this.user(row);
-    else { row.userId = user.id; row.revision = user.revision; row.authRevision = user.authRevision || 0; }
+    else { row.userId = user.id; row.revision = user.revision; row.authRevision = user.authRevision || 0; row.wechatIdentity = identity; }
     row.state = 'scanned';
     return { username: user.username, checkCode: row.checkCode, expiresAt: row.expiresAt };
   }

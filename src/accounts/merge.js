@@ -14,6 +14,7 @@ export class AccountMerger {
     if ([source, target].some(u => u.status !== 'active' || u.mergePending || u.mergedTo || u.role !== 'user')) fail(409, 'merge_unavailable', '仅支持两个正常使用的普通账号合并。');
     const bindings = [...wechatBindings(target, wechat.appid), ...wechatBindings(source, wechat.appid)];
     if (bindings.some((b, i) => bindings.some((other, j) => j < i && b.appid === other.appid && b.identity !== other.identity))) fail(409, 'identity_linked', '两个账号已关联该微信应用的不同身份，不能合并。');
+    for (const kind of ['email', 'phone']) if (source.contacts?.[kind] && target.contacts?.[kind] && source.contacts[kind] !== target.contacts[kind]) fail(409, 'contact_conflict', '两个账号的已验证联系方式不同，请先解除其中一个。');
     const links = [...(target.agents || []), ...(source.agents || [])].filter((l, i, all) => all.findIndex(x => x.world === l.world && x.agentId === l.agentId) === i);
     if (links.length > MAX_LINKS) fail(409, 'too_many_agents', '合并后的历史居民关联超出账号上限。');
     const b = hosted.billing;
@@ -79,6 +80,8 @@ export class AccountMerger {
       const from = users.find(u => u.id === plan.from), to = users.find(u => u.id === plan.to);
       const [first, ...rest] = plan.bindings;
       to.wechatIdentity = first.identity; to.wechatAppId = first.appid; to.wechatBindings = rest;
+      to.contacts = { ...from.contacts, ...to.contacts };
+      delete from.contacts;
       to.agents = plan.links;
       to.mergedAccountIds = [...new Set([...(to.mergedAccountIds || []), from.id, ...(from.mergedAccountIds || [])])];
       from.status = 'disabled'; from.mergedTo = to.id; from.agents = [];

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { boot } from './http-helpers.js';
+import { boot, verifiedBody } from './http-helpers.js';
 import { AccountStore, MAX_LINKS, publicUser } from '../src/accounts/store.js';
 import { replayDir } from '../src/tools/replay.js';
 import { eventually, startStub } from './model-stub.js';
@@ -19,6 +19,7 @@ function client(e) {
   return {
     get cookie() { return cookie; },
     async call(path, body, method = body === undefined ? 'GET' : 'POST', extra = {}) {
+      if (path === '/api/account/register' && body) body = await verifiedBody(e, body);
       const r = await e.call(path, { method, body, headers: { Cookie: cookie, 'X-Houren-Request': '1', ...extra } });
       if (r.headers.get('set-cookie')) cookie = r.headers.get('set-cookie').split(';')[0];
       return r;
