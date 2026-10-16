@@ -1,6 +1,8 @@
 # 后人纪 · 微信普通小程序
 
-2026-10-13用户确定迁移到普通小程序，AppID `wx83d31aa7fc9a797e`，名称“后人纪”，版本0.5.0，保留全部现有交互。默认 `project.config.json` 和默认构建脚本现已指向普通小程序，构建目录 `build-miniprogram/`。原小游戏以 `WECHAT_TARGET=game` 或 `npm run prepare:game` 明确选择，不能混用AppID或上传私钥。
+2026-10-13用户确定迁移到普通小程序，AppID `wx83d31aa7fc9a797e`，名称“后人纪”，当前版本 0.6.0，保留全部现有交互。默认 `project.config.json` 和默认构建脚本现已指向普通小程序，构建目录 `build-miniprogram/`。原小游戏以 `WECHAT_TARGET=game` 或 `npm run prepare:game` 明确选择，不能混用AppID或上传私钥。
+
+2026-10-16：三城 0.6.0 已通过开发者工具上传并覆盖现有体验版，包含全岛 / 分城地图、城级缩放拖动和居民籍城等更新；配套服务器已修复固定城名、地图引用及人类遗法被审核投影遮住的问题。开发者工具 390 宽、深色中文全岛与北城已看图，正式审核与真机手势验收未执行。详见[更新记录](../docs/validation/WECHAT-P7-20261016.md)。
 
 ```sh
 npm run prepare -- --offline
