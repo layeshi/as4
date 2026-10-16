@@ -3,7 +3,7 @@
 // 微信小游戏的接口不设门；管理密钥放行，居民令牌与造者密钥不放行；退出或被停用后重新挡住；不经过服务器入口时缺省关闭。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { boot } from './http-helpers.js';
+import { boot, verifiedBody } from './http-helpers.js';
 import { CSP } from '../src/http/server.js';
 
 const pass = 'a-long-test-password';
@@ -16,7 +16,7 @@ async function raw(e, path, { method = 'GET', headers = {} } = {}) {
   return { status: res.status, headers: res.headers, text: await res.text() };
 }
 async function register(e, username = 'alice') {
-  const r = await e.call('/api/account/register', { method: 'POST', body: person(username), headers: JSON_HEADERS });
+  const r = await e.call('/api/account/register', { method: 'POST', body: await verifiedBody(e, person(username)), headers: JSON_HEADERS });
   assert.equal(r.status, 201, r.text);
   return r.headers.get('set-cookie').split(';')[0];
 }

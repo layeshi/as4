@@ -49,10 +49,20 @@ function setup(account, routes = {}) {
 }
 const tabs = (root) => root.querySelectorAll('.login-tab').map((b) => b.textContent);
 const inputs = (root) => root.querySelectorAll('input');
-const names = (root) => inputs(root).map((i) => i.getAttribute('name'));
+const names = (root) => inputs(root).map((i) => i.getAttribute('name')).filter(Boolean);
 const fill = (root, values) => { for (const i of inputs(root)) if (i.getAttribute('name') in values) i.value = values[i.getAttribute('name')]; };
 const submit = async (root) => { root.querySelector('form').fire('submit'); await settle(); };
-const message = (root) => root.querySelector('.account-message');
+const message = (root) => root.querySelectorAll('.account-message').at(-1);
+const verificationRoutes = {
+  '/api/account/verification/request': () => reply(200, { challengeId: 'challenge', message: '验证码已发送。' }),
+  '/api/account/verification/confirm': () => reply(200, { proof: 'verified' }),
+};
+const verifyContact = async root => {
+  root.querySelector('.contact-entry input').value = 'newbie@example.org';
+  root.querySelector('.contact-entry button').click(); await settle();
+  root.querySelector('.contact-code input').value = '123456';
+  root.querySelector('.contact-code button').click(); await settle();
+};
 
 test('safeNext：只认本站的路径，其余回首页（防开放重定向）', () => {
   assert.equal(safeNext('/residents.html'), '/residents.html');
@@ -78,6 +88,50 @@ test('登录页：未登录时有登录与注册两个标签，登录表单只�
     assert.match(env.root.textContent, /需要登录/);
     assert.ok(!env.root.querySelectorAll('a').some((a) => a.getAttribute('href') === '/'), '开着登录门时没有「先随便看看」');
     assert.deepEqual(env.navigated, []);
+  } finally { env.restore(); }
+});
+
+test('账号密码显示开关保留输入并可重新隐藏', async () => {
+  const env = setup(openAccount);
+  try {
+    await env.mount();
+    const input = env.root.querySelector('input[name="password"]');
+    const toggle = env.root.querySelector('.password-toggle');
+    input.value = 'a-long-test-password';
+    assert.equal(input.getAttribute('type'), 'password');
+    toggle.click();
+    assert.equal(input.getAttribute('type'), 'text');
+    assert.equal(input.value, 'a-long-test-password');
+    assert.equal(toggle.getAttribute('aria-label'), '隐藏密码');
+    toggle.click();
+    assert.equal(input.getAttribute('type'), 'password');
+  } finally { env.restore(); }
+});
+
+test('找回密码验证联系方式后设置新密码，再回到登录', async () => {
+  const env = setup(openAccount, { ...verificationRoutes, '/api/account/recovery': () => reply(200, { ok: true }) });
+  try {
+    await env.mount();
+    env.root.querySelector('.login-forgot').click();
+    await verifyContact(env.root);
+    fill(env.root, { password: 'new-long-password', confirmPassword: 'new-long-password' });
+    await submit(env.root);
+    assert.deepEqual(env.calls.find(c => c.url === '/api/account/recovery').body, { proof: 'verified', password: 'new-long-password' });
+    assert.match(env.root.textContent, /密码已重置/);
+  } finally { env.restore(); }
+});
+
+test('管理员创建的账号首次登录先验证联系方式', async () => {
+  const env = setup(openAccount, { ...verificationRoutes, '/api/account/login': body => body.proof ? reply(200, { user: { id: 'new-user' } }) : reply(428, { error: { code: 'contact_required', message: '首次登录前请验证邮箱或手机号。' } }) });
+  try {
+    await env.mount();
+    fill(env.root, { username: 'newuser', password: 'a-long-test-password' });
+    await submit(env.root);
+    assert.ok(env.root.querySelector('.first-login-verification .contact-entry'));
+    await verifyContact(env.root);
+    await submit(env.root);
+    assert.equal(env.calls.filter(c => c.url === '/api/account/login').at(-1).body.proof, 'verified');
+    assert.deepEqual(env.navigated, ['/']);
   } finally { env.restore(); }
 });
 
@@ -155,8 +209,8 @@ test('登录页：登录失败显示服务器的话，不跳转，按钮恢复�
   } finally { env.restore(); }
 });
 
-test('登录页：注册要填确认密码，昵称可不填，不把确认密码发给服务器', async () => {
-  const env = setup(openAccount, { '/api/account/register': () => reply(201, { user: { id: 'u2' } }) });
+test('登录页：注册要验证联系方式、填确认密码，昵称可不填', async () => {
+  const env = setup(openAccount, { ...verificationRoutes, '/api/account/register': () => reply(201, { user: { id: 'u2' } }) });
   try {
     await env.mount();
     env.root.querySelectorAll('.login-tab')[1].click();
@@ -172,20 +226,22 @@ test('登录页：注册要填确认密码，昵称可不填，不把确认密�
     assert.ok(!env.calls.some((c) => c.url === '/api/account/register'), '不一致时不请求服务器');
 
     fill(env.root, { confirmPassword: 'a-long-test-password' });
+    await verifyContact(env.root);
     await submit(env.root);
-    assert.deepEqual(env.calls.find((c) => c.url === '/api/account/register').body, { username: 'newbie', password: 'a-long-test-password' });
+    assert.deepEqual(env.calls.find((c) => c.url === '/api/account/register').body, { username: 'newbie', password: 'a-long-test-password', proof: 'verified' });
     assert.deepEqual(env.navigated, ['/']);
   } finally { env.restore(); }
 });
 
 test('登录页：带昵称注册；mode 参数选标签，不可用的标签回到登录', async () => {
-  const env = setup(openAccount, { '/api/account/register': () => reply(201, { user: { id: 'u2' } }) });
+  const env = setup(openAccount, { ...verificationRoutes, '/api/account/register': () => reply(201, { user: { id: 'u2' } }) });
   try {
     await env.mount({ search: '?mode=register' });
     assert.equal(env.root.querySelector('.login-tab[aria-pressed="true"]').textContent, '注册');
     fill(env.root, { username: 'newbie', displayName: ' 新人 ', password: 'a-long-test-password', confirmPassword: 'a-long-test-password' });
+    await verifyContact(env.root);
     await submit(env.root);
-    assert.deepEqual(env.calls.find((c) => c.url === '/api/account/register').body, { username: 'newbie', displayName: '新人', password: 'a-long-test-password' });
+    assert.deepEqual(env.calls.find((c) => c.url === '/api/account/register').body, { username: 'newbie', displayName: '新人', password: 'a-long-test-password', proof: 'verified' });
   } finally { env.restore(); }
   for (const mode of ['setup', 'bogus']) {
     const e2 = setup(openAccount);
@@ -437,7 +493,7 @@ test('登录页的文件：走 CSP、不写内联样式或脚本，页面里有 
   assert.doesNotMatch(js, /innerHTML|document\.write|eval\(/);
   // 登录页不引入观测站的模块：首屏轻，也不会因它们的改动而坏
   const imports = [...js.matchAll(/from '\.\/([\w-]+)\.js'/g)].map((m) => m[1]).sort();
-  assert.deepEqual(imports, ['announcement-preview', 'api', 'dom', 'i18n', 'turnstile', 'wechat-login']);
+  assert.deepEqual(imports, ['account-inputs', 'announcement-preview', 'api', 'dom', 'i18n', 'turnstile', 'wechat-login']);
   const e = await boot();
   try {
     const r = await e.call('/login.html');

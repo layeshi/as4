@@ -2,6 +2,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { Runtime } from '../src/runtime.js';
 import { createApp } from '../src/http/server.js';
 import { loadConfig } from '../src/config.js';
@@ -54,4 +55,19 @@ export async function boot(extra = {}, { dir = mkdtempSync(join(tmpdir(), 'houre
     },
   };
   return env;
+}
+
+/** Give tests outside the account-verification suite a real, single-use registration proof. */
+export async function verifiedBody(env, body) {
+  if (!env.verificationCodes) {
+    env.verificationCodes = new Map();
+    env.app.ctx.verification.delivery = {
+      emailReady: true, phoneReady: false,
+      async sendEmail(address, code) { env.verificationCodes.set(address, code); },
+    };
+  }
+  const value = `test-${randomUUID()}@example.org`;
+  const request = await env.app.ctx.verification.request({ purpose: 'register', channel: 'email', value, ip: randomUUID() });
+  const confirmed = await env.app.ctx.verification.confirm(request.challengeId, env.verificationCodes.get(value));
+  return { ...body, proof: confirmed.proof };
 }

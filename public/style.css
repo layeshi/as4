@@ -201,7 +201,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 }
 
 /* ── 表单控件 ── */
-select, input[type=text], input[type=password], textarea {
+select, input[type=text], input[type=password], input[type=email], input[type=tel], textarea {
   background: var(--panel-2);
   color: var(--text);
   border: 1px solid var(--line);
@@ -210,6 +210,20 @@ select, input[type=text], input[type=password], textarea {
   font: inherit;
   max-width: 100%;
 }
+.password-control { position: relative; display: block; width: 100%; }
+.password-control input { width: 100%; padding-right: 46px !important; }
+.password-toggle { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--text); cursor: pointer; }
+.password-toggle[aria-pressed=true] { color: var(--accent); }
+.password-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+.contact-verification { display: grid; gap: 8px; margin: 12px 0; }
+.contact-entry, .contact-code { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.contact-entry select { flex: 0 0 90px; }
+.contact-entry input, .contact-code input { flex: 1 1 0; min-width: 0; }
+.contact-entry .btn, .contact-code .btn { flex: 0 0 auto; }
+.contact-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 14px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.contact-row strong { overflow-wrap: anywhere; }
+.contact-verification .account-message:empty { display: none; }
+@media (max-width: 540px) { .contact-entry { flex-wrap: wrap; } .contact-entry select { flex: 1 1 100%; } .contact-entry input { flex: 1 1 50%; } }
 textarea { width: 100%; resize: vertical; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
 .live-resident-picker { position: relative; max-width: 100%; }

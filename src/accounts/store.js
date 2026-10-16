@@ -38,13 +38,18 @@ export const wechatBindings = (u, legacyAppId) => [
   ...(u.wechatBindings || []),
 ];
 export const hasWechatIdentity = (u, identity) => wechatBindings(u).some(b => b.identity === identity);
-export const publicUser = (u) => {
+export const passwordEnabled = u => u.passwordLoginEnabled ?? !(u.wechatIdentity && /^wx_[a-f0-9]{24}$/.test(u.username));
+export const hasContact = u => !!(u.contacts?.email || u.contacts?.phone);
+const masked = (channel, value) => channel === 'phone' ? `${value.slice(0, 6)}****${value.slice(-4)}` : value.replace(/^(.{1,2}).*(@.+)$/, '$1***$2');
+export const publicUser = (u, legacyAppId) => {
   const { id, username, displayName, role, status, createdAt, updatedAt } = u;
   return { id, username, displayName, role, status, createdAt, updatedAt,
     wechatLinked: wechatBindings(u).length > 0,
+    wechatApps: wechatBindings(u, legacyAppId).map(b => b.appid).filter(Boolean),
+    contacts: Object.fromEntries(Object.entries(u.contacts || {}).map(([kind, value]) => [kind, masked(kind, value)])),
     // Legacy generated users had an unknown random password. This is display state only;
     // password setup always requires a new upstream identity proof, even for legacy users.
-    passwordLoginEnabled: u.passwordLoginEnabled ?? !(u.wechatIdentity && /^wx_[a-f0-9]{24}$/.test(username)) };
+    passwordLoginEnabled: passwordEnabled(u) };
 };
 export class AccountStore {
   constructor(dir) {
@@ -118,7 +123,7 @@ export class AccountStore {
     }
     return index;
   }
-  async create(body, { role = 'user', bootstrap = false, authorize = () => {} } = {}) {
+  async create(body, { role = 'user', bootstrap = false, verifiedContact = null, contactRequired = false, authorize = () => {} } = {}) {
     const name = username(body.username);
     const nickname = displayName(body.displayName ?? body.username);
     const encoded = await this.expensive(() => passwordHash(body.password));
@@ -126,8 +131,11 @@ export class AccountStore {
     return this.commit((users) => {
       if (bootstrap && users.some((u) => u.role === 'admin')) fail(409, 'already_initialized', '管理员已初始化，请登录。');
       if (users.some((u) => u.username === name)) fail(409, 'username_taken', '该用户名已被使用。');
+      if (verifiedContact && users.some(u => u.contacts?.[verifiedContact.channel] === verifiedContact.contact)) fail(409, 'contact_taken', '该联系方式不可使用。');
       const now = new Date().toISOString();
       const u = { id: randomUUID(), username: name, displayName: nickname, passwordHash: encoded, role, status: 'active', revision: 1, createdAt: now, updatedAt: now };
+      if (verifiedContact) u.contacts = { [verifiedContact.channel]: verifiedContact.contact };
+      if (contactRequired) u.contactRequired = true;
       users.push(u);
       return publicUser(u);
     });
@@ -170,23 +178,81 @@ export class AccountStore {
   async setWechatPassword(id, identity, password, { authorize = () => {} } = {}) {
     const before = this.get(id);
     if (!before || before.status !== 'active' || !hasWechatIdentity(before, identity)) fail(403, 'identity_mismatch', '当前微信与账号不匹配。');
+    if (!hasContact(before)) fail(409, 'contact_required', '请先验证邮箱或手机号。');
     const encoded = await this.expensive(() => passwordHash(password));
     authorize();
     return this.commit(users => {
       const u = users.find(u => u.id === id);
-      if (!u || (u.status !== 'active' || u.mergePending) || u.revision !== before.revision || (u.authRevision || 0) !== (before.authRevision || 0) || !hasWechatIdentity(u, identity)) fail(409, 'account_changed', '账号已更新，请重新登录。');
+      if (!u || (u.status !== 'active' || u.mergePending) || u.revision !== before.revision || (u.authRevision || 0) !== (before.authRevision || 0) || !hasWechatIdentity(u, identity) || !hasContact(u)) fail(409, 'account_changed', '账号已更新，请重新登录。');
       u.passwordHash = encoded; u.passwordLoginEnabled = true;
       u.authRevision = (u.authRevision || 0) + 1; u.updatedAt = new Date().toISOString();
       return publicUser(u);
     });
   }
-  async login(body) {
+  async login(body, { allowPending = false } = {}) {
     const name = typeof body.username === 'string' ? body.username.toLowerCase() : '';
     const before = this.data.users.find((u) => u.username === name);
     const valid = await this.expensive(() => verify(body.password, before?.passwordHash ?? this.dummy));
     const current = before && this.get(before.id);
-    if (!valid || !current || (current.status !== 'active' || current.mergePending) || current.revision !== before.revision || current.passwordHash !== before.passwordHash) fail(401, 'invalid_credentials', '用户名或密码错误，或账号已停用。');
+    if (!valid || !current || !passwordEnabled(current) || (current.status !== 'active' || current.mergePending) || current.revision !== before.revision || current.passwordHash !== before.passwordHash) fail(401, 'invalid_credentials', '用户名或密码错误，或账号已停用。');
+    if (!allowPending && current.contactRequired && !hasContact(current)) fail(428, 'contact_required', '首次登录前请验证邮箱或手机号。');
     return current;
+  }
+  async verifyPassword(id, password) {
+    const before = this.get(id);
+    if (!before || !passwordEnabled(before) || before.status !== 'active' || !await this.expensive(() => verify(password, before.passwordHash))) fail(401, 'invalid_password', '当前密码错误。');
+    const current = this.get(id);
+    if (!current || current.revision !== before.revision || current.passwordHash !== before.passwordHash) fail(409, 'account_changed', '账号已更新，请重试。');
+    return current;
+  }
+  setContact(id, channel, contact, { expectedRevision = null } = {}) {
+    return this.commit(users => {
+      const u = users.find(x => x.id === id && x.status === 'active' && !x.mergePending && !x.mergedTo);
+      if (!u || expectedRevision !== null && u.revision !== expectedRevision) fail(409, 'account_changed', '账号已更新，请重试。');
+      if (users.some(x => x.id !== id && x.contacts?.[channel] === contact)) fail(409, 'contact_taken', '该联系方式不可使用。');
+      u.contacts = { ...u.contacts, [channel]: contact };
+      u.contactRequired = false;
+      u.updatedAt = new Date().toISOString();
+      return publicUser(u);
+    });
+  }
+  deleteContact(id, channel, { expectedRevision = null } = {}) {
+    return this.commit(users => {
+      const u = users.find(x => x.id === id && x.status === 'active' && !x.mergePending && !x.mergedTo);
+      if (!u || expectedRevision !== null && u.revision !== expectedRevision) fail(409, 'account_changed', '账号已更新，请重试。');
+      if (!u.contacts?.[channel]) fail(404, 'not_found', '联系方式不存在。');
+      const contacts = { ...u.contacts }; delete contacts[channel];
+      if (passwordEnabled(u) && !Object.values(contacts).some(Boolean)) fail(409, 'last_contact', '密码账号必须保留至少一种已验证联系方式。');
+      u.contacts = contacts; u.updatedAt = new Date().toISOString();
+      return publicUser(u);
+    });
+  }
+  async resetPasswordByContact(id, channel, contact, password) {
+    const before = this.get(id);
+    if (!before || before.status !== 'active' || !passwordEnabled(before) || before.contacts?.[channel] !== contact) fail(400, 'verification_required', '请重新验证联系方式。');
+    const encoded = await this.expensive(() => passwordHash(password));
+    return this.commit(users => {
+      const u = users.find(x => x.id === id);
+      if (!u || u.status !== 'active' || u.revision !== before.revision || u.contacts?.[channel] !== contact || !passwordEnabled(u)) fail(409, 'account_changed', '账号已更新，请重试。');
+      u.passwordHash = encoded; u.revision++; u.updatedAt = new Date().toISOString();
+      return publicUser(u);
+    });
+  }
+  async unlinkWechat(id, appid, currentPassword, legacyAppId = null) {
+    const before = await this.verifyPassword(id, currentPassword);
+    if (!hasContact(before)) fail(409, 'contact_required', '请先验证邮箱或手机号。');
+    const binding = wechatBindings(before, legacyAppId).find(b => b.appid === appid);
+    if (!binding) fail(404, 'not_found', '微信绑定不存在。');
+    const result = this.commit(users => {
+      const u = users.find(x => x.id === id);
+      if (!u || u.revision !== before.revision || !hasContact(u) || !wechatBindings(u, legacyAppId).some(b => b.identity === binding.identity && b.appid === appid)) fail(409, 'account_changed', '微信绑定已变化，请刷新。');
+      if (u.wechatIdentity === binding.identity) { delete u.wechatIdentity; delete u.wechatAppId; }
+      else u.wechatBindings = (u.wechatBindings || []).filter(b => !(b.appid === appid && b.identity === binding.identity));
+      u.updatedAt = new Date().toISOString();
+      return publicUser(u);
+    });
+    for (const [token, session] of this.sessions) if (session.userId === id && session.wechatIdentity === binding.identity) this.sessions.delete(token);
+    return result;
   }
   session(token) {
     if (typeof token !== 'string' || !token) return null;
@@ -206,7 +272,8 @@ export class AccountStore {
     for (const [key] of own.slice(0, Math.max(0, own.length - 9))) this.sessions.delete(key);
     if (this.sessions.size >= 10000) this.sessions.delete(this.sessions.keys().next().value);
     const token = randomBytes(32).toString('hex');
-    this.sessions.set(hash(token), { userId: id, revision: u.revision, authRevision: u.authRevision || 0, expires: Date.now() + TTL, wechat: metadata.wechat });
+    const wechatIdentity = metadata.wechatIdentity || (metadata.wechat ? hash(`${metadata.wechat.appid}:${metadata.wechat.openid}`) : null);
+    this.sessions.set(hash(token), { userId: id, revision: u.revision, authRevision: u.authRevision || 0, expires: Date.now() + TTL, wechat: metadata.wechat, wechatIdentity });
     return token;
   }
   sessionMetadata(token) {
@@ -230,13 +297,14 @@ export class AccountStore {
     }
     if (body.password !== undefined) {
       if (!admin && !await this.expensive(() => verify(body.currentPassword, before.passwordHash))) fail(401, 'invalid_password', '当前密码错误。');
+      if (!passwordEnabled(before) && !hasContact(before)) fail(409, 'contact_required', '请先验证邮箱或手机号。');
       patch.passwordHash = await this.expensive(() => passwordHash(body.password));
       patch.passwordLoginEnabled = true;
     }
     authorize();
     return this.commit((users) => {
       const u = users.find((u) => u.id === id);
-      if (u.mergePending || u.mergedTo || u.revision !== before.revision || (u.authRevision || 0) !== (before.authRevision || 0)) fail(409, 'account_changed', '账号已更新，请刷新后重试。');
+      if (u.mergePending || u.mergedTo || u.revision !== before.revision || (u.authRevision || 0) !== (before.authRevision || 0) || patch.passwordLoginEnabled && !hasContact(u) && !passwordEnabled(u)) fail(409, 'account_changed', '账号已更新，请刷新后重试。');
       const next = { ...u, ...patch };
       if (u.role === 'admin' && u.status === 'active' && (next.role !== 'admin' || next.status !== 'active') && !users.some((v) => v.id !== id && v.role === 'admin' && v.status === 'active')) fail(409, 'last_admin', '必须保留至少一个启用的管理员。');
       const invalidate = patch.passwordHash || (patch.role && patch.role !== u.role) || (patch.status && patch.status !== u.status);

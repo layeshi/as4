@@ -355,6 +355,7 @@ a.summary-stat small { color: var(--accent); }
 .login-card .account-message { margin: 0; }
 .login-card .account-message:empty { display: none; }
 .login-note { margin: 16px 0 0; font-size: 13px; }
+.login-forgot { display: inline-block; margin-top: 12px; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
 .login-noscript { padding: 0 16px; text-align: center; color: #f4ead8; }
 .login-page .login-foot { color: rgba(244, 234, 216, 0.74); text-shadow: 0 1px 8px rgba(5, 11, 19, 0.9); }
 .login-page .login-foot a { color: #9fd8e0; }

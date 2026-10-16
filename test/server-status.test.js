@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
-import { boot } from './http-helpers.js';
+import { boot, verifiedBody } from './http-helpers.js';
 import { installFakeDom } from './fake-dom.js';
 import { openAccount } from '../public/accounts.js';
 import { serverStatusPanel } from '../public/admin-panels.js';
@@ -165,7 +165,8 @@ test('admin server status requires a signed-in administrator and returns only ag
     assert.equal((await e.call(path)).status, 401);
     assert.equal((await e.call(path, { admin: true })).status, 401, 'ADMIN_KEY alone is not a session');
     const create = async (route, username, extra = {}) => {
-      const r = await e.call(route, { method: 'POST', headers: { 'X-Houren-Request': '1' }, body: { username, displayName: username, password: 'long-test-password', ...extra } });
+      const body = { username, displayName: username, password: 'long-test-password', ...extra };
+      const r = await e.call(route, { method: 'POST', headers: { 'X-Houren-Request': '1' }, body: route === '/api/account/register' ? await verifiedBody(e, body) : body });
       assert.equal(r.status, 201);
       return r.headers.get('set-cookie').split(';')[0];
     };

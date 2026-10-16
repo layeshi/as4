@@ -16,14 +16,14 @@ function loadScript() {
   return scriptPromise;
 }
 
-export function mountLoginChallenge(container, sitekey) {
+export function mountLoginChallenge(container, sitekey, action = 'login') {
   let api, id, disposed = false;
   container.textContent = tr('正在加载人机验证…', 'Loading verification…');
   loadScript().then((turnstile) => {
     if (disposed || !container.isConnected) return;
     clear(container);
     api = turnstile;
-    id = api.render(container, { sitekey, action: 'login', theme: 'auto', 'response-field': false });
+    id = api.render(container, { sitekey, action, theme: 'auto', 'response-field': false });
   }).catch(() => {
     if (!disposed && container.isConnected) container.textContent = tr('人机验证加载失败，请稍后重试。', 'Verification failed to load. Please try again later.');
   });

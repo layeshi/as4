@@ -319,6 +319,10 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
       if (path === '/api/public/avatars' || path === '/api/public/worlds') continue; // ID-based P6 endpoints are exercised by p6.test.js.
       if (path === '/api/public') continue; // Dynamic P5 collection names are covered by p5-http.test.js.
       if (path === '/api/public/stream') continue; // SSE，长连接
+      if (path === '/api/account/wechat') {
+        assert.equal((await env.call('/api/account/wechat/wx0000000000000000', { method: 'DELETE', body: {} })).status, 403);
+        continue;
+      }
       if (path === '/api/wechat/qr' || path === '/api/wechat/qr/image') {
         // The client appends an operation or scene; these prefixes are not GET routes.
         for (const op of ['create', 'status', 'cancel', 'consume', 'scan', 'confirm']) {
@@ -355,7 +359,7 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
       if (path === '/api/owner/cap') { assert.equal((await env.call(path, { method: 'POST', body: {} })).status, 404); continue; } // SPEC-P4 T22: P4-only, tested separately.
       if (['materials','services','demands','orders','research','observations','projects','project','cooperation'].some(k => path === `/api/public/${k}`)) { assert.equal((await env.call(path)).status, 404); continue; } // Material-world routes: positive coverage in p5-http.test.js and project-feedback.test.js.
       if (path === '/api/public/attention') { assert.equal((await env.call(path)).status, 404); continue; } // Q43 A：只在第二前提存在，由 T15 验证。
-      const method = ['/api/me/wake', '/api/me/act', '/api/admin/pause', '/api/admin/resume', '/api/admin/law-recover', '/api/account/logout', '/api/port/register', '/api/port/adopt', '/api/port/foster', '/api/owner/letter', '/api/owner/release', '/api/public/weather/vote'].includes(path) ? 'POST' : 'GET';
+      const method = ['/api/me/wake', '/api/me/act', '/api/admin/pause', '/api/admin/resume', '/api/admin/law-recover', '/api/account/logout', '/api/account/recovery', '/api/account/contacts', '/api/account/verification/request', '/api/account/verification/confirm', '/api/port/register', '/api/port/adopt', '/api/port/foster', '/api/owner/letter', '/api/owner/release', '/api/public/weather/vote'].includes(path) ? 'POST' : 'GET';
       const r = await env.call(path, method === 'POST' ? { method, body: {} } : {});
       assert.notEqual(r.status, 404, `${method} ${path} 不存在`);
     }

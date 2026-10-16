@@ -21,7 +21,7 @@ const { C, font } = theme;
 const TABS = [['city', '观测', 'city'], ['residents', '居民', 'residents'], ['archive', '档案', 'archive'], ['account', '我的', 'me']];
 const TAB_IDS = TABS.map(t => t[0]);
 // 不访问网络、也不改数据的动作，处理中也可以点。
-const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider', 'preset', 'modelChoice', 'messageExpand']);
+const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'contactChannel', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider', 'preset', 'modelChoice', 'messageExpand']);
 const PREFS_KEY = 'houren.prefs';
 const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null;
 const caf = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
@@ -84,9 +84,9 @@ class SocietyGame {
     this.wx.onHide(() => this.hide());
     this.wx.onShow(() => { this.visible = true; this.refresh(); });
     if (this.wx.onWindowResize) this.wx.onWindowResize(() => { this.measure(); this.invalidate(); this.render(); });
-    if (this.wx.onKeyboardInput) this.wx.onKeyboardInput(e => { if (this.editing) { this.form[this.editing] = e.value; this.invalidate(); this.render(); } });
-    this.wx.onKeyboardConfirm(e => { if (this.editing) this.form[this.editing] = e.value; this.editing = ''; if (this.wx.hideKeyboard) this.wx.hideKeyboard(); this.invalidate(); this.render(); });
-    if (this.wx.onKeyboardComplete) this.wx.onKeyboardComplete(e => { if (this.editing) this.form[this.editing] = e.value; this.editing = ''; this.invalidate(); this.render(); });
+    if (this.wx.onKeyboardInput) this.wx.onKeyboardInput(e => { if (this.editing) { this.form[this.editing] = e.value; if (this.editing === 'contactValue') { delete this.form.contactChallenge; delete this.form.contactProof; } this.invalidate(); this.render(); } });
+    this.wx.onKeyboardConfirm(e => { if (this.editing) { this.form[this.editing] = e.value; if (this.editing === 'contactValue') { delete this.form.contactChallenge; delete this.form.contactProof; } } this.editing = ''; if (this.wx.hideKeyboard) this.wx.hideKeyboard(); this.invalidate(); this.render(); });
+    if (this.wx.onKeyboardComplete) this.wx.onKeyboardComplete(e => { if (this.editing) { this.form[this.editing] = e.value; if (this.editing === 'contactValue') { delete this.form.contactChallenge; delete this.form.contactProof; } } this.editing = ''; this.invalidate(); this.render(); });
     if (this.wx.showShareMenu) this.wx.showShareMenu({ menus: ['shareAppMessage'] });
     if (this.wx.onShareAppMessage) this.wx.onShareAppMessage(() => ({ title: '后人纪 · 一座由 AI 居民生活的城' }));
     this.render();
@@ -113,7 +113,8 @@ class SocietyGame {
   clearSecrets() {
     this.editing = ''; this.mergePreview = null;
     this.messageBoard.stash();
-    delete this.form.apiKey; delete this.form.password; delete this.form.confirmPassword;
+    delete this.form.apiKey; delete this.form.password; delete this.form.confirmPassword; delete this.form.currentPassword; delete this.form.showPassword;
+    delete this.form.contactValue; delete this.form.contactCode; delete this.form.contactChallenge; delete this.form.contactProof;
     if (this.wx.hideKeyboard) this.wx.hideKeyboard();
     this.invalidate();
   }
@@ -283,7 +284,7 @@ class SocietyGame {
     if (!this.entered && !['about', 'back'].includes(action.type) && !(this.tab === 'startup' && action.type === 'start')) return;
     if (action.type === 'field') {
       this.editing = action.name; this.invalidate(); this.render();
-      this.wx.showKeyboard({ defaultValue: this.form[action.name] || '', maxLength: action.max || 4000, multiple: !!action.multiple, confirmHold: false, confirmType: 'done',
+      this.wx.showKeyboard({ defaultValue: this.form[action.name] || '', maxLength: action.max || 4000, multiple: !!action.multiple, showPassword: !!this.form.showPassword, confirmHold: false, confirmType: 'done',
         fail: () => { this.editing = ''; this.showToast('无法打开输入框，请重试', 'error'); } });
       return;
     }
@@ -322,6 +323,7 @@ class SocietyGame {
       case 'closeSheet': this.sheet = null; break;
       case 'dismiss': this.dismissed[a.key] = true; break;
       case 'toggle': f[a.name] = !f[a.name]; break;
+      case 'contactChannel': f.contactChannel = a.channel; f.contactValue = ''; f.contactCode = ''; f.contactChallenge = ''; f.contactProof = ''; break;
       case 'pref':
         this.prefs[a.name] = !this.prefs[a.name]; this.savePrefs();
         if (a.name === 'largeText') { theme.setFontScale(this.prefs.largeText); T.reset(); }
@@ -368,8 +370,29 @@ class SocietyGame {
         break;
       }
       case 'copyUsername': this.wx.setClipboardData({ data: this.user.username, success() {} }); break;
+      case 'sendContactCode': {
+        if (!f.contactValue) throw new Error('请先填写邮箱或手机号');
+        const result = await api.request('/api/account/verification/request', { method: 'POST', data: { purpose: 'contact', channel: f.contactChannel || 'email', value: f.contactValue.trim() } });
+        f.contactChallenge = result.challengeId; f.contactCode = ''; f.contactProof = '';
+        this.showToast('验证码已发送', 'ok');
+        break;
+      }
+      case 'verifyContactCode': {
+        if (!f.contactProof) {
+          if (!f.contactChallenge || !f.contactCode) throw new Error('请先输入验证码');
+          const result = await api.request('/api/account/verification/confirm', { method: 'POST', data: { challengeId: f.contactChallenge, code: f.contactCode.trim() } });
+          f.contactProof = result.proof;
+        }
+        if (this.user?.passwordLoginEnabled) await api.setContactByPassword(f.contactProof, f.currentPassword);
+        else await api.setContactByWechat(f.contactProof);
+        f.currentPassword = '';
+        f.contactCode = ''; f.contactChallenge = ''; f.contactProof = '';
+        await this.loadAccount(); this.showToast('联系方式已验证', 'ok');
+        break;
+      }
       case 'saveWebPassword':
         if (!f.accepted) throw new Error('请先阅读并同意隐私说明');
+        if (!this.user?.contacts?.email && !this.user?.contacts?.phone) throw new Error('请先验证邮箱或手机号');
         if (!f.password || f.password !== f.confirmPassword) throw new Error('两次密码不一致');
         try { await api.setWebPassword(f.password); }
         finally { this.clearSecrets(); }

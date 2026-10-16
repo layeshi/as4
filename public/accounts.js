@@ -5,10 +5,12 @@ import { openModal, openBackstage, savedOwners } from './modals.js';
 import { accountAgentsPanel } from './account-usage-ui.js';
 import { prayerAuditPanel } from './prayers-ui.js';
 import { mountLoginChallenge } from './turnstile.js';
+import { contactVerification, passwordControl } from './account-inputs.js';
 // 人类账号：登录 / 注册弹窗、用户中心（只做导航，不放管理功能）、账户设置表单。
 // 管理功能都在管理后台（admin.html）；居民、余额与充值各有自己的页面。
 const tr = (zh, en) => getLang() === 'en' ? en : zh;
 let current = null;
+let verificationChannels = { email: false, phone: false };
 let loginWall = false; // 服务器开着登录门（REQUIRE_LOGIN）：没有登录就不该停在任何会员页或观测站
 let accountGeneration = 0;
 let accountButton;
@@ -17,7 +19,7 @@ const watchers = new Set(); // 会员页的顶栏：每次读到账号都重画
 export const button = (label, run, primary = false) => h('button', { type: 'button', class: `btn${primary ? ' primary' : ''}`, onClick: run }, label);
 export function field(label, name, type = 'text', value = '', extra = {}) {
   const input = h('input', { name, type, value, required: true, ...extra });
-  return h('label', { class: 'field' }, h('span', null, label), input);
+  return h('label', { class: 'field' }, h('span', null, label), type === 'password' ? passwordControl(input) : input);
 }
 export function form(fields, label, submit) {
   const message = h('p', { role: 'status', 'aria-live': 'polite', class: 'account-message' });
@@ -65,6 +67,7 @@ export async function refreshAccount({ notify = true, redirect = true } = {}) {
   const before=current?.id;
   if (r.ok) {
     current = r.json.user;
+    verificationChannels = r.json.verificationChannels || verificationChannels;
     loginWall = r.json.loginRequired === true;
     if (redirect && loginWall && !current) leaveForLogin();
   }
@@ -87,8 +90,8 @@ export async function signOut() {
 }
 /** 登录 / 注册弹窗；已登录时是用户中心。hub = false：登录成功后只关闭弹窗（会员页自己会重画） */
 export async function openAccount({ hub = true } = {}) {
-  let challenge = null;
-  const modal = openModal(tr('用户中心', 'Account'), 'account-modal', () => { challenge?.dispose(); challenge = null; });
+  let challenge = null, contactWidget = null;
+  const modal = openModal(tr('用户中心', 'Account'), 'account-modal', () => { challenge?.dispose(); contactWidget?.dispose(); challenge = null; contactWidget = null; });
   modal.body.append(h('p', { class: 'muted' }, tr('正在加载…', 'Loading…')));
   const r = await refreshAccount();
   clear(modal.body);
@@ -104,6 +107,7 @@ export async function openAccount({ hub = true } = {}) {
   if (r.json.registrationOpen) modes.push(['register', tr('注册', 'Register')]);
   function show(mode) {
     challenge?.dispose();
+    contactWidget?.dispose(); contactWidget = null;
     challenge = null;
     clear(pane);
     for (const b of tabs.children) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
@@ -111,21 +115,33 @@ export async function openAccount({ hub = true } = {}) {
     const fields = creating ? identity() : [field(tr('用户名', 'Username'), 'username', 'text', '', { autocomplete: 'username', maxlength: 32 })];
     fields.push(creating ? password() : field(tr('密码', 'Password'), 'password', 'password', '', { autocomplete: 'current-password', maxlength: 128 }));
     if (creating) fields.push(password('confirmPassword', tr('确认密码', 'Confirm password')));
+    if (creating) { contactWidget = contactVerification({ purpose: 'register', siteKey: r.json.turnstileSiteKey, channels: r.json.verificationChannels }); fields.push(contactWidget.node); }
     const challengeNode = mode === 'login' && r.json.turnstileSiteKey ? h('div', { class: 'login-turnstile', role: 'status', 'aria-live': 'polite' }) : null;
     let formChallenge = null;
     if (challengeNode) fields.push(challengeNode);
+    const firstLogin = mode === 'login' ? h('div', { class: 'first-login-verification' }) : null;
+    if (firstLogin) fields.push(firstLogin);
     pane.append(form(fields, modes.find(([id]) => id === mode)[1], async (body, msg) => {
       if (creating && body.password !== body.confirmPassword) return { ok: false, json: { error: { message: tr('两次密码不一致。', 'Passwords do not match.') } } };
       delete body.confirmPassword;
+      if (creating) {
+        if (!contactWidget.proof) return { ok: false, json: { error: { message: tr('请先验证邮箱或手机号。', 'Verify your email or phone first.') } } };
+        body.proof = contactWidget.proof;
+      } else if (contactWidget?.proof) body.proof = contactWidget.proof;
       if (challengeNode) {
         body.turnstileToken = formChallenge?.token() || '';
         if (!body.turnstileToken) return { ok: false, json: { error: { message: tr('请完成人机验证后重试。', 'Complete verification and try again.') } } };
       }
       const result = await request(`/api/account/${mode}`, body);
       if (challengeNode) formChallenge?.reset();
+      if (result.status === 428 && !contactWidget) {
+        contactWidget = contactVerification({ purpose: 'first_login', siteKey: r.json.turnstileSiteKey, channels: r.json.verificationChannels });
+        firstLogin.append(h('p', { class: 'muted' }, tr('首次登录，请验证邮箱或手机号。', 'Verify an email or phone before your first sign-in.')), contactWidget.node);
+      }
       if (result.ok) { await refreshAccount(); modal.close(); if (hub) openAccount(); }
       return result;
     }));
+    if (mode === 'login') pane.append(h('a', { href: '/login.html?mode=recover', class: 'login-forgot' }, tr('忘记密码？', 'Forgot password?')));
     if (challengeNode) challenge = formChallenge = mountLoginChallenge(challengeNode, r.json.turnstileSiteKey);
   }
   for (const [id, label] of modes) tabs.append(h('button', { type: 'button', class: 'btn', dataset: { mode: id }, onClick: () => show(id) }, label));
@@ -159,6 +175,8 @@ function accountHub(modal) {
 }
 /** 账户设置：个人资料与修改密码（account.html） */
 export function settingsPanel(user) {
+  const root = h('div', { class: 'settings-grid' });
+  const redraw = async updated => { await refreshAccount(); clear(root).append(...Array.from(settingsPanel(updated).childNodes)); };
   const profile = form([field(tr('昵称', 'Display name'), 'displayName', 'text', user.displayName, { maxlength: 60 })], tr('保存资料', 'Save profile'), async (body, msg) => {
     const r = await request('/api/account', body, 'PATCH');
     if (r.ok) { await refreshAccount(); msg.textContent = tr('资料已保存。', 'Profile saved.'); }
@@ -171,11 +189,45 @@ export function settingsPanel(user) {
     if (r.ok) { change.reset(); msg.textContent = tr('密码已更新，其他登录会话已失效。', 'Password updated. Other sessions have been signed out.'); }
     return r;
   });
-  return h('div', { class: 'settings-grid' },
+  const contacts = h('section', { class: 'card-panel' }, h('h2', null, tr('验证联系方式', 'Verified contacts')));
+  for (const [kind, label] of [['email', tr('邮箱', 'Email')], ['phone', tr('手机号', 'Phone')]]) {
+    if (!user.contacts?.[kind]) continue;
+    contacts.append(h('div', { class: 'contact-row' }, h('span', null, label), h('strong', null, user.contacts[kind])));
+    if (user.passwordLoginEnabled) contacts.append(form([password('currentPassword', tr('当前密码', 'Current password'))], tr('解除' + label, 'Remove ' + label), async (body, msg) => {
+      const r = await request(`/api/account/contacts/${kind}`, body, 'DELETE');
+      if (r.ok) await redraw(r.json.user);
+      return r;
+    }));
+  }
+  if (user.passwordLoginEnabled) {
+    const widget = contactVerification({ purpose: 'contact', channels: verificationChannels });
+    contacts.append(h('h3', null, tr('添加或更换', 'Add or replace')), widget.node,
+      form([password('currentPassword', tr('当前密码', 'Current password'))], tr('保存联系方式', 'Save contact'), async (body) => {
+        if (!widget.proof) return { ok: false, json: { error: { message: tr('请先验证新联系方式。', 'Verify the new contact first.') } } };
+        const r = await request('/api/account/contacts', { ...body, proof: widget.proof });
+        if (r.ok) await redraw(r.json.user);
+        return r;
+      }));
+  } else contacts.append(h('p', { class: 'muted' }, tr('请在微信端验证联系方式，再设置网页登录密码。', 'Verify a contact in WeChat, then set a web password.')));
+  const wechat = h('section', { class: 'card-panel' }, h('h2', null, tr('微信关联', 'WeChat linking')));
+  const apps = user.wechatApps || [];
+  if (!apps.length) wechat.append(h('p', null, tr('尚未关联微信。', 'WeChat is not linked.')));
+  for (const appid of apps) {
+    const name = appid.startsWith('wx') ? `${tr('微信应用', 'WeChat app')} · ${appid}` : appid;
+    wechat.append(h('p', null, name));
+    if (user.passwordLoginEnabled && Object.keys(user.contacts || {}).length) wechat.append(form([password('currentPassword', tr('当前密码', 'Current password'))], tr('解除此项绑定', 'Unlink this app'), async body => {
+      const r = await request(`/api/account/wechat/${encodeURIComponent(appid)}`, body, 'DELETE');
+      if (r.ok) await redraw(r.json.user);
+      return r;
+    }));
+  }
+  if (apps.length && (!user.passwordLoginEnabled || !Object.keys(user.contacts || {}).length)) wechat.append(h('p', { class: 'muted' }, tr('请先验证联系方式并启用密码登录，再解除微信绑定。', 'Verify a contact and enable password sign-in before unlinking WeChat.')));
+  wechat.append(h('p', { class: 'muted' }, tr('在微信端可关联现有网站账号；已有两个账号时，请先验证两端身份并合并。', 'Link an existing web account in WeChat. If you have two accounts, verify both before merging them.')));
+  root.append(
     h('section', { class: 'card-panel' }, h('h2', null, tr('个人资料', 'Profile')), h('p', { class: 'muted' }, `@${user.username} · ${roleName(user)}`), profile),
-    h('section', { class: 'card-panel' }, h('h2', null, tr('修改密码', 'Change password')), h('p', { class: 'muted' }, tr('更新后，其他设备上的登录会失效。', 'Other sessions are signed out after the change.')), change),
-    h('section', { class: 'card-panel' }, h('h2', null, tr('微信关联', 'WeChat linking')),
-      h('p', null, user.wechatLinked ? tr('已关联微信。小程序与网页使用同一账号。', 'WeChat linked. The mini program and website share this account.') : tr('尚未关联微信。', 'WeChat not linked.')),
-      h('p', { class: 'muted' }, tr('在小程序「我的」选择「已有网站账号」，使用本页用户名登录，再关联微信。若微信已有独立账号，请使用该账号的「设置网页登录密码」；已有两个账号时，可在微信账号的「合并到已有网站账号」中验证两端身份并确认迁移。', 'In the mini program, sign in with this username, then link WeChat. If WeChat already has a separate account, set its web password there. To merge existing accounts, verify both identities and confirm the transfer in the mini program.'))),
+    h('section', { class: 'card-panel' }, h('h2', null, tr('修改密码', 'Change password')), user.passwordLoginEnabled ? h('p', { class: 'muted' }, tr('更新后，其他设备上的登录会失效。', 'Other sessions are signed out after the change.')) : h('p', { class: 'muted' }, tr('请先在微信端启用密码登录。', 'Enable password sign-in in WeChat first.')), user.passwordLoginEnabled ? change : null),
+    contacts,
+    wechat,
     h('section', { class: 'card-panel wide' }, prayerAuditPanel()));
+  return root;
 }

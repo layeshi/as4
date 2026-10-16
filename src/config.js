@@ -43,6 +43,12 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
     adminKey: env.ADMIN_KEY || null,
     turnstileSiteKey: env.TURNSTILE_SITE_KEY || null,
     turnstileSecretKey: env.TURNSTILE_SECRET_KEY || null,
+    aliyunAccessKeyId: env.ALIBABA_CLOUD_ACCESS_KEY_ID || null,
+    aliyunAccessKeySecret: env.ALIBABA_CLOUD_ACCESS_KEY_SECRET || null,
+    aliyunMailFrom: env.ALIYUN_MAIL_FROM || null,
+    aliyunMailRegion: env.ALIYUN_MAIL_REGION || 'cn-hangzhou',
+    aliyunSmsSign: env.ALIYUN_SMS_SIGN || null,
+    smsDailyLimit: num(env.SMS_DAILY_LIMIT, 100),
     registrationOpen: env.REGISTRATION_OPEN !== '0',
     wechatAppId: env.WECHAT_APPID || null,
     wechatAppSecret: env.WECHAT_APP_SECRET || null,
@@ -81,6 +87,7 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
   if (cfg.shellTokensPerDay !== null && (!Number.isInteger(cfg.shellTokensPerDay) || cfg.shellTokensPerDay < 1)) throw new Error('SHELL_TOKENS_PER_DAY 必须是正整数');
   if (cfg.shellSlots !== null && (!Number.isInteger(cfg.shellSlots) || cfg.shellSlots < 0)) throw new Error('SHELL_SLOTS 必须是非负整数');
   if (!!cfg.turnstileSiteKey !== !!cfg.turnstileSecretKey) throw new Error('TURNSTILE_SITE_KEY 与 TURNSTILE_SECRET_KEY 必须同时设置');
+  if (!Number.isInteger(cfg.smsDailyLimit) || cfg.smsDailyLimit < 1) throw new Error('SMS_DAILY_LIMIT 必须是正整数');
   return cfg;
 }
 

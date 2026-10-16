@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { boot } from './http-helpers.js';
+import { boot, verifiedBody } from './http-helpers.js';
 import { Runtime } from '../src/runtime.js';
 import { loadConfig } from '../src/config.js';
 import { ShellManager } from '../src/shells/manager.js';
@@ -122,7 +122,7 @@ test('管理员会话可控制实验，普通用户、跨站请求与缺少验�
     assert.equal((await e.call('/api/admin/pause', { method: 'POST', body: {}, headers: { Cookie: cookie, 'X-Houren-Request': '1', 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
     assert.equal(e.rt.w.paused, false);
     assert.equal((await e.call('/api/admin/pause', { method: 'POST', body: {}, headers: { Cookie: cookie, 'X-Houren-Request': '1' } })).status, 200);
-    const normal = await e.call('/api/account/register', { method: 'POST', body: { username: 'normal', displayName: '普通用户', password: body.password }, headers: { 'X-Houren-Request': '1' } });
+    const normal = await e.call('/api/account/register', { method: 'POST', body: await verifiedBody(e, { username: 'normal', displayName: '普通用户', password: body.password }), headers: { 'X-Houren-Request': '1' } });
     const other = normal.headers.get('set-cookie').split(';')[0];
     assert.equal((await e.call('/api/admin/experiment', { headers: { Cookie: other } })).status, 403);
     assert.equal((await e.call('/api/admin/resume', { method: 'POST', body: {}, headers: { Cookie: other, 'X-Houren-Request': '1' } })).status, 403);

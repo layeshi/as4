@@ -98,6 +98,7 @@ test('setting a web password revokes sessions but preserves an existing resident
   const { e, s, source, sourceToken, a } = await setup(t);
   const runners = e.app.ctx.runners;
   assert.equal(runners.valid(a), true);
+  s.setContact(source.id, 'email', 'source@example.org');
   await s.setWechatPassword(source.id, identityHash(mini, 'verified-owner'), 'new-web-password');
   assert.equal(s.session(sourceToken), null);
   assert.equal(runners.valid(a), true);

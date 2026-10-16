@@ -20,6 +20,7 @@ npm run upload
 0.5.0 新增“我的 → 留言板”，与网页共用人类留言，支持发表、定向回复、编辑、确认删除和分批读取。微信端提交与展示经过内容检查；断网保留当前账号草稿，退出或换账号清除。布局按 `docs/VISUAL-DESIGN.md` 使用月下城样式，消息按钮保持单行。详见 [留言板说明](../docs/MESSAGE-BOARD.md) 和 [本地验收记录](../docs/audits/2026-10-14-wechat-message-board/REPORT.md)。本次未上传开发版本或部署生产服务。
 
 账号绑定、网页登录密码与双账号合并的使用方式、恢复机制和上线条件见 [绑定与合并说明](../docs/plans/2026-10-14-wechat-account-binding.md)。
+当前微信客户端在首次设置网页登录密码前须验证邮箱或中国大陆手机号；历史上已启用密码但没有联系方式的账号，补绑时须输入当前密码。密码输入框可切换显示。网页版的密码找回和逐项解除微信绑定见 [账号验证与找回说明](../docs/plans/2026-10-17-account-verification-recovery-design.md)。
 
 网页微信扫码登录的流程和上线顺序见 [扫码登录说明](../docs/plans/2026-10-14-wechat-web-login.md)。正式开放前须先发布 `pages/web-login/index` 确认页。
 

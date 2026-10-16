@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { boot } from './http-helpers.js';
+import { boot, verifiedBody } from './http-helpers.js';
 import { AccountStore } from '../src/accounts/store.js';
 import { verifyLoginTurnstile } from '../src/http/accounts.js';
 import { loadConfig } from '../src/config.js';
@@ -21,6 +21,8 @@ test('Turnstile Siteverify checks token and action, and fails closed on upstream
   };
   await verifyLoginTurnstile('secret', 'token', '192.0.2.1', good);
   await verifyLoginTurnstile('secret', 'token', '192.0.2.1', async () => ({ ok: true, json: async () => ({ success: true }) }));
+  await verifyLoginTurnstile('secret', 'token', '192.0.2.1', async () => ({ ok: true, json: async () => ({ success: true, action: 'verify' }) }), 'verify');
+  await assert.rejects(verifyLoginTurnstile('secret', 'token', '192.0.2.1', async () => ({ ok: true, json: async () => ({ success: true }) }), 'verify'), { code: 'turnstile_failed' });
   assert.equal(sent.url, 'https://challenges.cloudflare.com/turnstile/v0/siteverify');
   assert.equal(sent.options.body.get('secret'), 'secret');
   assert.equal(sent.options.body.get('response'), 'token');
@@ -47,6 +49,7 @@ function client(e) {
   return {
     get cookie() { return cookie; },
     async call(path, body, method = body === undefined ? 'GET' : 'POST', extra = {}) {
+      if (path === '/api/account/register' && body && e.cfg.registrationOpen !== false) body = await verifiedBody(e, body);
       const r = await e.call(path, { method, body, headers: { Cookie: cookie, 'X-Houren-Request': '1', ...extra } });
       if (r.headers.get('set-cookie')) cookie = r.headers.get('set-cookie').split(';')[0];
       return r;

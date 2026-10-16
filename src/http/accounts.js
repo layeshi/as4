@@ -1,4 +1,6 @@
-import { AccountError, fail, publicUser } from '../accounts/store.js';
+import { AccountError, fail, hasContact, hasWechatIdentity, passwordEnabled, publicUser } from '../accounts/store.js';
+import { normalizeContact } from '../accounts/verification.js';
+import { identityHash } from '../wechat/service.js';
 import { prayerView } from '../e2/engine/prayers.js';
 import { clientIp, parseCookies, readJson, sendJson, SlidingLimiter, timingEqual } from './util.js';
 
@@ -87,7 +89,7 @@ function limit(ctx, req, body, registering = false) {
   const ip = clientIp(req, ctx.cfg.trustProxy);
   if (!ctx.accountLimits.ip.take(ip) || (registering && !ctx.accountLimits.register.take(ip)) || (!registering && !ctx.accountLimits.username.take(String(body.username || '').toLowerCase().slice(0, 64)))) fail(429, 'rate_limited', '尝试次数过多，请稍后再试。');
 }
-export async function verifyLoginTurnstile(secret, token, ip, fetchImpl = fetch) {
+export async function verifyLoginTurnstile(secret, token, ip, fetchImpl = fetch, action = 'login') {
   if (typeof token !== 'string' || !token || token.length > 2048) fail(400, 'turnstile_required', '请完成人机验证后重试。');
   let result;
   try {
@@ -101,17 +103,44 @@ export async function verifyLoginTurnstile(secret, token, ip, fetchImpl = fetch)
   } catch {
     fail(503, 'turnstile_unavailable', '人机验证暂时不可用，请稍后重试。');
   }
-  if (result?.success !== true || (result.action && result.action !== 'login')) fail(403, 'turnstile_failed', '人机验证未通过，请重试。');
+  if (result?.success !== true || (action === 'verify' ? result.action !== action : result.action && result.action !== action)) fail(403, 'turnstile_failed', '人机验证未通过，请重试。');
+}
+async function reauthenticate(ctx, actor, body, authorize) {
+  if (passwordEnabled(actor)) await ctx.accounts.verifyPassword(actor.id, body.currentPassword);
+  else {
+    const identity = await ctx.wechat.exchange(body.wechatCode, body.appid);
+    if (!hasWechatIdentity(ctx.accounts.get(actor.id), identityHash(identity.appid, identity.openid))) fail(403, 'identity_mismatch', '微信身份与当前账号不匹配。');
+  }
+  authorize();
 }
 export const accountRoutes = [
   ['GET', '/api/account', wrap(({ req, res, ctx }) => {
     const user = accountFor(ctx, req);
-    sendJson(res, 200, { user: user ? publicUser(user) : null, registrationOpen: ctx.cfg.registrationOpen !== false, loginRequired: ctx.cfg.requireLogin === true, wechatQrEnabled: ctx.wechatWebLogin.enabled, turnstileSiteKey: ctx.cfg.turnstileSiteKey || null });
+    sendJson(res, 200, { user: user ? publicUser(user, ctx.wechat.appid) : null, registrationOpen: ctx.cfg.registrationOpen !== false, loginRequired: ctx.cfg.requireLogin === true, wechatQrEnabled: ctx.wechatWebLogin.enabled, turnstileSiteKey: ctx.cfg.turnstileSiteKey || null, verificationChannels: { email: ctx.verification.available('email'), phone: ctx.verification.available('phone') } });
+  })],
+  ['POST', '/api/account/verification/request', wrap(async ({ req, res, ctx, body }) => {
+    const { purpose, channel } = body;
+    const actor = accountFor(ctx, req);
+    if (purpose === 'register' && ctx.cfg.registrationOpen === false) fail(403, 'registration_closed', '公开注册已关闭。');
+    if (purpose === 'contact') {
+      if (!actor) fail(401, 'unauthorized', '请先登录。');
+    } else if (purpose === 'register' || purpose === 'recover' || purpose === 'first_login') {
+      if (!ctx.cfg.turnstileSecretKey) fail(503, 'turnstile_unavailable', '人机验证尚未配置。');
+      await ctx.verifyLoginTurnstile(ctx.cfg.turnstileSecretKey, body.turnstileToken, clientIp(req, ctx.cfg.trustProxy), fetch, 'verify');
+    } else fail(400, 'invalid_request', '验证用途无效。');
+    const contact = normalizeContact(channel, body.value);
+    const user = purpose === 'recover' ? ctx.accounts.data.users.find(u => u.status === 'active' && !u.mergePending && passwordEnabled(u) && u.contacts?.[channel] === contact) : null;
+    const result = await ctx.verification.request({ channel, value: contact, purpose, ip: clientIp(req, ctx.cfg.trustProxy), ownerId: purpose === 'contact' ? actor.id : null, userId: user?.id || null, deliver: purpose !== 'recover' || !!user, deferDelivery: purpose === 'recover' });
+    sendJson(res, 200, { ...result, message: '如该联系方式可用于验证，验证码将发送。' });
+  })],
+  ['POST', '/api/account/verification/confirm', wrap(async ({ res, ctx, body }) => {
+    sendJson(res, 200, await ctx.verification.confirm(body.challengeId, body.code));
   })],
   ['POST', '/api/account/register', wrap(async ({ req, res, ctx, body }) => {
     limit(ctx, req, body, true);
     if (ctx.cfg.registrationOpen === false) fail(403, 'registration_closed', '公开注册已关闭，请联系管理员。');
-    const user = await ctx.accounts.create(body);
+    const verified = ctx.verification.consume(body.proof, 'register');
+    const user = await ctx.accounts.create(body, { verifiedContact: verified });
     setSession(req, res, ctx, user.id);
     sendJson(res, 201, { user });
   })],
@@ -125,10 +154,35 @@ export const accountRoutes = [
   ['POST', '/api/account/login', wrap(async ({ req, res, ctx, body }) => {
     limit(ctx, req, body);
     if (ctx.cfg.turnstileSecretKey) await ctx.verifyLoginTurnstile(ctx.cfg.turnstileSecretKey, body.turnstileToken, clientIp(req, ctx.cfg.trustProxy));
-    const user = await ctx.accounts.login(body);
+    const user = await ctx.accounts.login(body, { allowPending: true });
+    if (user.contactRequired && !hasContact(user)) {
+      if (!body.proof) fail(428, 'contact_required', '首次登录前请验证邮箱或手机号。');
+      const verified = ctx.verification.consume(body.proof, 'first_login');
+      ctx.accounts.setContact(user.id, verified.channel, verified.contact, { expectedRevision: user.revision });
+    }
     setSession(req, res, ctx, user.id);
-    sendJson(res, 200, { user: publicUser(user) });
+    sendJson(res, 200, { user: publicUser(ctx.accounts.get(user.id)) });
   })],
+  ['POST', '/api/account/recovery', wrap(async ({ res, ctx, body }) => {
+    const verified = ctx.verification.consume(body.proof, 'recover');
+    await ctx.accounts.resetPasswordByContact(verified.userId, verified.channel, verified.contact, body.password);
+    sendJson(res, 200, { ok: true });
+  })],
+  ['POST', '/api/account/contacts', wrap(async ({ res, ctx, body, actor, authorize }) => {
+    await reauthenticate(ctx, actor, body, authorize);
+    const verified = ctx.verification.consume(body.proof, 'contact', actor.id);
+    sendJson(res, 200, { user: ctx.accounts.setContact(actor.id, verified.channel, verified.contact, { expectedRevision: actor.revision }) });
+  }, { signedIn: true })],
+  ['DELETE', /^\/api\/account\/contacts\/(email|phone)$/, wrap(async ({ res, ctx, body, actor, params, authorize }) => {
+    await reauthenticate(ctx, actor, body, authorize);
+    sendJson(res, 200, { user: ctx.accounts.deleteContact(actor.id, params[0], { expectedRevision: actor.revision }) });
+  }, { signedIn: true })],
+  ['DELETE', /^\/api\/account\/wechat\/([^/]+)$/, wrap(async ({ res, ctx, body, actor, params, authorize }) => {
+    if (!passwordEnabled(actor)) fail(409, 'password_required', '请先验证联系方式并启用密码登录。');
+    authorize();
+    const user = await ctx.accounts.unlinkWechat(actor.id, params[0], body.currentPassword, ctx.wechat.appid);
+    sendJson(res, 200, { user });
+  }, { signedIn: true })],
   ['POST', '/api/account/logout', wrap(({ req, res, ctx }) => {
     ctx.accounts.logout(tokenOf(req));
     res.setHeader('Set-Cookie', cookie(req, ctx));
@@ -177,7 +231,8 @@ export const accountRoutes = [
   ['POST', '/api/admin/users', wrap(async ({ req, res, ctx, body, authorize }) => {
     limit(ctx, req, body, true);
     if (body.role !== undefined && !['user', 'admin'].includes(body.role)) fail(400, 'invalid_role', '角色无效。');
-    const user = await ctx.accounts.create(body, { role: body.role || 'user', authorize });
+    const role = body.role || 'user';
+    const user = await ctx.accounts.create(body, { role, contactRequired: role === 'user', authorize });
     sendJson(res, 201, { user });
   }, { admin: true })],
   ['PATCH', /^\/api\/admin\/users\/([^/]+)$/, wrap(async ({ req, res, ctx, body, params, authorize }) => {

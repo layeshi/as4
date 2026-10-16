@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import { boot } from './http-helpers.js';
+import { boot, verifiedBody } from './http-helpers.js';
 import { MessageBoard } from '../src/message-board.js';
 
 const password = 'message-board-test-password';
 async function person(e, name, admin = false) {
-  const r = await e.call(admin ? '/api/account/setup' : '/api/account/register', { method: 'POST', body: { username: name, displayName: name, password, ...(admin ? { adminKey: e.cfg.adminKey } : {}) }, headers: { 'X-Houren-Request': '1' } });
+  const body = { username: name, displayName: name, password, ...(admin ? { adminKey: e.cfg.adminKey } : {}) };
+  const r = await e.call(admin ? '/api/account/setup' : '/api/account/register', { method: 'POST', body: admin ? body : await verifiedBody(e, body), headers: { 'X-Houren-Request': '1' } });
   assert.equal(r.status, 201);
   const cookie = r.headers.get('set-cookie').split(';')[0];
   return { user: r.json.user, cookie, call: (path, body, method = body === undefined ? 'GET' : 'POST', headers = {}) => e.call(path, { body, method, headers: { Cookie: cookie, 'X-Houren-Request': '1', ...headers } }) };
