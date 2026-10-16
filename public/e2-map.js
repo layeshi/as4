@@ -197,6 +197,7 @@ export function createMap2(svg, deps) {
     b.box.setAttribute('y', (-bh / 2).toFixed(1));
     b.box.setAttribute('width', bw);
     b.box.setAttribute('height', bh);
+    b.size = [bw, bh];
   }
   function paintBadges() {
     if (!island || !state) return;
@@ -228,19 +229,38 @@ export function createMap2(svg, deps) {
         [t('cityBadgeTreasury', { n: compact((c.treasury && c.treasury.energy) || 0), p: open }), wx].filter(Boolean).join(' · '),
       ];
       // 窄屏（地图宽度 < 560）只写城名与人数，免得三块城牌互相压住
-      setBadgeText(b, W < 560 ? texts.slice(0, 2) : texts);
+      const shortName = c.cityName && c.cityName !== hn.zh ? clip(name, lang === 'en' ? 16 : 9) : (c.short && c.short[lang]) || name;
+      setBadgeText(b, W < 560 ? [shortName, `${t('cmpDomiciled')} ${compact(domiciled[c.id] || 0)}`, `${t('cmpPresent')} ${compact(present[c.id] || 0)}`] : texts);
       b.g.firstChild.textContent = texts.join('\n');
       b.g.setAttribute('aria-label', texts.join('，'));
     }
     if (badgeEls.wilds) setBadgeText(badgeEls.wilds, [t('wildsBadge', { n: wilds })]);
+    const v = view.state();
+    if (v.fitted) placeBadges(v.k, v.tx, v.ty, v.H);
   }
   let badgesNarrow = null;
-  function placeBadges(k) {
+  function placeBadges(k, tx, ty, H) {
     if ((W < 560) !== badgesNarrow) {
       badgesNarrow = W < 560;
       paintBadges();
     }
-    for (const b of Object.values(badgeEls)) b.g.setAttribute('transform', `translate(${b.at[0]} ${b.at[1]}) scale(${(1 / k).toFixed(4)})`);
+    const placed = [];
+    for (const b of Object.values(badgeEls)) {
+      let [x, y] = b.at;
+      if (W < 560 && b.size) {
+        const [bw, bh] = b.size;
+        let sx = clamp(tx + x * k, bw / 2 + 6, W - bw / 2 - 6);
+        let sy = clamp(ty + y * k, HUD + bh / 2 + 6, H - bh / 2 - 6);
+        // 荒野人数放在两块下方城牌之外，避免盖住人数。
+        if (b === badgeEls.wilds) {
+          for (const p of placed) if (Math.abs(sx - p.x) < (bw + p.w) / 2 + 6 && Math.abs(sy - p.y) < (bh + p.h) / 2 + 6) sy = p.y + (bh + p.h) / 2 + 8;
+          sy = Math.min(sy, H - bh / 2 - 6);
+        }
+        placed.push({ x: sx, y: sy, w: bw, h: bh });
+        x = (sx - tx) / k; y = (sy - ty) / k;
+      }
+      b.g.setAttribute('transform', `translate(${x} ${y}) scale(${(1 / k).toFixed(4)})`);
+    }
   }
 
   /** 跨城的移动：一道飞过荒野的弧线，几秒后淡出（只在全岛级显示） */
@@ -380,7 +400,7 @@ export function createMap2(svg, deps) {
 
   const view = createView(svg, world, {
     hud: HUD,
-    onChange({ k, W: w, H: h, fitK }) {
+    onChange({ k, tx, ty, W: w, H: h, fitK }) {
       viewK = k;
       W = w;
       L.labels.setAttribute('font-size', (12.5 / k).toFixed(3));
@@ -395,7 +415,7 @@ export function createMap2(svg, deps) {
         lod = next;
       }
       if (island) {
-        placeBadges(k);
+        placeBadges(k, tx, ty, h);
         layoutMini(h);
         reportFocus();
       }
