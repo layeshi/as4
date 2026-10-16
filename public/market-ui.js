@@ -127,7 +127,7 @@ function renderRecord(ctx, row, isService) {
 }
 
 export function renderMaterialsMarket(ctx, root) {
-  if (![5, 6].includes(ctx.S.state.world.premise)) return;
+  if (![5, 6, 7].includes(ctx.S.state.world.premise)) return;
   const key = `${ctx.S.state.world.id}:${ctx.S.state.world.epoch}`;
   if (key !== worldKey) {
     Object.assign(session, { agent: '', status: '', kind: '', cursors: [null], opened: new Set() });
