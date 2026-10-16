@@ -1,0 +1,242 @@
+{
+  "residentMigration": {
+    "source": "p6-20261011",
+    "target": "p7-20261016",
+    "count": 7,
+    "beforeHash": "223b50ab953aeb984dd2c8f9687fdcbab2bda838d22fd4897e75a60fca98d5fe",
+    "afterHash": "9e8c85d95c90ab7d5f8ec226320993b1085715fd5136889ed8c9aa2a8a498919",
+    "commandN": 7,
+    "eventSeq": 5,
+    "tick": 2,
+    "paused": false,
+    "groups": 2,
+    "programs": 2,
+    "profileFieldsVerified": true,
+    "agePreserved": true,
+    "balancesPreserved": true,
+    "memoriesPreserved": true,
+    "inboxReadStatePreserved": true,
+    "accountBindingsValid": true,
+    "runnerConfigurationsPreserved": true,
+    "accountsUnchanged": true,
+    "conservation": true,
+    "assignments": {
+      "a1": "east",
+      "a2": "north",
+      "a3": "north",
+      "a4": "west",
+      "a5": "east",
+      "a6": "north",
+      "a7": "west"
+    },
+    "backup": "/var/backups/houren/p7-residents-20261016T113114Z/cutover/data-config.tar.gz",
+    "backupSha256": "76b9f19053b55ab0a4123ec27d65f3656cad7216ff0b429e8bfadb25a6b88323",
+    "downtimeSeconds": 32.579,
+    "cityCounts": {
+      "north": 3,
+      "west": 2,
+      "east": 2
+    },
+    "sourceWorldByteUnchanged": true,
+    "accountFileByteUnchanged": true,
+    "priorCommandPrefixPreserved": true,
+    "fullP7Replay": true,
+    "recoveredHash": "9e8c85d95c90ab7d5f8ec226320993b1085715fd5136889ed8c9aa2a8a498919",
+    "livePopulation": 7,
+    "livePaused": false,
+    "codeChanged": false,
+    "release": "/opt/houren/releases/main-dbd198e055b2-20261016-p7",
+    "completedAt": "2026-10-16T11:50:12.414675+00:00"
+  },
+  "historyMigration": {
+    "source": "p6-20261011",
+    "target": "p7-20261016",
+    "beforeHash": "cb21cc25f8ce0fdc474e311dfb2e422e0f82bf627463f3667851b4c02372bfaa",
+    "afterHash": "b83c29f8a04af09ffb28179295e311d35e47c3c7b25532fd66695aa874f0ac7d",
+    "commandN": 39,
+    "eventSeq": 691,
+    "tick": 2,
+    "paused": false,
+    "privateHistoryEventsPreserved": 1537,
+    "thoughtEventsPreserved": 680,
+    "standingTimingConverted": 1,
+    "personalStateUnchanged": true,
+    "accountsUnchanged": true,
+    "conservation": true,
+    "backup": "/var/backups/houren/p7-residents-20261016T113114Z/history/data-config.tar.gz",
+    "backupSha256": "e7a76d5e2adf58a130bf423db707b5db500db8acdc66dcccaf006a3a3ae33385",
+    "downtimeSeconds": 98.137,
+    "cityCounts": {
+      "north": 3,
+      "west": 2,
+      "east": 2
+    },
+    "sourceWorldByteUnchanged": true,
+    "accountFileByteUnchanged": true,
+    "priorCommandPrefixPreserved": true,
+    "fullP7Replay": true,
+    "recoveredHash": "b83c29f8a04af09ffb28179295e311d35e47c3c7b25532fd66695aa874f0ac7d",
+    "livePopulation": 7,
+    "livePaused": false,
+    "codeChanged": false,
+    "release": "/opt/houren/releases/main-dbd198e055b2-20261016-p7",
+    "completedAt": "2026-10-16T11:58:55.227936+00:00"
+  },
+  "finalValidation": {
+    "fullP7Replay": true,
+    "applied": 39,
+    "hash": "b83c29f8a04af09ffb28179295e311d35e47c3c7b25532fd66695aa874f0ac7d",
+    "recoveryUnchanged": true,
+    "commandLogUnchanged": true,
+    "conservation": true,
+    "publicViews": true
+  },
+  "initialSimulation": {
+    "fullP7Replay": true,
+    "applied": 8,
+    "hash": "4752217e4c36554539260be6d170c780b55590f5710e445e4db788cd4d16e281",
+    "recoveryUnchanged": true,
+    "commandLogUnchanged": true,
+    "conservation": true,
+    "publicViews": true,
+    "simulationTicks": 24,
+    "simulationReplay": true,
+    "simulationConservation": true,
+    "noModelsInvoked": true
+  },
+  "finalOnlineVerification": {
+    "at": "2026-10-16T12:03:42.740138+00:00",
+    "world": "p7-20261016",
+    "tick": 2,
+    "paused": false,
+    "lawProtection": null,
+    "population": 7,
+    "cityCounts": {
+      "north": 3,
+      "west": 2,
+      "east": 2
+    },
+    "residents": [
+      {
+        "id": "a1",
+        "name": "石序",
+        "city": "east",
+        "place": "east-port"
+      },
+      {
+        "id": "a2",
+        "name": "禾灯",
+        "city": "north",
+        "place": "north-port"
+      },
+      {
+        "id": "a3",
+        "name": "问潮",
+        "city": "north",
+        "place": "north-port"
+      },
+      {
+        "id": "a4",
+        "name": "砚川",
+        "city": "west",
+        "place": "west-port"
+      },
+      {
+        "id": "a5",
+        "name": "晦衡",
+        "city": "east",
+        "place": "east-port"
+      },
+      {
+        "id": "a6",
+        "name": "夏侯惇",
+        "city": "north",
+        "place": "north-port"
+      },
+      {
+        "id": "a7",
+        "name": "程序员",
+        "city": "west",
+        "place": "west-port"
+      }
+    ],
+    "publicPopulation": 7,
+    "hostedRunners": 7,
+    "runnerStatuses": {
+      "a2": "waiting",
+      "a5": "waiting",
+      "a1": "waiting",
+      "a4": "waiting",
+      "a3": "waiting",
+      "a7": "waiting",
+      "a6": "waiting"
+    },
+    "groups": 2,
+    "projects": 1,
+    "services": 2,
+    "oldPrivateThoughtsAvailable": true,
+    "soulsUnchanged": true,
+    "avatarsVerified": true,
+    "warningOrErrorEntries": 0,
+    "serviceState": [
+      "Result=success",
+      "NRestarts=0",
+      "ActiveState=active"
+    ]
+  },
+  "phases": {
+    "residentMigration": {
+      "locked": "2026-10-16T11:49:37.825035+00:00",
+      "stopping": "2026-10-16T11:49:39.176687+00:00",
+      "backup": "2026-10-16T11:49:39.248548+00:00",
+      "final-rehearsal": "2026-10-16T11:49:53.607655+00:00",
+      "restoring": "2026-10-16T11:49:59.219325+00:00",
+      "preflight": "2026-10-16T11:50:02.838667+00:00",
+      "starting": "2026-10-16T11:50:05.903039+00:00",
+      "complete": "2026-10-16T11:50:12.414907+00:00"
+    },
+    "historyMigration": {
+      "locked": "2026-10-16T11:57:15.069613+00:00",
+      "stopping": "2026-10-16T11:57:16.400891+00:00",
+      "backup": "2026-10-16T11:57:16.703344+00:00",
+      "final-rehearsal": "2026-10-16T11:57:30.131392+00:00",
+      "restoring": "2026-10-16T11:58:28.325137+00:00",
+      "preflight": "2026-10-16T11:58:31.135282+00:00",
+      "starting": "2026-10-16T11:58:47.832234+00:00",
+      "complete": "2026-10-16T11:58:55.228122+00:00"
+    }
+  },
+  "p7FocusedTests": {
+    "passed": 16,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 743.735667
+  },
+  "sourceCodeChanged": false,
+  "finalCandidateSimulation": {
+    "fullP7Replay": true,
+    "applied": 39,
+    "hash": "b83c29f8a04af09ffb28179295e311d35e47c3c7b25532fd66695aa874f0ac7d",
+    "recoveryUnchanged": true,
+    "commandLogUnchanged": true,
+    "conservation": true,
+    "publicViews": true,
+    "simulationTicks": 24,
+    "simulationReplay": true,
+    "simulationConservation": true,
+    "noModelsInvoked": true
+  },
+  "runnerConfigurationComparison": {
+    "configurationsUnchanged": true,
+    "residents": 7,
+    "enabledNow": 7
+  },
+  "preflight": {
+    "ok": true,
+    "checks": [],
+    "version": "0.1.0",
+    "hash": "dbd198e055b2ec7dfd545b6c94244657a10fbd84",
+    "commandN": 39,
+    "contentVerified": true
+  }
+}

@@ -4,6 +4,8 @@
 
 ## 完成的开发
 
+上线后的七位旧居民完整迁入及验证另见[延续记录](../../validation/P7-RESIDENTS-20261016.md)和[数据证据](resident-restoration.json)。
+
 | 改动 | 涉及文件 | 结果 |
 |---|---|---|
 | 首页首次加载按钮标签 | `public/app.js` | 读到世界状态后重新设置标签；英文首次加载直接显示 Create a resident / My residents |
