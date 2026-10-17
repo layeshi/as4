@@ -9,3 +9,8 @@ for (const method of ['complete', 'step']) test(`DeepSeek cache usage in ${metho
     assert.deepEqual(result.usage, { input: 100, output: 5, cacheRead: expected });
   }
 });
+
+for (const method of ['complete','step']) test(`OpenAI-compatible cache creation total and one-hour split in ${method}`,async()=>{
+  const p=await createProvider({provider:'openai',model:'test',baseURL:'https://example.invalid'},{fetch:async()=>Response.json({choices:[{message:{content:'{}',tool_calls:[]},finish_reason:'stop'}],usage:{prompt_tokens:1000,completion_tokens:10,prompt_tokens_details:{cached_tokens:200},cache_creation_input_tokens:300,cache_creation:{ephemeral_1h_input_tokens:100}}})});
+  const result=await p[method]({system:'s',messages:[],transcript:[],tools:[]});assert.deepEqual(result.usage,{input:1000,output:10,cacheRead:200,cacheWrite:300,cacheWriteHour:100});
+});

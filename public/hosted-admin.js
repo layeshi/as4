@@ -1,3 +1,4 @@
+import { catalogAdmin } from './hosted-catalog-admin.js';
 // 管理后台里与模型计费有关的三块：平台托管（配置、连接测试、今日统计）、充值审核（待处理申请、手动调整、账号余额）、
 // 公共角色模型（独立预算）。每块返回一个根节点，由 admin.js 挂到内容区。
 
@@ -64,6 +65,8 @@ function hostedPanel(render, { pollMs = 0, key = () => '', onView, stale = () =>
 
 export function hostedConfigPanel() {
   return hostedPanel((pane, d, refresh) => {
+    catalogAdmin(pane, d, refresh);
+    if (d.config.version === 2) return;
     const c = d.config, today = d.stats.today;
     pane.append(h('p', { class: `callout ${d.available ? 'good' : 'warn'}` }, d.available ? '平台托管已开放：选择托管的居民从各自账号的余额扣费。' : '平台托管暂未开放：勾选「开放」并配齐接口地址、模型、API Key 与三个单价后，居民才能选择托管。'));
     if (d.storageFault) pane.append(h('p', { class: 'callout bad' }, '托管账本暂不可用，入账与调整已暂停。'));
@@ -87,7 +90,7 @@ export function hostedConfigPanel() {
     }));
     configForm.append(testNotice);
     pane.append(h('div', { class: 'card-grid hosted-grid' },
-      card('托管配置', '单价按 DeepSeek 官方价格填写，不加价。测试调用由平台承担费用。保存后，已启用的托管居民会自动换用新配置。', configForm),
+      card('托管配置', '旧版单模型配置（迁移前兼容）。请使用上方 OpenLux 接入设置升级；测试调用由平台承担费用。', configForm),
       card('今日统计', `${d.day} · ${d.timezone}`, metrics([['余额合计', money(d.stats.balanceMicro)], ['在途预留', money(d.stats.reservedMicro)], ['今日扣费', money(today.costMicro)], ['今日调用', today.calls], ['今日 token', today.tokens], ['输入 token', today.input], ['缓存命中 token', today.cacheRead], ['输出 token', today.output], ['托管居民', d.stats.hostedResidents]]))));
   });
 }

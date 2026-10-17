@@ -59,13 +59,13 @@ test('余额与充值：余额、价格、规则、收款码、记录与居民�
   start(()=>reply({qr:{wechat:'/api/public/support/qr/wechat',alipay:'/api/public/support/qr/alipay'}}));
   const area=await hostedArea({username:'localuser'},account(),async()=>{},{a1:'青禾'});
   assert.match(area.textContent,/账号余额¥12.3457在途预留¥0.1000/);assert.match(area.textContent,/输入未命中缓存2.000000输入命中缓存0.200000输出3.000000/);
-  for(const text of ['deepseek-chat','4096','不加价','不是游戏内词元','不能提现','不能转让','退款由管理员','@localuser','手动入账','待处理','最近30个现实日','Asia/Shanghai','青禾','¥0.3000','退款'])assert.ok(area.textContent.includes(text),text);
+  for(const text of ['deepseek-chat','4096','平台倍率','不是游戏内词元','不能提现','不能转让','退款由管理员','@localuser','手动入账','待处理','最近30个现实日','Asia/Shanghai','青禾','¥0.3000','退款'])assert.ok(area.textContent.includes(text),text);
   assert.equal(area.querySelector('a').getAttribute('href'),'/support.html');assert.equal(area.querySelectorAll('img').length,2);
   assert.ok(formFor(area,'提交入账申请'));
   // 购买三步在一块卡片里，计费规则在另一块
   const cards=area.querySelectorAll('section').filter(s=>s.classList.contains('card-panel'));
   assert.ok(cards.find(s=>s.textContent.startsWith('购买额度')).textContent.includes('提交入账申请'));
-  assert.ok(cards.find(s=>s.textContent.startsWith('计费规则')).textContent.includes('不加价'));
+  assert.ok(cards.find(s=>s.textContent.startsWith('计费规则')).textContent.includes('平台倍率'));
 });
 test('余额与充值：关闭、无收款码、故障及接口错误均不提供购买表单',async()=>{
   for(const data of [account({enabled:false,available:false,pricesMicro:null}),account({storageFault:true})]){
@@ -106,7 +106,7 @@ test('模型表单：托管隐藏自有字段和测试，保存 hosted；切换�
   assert.equal(input(noCap,'dailyCap'),null,'居民的模型配置不显示每日上限');await submit(noCap);assert.deepEqual(plain[0],[{hosted:true},undefined]);
 });
 test('模型表单：已有托管预选，关闭说明及公共角色模型保持独立',()=>{
-  const f=modelForm({hosted:true,model:'old-model'},()=>{},undefined,undefined,account());assert.equal(input(f,'modelSource').value,'hosted');assert.match(f.textContent,/平台托管 · deepseek-chat/);
+  const f=modelForm({hosted:true,model:'old-model'},()=>{},undefined,undefined,account());assert.equal(input(f,'modelSource').value,'hosted');assert.match(f.textContent,/平台托管模型deepseek-chat/);
   const closed=modelForm(null,()=>{},undefined,undefined,account({available:false}));assert.equal(input(closed,'modelSource').children[0].disabled,true);assert.match(closed.textContent,/平台托管暂未开放/);
   const publicRole=modelForm({},()=>{},undefined,undefined,null);assert.equal(input(publicRole,'modelSource'),null);
 });
@@ -206,7 +206,7 @@ test('居民档案：总览只看状态，管理动作在「管理」，模型�
     for(const label of ['更新上限','寄送家书','发起过继邀请'])assert.ok(formFor(nodes.content,label),`管理里有「${label}」`);
     await fire(buttons(nodes.content,'模型运行')[0],'click');assert.match(nodes.content.textContent,/最近30个现实日托管扣费/);assert.match(nodes.content.textContent,/¥0.3000/);assert.match(nodes.content.textContent,/托管余额不足/);
     const chargeSection=nodes.content.querySelectorAll('section').find(s=>s.textContent.startsWith('最近30个现实日托管扣费'));assert.doesNotMatch(chargeSection.textContent,/a2/);assert.match(chargeSection.textContent,/青禾/);
-    const f=formFor(nodes.content,'保存模型配置');assert.equal(input(f,'modelSource').value,'hosted');assert.equal(input(f,'dailyCap'),null);await submit(f);
+    const f=formFor(nodes.content,'保存模型配置');assert.equal(input(f,'modelSource').value,'hosted');assert.equal(Number(input(f,'dailyCap').value),100);await submit(f);
     const req=posts().find(r=>r.url==='/api/account/residents/a1/runner');assert.deepEqual(req.body,{op:'save',config:{hosted:true}});
   }finally{location.href='http://localhost/residents.html';}
 });
@@ -215,5 +215,29 @@ test('托管醒来状态有解释；页面共用控制台样式；支持页的�
   assert.match(nextWakeText({state:'scheduled',at:null,blockedBy:['hosted_balance_low'],day:1,tickOfDay:2,every:3}),/托管余额不足/);
   const css=readFileSync(new URL('../public/console.css',import.meta.url),'utf8');for(const rule of ['.console-header','.admin-layout','.summary-row','.resident-grid'])assert.ok(css.includes(rule),rule);
   for(const page of ['residents','billing','account','admin']){const html=readFileSync(new URL(`../public/${page}.html`,import.meta.url),'utf8');assert.match(html,/<link rel="stylesheet" href="\/console.css">/,page);assert.match(html,/id="console-header"/,page);assert.match(html,new RegExp(`<script type="module" src="/${page}.js"></script>`),page);}
-  assert.match(readFileSync(new URL('../public/support.html',import.meta.url),'utf8'),/居民的管理者可前往<a href="\/billing.html">余额与充值<\/a>.*官方成本价/);
+  assert.match(readFileSync(new URL('../public/support.html',import.meta.url),'utf8'),/居民的管理者可前往<a href="\/billing.html">余额与充值<\/a>.*OpenLux 发布的人民币单价/);
+});
+
+test('OpenLux model selection displays CNY prices and recalculates daily / 30-day estimate',async()=>{
+  const models=[{id:'gpt-6-luna',available:true,pricesMicro:{miss:1000000,hit:100000,output:5000000}},{id:'gpt-6-astra',available:true,pricesMicro:{miss:10000000,hit:1000000,output:50000000}},{id:'grok-4.7',available:false}];
+  let saved;const f=modelForm({hosted:true,model:'gpt-6-luna'},async(config,cap)=>{saved={config,cap};},undefined,undefined,account({version:2,models}),{withCap:true,dailyCap:10000});
+  assert.match(f.textContent,/每日额度 10,000/);assert.match(f.textContent,/每月（30天）/);assert.match(f.textContent,/粗略估算/);assert.match(f.textContent,/不是扣费上限/);
+  const initial=f.querySelector('.hosted-estimate').textContent;
+  input(f,'hostedModel').value='gpt-6-astra';await fire(input(f,'hostedModel'),'change');assert.notEqual(f.querySelector('.hosted-estimate').textContent,initial);
+  input(f,'dailyCap').value='20000';await fire(input(f,'dailyCap'),'input');assert.match(f.textContent,/每日额度 20,000/);
+  await submit(f);assert.deepEqual(saved,{config:{hosted:true,model:'gpt-6-astra'},cap:20000});
+  input(f,'dailyCap').value='-1';await fire(input(f,'dailyCap'),'input');assert.match(f.textContent,/有效的每日/);
+  input(f,'hostedModel').value='grok-4.7';await fire(input(f,'hostedModel'),'change');assert.match(f.textContent,/该模型尚未开放/);
+});
+
+test('OpenLux admin clears stale group selection and publishes only verified selected models',async()=>{
+  const model={id:'deepseek-v4.1-flash',group:'Self-Deployed-2',pricesMicro:{miss:1260000,hit:25200,output:5040000},tiers:[{upTo:null,pricesMicro:{miss:1260000,hit:25200,output:5040000}}]};
+  const config={version:2,enabled:true,baseURL:'https://models.example.invalid/v1',hasApiKey:true,multiplier:'1.2',publishedMultiplier:'1.2',maxOutputTokens:4096,models:[model],priceVersion:'version',draft:{id:'draft',multiplier:'1.2',fetchedAt:'2026-10-17',entries:[{id:model.id,groups:[{group:'Self-Deployed-2',ratio:.5},{group:'Self-Deployed-3',ratio:.75}]}],tested:{[model.id]:model}}};
+  start(req=>reply(req.method==='GET'?admin({config}):{}));
+  const root=mount(hostedConfigPanel());await flush();
+  assert.ok(formFor(root,'保存 OpenLux 设置'));assert.match(root.textContent,/固定汇率：7/);
+  const group=input(root,`group-${model.id}`);assert.equal(group.value,'Self-Deployed-2');
+  group.value='Self-Deployed-3';await fire(group,'change');assert.match(root.textContent,/分组已变化/);
+  await fire(buttons(root,'确认发布勾选模型及价格')[0],'click');assert.deepEqual(posts().at(-1).body,{draftId:'draft',models:[]});
+  root.remove();
 });

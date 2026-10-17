@@ -13,6 +13,7 @@ import { UsageStore } from './usage.js';
 import { earthDay } from '../shells/budget.js';
 import { agentic, tokenized } from '../e2/facade.js';
 import { waitCore } from '../http/agent.js';
+import { reservePrices } from '../hosted/catalog.js';
 import { reservationMicro } from '../hosted/billing.js';
 import { toolDefs } from '../../runner/loop.js';
 
@@ -220,14 +221,16 @@ export class RunnerManager {
     const link=relation(this.rt.w,id), a=this.rt.w.agents[id];
     if(!link||link.managerAccountId!==accountId||!['awake','dormant'].includes(a?.status))throw new RunnerError('居民当前不可配置。',403);
     const revision=link.ownershipRevision;
-    await this.stop(id); authorize();
+    const liveSwitch = !!(config.hosted && this.records[id]?.config.hosted && this.ctx.hosted.config.version === 2 && this.jobs.has(id));
+    if (!liveSwitch) await this.stop(id); authorize();
     if(relation(this.rt.w,id)?.ownershipRevision!==revision)throw new RunnerError('管理权已变更。',409);
     const previous=this.records[id];
-    this.records[id]={accountId,ownershipRevision:revision,accountRevision:this.ctx.accounts.get(accountId).revision,config,enabled};
-    try{this.persist();}catch(e){if(previous)this.records[id]=previous;else delete this.records[id];throw e;}
+    const oldConfig = previous?.config;
+    this.records[id] = liveSwitch ? Object.assign(previous, { config }) : {accountId,ownershipRevision:revision,accountRevision:this.ctx.accounts.get(accountId).revision,config,enabled};
+    try{this.persist();}catch(e){if(previous){previous.config=oldConfig;this.records[id]=previous;}else delete this.records[id];throw e;}
     const result=this.rt.exec('account',{op:'model',agentId:id,accountId,ownershipRevision:revision,model:config.model,requestId:randomUUID()}).result;
     if(!result.ok)throw new RunnerError('模型设置未生效。');
-    this.states.set(id,{status:'paused',logs:[]});
+    if (!liveSwitch) this.states.set(id,{status:'paused',logs:[]});
     if(enabled)this.start(id);
     return this.view(id);
   }
@@ -252,26 +255,35 @@ export class RunnerManager {
     if (this.jobs.has(id)) return this.view(id);
     const r = this.records[id]; r.enabled = true; this.persist();
     const hosted = r.config.hosted ? this.ctx.hosted : null;
-    if (hosted && !hosted.available()) {
-      this.states.set(id, { status: 'hosted_unavailable', logs: [] });
+    if (hosted && !hosted.available(hosted.config.version === 2 ? r.config.model : undefined)) {
+      this.states.set(id, { status: 'hosted_unavailable', lastError: '所选模型不可用，请重新选择模型。', logs: [] });
+      if (hosted.config.version === 2) { r.enabled = false; this.persist(); }
       return this.view(id);
     }
     if (!this.serverURL || this.rt.w.paused) return this.view(id);
-    const hostedConfig = hosted ? structuredClone(hosted.config) : null;
+    let hostedConfig = hosted ? hosted.snapshot(r.config.model) : null;
     const config = hosted ? { ...r.config, ...hosted.resolved(hostedConfig), timeoutMs: r.config.timeoutMs } : r.config;
-    let reservation = null, balanceLow = false;
+    let reservation = null, balanceLow = false, failures = 0, unavailable = false;
+    let sample = null;
     const controller = new AbortController();
     const state = { ...this.states.get(id), status: 'starting', lastError: null, logs: [] };
     if ((this.rt.w.premise === 6 || this.rt.w.premise === 7)) { delete state.nextWakeTick; delete state.wakeEvery; }
     this.states.set(id, state);
     const log = makeLogger(id, { secrets: [r.token, config.apiKey], quiet: true, out: () => {}, err: () => {} });
     const promise = Promise.resolve().then(async () => {
-      const provider = await (hosted ? hosted.provider(config) : this.provider(config));
+      const dynamic = () => hosted?.config.version === 2;
+      const provider = hosted ? { step: async args => {
+        const selected = await hosted.provider({ ...hosted.resolved(hostedConfig), timeoutMs: r.config.timeoutMs });
+        return selected.step(args);
+      } } : await (hosted ? hosted.provider(config) : this.provider(config));
       const client = (this.rt.w.premise === 6 || this.rt.w.premise === 7) ? managedClient(this.ctx,id,()=>this.records[id]===r&&this.valid(id)&&!this.rt.w.paused,controller.signal) : null;
       if (hosted && client) {
         const wake = client.wake;
         client.wake = async args => {
-          if (hosted.billing.available(r.accountId) < reservationMicro(0, hostedConfig.maxOutputTokens, hostedConfig.pricesMicro)) {
+          if (dynamic()) {
+            try { hostedConfig = hosted.snapshot(r.config.model); } catch { unavailable = true; r.enabled = false; this.persist(); state.status = 'hosted_unavailable'; state.lastError = '所选模型不可用，请重新选择模型。'; controller.abort(); return { ok: false, status: 409, json: { error: { code: 'hosted_unavailable' } } }; }
+          }
+          if (hosted.billing.available(r.accountId) < reservationMicro(0, hostedConfig.maxOutputTokens, reservePrices(hostedConfig))) {
             balanceLow = true; state.status = 'hosted_balance_low';
             return { ok: false, status: 409, json: { error: { code: 'hosted_balance_low' } } };
           }
@@ -284,6 +296,9 @@ export class RunnerManager {
         ...(client ? { client } : {}),
         ...(hosted ? { beforeModel: (_agentId, { chars }) => {
           if (controller.signal.aborted) return false;
+          if (dynamic()) {
+            try { hostedConfig = hosted.snapshot(r.config.model); } catch { unavailable = true; state.status = 'hosted_unavailable'; state.lastError = '所选模型不可用，请重新选择模型。'; r.enabled = false; this.persist(); controller.abort(); return false; }
+          }
           reservation = hosted.billing.reserve(r.accountId, id, chars, hostedConfig);
           balanceLow = !reservation;
           if (balanceLow) state.status = 'hosted_balance_low';
@@ -294,20 +309,33 @@ export class RunnerManager {
           if (hosted) {
             hosted.billing.settle(reservation, usage, { ...meta, cancelled: meta.cancelled || controller.signal.aborted });
             reservation = null;
+            if (hostedConfig.version === 2) {
+              if (!sample) sample = { model: hostedConfig.model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWriteHour: 0, complete: true };
+              if (sample.model !== hostedConfig.model || !meta.ok || !Number.isSafeInteger(usage?.input) || !Number.isSafeInteger(usage?.output)) sample.complete = false;
+              if (meta.ok && usage) for (const k of ['input','output','cacheRead','cacheWrite','cacheWriteHour']) sample[k] += usage[k] ?? 0;
+              if (!meta.cancelled && !controller.signal.aborted) { failures = meta.ok ? 0 : failures + 1;
+                if (failures >= 3 || (!meta.ok && [401,403,404].includes(meta.error?.status))) { unavailable = true; state.status = 'hosted_unavailable'; state.lastError = '模型持续不可用，请检查权限或选择其他模型。'; r.enabled = false; this.persist(); controller.abort(); }
+              }
+            }
           }
           // A request we cancelled ourselves (pause, saving new settings, shutdown, the tick boundary) is not a provider failure.
           if (!meta.ok && (controller.signal.aborted || meta.cancelled)) return;
-          this.usage.record(id, usage, meta, config.model);
-          if((this.rt.w.premise===6 || this.rt.w.premise === 7))this.usage.record(`${id}@${r.accountId}`,usage,meta,config.model);
+          this.usage.record(id, usage, meta, hostedConfig?.model ?? config.model);
+          if((this.rt.w.premise===6 || this.rt.w.premise === 7))this.usage.record(`${id}@${r.accountId}`,usage,meta,hostedConfig?.model ?? config.model);
         },
         waitWake: (this.rt.w.premise===6 || this.rt.w.premise === 7)?async args=>this.records[id]===r&&this.valid(id)?managedClient(this.ctx,id,()=>this.records[id]===r&&this.valid(id),controller.signal).wait(args):{ok:false,status:401}:this.waitWake(id),
         // Account-managed residents use the same sanitized waking records,
         // including refusals before a model call (e.g. tokens_exhausted).
-        onWaking: (_agentId, rec) => this.traces?.append(id, rec, config.model),
+        onWaking: (_agentId, rec) => {
+          this.traces?.append(id, rec, hostedConfig?.model ?? config.model);
+          if (sample?.complete && rec.bill && rec.turns > 0) hosted.billing.recordSample(sample.model, Object.fromEntries(['input','output','cacheRead','cacheWrite','cacheWriteHour'].map(k => [k, sample[k]])), rec.bill.read + rec.bill.reread + rec.bill.write);
+          sample = null;
+        },
         onState: (event) => {
           if (controller.signal.aborted) return;
           Object.assign(state, event);
           if (balanceLow) state.status = 'hosted_balance_low';
+          if (unavailable) state.status = 'hosted_unavailable';
           if (event.lastActionAt) state.logs = [...state.logs, { at: event.lastActionAt, actions: event.actions }].slice(-10);
         },
       });
@@ -327,6 +355,11 @@ export class RunnerManager {
     return this.view(id);
   }
   async refreshHosted() {
+    if (this.ctx.hosted.config.version === 2) {
+      // Running calls keep their snapshot; the next call resolves the new publication.
+      for (const [id, r] of Object.entries(this.records)) if (r.config.hosted && r.enabled && !this.jobs.has(id) && this.valid(id) && !this.closing) this.start(id);
+      return;
+    }
     const ids = Object.keys(this.records).filter(id => this.records[id].config.hosted && this.records[id].enabled);
     await Promise.all(ids.map(id => this.stop(id)));
     for (const id of ids) if (this.records[id]?.config.hosted && this.records[id].enabled && this.valid(id) && !this.closing) this.start(id);

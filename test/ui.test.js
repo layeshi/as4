@@ -338,7 +338,7 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
         assert.equal(reply.status, 401, '回应路由存在且要求登录会话');
         continue;
       }
-      if (['/api/account/hosted/requests', '/api/admin/hosted/requests', '/api/admin/hosted/config', '/api/admin/hosted/test', '/api/admin/hosted/adjust'].includes(path)) {
+      if (['/api/account/hosted/requests', '/api/admin/hosted/requests', '/api/admin/hosted/config', '/api/admin/hosted/test', '/api/admin/hosted/adjust', '/api/admin/hosted/catalog/sync', '/api/admin/hosted/catalog/test', '/api/admin/hosted/catalog/publish'].includes(path)) {
         const routes = path === '/api/account/hosted/requests' ? [path, `${path}/req1/cancel`] : path === '/api/admin/hosted/requests' ? [`${path}/req1/approve`, `${path}/req1/reject`] : [path];
         for (const route of routes) {
           const reply = await env.call(route, { method: 'POST', body: {}, headers: { 'X-Houren-Request': '1' } });

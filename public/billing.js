@@ -1,4 +1,4 @@
-// 余额与充值（billing.html）：平台托管 DeepSeek 的余额、购买额度、计费规则、入账申请与扣费记录。
+// 余额与充值（billing.html）：平台托管 OpenLux 的余额、购买额度、计费规则、入账申请与扣费记录。
 
 import { h, clear } from './dom.js';
 import { api, errorText } from './api.js';
@@ -15,7 +15,7 @@ initAccounts(null, { onAccountChange: () => load() });
 
 export async function load() {
   const version = ++generation;
-  pageHead(head, { eyebrow: '平台托管 DeepSeek', title: '余额与充值', lead: '为选择平台托管的居民购买模型调用额度。买到的是模型调用，不是游戏内词元，也不带来游戏内优势。', actions: [btn('刷新', () => load())] });
+  pageHead(head, { eyebrow: '平台托管 OpenLux', title: '余额与充值', lead: '为选择平台托管的居民购买模型调用额度。买到的是模型调用，不是游戏内词元，也不带来游戏内优势。', actions: [btn('刷新', () => load())] });
   clear(content);
   say('正在加载…');
   const account = await refreshAccount({ notify: false });

@@ -14,6 +14,9 @@ export const hostedRoutes = [
   ['POST', /^\/api\/account\/hosted\/requests\/([^/]+)\/cancel$/, wrap(({ res, ctx, actor, params }) => sendJson(res, 200, { request: ctx.hosted.billing.cancel(params[0], actor.id) }))],
   ['GET', '/api/admin/hosted', wrap(({ res, ctx }) => sendJson(res, 200, ctx.hosted.adminView()), true)],
   ['POST', '/api/admin/hosted/config', wrap(async ({ res, ctx, body, authorize }) => sendJson(res, 200, await ctx.hosted.save(body, authorize)), true)],
+  ['POST', '/api/admin/hosted/catalog/sync', wrap(async ({ res, ctx, authorize }) => sendJson(res, 200, await ctx.hosted.syncCatalog(authorize)), true)],
+  ['POST', '/api/admin/hosted/catalog/test', wrap(async ({ res, ctx, body, authorize }) => sendJson(res, 200, await ctx.hosted.testCatalog(body, authorize)), true)],
+  ['POST', '/api/admin/hosted/catalog/publish', wrap(async ({ res, ctx, body, authorize }) => sendJson(res, 200, await ctx.hosted.publishCatalog(body, authorize)), true)],
   ['POST', '/api/admin/hosted/test', wrap(async ({ res, ctx, body, authorize }) => { const result = await ctx.hosted.test(body); authorize(); sendJson(res, 200, result); }, true)],
   ['POST', /^\/api\/admin\/hosted\/requests\/([^/]+)\/(approve|reject)$/, wrap(({ res, ctx, actor, params, body }) => sendJson(res, 200, { request: ctx.hosted.billing.decide(params[0], actor.id, params[1] === 'approve', body) }), true)],
   ['POST', '/api/admin/hosted/adjust', wrap(({ res, ctx, actor, body }) => {

@@ -268,3 +268,45 @@ test('later-turn balance refusal keeps waking charge; failed calls refund withou
   assert.ok(!JSON.stringify(e.ctx.runners.view(id)).includes(TEST_KEY)); assert.ok(!e.logs.join('\n').includes(TEST_KEY));
   await e.ctx.runners.pause(id);
 });
+
+async function openlux(e, ids = ['deepseek-v4.1-flash','deepseek-v4-pro']) {
+  const fixture=JSON.parse(readFileSync(new URL('./fixtures/openlux-pricing-2026-10-17.json',import.meta.url)));
+  e.ctx.hosted.pricingFetch=async()=>Response.json(fixture);
+  await e.saveConfig({version:2,enabled:true,baseURL:'https://models.example.invalid/v1',apiKey:TEST_KEY,multiplier:'1.2',maxOutputTokens:256});
+  const synced=await e.call('/api/admin/hosted/catalog/sync',{as:'admin',body:{}});assert.equal(synced.status,200);
+  let draftId=synced.json.config.draft.id;
+  for(const model of ids){const tested=await e.call('/api/admin/hosted/catalog/test',{as:'admin',body:{draftId,model,group:'Self-Deployed-2',groupConfirmed:true}});assert.equal(tested.status,200,tested.text);draftId=tested.json.draftId;}
+  const published=await e.call('/api/admin/hosted/catalog/publish',{as:'admin',body:{draftId,models:ids}});assert.equal(published.status,200,published.text);
+}
+test('OpenLux HTTP catalog actions require admin and reject forged models/prices',async t=>{
+  const e=await setup(t);
+  for(const action of ['sync','test','publish'])for(const [as,status] of [['alice',403],['nobody',401]])assert.equal((await e.call(`/api/admin/hosted/catalog/${action}`,{as,body:{}})).status,status);
+  await openlux(e);const id=await e.resident();
+  const r=await e.call(`/api/account/residents/${id}/runner`,{body:{op:'save',config:{hosted:true,model:'gpt-not-allowed',pricesMicro:{miss:0,output:0}}}});assert.equal(r.status,400);
+  const publicView=await e.call('/api/account/hosted');assert.equal(publicView.json.models.length,9);assert.ok(!publicView.text.includes('Self-Deployed'));
+});
+test('OpenLux switches models and prices after an in-flight call without aborting or misbilling it',async t=>{
+  const e=await setup(t);await openlux(e);const id=await e.resident();await e.saveChoice(id,{hosted:true,model:'deepseek-v4.1-flash'});e.fund(100000000);
+  let finish;const dispatched=[];
+  e.ctx.hosted.providerOverride=config=>({step:()=>{dispatched.push(config.model);return new Promise(resolve=>{finish=resolve;});}});
+  e.ctx.runners.activate('http://unused.invalid');e.ctx.runners.start(id);await eventually(()=>!!finish);
+  const job=e.ctx.runners.jobs.get(id),version=e.ctx.hosted.config.priceVersion;
+  await e.saveChoice(id,{hosted:true,model:'deepseek-v4-pro'});
+  assert.equal(e.ctx.runners.jobs.get(id),job);assert.equal(job.controller.signal.aborted,false);assert.equal(e.ctx.runners.records[id].enabled,true);
+  // Also publish a new price while the original request is outstanding.
+  await e.saveConfig({multiplier:'2'});assert.equal(job.controller.signal.aborted,false);
+  const firstFinish=finish;finish=null;firstFinish({...done({input:1000,cacheRead:0,output:100}),calls:[{id:'unknown',name:'unknown_tool',args:{}}]});await eventually(()=>e.ctx.hosted.billing.data.daily.length===1);
+  const first=e.ctx.hosted.billing.data.daily[0];assert.equal(first.basis.model,'deepseek-v4.1-flash');assert.equal(first.basis.priceVersion,version);assert.equal(first.costMicro,1764);
+  await eventually(()=>dispatched.length===2);assert.equal(dispatched[1],'deepseek-v4-pro');finish(done());
+  await eventually(()=>e.ctx.hosted.billing.data.daily.length===2);assert.equal(e.ctx.hosted.billing.data.daily[1].basis.model,'deepseek-v4-pro');
+  await e.ctx.runners.pause(id);
+});
+test('OpenLux unavailable old model is paused rather than silently mapped; permission errors pause selected model',async t=>{
+  const e=await setup(t);await e.saveConfig();const id=await e.resident();await e.saveChoice(id);e.fund();
+  await openlux(e);e.ctx.runners.activate('http://unused.invalid');e.ctx.runners.start(id);
+  assert.equal(e.ctx.runners.view(id).status,'hosted_unavailable');assert.equal(e.ctx.runners.records[id].config.model,'deepseek-test');assert.equal(e.ctx.runners.records[id].enabled,false);
+  await e.saveChoice(id,{hosted:true,model:'deepseek-v4.1-flash'});
+  e.ctx.hosted.providerOverride=()=>({step:async()=>{throw Object.assign(new Error('secret upstream body'),{status:403});}});
+  e.ctx.runners.start(id);await eventually(()=>e.ctx.runners.jobs.size===0);
+  assert.equal(e.ctx.runners.view(id).status,'hosted_unavailable');assert.equal(e.ctx.runners.records[id].enabled,false);assert.equal(e.ctx.hosted.billing.balance(e.users.alice.id),1000000);
+});

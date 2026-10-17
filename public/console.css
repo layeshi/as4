@@ -474,3 +474,10 @@ a.summary-stat small { color: var(--accent); }
 .import-soul summary { cursor: pointer; }
 .import-row { display: flex; align-items: center; gap: 6px; }
 .import-row .btn { margin-left: auto; }
+
+/* Hosted model prices and scenario estimates follow the console's shared cards. */
+.hosted-price-view { display: grid; gap: 10px; margin-top: 12px; min-width: 0; }
+.hosted-price-view p { margin: 0; }
+.hosted-estimate { padding: 12px; border: 1px solid var(--line-soft); border-radius: 8px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.7; }
+.estimate-assumptions summary { cursor: pointer; color: var(--muted); }
+.estimate-assumptions p { margin-top: 8px; line-height: 1.7; }

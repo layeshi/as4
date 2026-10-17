@@ -27,7 +27,7 @@ export function adminSections() {
     ]],
     [tr('模型', 'Models'), [
       ['reports', tr('AI 史官', 'AI chronicler'), tr('世界报告的专用模型、独立额度与历史补生成。', 'Report model, separate budget and past report generation.'), () => reportsPanel()],
-      ['hosted', tr('平台托管', 'Hosted model'), tr('平台托管 DeepSeek 的开放状态、接口、单价与今日统计。', 'Hosted DeepSeek availability, endpoint, prices and today’s statistics.'), () => hostedConfigPanel()],
+      ['hosted', tr('平台托管', 'Hosted model'), tr('平台托管 OpenLux 的开放状态、接口、单价与今日统计。', 'Hosted DeepSeek availability, endpoint, prices and today’s statistics.'), () => hostedConfigPanel()],
       ['usage', tr('托管用量', 'Hosted usage'), tr('所有托管居民的 token 用量、全城合计与近 14 日走势。', 'Token usage of every hosted resident, city totals and the last 14 days.'), () => { const root = h('div'); adminUsageView(root); return root; }],
       ['public-model', tr('公共角色模型', 'Public role model'), tr('公共角色回答居民提问时使用的共享模型与独立预算。', 'The shared model and separate budget public roles use to answer residents.'), () => publicModelPanel()],
     ]],
