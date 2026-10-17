@@ -4,7 +4,7 @@ import { api, errorText, leaveForLogin } from './api.js';
 import { openModal, openBackstage, savedOwners } from './modals.js';
 import { accountAgentsPanel } from './account-usage-ui.js';
 import { prayerAuditPanel } from './prayers-ui.js';
-import { mountLoginChallenge } from './turnstile.js';
+import { loginChallengeProvider, mountAccountLoginChallenge } from './login-challenge.js';
 import { contactVerification, passwordControl } from './account-inputs.js';
 // 人类账号：登录 / 注册弹窗、用户中心（只做导航，不放管理功能）、账户设置表单。
 // 管理功能都在管理后台（admin.html）；居民、余额与充值各有自己的页面。
@@ -116,7 +116,8 @@ export async function openAccount({ hub = true } = {}) {
     fields.push(creating ? password() : field(tr('密码', 'Password'), 'password', 'password', '', { autocomplete: 'current-password', maxlength: 128 }));
     if (creating) fields.push(password('confirmPassword', tr('确认密码', 'Confirm password')));
     if (creating) { contactWidget = contactVerification({ purpose: 'register', siteKey: r.json.turnstileSiteKey, channels: r.json.verificationChannels }); fields.push(contactWidget.node); }
-    const challengeNode = mode === 'login' && r.json.turnstileSiteKey ? h('div', { class: 'login-turnstile', role: 'status', 'aria-live': 'polite' }) : null;
+    const provider = loginChallengeProvider(r.json);
+    const challengeNode = mode === 'login' && provider !== 'none' ? h('div', { class: provider === 'altcha' ? 'login-altcha' : 'login-turnstile' }) : null;
     let formChallenge = null;
     if (challengeNode) fields.push(challengeNode);
     const firstLogin = mode === 'login' ? h('div', { class: 'first-login-verification' }) : null;
@@ -129,11 +130,11 @@ export async function openAccount({ hub = true } = {}) {
         body.proof = contactWidget.proof;
       } else if (contactWidget?.proof) body.proof = contactWidget.proof;
       if (challengeNode) {
-        body.turnstileToken = formChallenge?.token() || '';
-        if (!body.turnstileToken) return { ok: false, json: { error: { message: tr('请完成人机验证后重试。', 'Complete verification and try again.') } } };
+        body[provider === 'altcha' ? 'altcha' : 'turnstileToken'] = formChallenge?.token() || '';
+        if (!body[provider === 'altcha' ? 'altcha' : 'turnstileToken']) return { ok: false, json: { error: { message: tr('请完成人机验证后重试。', 'Complete verification and try again.') } } };
       }
       const result = await request(`/api/account/${mode}`, body);
-      if (challengeNode) formChallenge?.reset();
+      if (challengeNode && !result.ok) formChallenge?.reset();
       if (result.status === 428 && !contactWidget) {
         contactWidget = contactVerification({ purpose: 'first_login', siteKey: r.json.turnstileSiteKey, channels: r.json.verificationChannels });
         firstLogin.append(h('p', { class: 'muted' }, tr('首次登录，请验证邮箱或手机号。', 'Verify an email or phone before your first sign-in.')), contactWidget.node);
@@ -142,7 +143,7 @@ export async function openAccount({ hub = true } = {}) {
       return result;
     }));
     if (mode === 'login') pane.append(h('a', { href: '/login.html?mode=recover', class: 'login-forgot' }, tr('忘记密码？', 'Forgot password?')));
-    if (challengeNode) challenge = formChallenge = mountLoginChallenge(challengeNode, r.json.turnstileSiteKey);
+    if (challengeNode) challenge = formChallenge = mountAccountLoginChallenge(challengeNode, r.json);
   }
   for (const [id, label] of modes) tabs.append(h('button', { type: 'button', class: 'btn', dataset: { mode: id }, onClick: () => show(id) }, label));
   show('login');

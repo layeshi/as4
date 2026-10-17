@@ -149,14 +149,22 @@ export const langOf = (q) => (q.get('lang') === 'en' ? 'en' : 'zh');
 
 /** 滑动窗口：每个 key 在 windowMs 内最多 max 次 */
 export class SlidingLimiter {
-  constructor(max, windowMs) {
+  constructor(max, windowMs, maxKeys = 10000) {
     this.max = max;
     this.windowMs = windowMs;
+    this.maxKeys = maxKeys;
+    this.nextSweep = 0;
     this.hits = new Map();
   }
 
   /** 记一次并返回是否放行 */
   take(key, now = Date.now()) {
+    if (now >= this.nextSweep) {
+      this.sweep(now);
+      this.nextSweep = now + Math.min(this.windowMs, 60000);
+    }
+    // Do not evict live counters: new identities must not reset another identity's budget.
+    if (!this.hits.has(key) && this.hits.size >= this.maxKeys) return false;
     const list = (this.hits.get(key) || []).filter((t) => now - t < this.windowMs);
     if (list.length >= this.max) {
       this.hits.set(key, list);
@@ -164,7 +172,6 @@ export class SlidingLimiter {
     }
     list.push(now);
     this.hits.set(key, list);
-    if (this.hits.size > 10000) this.sweep(now);
     return true;
   }
 

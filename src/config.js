@@ -41,6 +41,8 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
     dataDir: env.DATA_DIR || './data',
     allowLocalModels: env.ALLOW_LOCAL_MODELS === '1',
     adminKey: env.ADMIN_KEY || null,
+    loginCaptcha: env.LOGIN_CAPTCHA || null,
+    altchaMaxCounter: num(env.ALTCHA_MAX_COUNTER, 2000),
     turnstileSiteKey: env.TURNSTILE_SITE_KEY || null,
     turnstileSecretKey: env.TURNSTILE_SECRET_KEY || null,
     aliyunAccessKeyId: env.ALIBABA_CLOUD_ACCESS_KEY_ID || null,
@@ -87,6 +89,9 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
   if (cfg.shellTokensPerDay !== null && (!Number.isInteger(cfg.shellTokensPerDay) || cfg.shellTokensPerDay < 1)) throw new Error('SHELL_TOKENS_PER_DAY 必须是正整数');
   if (cfg.shellSlots !== null && (!Number.isInteger(cfg.shellSlots) || cfg.shellSlots < 0)) throw new Error('SHELL_SLOTS 必须是非负整数');
   if (!!cfg.turnstileSiteKey !== !!cfg.turnstileSecretKey) throw new Error('TURNSTILE_SITE_KEY 与 TURNSTILE_SECRET_KEY 必须同时设置');
+  if (cfg.loginCaptcha !== null && !['altcha', 'turnstile', 'none'].includes(cfg.loginCaptcha)) throw new Error('LOGIN_CAPTCHA 必须是 altcha、turnstile 或 none');
+  if (cfg.loginCaptcha === 'turnstile' && !cfg.turnstileSecretKey) throw new Error('LOGIN_CAPTCHA=turnstile 必须配置 Turnstile 密钥');
+  if (!Number.isInteger(cfg.altchaMaxCounter) || cfg.altchaMaxCounter < 500 || cfg.altchaMaxCounter > 20000) throw new Error('ALTCHA_MAX_COUNTER 必须是 500–20000 的整数');
   if (!Number.isInteger(cfg.smsDailyLimit) || cfg.smsDailyLimit < 1) throw new Error('SMS_DAILY_LIMIT 必须是正整数');
   return cfg;
 }

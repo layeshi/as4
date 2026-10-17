@@ -308,7 +308,7 @@ test('静态文件：GET / 与各模块 200，带 CSP 与正确的 MIME；/api/p
 });
 
 test('前端引用的公共接口都存在（按路径前缀）', async () => {
-  const env = await boot();
+  const env = await boot({ loginCaptcha: 'altcha' });
   try {
     const used = new Set();
     for (const f of jsFiles) for (const m of read(f).matchAll(/['`](\/api\/[a-z/-]+)/g)) used.add(m[1]);

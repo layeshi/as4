@@ -63,15 +63,35 @@ test('invalid WeChat proofs, unavailable verification and wrong passwords never 
   assert.equal(accounts.data.users.length, 1);
 });
 
-test('WeChat password login shares username limits with website login and gates before upstream exchange', async t => {
+test('unverified website attempts cannot exhaust a WeChat password login account quota', async t => {
   const { e, login, exchanges } = await setup(t);
   for (let i = 0; i < 15; i++) {
     const r = await e.call('/api/account/login', { method: 'POST', headers, body: { username: 'website', password }, ip: '10.0.0.1' });
     assert.equal(r.status, 400);
   }
   const r = await login({}, { ip: '10.0.0.2' });
+  assert.equal(r.status, 200);
+  assert.equal(exchanges(), 1);
+});
+
+test('verified website attempts still share the username quota with WeChat password login', async t => {
+  const { e, login } = await setup(t);
+  e.app.ctx.verifyLoginTurnstile = async () => {};
+  for (let i = 0; i < 15; i++) {
+    const r = await e.call('/api/account/login', { method: 'POST', headers, body: { username: 'website', password: 'wrong-password', turnstileToken: 'valid' }, ip: '10.0.0.1' });
+    assert.equal(r.status, 401);
+  }
+  const r = await login({}, { ip: '10.0.0.2' });
   assert.equal(r.status, 429);
-  assert.equal(exchanges(), 0);
+  assert.equal(r.headers.get('set-cookie'), null);
+});
+
+test('ALTCHA website mode continues to accept server-verified WeChat identity for native password login', async t => {
+  const { e, login, exchanges } = await setup(t);
+  e.app.ctx.cfg.loginCaptcha = 'altcha';
+  e.app.ctx.loginChallenge = { verify: () => { throw new Error('native login must use WeChat'); }, close() {} };
+  assert.equal((await login()).status, 200);
+  assert.equal(exchanges(), 1);
 });
 
 test('WeChat proof does not bypass required first-login contact verification', async t => {

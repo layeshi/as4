@@ -7,7 +7,7 @@ import { mountWechatLogin } from './wechat-login.js';
 import { h, clear } from './dom.js';
 import { getLang, setLang } from './i18n.js';
 import { api, errorText, LOGIN_PAGE } from './api.js';
-import { mountLoginChallenge } from './turnstile.js';
+import { loginChallengeProvider, mountAccountLoginChallenge } from './login-challenge.js';
 import { contactVerification, passwordControl } from './account-inputs.js';
 
 const tr = (zh, en) => (getLang() === 'en' ? en : zh);
@@ -161,7 +161,8 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
     } else {
       add('password', tr('密码', 'Password'), 'password', { maxlength: 128, autocomplete: 'current-password' });
     }
-    const challengeNode = mode === 'login' && account.turnstileSiteKey ? h('div', { class: 'login-turnstile', role: 'status', 'aria-live': 'polite' }) : null;
+    const provider = loginChallengeProvider(account);
+    const challengeNode = mode === 'login' && provider !== 'none' ? h('div', { class: provider === 'altcha' ? 'login-altcha' : 'login-turnstile' }) : null;
     let formChallenge = null;
     if (challengeNode) fields.push(challengeNode);
     const firstLogin = mode === 'login' ? h('div', { class: 'first-login-verification' }) : null;
@@ -175,8 +176,8 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
       const val = (key) => String(inputs[key].value ?? '');
       const body = { username: val('username').trim(), password: val('password') };
       if (challengeNode) {
-        body.turnstileToken = formChallenge?.token() || '';
-        if (!body.turnstileToken) {
+        body[provider === 'altcha' ? 'altcha' : 'turnstileToken'] = formChallenge?.token() || '';
+        if (!body[provider === 'altcha' ? 'altcha' : 'turnstileToken']) {
           message.className = 'account-message error';
           message.textContent = tr('请完成人机验证后重试。', 'Complete verification and try again.');
           return;
@@ -199,7 +200,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
       message.className = 'account-message';
       message.textContent = tr('正在处理…', 'Working…');
       const r = await api(`/api/account/${mode}`, { method: 'POST', body });
-      if (challengeNode) formChallenge?.reset();
+      if (challengeNode && !r.ok) formChallenge?.reset();
       if (version !== generation) return;
       if (r.ok) {
         message.textContent = tr('成功，正在进入…', 'Success. Taking you in…');
@@ -225,7 +226,7 @@ export async function mountLogin({ root, search = '', hash = '', origin = 'http:
       h('h2', { class: 'login-card-title' }, tr('登录后观看这座城', 'Sign in to watch the city')),
       h('p', { class: 'login-card-lead' }, wall ? tr('观看之前请先登录；还没有账号，注册一个只要几秒。', 'Please sign in before you watch. No account yet? Registering takes a few seconds.') : tr('登录你的账号，或注册一个新账号。', 'Sign in to your account, or register a new one.')),
       tablist, form, ...notes));
-    if (challengeNode) challenge = formChallenge = mountLoginChallenge(challengeNode, account.turnstileSiteKey);
+    if (challengeNode) challenge = formChallenge = mountAccountLoginChallenge(challengeNode, account);
     inputs.username.focus();
   }
 

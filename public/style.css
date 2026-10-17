@@ -1010,3 +1010,6 @@ ul.reading { list-style: none; padding-left: 0; }
 .map-legend .key.city-north { background: #6b93ff; }
 .map-legend .key.city-west { background: #ff9446; }
 .map-legend .key.city-east { background: #b98bff; }
+
+.login-altcha [hidden] { display: none !important; }
+.login-altcha { margin-block: .5rem; }

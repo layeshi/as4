@@ -1,4 +1,5 @@
 import { AccountError, fail, hasContact, hasWechatIdentity, passwordEnabled, publicUser } from '../accounts/store.js';
+import { loginCaptchaProvider } from '../accounts/login-challenge.js';
 import { normalizeContact } from '../accounts/verification.js';
 import { identityHash } from '../wechat/service.js';
 import { prayerView } from '../e2/engine/prayers.js';
@@ -64,7 +65,7 @@ export const accountWrap = (handler, { admin = false, signedIn = false, bodyLimi
 };
 const wrap = accountWrap;
 export function accountLimits() {
-  return { ip: new SlidingLimiter(30, 15 * 60000), username: new SlidingLimiter(15, 15 * 60000), register: new SlidingLimiter(5, 60 * 60000), claim: new SlidingLimiter(20, 15 * 60000) };
+  return { login: new SlidingLimiter(120, 60000), ip: new SlidingLimiter(30, 15 * 60000), username: new SlidingLimiter(15, 15 * 60000), register: new SlidingLimiter(5, 60 * 60000), claim: new SlidingLimiter(20, 15 * 60000) };
 }
 const CLAIM_BATCH = 50; // owner keys per claim request (the body limit is 8 KB; a key is 64 hex characters)
 /**
@@ -90,11 +91,16 @@ function limit(ctx, req, body, registering = false) {
   if (!ctx.accountLimits.ip.take(ip) || (registering && !ctx.accountLimits.register.take(ip)) || (!registering && !ctx.accountLimits.username.take(String(body.username || '').toLowerCase().slice(0, 64)))) fail(429, 'rate_limited', '尝试次数过多，请稍后再试。');
 }
 async function passwordLogin({ req, res, ctx, body }, wechat = false) {
-  limit(ctx, req, body);
+  const ip = clientIp(req, ctx.cfg.trustProxy);
+  if (!ctx.accountLimits.login.take('all') || !ctx.accountLimits.ip.take(ip)) fail(429, 'rate_limited', '尝试次数过多，请稍后再试。');
+  if (typeof body.username !== 'string' || !/^[A-Za-z0-9_]{3,32}$/.test(body.username) || typeof body.password !== 'string' || body.password.length > 128) fail(400, 'invalid_request', '请输入有效的用户名和密码。');
   // A client header is not proof. Exchange a fresh code with the configured
   // WeChat app without creating, binding, or switching a WeChat account.
   if (wechat) await ctx.wechat.exchange(body.code, body.appid);
-  else if (ctx.cfg.turnstileSecretKey) await ctx.verifyLoginTurnstile(ctx.cfg.turnstileSecretKey, body.turnstileToken, clientIp(req, ctx.cfg.trustProxy));
+  else if (loginCaptchaProvider(ctx.cfg) === 'altcha') await ctx.loginChallenge.verify(body.altcha);
+  else if (loginCaptchaProvider(ctx.cfg) === 'turnstile') await ctx.verifyLoginTurnstile(ctx.cfg.turnstileSecretKey, body.turnstileToken, ip);
+  // Only a verified login attempt may consume the target account's quota.
+  if (!ctx.accountLimits.username.take(body.username.toLowerCase())) fail(429, 'rate_limited', '尝试次数过多，请稍后再试。');
   const user = await ctx.accounts.login(body, { allowPending: true });
   if (user.contactRequired && !hasContact(user)) {
     if (!body.proof) fail(428, 'contact_required', '首次登录前请验证邮箱或手机号。');
@@ -131,7 +137,12 @@ async function reauthenticate(ctx, actor, body, authorize) {
 export const accountRoutes = [
   ['GET', '/api/account', wrap(({ req, res, ctx }) => {
     const user = accountFor(ctx, req);
-    sendJson(res, 200, { user: user ? publicUser(user, ctx.wechat.appid) : null, registrationOpen: ctx.cfg.registrationOpen !== false, loginRequired: ctx.cfg.requireLogin === true, wechatQrEnabled: ctx.wechatWebLogin.enabled, turnstileSiteKey: ctx.cfg.turnstileSiteKey || null, verificationChannels: { email: ctx.verification.available('email'), phone: ctx.verification.available('phone') } });
+    sendJson(res, 200, { user: user ? publicUser(user, ctx.wechat.appid) : null, registrationOpen: ctx.cfg.registrationOpen !== false, loginRequired: ctx.cfg.requireLogin === true, wechatQrEnabled: ctx.wechatWebLogin.enabled, loginCaptcha: { provider: loginCaptchaProvider(ctx.cfg) }, turnstileSiteKey: ctx.cfg.turnstileSiteKey || null, verificationChannels: { email: ctx.verification.available('email'), phone: ctx.verification.available('phone') } });
+  })],
+  ['GET', '/api/account/challenge', wrap(async ({ req, res, ctx }) => {
+    if (!ctx.loginChallenge) fail(404, 'not_found', '登录验证未启用。');
+    if (req.headers['x-houren-request'] !== '1' || req.headers['sec-fetch-site'] === 'cross-site') fail(403, 'csrf', '请求验证失败，请刷新页面。');
+    sendJson(res, 200, await ctx.loginChallenge.issue(clientIp(req, ctx.cfg.trustProxy)));
   })],
   ['POST', '/api/account/verification/request', wrap(async ({ req, res, ctx, body }) => {
     const { purpose, channel } = body;

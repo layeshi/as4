@@ -24,6 +24,7 @@ import { loginLocation, passesWall, walledApi, walledPage } from './login-wall.j
 import { checkBackstage } from '../backstage.js';
 import http from 'node:http';
 import { ExperimentControl } from '../experiment-control.js';
+import { LoginChallenge, loginCaptchaProvider } from '../accounts/login-challenge.js';
 import { AccountStore } from '../accounts/store.js';
 import { AliyunDelivery } from '../accounts/aliyun-delivery.js';
 import { VerificationService } from '../accounts/verification.js';
@@ -70,7 +71,7 @@ const MIME = {
 };
 
 /** index.html 的内容安全策略：界面脚本只能通过 CSSOM / classList / SVG 属性设置样式（SPEC §13） */
-export const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self' https://challenges.cloudflare.com; connect-src 'self'; frame-src https://challenges.cloudflare.com";
+export const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; worker-src 'self'; frame-src 'none'";
 
 const roleAdminRoutes = [
   ['GET','/api/admin/server-status',accountWrap(({res,ctx})=>sendJson(res,200,{...ctx.serverStatus.view(),users:registeredUserCounts(ctx.accounts.data.users)}),{admin:true})],
@@ -99,7 +100,7 @@ function match(method, pathname) {
 }
 
 /** gateCtx：开着登录门时传 ctx（页面要登录才给），否则 null */
-async function serveStatic(req, res, url, dir, gateCtx) {
+async function serveStatic(req, res, url, dir, gateCtx, csp) {
   const { pathname } = url;
   let rel;
   try {
@@ -135,7 +136,7 @@ async function serveStatic(req, res, url, dir, gateCtx) {
     const body = await readFile(file);
     const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Length': body.length };
     if (ext === '.html') {
-      headers['Content-Security-Policy'] = CSP;
+      headers['Content-Security-Policy'] = csp;
       headers['Cache-Control'] = 'no-cache';
       headers['X-Content-Type-Options'] = 'nosniff';
     } else {
@@ -156,10 +157,14 @@ async function serveStatic(req, res, url, dir, gateCtx) {
  * @param cfg 配置（loadConfig 的结果，另可带 trustProxy）
  */
 export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, backstageRoot, verificationDelivery } = {}) {
+  const provider = loginCaptchaProvider(cfg);
+  // Contact registration/recovery still uses Turnstile when its keys are configured.
+  const csp = cfg.turnstileSiteKey ? CSP.replace("script-src 'self'", "script-src 'self' https://challenges.cloudflare.com").replace("frame-src 'none'", 'frame-src https://challenges.cloudflare.com') : CSP;
   const ctx = {
     rt,
     cfg,
     accounts: new AccountStore(cfg.dataDir),
+    loginChallenge: provider === 'altcha' ? new LoginChallenge({ maxCounter: cfg.altchaMaxCounter }) : null,
     verification: new VerificationService(verificationDelivery || new AliyunDelivery(cfg), { smsDailyLimit: cfg.smsDailyLimit || 100, counterFile: join(cfg.dataDir, 'verification-sms-budget.json') }),
     messageBoard: new MessageBoard(cfg.dataDir),
     announcements: new AnnouncementStore(cfg.dataDir),
@@ -245,7 +250,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
         res.writeHead(405, { Allow: 'GET, HEAD' }).end();
         return;
       }
-      await serveStatic(req, res, url, publicDir, cfg.requireLogin === true ? ctx : null);
+      await serveStatic(req, res, url, publicDir, cfg.requireLogin === true ? ctx : null, csp);
     } catch (e) {
       logger.error?.('HTTP 处理出错：', e);
       if (!res.headersSent) sendError(res, 'zh', 'internal');
@@ -279,6 +284,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     server,
     ctx,
     async close() {
+      ctx.loginChallenge?.close();
       ctx.serverStatus.close();
       await ctx.reports.close();
       await ctx.historyExports.close();
