@@ -14,3 +14,8 @@ for (const method of ['complete','step']) test(`OpenAI-compatible cache creation
   const p=await createProvider({provider:'openai',model:'test',baseURL:'https://example.invalid'},{fetch:async()=>Response.json({choices:[{message:{content:'{}',tool_calls:[]},finish_reason:'stop'}],usage:{prompt_tokens:1000,completion_tokens:10,prompt_tokens_details:{cached_tokens:200},cache_creation_input_tokens:300,cache_creation:{ephemeral_1h_input_tokens:100}}})});
   const result=await p[method]({system:'s',messages:[],transcript:[],tools:[]});assert.deepEqual(result.usage,{input:1000,output:10,cacheRead:200,cacheWrite:300,cacheWriteHour:100});
 });
+
+test('OpenLux nested cache write counters are retained for billing',async()=>{
+  const p=await createProvider({provider:'openai',model:'test',baseURL:'https://example.invalid'},{fetch:async()=>Response.json({choices:[{message:{content:'{}',tool_calls:[]},finish_reason:'stop'}],usage:{prompt_tokens:1000,completion_tokens:10,prompt_tokens_details:{cached_tokens:100,cache_write_tokens:200}}})});
+  const r=await p.step({system:'s',transcript:[],tools:[]});assert.equal(r.usage.cacheWrite,200);assert.equal(r.usage.cacheRead,100);
+});

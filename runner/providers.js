@@ -267,6 +267,7 @@ function createOpenAIProvider(cfg, deps) {
     const reasoning = u?.output_tokens_details?.reasoning_tokens;
     if (usage && Number.isFinite(reasoning)) usage.reasoning = reasoning;
     if(usage&&Number.isFinite(u?.input_tokens_details?.cached_tokens))usage.cacheRead=u.input_tokens_details.cached_tokens;
+    if(usage&&Number.isFinite(u?.input_tokens_details?.cache_write_tokens))usage.cacheWrite=u.input_tokens_details.cache_write_tokens;
     return { usable, stop, text, usage };
   };
 
@@ -304,6 +305,7 @@ function createOpenAIProvider(cfg, deps) {
       if(out.usage&&Number.isFinite(u?.prompt_tokens_details?.cached_tokens))out.usage.cacheRead=u.prompt_tokens_details.cached_tokens;
       else if(out.usage&&Number.isFinite(u?.prompt_cache_hit_tokens))out.usage.cacheRead=u.prompt_cache_hit_tokens;
       if (out.usage && Number.isFinite(u?.cache_creation_input_tokens)) out.usage.cacheWrite = u.cache_creation_input_tokens;
+      else if (out.usage && Number.isFinite(u?.prompt_tokens_details?.cache_write_tokens)) out.usage.cacheWrite = u.prompt_tokens_details.cache_write_tokens;
       if (out.usage && Number.isFinite(u?.cache_creation?.ephemeral_1h_input_tokens)) out.usage.cacheWriteHour = u.cache_creation.ephemeral_1h_input_tokens;
       return out;
     },
@@ -337,6 +339,7 @@ function createOpenAIProvider(cfg, deps) {
       if(out.usage&&Number.isFinite(u?.prompt_tokens_details?.cached_tokens))out.usage.cacheRead=u.prompt_tokens_details.cached_tokens;
       else if(out.usage&&Number.isFinite(u?.prompt_cache_hit_tokens))out.usage.cacheRead=u.prompt_cache_hit_tokens;
       if (out.usage && Number.isFinite(u?.cache_creation_input_tokens)) out.usage.cacheWrite = u.cache_creation_input_tokens;
+      else if (out.usage && Number.isFinite(u?.prompt_tokens_details?.cache_write_tokens)) out.usage.cacheWrite = u.prompt_tokens_details.cache_write_tokens;
       if (out.usage && Number.isFinite(u?.cache_creation?.ephemeral_1h_input_tokens)) out.usage.cacheWriteHour = u.cache_creation.ephemeral_1h_input_tokens;
       return out;
     },

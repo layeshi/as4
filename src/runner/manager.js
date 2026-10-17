@@ -273,7 +273,9 @@ export class RunnerManager {
     const promise = Promise.resolve().then(async () => {
       const dynamic = () => hosted?.config.version === 2;
       const provider = hosted ? { step: async args => {
-        const selected = await hosted.provider({ ...hosted.resolved(hostedConfig), timeoutMs: r.config.timeoutMs });
+        const selected = await hosted.provider({ ...hosted.resolved(hostedConfig), timeoutMs: r.config.timeoutMs, onResponse: ({ routingGroup }) => {
+          if (hostedConfig.version === 2 && routingGroup && routingGroup !== hostedConfig.group) throw Object.assign(new Error('模型实际线路价格已变化，请管理员重新核验。'), { status: 403 });
+        } });
         return selected.step(args);
       } } : await (hosted ? hosted.provider(config) : this.provider(config));
       const client = (this.rt.w.premise === 6 || this.rt.w.premise === 7) ? managedClient(this.ctx,id,()=>this.records[id]===r&&this.valid(id)&&!this.rt.w.paused,controller.signal) : null;

@@ -310,3 +310,10 @@ test('OpenLux unavailable old model is paused rather than silently mapped; permi
   e.ctx.runners.start(id);await eventually(()=>e.ctx.runners.jobs.size===0);
   assert.equal(e.ctx.runners.view(id).status,'hosted_unavailable');assert.equal(e.ctx.runners.records[id].enabled,false);assert.equal(e.ctx.hosted.billing.balance(e.users.alice.id),1000000);
 });
+
+test('OpenLux route drift pauses instead of charging a different group at published prices',async t=>{
+  const e=await setup(t);await openlux(e);const id=await e.resident();await e.saveChoice(id,{hosted:true,model:'deepseek-v4.1-flash'});e.fund();
+  e.ctx.hosted.providerOverride=config=>({step:async()=>{config.onResponse({routingGroup:'Self-Deployed-3'});return done();}});
+  e.ctx.runners.activate('http://unused.invalid');e.ctx.runners.start(id);await eventually(()=>e.ctx.runners.jobs.size===0);
+  assert.equal(e.ctx.runners.view(id).status,'hosted_unavailable');assert.equal(e.ctx.hosted.billing.balance(e.users.alice.id),1000000);
+});
