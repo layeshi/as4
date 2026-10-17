@@ -1,0 +1,71 @@
+{
+  "sha": "ad0378a9068222dd08f4013082bb389f2c222cc0",
+  "oldRelease": "/opt/houren/releases/72e40b3-account-verification-20261017",
+  "newRelease": "/opt/houren/releases/main-ad0378a90682-20261017-wechat-login",
+  "backup": "/var/backups/houren/wechat-login-admin-merge-20261017-r2",
+  "verificationMode": "final snapshot recovery",
+  "genesisReplay": false,
+  "phases": {
+    "preparing": "2026-10-17T03:15:35.513647+00:00",
+    "stopping": "2026-10-17T03:15:35.986006+00:00",
+    "consistent-backup": "2026-10-17T03:15:50.303110+00:00",
+    "offline-recovery": "2026-10-17T03:15:59.190846+00:00",
+    "permissions-preflight": "2026-10-17T03:16:07.637975+00:00",
+    "switching": "2026-10-17T03:16:10.530770+00:00",
+    "verifying-online": "2026-10-17T03:16:31.841626+00:00",
+    "failed": "2026-10-17T03:16:32.272995+00:00",
+    "old-service-restored": "2026-10-17T03:17:16.888717+00:00"
+  },
+  "phase": "old-service-restored",
+  "oldFilesVerified": 1134,
+  "releaseFilesVerified": 1141,
+  "otherServicePids": {
+    "nginx": "8608",
+    "xray": "13274"
+  },
+  "stopSeconds": 14.316,
+  "dataBackupSha256": "2867231f4c15ee483dc22d1da38638ae35e7bf343bc673420d435e215dcc442e",
+  "oldReleaseBackupSha256": "704a2b46dbbf0169b280bf7e36e8c13845e885021e7c8d477e8541153ce9d56d",
+  "recovery": {
+    "worldId": "p7-20261016",
+    "premise": 7,
+    "physics": 2,
+    "tick": 50,
+    "commandN": 2679,
+    "logEnd": 2679,
+    "replayed": 0,
+    "stateHash": "b2a69f110aedc4c2f275072a1af85a30ba6f3f1a9f2dc6d786f51cf053f8084d",
+    "residents": 17,
+    "accounts": 4,
+    "runners": 16,
+    "validRunners": 16,
+    "enabledRunners": 16,
+    "paused": false,
+    "shellsPaused": null,
+    "hostedEnabled": true,
+    "billingAccounts": 1,
+    "commandLogHash": "eafa30a34e45bb2a7562126f1d542df34d53335007dd3be723340c5eec6303e7",
+    "commandLogBytes": 46710706,
+    "eventSequence": 1518
+  },
+  "preflight": {
+    "ok": true,
+    "checks": [],
+    "version": "0.1.0",
+    "hash": "ad0378a9068222dd08f4013082bb389f2c222cc0",
+    "commandN": 2679,
+    "contentVerified": true
+  },
+  "downtimeSeconds": 55.854,
+  "health": {
+    "ok": true,
+    "worldId": "p7-20261016",
+    "login": 200,
+    "account": 200,
+    "state": 200,
+    "sse": 200
+  },
+  "historyPrefixPreserved": true,
+  "accountsPreserved": true,
+  "errorType": "AssertionError"
+}

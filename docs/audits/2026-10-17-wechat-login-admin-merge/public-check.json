@@ -1,0 +1,31 @@
+{
+  "/login.html": {
+    "status": 200
+  },
+  "/login.js": {
+    "status": 200
+  },
+  "/style.css": {
+    "status": 200
+  },
+  "/api/account": {
+    "status": 200,
+    "loginRequired": true,
+    "userIsAnonymous": true,
+    "turnstileConfigured": true
+  },
+  "/api/public/state": {
+    "status": 401,
+    "worldId": null,
+    "errorCode": "login_required"
+  },
+  "/api/wechat/public/state": {
+    "status": 200,
+    "worldId": "p7-20261016",
+    "errorCode": null
+  },
+  "newLoginRoute": {
+    "status": 400,
+    "errorCode": "invalid_code"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "sha": "ad0378a9068222dd08f4013082bb389f2c222cc0",
+  "oldRelease": "/opt/houren/releases/72e40b3-account-verification-20261017",
+  "newRelease": "/opt/houren/releases/main-ad0378a90682-20261017-wechat-login",
+  "backup": "/var/backups/houren/wechat-login-admin-merge-20261017",
+  "verificationMode": "final snapshot recovery",
+  "genesisReplay": false,
+  "phases": {
+    "preparing": "2026-10-17T03:11:06.114777+00:00",
+    "stopping": "2026-10-17T03:11:06.398820+00:00",
+    "consistent-backup": "2026-10-17T03:11:06.589439+00:00",
+    "offline-recovery": "2026-10-17T03:11:17.878798+00:00",
+    "failed": "2026-10-17T03:11:24.575927+00:00",
+    "old-service-restored": "2026-10-17T03:11:45.815610+00:00"
+  },
+  "phase": "old-service-restored",
+  "oldFilesVerified": 1134,
+  "releaseFilesVerified": 1141,
+  "otherServicePids": {
+    "nginx": "8608",
+    "xray": "13274"
+  },
+  "stopSeconds": 0.19,
+  "dataBackupSha256": "6c344b5ea1e554aaadf441648be3b3dfff1c4c3f642cc8d6e2ca4a3dcae4b5fb",
+  "oldReleaseBackupSha256": "704a2b46dbbf0169b280bf7e36e8c13845e885021e7c8d477e8541153ce9d56d",
+  "errorType": "CalledProcessError"
+}

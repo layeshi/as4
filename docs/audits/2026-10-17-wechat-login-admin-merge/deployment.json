@@ -1,0 +1,78 @@
+{
+  "sha": "ad0378a9068222dd08f4013082bb389f2c222cc0",
+  "oldRelease": "/opt/houren/releases/72e40b3-account-verification-20261017",
+  "newRelease": "/opt/houren/releases/main-ad0378a90682-20261017-wechat-login",
+  "backup": "/var/backups/houren/wechat-login-admin-merge-20261017-r3",
+  "verificationMode": "final snapshot recovery",
+  "genesisReplay": false,
+  "phases": {
+    "preparing": "2026-10-17T03:22:02.704881+00:00",
+    "stopping": "2026-10-17T03:22:03.056807+00:00",
+    "consistent-backup": "2026-10-17T03:22:03.250655+00:00",
+    "offline-recovery": "2026-10-17T03:22:13.713037+00:00",
+    "permissions-preflight": "2026-10-17T03:22:22.875189+00:00",
+    "switching": "2026-10-17T03:22:25.720564+00:00",
+    "verifying-online": "2026-10-17T03:22:47.038091+00:00",
+    "complete": "2026-10-17T03:22:47.620549+00:00"
+  },
+  "phase": "complete",
+  "oldFilesVerified": 1134,
+  "releaseFilesVerified": 1141,
+  "otherServicePids": {
+    "nginx": "8608",
+    "xray": "13274"
+  },
+  "stopSeconds": 0.193,
+  "dataBackupSha256": "59278dc9ee31905d3d9ce50fade4428a8fa481ca5ef80c08071d3c69c2e8c8fa",
+  "oldReleaseBackupSha256": "704a2b46dbbf0169b280bf7e36e8c13845e885021e7c8d477e8541153ce9d56d",
+  "recovery": {
+    "worldId": "p7-20261016",
+    "premise": 7,
+    "physics": 2,
+    "tick": 50,
+    "commandN": 2783,
+    "logEnd": 2783,
+    "replayed": 0,
+    "stateHash": "bed1b4596dd4fcaf953d19774635089b796e70086a2eef86d36fcf392762a954",
+    "residents": 17,
+    "accounts": 4,
+    "runners": 16,
+    "validRunners": 16,
+    "enabledRunners": 16,
+    "paused": false,
+    "shellsPaused": null,
+    "hostedEnabled": true,
+    "billingAccounts": 1,
+    "commandLogHash": "99294b31728b18882c4999cecf23b6f19f4745c7bc2a5a64b536c86a0bf7f27d",
+    "commandLogBytes": 47868527,
+    "eventSequence": 1533
+  },
+  "preflight": {
+    "ok": true,
+    "checks": [],
+    "version": "0.1.0",
+    "hash": "ad0378a9068222dd08f4013082bb389f2c222cc0",
+    "commandN": 2783,
+    "contentVerified": true
+  },
+  "downtimeSeconds": 43.98,
+  "health": {
+    "ok": true,
+    "worldId": "p7-20261016",
+    "login": 200,
+    "account": 200,
+    "state": 200,
+    "sse": 200
+  },
+  "historyPrefixPreserved": true,
+  "accountsPreserved": true,
+  "encryptedConfigurationPreserved": true,
+  "configurationPreserved": true,
+  "service": {
+    "ActiveState": "active",
+    "SubState": "running",
+    "NRestarts": "0",
+    "Result": "success",
+    "MainPID": "204351"
+  }
+}
