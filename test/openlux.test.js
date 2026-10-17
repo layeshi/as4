@@ -125,3 +125,12 @@ test('retesting a draft changes its revision so another admin cannot publish uns
   await s.publishCatalog({draftId:tested.draftId,models:['deepseek-v4.1-flash']});
   assert.equal(s.snapshot('deepseek-v4.1-flash').group,'Self-Deployed-3');
 });
+
+test('GPT models select Responses; automatic grouping prices the observed key route, never the guessed candidate',async t=>{
+  assert.equal(priced('gpt-6-luna','Openai-Gpt-1').provider,'openai-responses');
+  const {service:s}=setup(t);await prepare(s);
+  s.providerOverride=config=>({step:async()=>{assert.equal(config.provider,'openai-responses');config.onResponse({routingGroup:'Openai-Gpt-1'});return {calls:[{name:'done'}],usage:{input:100,output:5}};}});
+  await s.testCatalog({draftId:s.config.draft.id,model:'gpt-6-luna',autoGroup:true});
+  assert.equal(s.config.draft.tested['gpt-6-luna'].group,'Openai-Gpt-1');
+  await assert.rejects(s.testCatalog({draftId:s.config.draft.id,model:'gpt-6-luna',group:'Azure-Gpt-3',groupConfirmed:true}),/与所选分组不同/);
+});

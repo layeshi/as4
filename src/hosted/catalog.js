@@ -46,7 +46,7 @@ export function priceModel(entry, group, multiplier) {
   if (entry.error) throw Error(entry.error);
   const m = entry.source, g = entry.groups.find(g => g.group === group);
   if (!g) throw Error('请选择与平台 Key 匹配的有效分组。');
-  if (m.quota_type !== 0 || !m.supported_endpoint_types?.includes('openai')) throw Error('仅支持按 token 计费且兼容 OpenAI 工具调用的文本模型。');
+  if (m.quota_type !== 0 || !m.supported_endpoint_types?.some(p => ['openai', 'openai-response'].includes(p))) throw Error('仅支持按 token 计费且兼容 OpenAI 工具调用的文本模型。');
   if (m.model_type !== '对话') throw Error('模型不是文本对话模型。');
   const base = [2, m.model_ratio, g.ratio];
   const factors = { miss: 1, output: m.completion_ratio, hit: m.cache_ratio, write: m.cache_creation_5m_ratio ?? m.cache_creation_ratio, writeHour: m.cache_creation_1h_ratio };
@@ -72,7 +72,7 @@ export function priceModel(entry, group, multiplier) {
       return { upTo: s.step_size, ...rates({ miss: s.prompt_step_ratio, output: s.completion_step_ratio, hit: s.cache_step_ratio }) };
     });
   } else tiers = [{ upTo: null, ...rates({}) }];
-  return { id: entry.id, group, provider: 'openai', tiers, pricesMicro: tiers[0].pricesMicro, usd: tiers[0].usd, exchangeRate: FX, multiplier: String(multiplier) };
+  return { id: entry.id, group, provider: m.supported_endpoint_types.includes('openai-response') ? 'openai-responses' : 'openai', tiers, pricesMicro: tiers[0].pricesMicro, usd: tiers[0].usd, exchangeRate: FX, multiplier: String(multiplier) };
 }
 export function applicablePrices(model, input) {
   if (!model.tiers) return model.pricesMicro;

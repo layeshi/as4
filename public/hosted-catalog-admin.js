@@ -24,18 +24,18 @@ export function catalogAdmin(pane, data, refresh) {
   const items = draft.entries.map(m => {
     const tested = draft.tested[m.id];
     const include = h('input', { type: 'checkbox', checked: !!tested, disabled: !tested }); selected.set(m.id, include);
-    const group = h('select', { name: `group-${m.id}` }, h('option', { value: '' }, '选择此模型 Key 的实际分组'), m.groups.map(g => h('option', { value: g.group }, `${g.group}（×${g.ratio}）`)));
+    const group = h('select', { name: `group-${m.id}` }, h('option', { value: '' }, '自动识别 Key 实际分组（推荐）'), m.groups.map(g => h('option', { value: g.group }, `${g.group}（×${g.ratio}）`)));
     group.value = tested?.group ?? c.models.find(x => x.id === m.id)?.group ?? '';
     const confirmed = h('input', { type: 'checkbox' });
     const notice = h('p', { role: 'status' });
     group.addEventListener('change', () => { include.checked = false; include.disabled = true; confirmed.checked = false; notice.textContent = '分组已变化，请重新核对并验证后发布。'; });
     const test = btn('验证此模型（平台承担调用费用）', async () => {
       notice.textContent = '正在验证…';
-      try { await request('/api/admin/hosted/catalog/test', { draftId: draft.id, model: m.id, group: group.value, groupConfirmed: confirmed.checked }); await refresh(); }
+      try { await request('/api/admin/hosted/catalog/test', { draftId: draft.id, model: m.id, group: group.value, autoGroup: !group.value, groupConfirmed: confirmed.checked }); await refresh(); }
       catch (e) { notice.textContent = e.message; }
     });
     const tiers = tested ? table(['输入长度上限', ...catalogPriceLabels.map(([,label])=>label)], tested.tiers.map(t=>[t.upTo??'不限',...catalogPriceLabels.map(([k])=>t.pricesMicro[k]==null?'不适用':microYuan(t.pricesMicro[k],6))])) : null;
-    return card(m.id, m.error ?? (tested ? '工具调用与用量返回已通过测试，可纳入本次发布。' : '未验证；不向用户开放。'), h('label', { class: 'check' }, include, '纳入本次发布'), h('label', { class: 'field' }, h('span', null, 'Key 对应分组（当前中间档须按实际配置核对）'), group), h('label', { class: 'check' }, confirmed, '已核对平台 Key 在此模型上的实际分组'), m.error ? null : test, tiers, notice);
+    return card(m.id, m.error ?? (tested ? '工具调用与用量返回已通过测试，可纳入本次发布。' : '未验证；不向用户开放。'), h('label', { class: 'check' }, include, '纳入本次发布'), h('label', { class: 'field' }, h('span', null, 'Key 对应分组（当前中间档须按实际配置核对）'), group), h('label', { class: 'check' }, confirmed, '手动指定时：已核对平台 Key 在此模型上的实际分组'), m.error ? null : test, tiers, notice);
   });
   pane.append(card('待发布价格', `${draft.fetchedAt} · 来源 OpenLux 官方目录 · 倍率 ${draft.multiplier}。发布会用勾选模型替换当前目录；未勾选模型将停止接受新调用。`, ...items,
     btn('确认发布勾选模型及价格', async () => { await request('/api/admin/hosted/catalog/publish', { draftId: draft.id, models: [...selected].filter(([,input])=>input.checked).map(([id])=>id) }); await refresh(); }, true)));

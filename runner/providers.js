@@ -219,6 +219,7 @@ function createOpenAIProvider(cfg, deps) {
       const timedOut = isTimeout(e);
       throw new ProviderError(`网络错误：${timedOut ? `timeout（${seconds(limit)} 秒）` : safeMessage(e)}`, { retryable: true, timeout: timedOut, errorKind: timedOut ? 'timeout' : 'network', phase: 'request' });
     }
+    deps.onResponse?.({ routingGroup: res.headers?.get('x-routing-group') ?? null });
     let json;
     try {
       json = await res.json();

@@ -149,11 +149,11 @@ export class RunnerManager {
     return { timezone: base.timezone, day: base.day, hosted: agents.length, unhosted, total, today, days, agents };
   }
   provider(config, timeoutMs = config.timeoutMs) {
-    const { apiKey, thinking, ...safe } = config;
+    const { apiKey, thinking, onResponse, ...safe } = config;
     return createProvider({ ...safe, timeoutMs, apiKeyEnv: apiKey ? 'MANAGED_KEY' : undefined,
       ...(config.provider === 'openai' && thinking !== 'default' ? { extraBody: { thinking: { type: thinking } } } : {}),
       ...(config.provider === 'anthropic' && config.baseURL !== 'https://api.anthropic.com' ? { fallbacks: false } : {}),
-    }, { env: { MANAGED_KEY: apiKey }, fetch: modelFetch(this.cfg.allowLocalModels === true, { timeoutMs }) });
+    }, { env: { MANAGED_KEY: apiKey }, onResponse, fetch: modelFetch(this.cfg.allowLocalModels === true, { timeoutMs }) });
   }
   /**
    * 托管居民的等待函数（runAgent 的 deps.waitWake，SPEC-P2 §6.4、§10.3）：托管运行器走 HTTP 感知与行动，但就在服务器进程里，

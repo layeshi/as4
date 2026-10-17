@@ -71,7 +71,7 @@ export class HostedService {
     return structuredClone({ ...item, model: item.id, version: 2, baseURL: this.config.baseURL, apiKey: this.config.apiKey, thinking: 'default', maxOutputTokens: this.config.maxOutputTokens, priceVersion: this.config.priceVersion });
   }
   resolved(config = this.config) {
-    return { provider: 'openai', baseURL: config.baseURL, model: config.model, apiKey: config.apiKey, thinking: config.thinking,
+    return { provider: config.provider ?? 'openai', baseURL: config.baseURL, model: config.model, apiKey: config.apiKey, thinking: config.thinking,
       maxTokens: config.maxOutputTokens, toolMode: 'native', actionTools: 'typed', timeoutMs: 120000 };
   }
   provider(config) { return this.providerOverride ? this.providerOverride(config) : this.ctx.runners.provider(config); }
@@ -145,15 +145,20 @@ export class HostedService {
       if (c.version !== 2 || !draft || raw.draftId !== draft.id) throw new RunnerError('价格草稿已变化，请重新同步。');
       if (!c.apiKey || !c.baseURL) throw new RunnerError('请先保存平台接口地址和 API Key。');
       const entry = draft.entries.find(m => m.id === raw.model);
-      if (!entry || raw.groupConfirmed !== true) throw new RunnerError('请核对该模型的 Key 所属分组。');
+      if (!entry || (raw.autoGroup !== true && raw.groupConfirmed !== true)) throw new RunnerError('请核对该模型的 Key 所属分组。');
       let model;
-      try { model = priceModel(entry, raw.group, draft.multiplier); } catch (e) { throw new RunnerError(e.message); }
+      try { model = priceModel(entry, raw.autoGroup === true ? entry.groups[0]?.group : raw.group, draft.multiplier); } catch (e) { throw new RunnerError(e.message); }
       const config = { ...c, ...model, model: model.id, thinking: 'default' };
+      let routingGroup = null;
       try {
-        const provider = await this.provider({ ...this.resolved(config), timeoutMs: 20000 });
+        const provider = await this.provider({ ...this.resolved(config), timeoutMs: 20000, onResponse: response => { routingGroup = response.routingGroup; } });
         const result = await provider.step({ system: 'Connection test. Call done once.', transcript: [{ role: 'user', text: 'Call done with an empty object.' }], tools: [{ name: 'done', description: 'Finish.', schema: { type: 'object', properties: {}, additionalProperties: false } }], signal: AbortSignal.timeout(20000), timeoutMs: 20000 });
         if (!result?.calls?.some(call => call.name === 'done') || !Number.isSafeInteger(result.usage?.input) || !Number.isSafeInteger(result.usage?.output) || result.usage.input < 0 || result.usage.output < 0 || costMicro(result.usage, model.pricesMicro) === null) throw Error();
       } catch { throw new RunnerError('模型测试失败：请检查 Key 权限、模型接口、工具调用及用量返回。'); }
+      if (raw.autoGroup === true) {
+        if (!routingGroup) throw new RunnerError('上游没有返回实际路由分组，请手动核对 Key 分组。');
+        try { model = priceModel(entry, routingGroup, draft.multiplier); } catch { throw new RunnerError('实际路由分组不在官方价格目录中，不能发布。'); }
+      } else if (routingGroup && routingGroup !== raw.group) throw new RunnerError(`实际 Key 路由分组为 ${routingGroup}，与所选分组不同，请重新核验。`);
       authorize();
       model.testedAt = new Date().toISOString();
       const draftId = randomUUID();
