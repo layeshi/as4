@@ -78,7 +78,7 @@
     "updateDescription": "第七前提「三城」：全岛与分城地图、城级双指缩放和拖动、居民籍城与筛选、世界报告、公告与留言板。",
     "onlineVersionObservedBeforeUpload": "0.4.1",
     "formalReviewSubmitted": true,
-    "formalReleasePerformed": false
+    "formalReleasePerformed": true
   },
   "realDeviceVerified": false,
   "simulatorVerification": {
@@ -104,11 +104,11 @@
     "version": "0.6.0",
     "submittedAt": "2026-10-16 22:36:02 Asia/Shanghai",
     "submissionReceipt": "已提交审核",
-    "status": "审核中",
+    "status": "审核通过",
     "platformEstimate": "预计在1-7天内完成审核；特殊情况可能延长",
     "onlineVersionAtSubmission": "0.4.1",
-    "approvalReceived": false,
-    "formalReleasePerformed": false,
+    "approvalReceived": true,
+    "formalReleasePerformed": true,
     "automaticReleaseConfigured": false,
     "expeditedReviewRequested": false,
     "privacyGuidanceReused": true,
@@ -120,9 +120,64 @@
       "wechat-060-review-status.png": "c0c4a54d7e0b18d0e4e000d845f2de3490db61f56f8f19a42b8983969899cb60",
       "wechat-060-review-pending.png": "39b919a03f07df5d0e56bbaa60cd0db51420a5d9ed1b964c75af0ad23da22925"
     },
-    "pendingAction": "审核通过后发布 0.6.0，并核验正式包；真实手机验收尚未完成",
+    "pendingAction": "正式包真实手机界面、双指手势及私人写入验收尚未完成",
     "codeChanged": false,
     "serverRedeployed": false,
-    "testsRerun": false
+    "testsRerun": false,
+    "statusAtSubmission": "审核中",
+    "approvalObservedOn": "2026-10-17"
+  },
+  "formalRelease": {
+    "method": "WeChat public platform in Comet, GUI",
+    "status": "线上版本",
+    "version": "0.6.0",
+    "appid": "wx83d31aa7fc9a797e",
+    "mode": "全量发布",
+    "releasedAt": "2026-10-17 10:30:38 Asia/Shanghai",
+    "publisher": "神州流浪汉",
+    "administratorQrConfirmedByUser": true,
+    "platformOnlineVersionVerified": true,
+    "previousOnlineVersion": "0.4.1",
+    "codeCommit": "477bed17814473d031a3cc353b389d2488130709",
+    "originalUploadFileDigestsVerified": 45,
+    "postReleaseHttps": {
+      "checkedAt": "2026-10-17T02:32:19.868Z",
+      "apiBase": "https://www.heirscity.site",
+      "checks": [
+        {
+          "path": "/api/wechat/public/state",
+          "status": 200,
+          "premise": 7,
+          "residentCount": 17,
+          "compatible": true
+        },
+        {
+          "path": "/api/wechat/public/map",
+          "status": 200,
+          "compatible": true
+        },
+        {
+          "path": "/api/wechat/public/events?recent=1&limit=3",
+          "status": 200,
+          "compatible": true
+        },
+        {
+          "path": "/api/account",
+          "status": 200,
+          "compatible": true
+        }
+      ]
+    },
+    "screenshots": {
+      "wechat-060-published-status-20261017.png": "a11e9ff4170778652467372d8fc0a3298c2f6cad2cd2c0aba93c75299010394d",
+      "wechat-060-published-20261017.png": "70cb7c6b8f85f26b473b49e70aec4a3a7b9f7dd8befd71b3101961a29c829716"
+    },
+    "codeChanged": false,
+    "clientReuploaded": false,
+    "serverRedeployed": false,
+    "fullTestsRerun": false,
+    "realDeviceVersionChecked": false,
+    "realDeviceGestureVerified": false,
+    "remainingVerification": "正式包真机功能及私人写入未验证；后续新合入的账号验证等源码不在此次已审核包内"
   }
 }

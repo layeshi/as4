@@ -16,6 +16,60 @@ import { FiscalView } from '../src/fiscal-view.js';
 const hiddenPhysics = JSON.parse(readFileSync(new URL('./fixtures/p7-hidden-physics.json', import.meta.url), 'utf8'));
 const world = (seed = 'p7') => createWorld({ id: seed, seed, premise: 7, hiddenPhysics });
 
+for (const [build, args, materials] of [
+  ['site', { lot: 'wilds-lot-5', name: '盐滩观察站' }, 15],
+  ['road', { to: 'datatower' }, 30],
+]) {
+  test(`P7 outside ${build} construction does not require a city well or pause the experiment`, () => {
+    const w = createWorld({ seed: `outside-${build}`, premise: 7, hiddenPhysics, lawSemanticsVersion: 2 });
+    const h = harness(w), id = h.create('builder', '建设者', 'north');
+    assert.equal(h.act(id, [{ type: 'move', to: 'saltflats' }])[0].ok, true);
+    h.tick();
+    assert.equal(w.well, null);
+    const wells = structuredClone(Object.fromEntries(Object.entries(w.cities).map(([id, c]) => [id, c.well])));
+    const [result] = h.act(id, [{ type: 'initiate', build, ...args }]);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    const project = w.projects[result.data.project];
+    assert.equal(project.needMaterials, materials);
+    assert.equal(project.needWork, 40);
+    assert.equal(project.phase, 'funding');
+    assert.equal(w.paused, false);
+    assert.equal(w.lawSemantics.protection, undefined);
+    assert.deepEqual(Object.fromEntries(Object.entries(w.cities).map(([id, c]) => [id, c.well])), wells);
+    if (build === 'site') assert.equal(w.lots[args.lot].project, project.id);
+    assert.equal(e2.checkConservation(w).ok, true);
+  });
+}
+
+test('P7 outside well upgrade returns wrong_place without fault protection', () => {
+  const w = createWorld({ seed: 'outside-upgrade', premise: 7, hiddenPhysics, lawSemanticsVersion: 2 });
+  const h = harness(w), id = h.create('builder', '建设者', 'north');
+  h.act(id, [{ type: 'move', to: 'saltflats' }]);
+  h.tick();
+  const [result] = h.act(id, [{ type: 'initiate', build: 'upgrade' }]);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, 'wrong_place');
+  assert.equal(w.paused, false);
+  assert.equal(w.lawSemantics.protection, undefined);
+  assert.equal(Object.keys(w.projects).length, 0);
+});
+
+for (const city of ['north', 'west', 'east']) {
+  test(`P7 ${city} well upgrade uses its own city's upgrade level`, () => {
+    const w = createWorld({ seed: `upgrade-${city}`, premise: 7, hiddenPhysics, lawSemanticsVersion: 2 });
+    const h = harness(w), id = h.create('builder', '建设者', city);
+    w.cities[city].well.upgrades.push({ level: 1 });
+    h.act(id, [{ type: 'move', to: `${city}-well` }]);
+    const [result] = h.act(id, [{ type: 'initiate', build: 'upgrade' }]);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    const project = w.projects[result.data.project];
+    assert.equal(project.needMaterials, 100);
+    assert.equal(project.needWork, 200);
+    assert.equal(w.well, null);
+    assert.equal(w.paused, false);
+  });
+}
+
 test('P7 fiscal metrics separate actual law payments by city without changing the world', () => {
   const w = world(), h = harness(w), fiscal = new FiscalView();
   for (const city of ['north', 'west', 'east']) h.create(`acct-${city}`, city, city);
