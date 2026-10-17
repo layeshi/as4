@@ -9,7 +9,8 @@ import { hooks } from './hooks.js';
 import { wellPlace } from './environment.js';
 import { multiCity, cityValue, cityOfPlace, fallbackCity } from './cities.js';
 export function initializeProject(w, j, access) {
-  const n = w.well.upgrades.length + 1;
+  // Outside the cities there is no well; only well upgrades depend on its level.
+  const n = j.build === 'upgrade' ? w.well.upgrades.length + 1 : 0;
   const wild = j.lot
     ? lotDefs(w)[j.lot].district === 'wilds'
     : w.places[j.on]?.wild;
