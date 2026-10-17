@@ -9,14 +9,15 @@ import { BillingStore } from '../src/hosted/billing.js';
 import { identityHash } from '../src/wechat/service.js';
 const mini = 'wx83d31aa7fc9a797e', password = 'website-password';
 const headers = { 'X-Houren-Request': '1' };
-async function setup(t) {
+async function setup(t, { sourceRole = 'user', targetRole = 'user' } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'houren-merge-')), file = join(dir, 'physics.json');
   writeFileSync(file, JSON.stringify({ version: 1, regrowth: { baseByZone: { wilds: 20, scrapyard: 15, solarfield: 10 }, thresholdByZone: { wilds: 30, scrapyard: 25, solarfield: 15 }, factorPermille: 500 }, construction: { fullActionsPerTick: 2, factorPermille: 500 } }));
   const e = await boot({ physics: 2, premise: 6, shellSlots: 0, hiddenPhysicsFile: file, map: 'compact-materials-v1', wechatAppId: 'wx216f3fb724629f67', wechatAppSecret: 'game-secret', wechatMiniprogramAppId: mini, wechatMiniprogramAppSecret: 'mini-secret' }, { dir });
   t.after(() => e.close());
   const s = e.app.ctx.accounts;
   const source = await s.wechatLogin(identityHash(mini, 'verified-owner'), { appid: mini });
-  const target = await s.create({ username: 'website', password });
+  if (sourceRole === 'admin') await s.update(source.id, { role: 'admin' }, { admin: true });
+  const target = await s.create({ username: 'website', password }, { role: targetRole });
   const sourceToken = s.issue(source.id), targetToken = s.issue(target.id);
   const auth = { ...headers, Cookie: 'houren_session=' + sourceToken };
   e.app.ctx.wechat.fetcher = async () => ({ ok: true, json: async () => ({ openid: 'verified-owner' }) });
@@ -35,8 +36,8 @@ async function setup(t) {
   const preview = async (body = {}) => e.call('/api/wechat/merge/preview', { method: 'POST', headers: auth, body: { username: 'website', password, code: 'fresh-code', appid: mini, ...body } });
   return { e, s, source, target, sourceToken, targetToken, auth, a, b, billing, preview };
 }
-test('two proofs and explicit confirmation merge residents, balances and bindings exactly once', async t => {
-  const { e, s, source, target, sourceToken, targetToken, auth, a, b, billing, preview } = await setup(t);
+for (const targetRole of ['user', 'admin']) test(targetRole + ': two proofs and explicit confirmation merge residents, balances and bindings exactly once', async t => {
+  const { e, s, source, target, sourceToken, targetToken, auth, a, b, billing, preview } = await setup(t, { targetRole });
   assert.equal((await preview({ password: 'wrong-password' })).status, 401);
   assert.ok(s.session(sourceToken));
   const p = await preview(); assert.equal(p.status, 200, p.text); assert.equal(p.json.residents, 1); assert.equal(p.json.sourceBalanceMicro, 7000000);
@@ -46,6 +47,13 @@ test('two proofs and explicit confirmation merge residents, balances and binding
   const energy = e.rt.w.agents[a].energy;
   const r = await e.call('/api/wechat/merge/confirm', { method: 'POST', headers: auth, body });
   assert.equal(r.status, 200, r.text); assert.equal(r.json.user.id, target.id);
+  assert.equal(r.json.user.role, targetRole);
+  const wxLogin = await e.call('/api/wechat/login', { method: 'POST', headers, body: { code: 'new-code', appid: mini } });
+  assert.equal(wxLogin.status, 200, wxLogin.text);
+  assert.equal(wxLogin.json.user.id, target.id);
+  assert.equal(wxLogin.json.user.role, targetRole);
+  const management = await e.call('/api/admin/users', { headers: { Cookie: wxLogin.headers.get('set-cookie').split(';')[0] } });
+  assert.equal(management.status, targetRole === 'admin' ? 200 : 403);
   assert.equal(billing.balance(source.id), 0); assert.equal(billing.balance(target.id), 6000000);
   assert.equal(e.rt.w.access.residents[a].managerAccountId, target.id);
   assert.equal(e.rt.w.access.residents[a].creatorAccountId, target.id);
@@ -65,8 +73,8 @@ test('two proofs and explicit confirmation merge residents, balances and binding
   const reload = new BillingStore({ file: billing.file }); assert.equal(reload.fault, false); assert.equal(reload.balance(target.id), 6000000);
   assert.equal(reload.accountView(target.id).requests.length, 3);
 });
-test('failed publication stays locked and durable recovery does not double-credit', async t => {
-  const { e, source, target, auth, a, billing, preview } = await setup(t);
+for (const targetRole of ['user', 'admin']) test(targetRole + ': failed publication stays locked and durable recovery does not double-credit', async t => {
+  const { e, source, target, auth, a, billing, preview } = await setup(t, { targetRole });
   const p = await preview();
   const merger = e.app.ctx.accountMerger;
   merger.mergeUsage = () => { throw new Error('simulated interruption'); };
@@ -81,9 +89,35 @@ test('failed publication stays locked and durable recovery does not double-credi
   assert.equal(ctx.hosted.billing.balance(target.id), 6000000);
   assert.equal(ctx.hosted.billing.data.merges.length, 1);
   assert.equal(ctx.accounts.get(source.id).mergedTo, target.id);
+  assert.equal(ctx.accounts.get(target.id).role, targetRole);
   assert.equal(ctx.runners.valid(a), true);
   assert.equal(ctx.runners.usage.view(a + '@' + target.id).total.tokens, 30);
   assert.ok(!readFileSync(ctx.accounts.file, 'utf8').includes('mergePending'));
+});
+
+for (const targetRole of ['user', 'admin']) test('administrator source cannot merge into ' + targetRole, async t => {
+  const { s, source, billing, preview } = await setup(t, { sourceRole: 'admin', targetRole });
+  const r = await preview();
+  assert.equal(r.status, 409, r.text);
+  assert.equal(r.json.error.code, 'merge_unavailable');
+  assert.equal(s.get(source.id).status, 'active');
+  assert.equal(s.get(source.id).role, 'admin');
+  assert.equal(billing.balance(source.id), 7000000);
+});
+
+for (const conflict of ['identity', 'email', 'phone']) test('administrator target refuses conflicting ' + conflict + ' without migration', async t => {
+  const { s, source, target, billing, preview } = await setup(t, { targetRole: 'admin' });
+  if (conflict === 'identity') await s.wechatLogin(identityHash(mini, 'different-owner'), { appid: mini, bindId: target.id });
+  else {
+    s.setContact(source.id, conflict, conflict === 'email' ? 'source@example.org' : '+8613800000001');
+    s.setContact(target.id, conflict, conflict === 'email' ? 'target@example.org' : '+8613800000002');
+  }
+  const r = await preview();
+  assert.equal(r.status, 409, r.text);
+  assert.equal(r.json.error.code, conflict === 'identity' ? 'identity_linked' : 'contact_conflict');
+  assert.equal(s.get(source.id).status, 'active');
+  assert.equal(billing.balance(source.id), 7000000);
+  assert.equal(billing.balance(target.id), -1000000);
 });
 test('password change after preview invalidates approval and leaves data intact', async t => {
   const { e, s, source, target, auth, billing, preview } = await setup(t);

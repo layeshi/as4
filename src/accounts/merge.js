@@ -11,7 +11,8 @@ export class AccountMerger {
     const source = accounts.get(from), target = accounts.get(to);
     if ((rt.w.premise !== 6 && rt.w.premise !== 7)) fail(409, 'merge_unsupported', '当前世界暂不支持账号合并。');
     if (!source || !target || from === to) fail(409, 'same_account', '两端已经是同一个账号，无需合并。');
-    if ([source, target].some(u => u.status !== 'active' || u.mergePending || u.mergedTo || u.role !== 'user')) fail(409, 'merge_unavailable', '仅支持两个正常使用的普通账号合并。');
+    if ([source, target].some(u => u.status !== 'active' || u.mergePending || u.mergedTo)) fail(409, 'merge_unavailable', '仅支持两个正常使用的账号合并。');
+    if (source.role !== 'user' || !['user', 'admin'].includes(target.role)) fail(409, 'merge_unavailable', '仅支持普通微信账号合入网站账号；管理员账号必须作为保留账号。');
     const bindings = [...wechatBindings(target, wechat.appid), ...wechatBindings(source, wechat.appid)];
     if (bindings.some((b, i) => bindings.some((other, j) => j < i && b.appid === other.appid && b.identity !== other.identity))) fail(409, 'identity_linked', '两个账号已关联该微信应用的不同身份，不能合并。');
     for (const kind of ['email', 'phone']) if (source.contacts?.[kind] && target.contacts?.[kind] && source.contacts[kind] !== target.contacts[kind]) fail(409, 'contact_conflict', '两个账号的已验证联系方式不同，请先解除其中一个。');

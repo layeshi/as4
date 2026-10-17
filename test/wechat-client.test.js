@@ -78,6 +78,24 @@ for (const miniprogram of [false, true]) test('P6 ' + (miniprogram ? 'Mini Progr
   await g.dispatch({type:'start'}); assert.equal(g.state.world.premise, 6); assert.ok(g.hits.some(h=>h.action.kind==='place'));
   c.wx.emitHide(); assert.equal(c.timers.size,0);
   await g.dispatch({type:'tab',tab:'account'}); await g.dispatch({type:'wechatLogin'}); assert.match(g.error,/隐私/);
+  const passwordUser = await env.app.ctx.accounts.create({ username: 'password_user', password: 'native-password-login' });
+  env.app.ctx.cfg.turnstileSecretKey = 'enabled-for-native-login';
+  await g.dispatch({ type: 'linkAccount' });
+  Object.assign(g.form, { accepted: true, username: 'password_user', password: 'wrong-password' });
+  await g.dispatch({ type: 'auth' });
+  assert.match(g.error, /密码/);
+  assert.equal(g.form.password, undefined);
+  g.form.password = 'native-password-login';
+  await g.dispatch({ type: 'auth' });
+  assert.equal(g.error, ''); assert.equal(g.user.id, passwordUser.id);
+  assert.equal(g.wechatLinked, false);
+  assert.equal(env.app.ctx.accounts.data.users.length, 1, 'password login never creates a WeChat account');
+  const nativeLogin = c.requests.find(r => r.url.endsWith('/api/wechat/password-login'));
+  assert.equal(nativeLogin.data.code, 'test-wechat-code');
+  assert.equal(nativeLogin.data.appid, miniprogram ? 'wx83d31aa7fc9a797e' : undefined); // Game uses the configured server default.
+  assert.ok([...c.storage.values()].every(v => !v.includes('native-password-login')));
+  await g.dispatch({ type: 'logout' });
+  env.app.ctx.cfg.turnstileSecretKey = '';
   g.form.accepted=true; await g.dispatch({type:'wechatLogin'}); assert.equal(g.error,''); assert.equal(g.user.role,'user'); assert.equal(g.wechatVerified,true);
   if (miniprogram) assert.equal(c.requests.find(r => r.url.endsWith('/api/wechat/login')).data.appid, 'wx83d31aa7fc9a797e');
   await g.dispatch({type:'entry'}); Object.assign(g.form,{name:'小游戏居民',soul:'独立观察这座城市',entryAccepted:true});
@@ -127,7 +145,7 @@ for (const miniprogram of [false, true]) test('P6 ' + (miniprogram ? 'Mini Progr
   await g.dispatch({ type: 'verifyContactCode' }); assert.equal(g.error, '');
   assert.equal(g.user.contacts.email, 'le***@example.org');
   assert.equal(g.form.currentPassword, '');
-  const mergeTarget = await env.app.ctx.accounts.create({ username: 'merge_target', password: 'merge-target-password' });
+  const mergeTarget = await env.app.ctx.accounts.create({ username: 'merge_target', password: 'merge-target-password' }, { role: 'admin' });
   await g.dispatch({type:'mergeAccount'}); g.form.username = 'merge_target'; g.form.password = 'wrong-password';
   await g.dispatch({type:'previewMerge'}); assert.match(g.error, /密码/); assert.equal(g.user.id, accountId);
   g.form.password = 'merge-target-password';

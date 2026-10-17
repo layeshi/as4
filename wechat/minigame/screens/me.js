@@ -121,6 +121,7 @@ function mergeAccount(app, W) {
   const f = app.form, preview = app.mergePreview;
   if (preview) return { top: { kind: 'back', title: '确认账号合并' }, tabbar: false, nodes: [
     N.text(W, '请核对：合并后保留网站账号', { style: 'heading', bold: true }),
+    ...(preview.target.role === 'admin' ? [N.text(W, '保留管理员身份，合并后可通过微信直接登录管理员账号。', { style: 'action', color: C.text2 })] : []),
     N.text(W, preview.target.username, { style: 'heading' }),
     N.text(W, '原微信账号：' + preview.source.username, { style: 'meta' }),
     N.text(W, '迁移居民：' + preview.residents + ' 位；迁移余额：¥' + (preview.sourceBalanceMicro / 1000000).toFixed(6), { style: 'action' }),

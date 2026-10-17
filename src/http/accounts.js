@@ -89,6 +89,21 @@ function limit(ctx, req, body, registering = false) {
   const ip = clientIp(req, ctx.cfg.trustProxy);
   if (!ctx.accountLimits.ip.take(ip) || (registering && !ctx.accountLimits.register.take(ip)) || (!registering && !ctx.accountLimits.username.take(String(body.username || '').toLowerCase().slice(0, 64)))) fail(429, 'rate_limited', '尝试次数过多，请稍后再试。');
 }
+async function passwordLogin({ req, res, ctx, body }, wechat = false) {
+  limit(ctx, req, body);
+  // A client header is not proof. Exchange a fresh code with the configured
+  // WeChat app without creating, binding, or switching a WeChat account.
+  if (wechat) await ctx.wechat.exchange(body.code, body.appid);
+  else if (ctx.cfg.turnstileSecretKey) await ctx.verifyLoginTurnstile(ctx.cfg.turnstileSecretKey, body.turnstileToken, clientIp(req, ctx.cfg.trustProxy));
+  const user = await ctx.accounts.login(body, { allowPending: true });
+  if (user.contactRequired && !hasContact(user)) {
+    if (!body.proof) fail(428, 'contact_required', '首次登录前请验证邮箱或手机号。');
+    const verified = ctx.verification.consume(body.proof, 'first_login');
+    ctx.accounts.setContact(user.id, verified.channel, verified.contact, { expectedRevision: user.revision });
+  }
+  setSession(req, res, ctx, user.id);
+  sendJson(res, 200, { user: publicUser(ctx.accounts.get(user.id)) });
+}
 export async function verifyLoginTurnstile(secret, token, ip, fetchImpl = fetch, action = 'login') {
   if (typeof token !== 'string' || !token || token.length > 2048) fail(400, 'turnstile_required', '请完成人机验证后重试。');
   let result;
@@ -151,18 +166,8 @@ export const accountRoutes = [
     setSession(req, res, ctx, user.id);
     sendJson(res, 201, { user });
   })],
-  ['POST', '/api/account/login', wrap(async ({ req, res, ctx, body }) => {
-    limit(ctx, req, body);
-    if (ctx.cfg.turnstileSecretKey) await ctx.verifyLoginTurnstile(ctx.cfg.turnstileSecretKey, body.turnstileToken, clientIp(req, ctx.cfg.trustProxy));
-    const user = await ctx.accounts.login(body, { allowPending: true });
-    if (user.contactRequired && !hasContact(user)) {
-      if (!body.proof) fail(428, 'contact_required', '首次登录前请验证邮箱或手机号。');
-      const verified = ctx.verification.consume(body.proof, 'first_login');
-      ctx.accounts.setContact(user.id, verified.channel, verified.contact, { expectedRevision: user.revision });
-    }
-    setSession(req, res, ctx, user.id);
-    sendJson(res, 200, { user: publicUser(ctx.accounts.get(user.id)) });
-  })],
+  ['POST', '/api/account/login', wrap(args => passwordLogin(args))],
+  ['POST', '/api/wechat/password-login', wrap(args => passwordLogin(args, true))],
   ['POST', '/api/account/recovery', wrap(async ({ res, ctx, body }) => {
     const verified = ctx.verification.consume(body.proof, 'recover');
     await ctx.accounts.resetPasswordByContact(verified.userId, verified.channel, verified.contact, body.password);

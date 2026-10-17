@@ -84,6 +84,7 @@ function wechatProof(path, data, codeKey = 'code') {
   });
 }
 function loginWeChat(bindCurrent) { return wechatProof('/api/wechat/login', { bindCurrent: !!bindCurrent }); }
+function loginByPassword(username, password) { return wechatProof('/api/wechat/password-login', { username, password }); }
 function setWebPassword(password) { return wechatProof('/api/wechat/password', { password }); }
 function setContactByWechat(proof) { return wechatProof('/api/account/contacts', { proof }, 'wechatCode'); }
 function setContactByPassword(proof, currentPassword) { return request('/api/account/contacts', { method: 'POST', data: { proof, currentPassword } }); }
@@ -112,4 +113,4 @@ function download(path) {
   });
 }
 
-module.exports = { request, download, restoreSession, clearSession, loginWeChat, setWebPassword, setContactByWechat, setContactByPassword, previewMerge, requestId };
+module.exports = { request, download, restoreSession, clearSession, loginWeChat, loginByPassword, setWebPassword, setContactByWechat, setContactByPassword, previewMerge, requestId };

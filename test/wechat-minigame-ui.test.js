@@ -501,10 +501,11 @@ function sessionRaceClient() {
       return pending.splice(index, 1)[0].options;
     },
     async login() {
-      deferredPaths.add('/api/account/login');
+      deferredPaths.add('/api/wechat/password-login');
       g.tab = 'link'; Object.assign(g.form, { accepted: true, username: 'fixture-user', password: 'fixture-password' });
       const action = g.dispatch({ type: 'auth' });
-      this.take('/api/account/login').success({ statusCode: 200, data: { ok: true }, cookies: ['houren_session=' + current] });
+      await Promise.resolve(); await Promise.resolve();
+      this.take('/api/wechat/password-login').success({ statusCode: 200, data: { ok: true }, cookies: ['houren_session=' + current] });
       await action;
       assert.equal(g.error, ''); assert.equal(g.user.id, 'current-account');
       assert.equal(storage.get(key), current, 'ordinary login stores its session');
@@ -586,15 +587,16 @@ test('session race: late logout cookies cannot delete a newer WeChat login', asy
   assert.equal(await c.cookie(), 'houren_session=' + c.current);
 });
 
-test('session race: delayed WeChat code after a session clear cannot begin a login exchange', async () => {
+for (const passwordLogin of [false, true]) test('session race: delayed WeChat code after a session clear cannot begin ' + (passwordLogin ? 'password login' : 'WeChat login'), async () => {
   const c = sessionRaceClient(); let callback;
   c.wx.login = options => { callback = options; };
-  c.deferredPaths.add('/api/wechat/login');
-  const login = c.api.loginWeChat(true).catch(error => error);
+  const path = passwordLogin ? '/api/wechat/password-login' : '/api/wechat/login';
+  c.deferredPaths.add(path);
+  const login = (passwordLogin ? c.api.loginByPassword('fixture-user', 'fixture-password') : c.api.loginWeChat(true)).catch(error => error);
   c.api.clearSession();
   callback.success({ code: 'fixture-obsolete-code' });
   await Promise.resolve(); await Promise.resolve();
-  assert.equal(c.pending.filter(entry => entry.path === '/api/wechat/login').length, 0, 'an obsolete code never starts an auth request');
+  assert.equal(c.pending.filter(entry => entry.path === path).length, 0, 'an obsolete code never starts an auth request');
   assert.equal(await c.cookie(), undefined);
   assert.match((await login).message, /会话/);
   assert.equal(c.storage.has(c.key), false);

@@ -345,7 +345,8 @@ class SocietyGame {
       case 'health': this.push('about'); break;
       case 'auth':
         if (!f.accepted) throw new Error('请先阅读并同意隐私说明');
-        await api.request('/api/account/login', { method: 'POST', timeout: 30000, data: { username: (f.username || '').trim(), password: f.password || '' } });
+        try { await api.loginByPassword((f.username || '').trim(), f.password || ''); }
+        finally { this.clearSecrets(); }
         f.password = ''; this.navigation++; this.owner = null; this.residentId = ''; this.moderation = {}; this.loginRequired = {}; this.messageBoard.reset(); await this.loadAccount(); this.back(); this.showToast('已登录网站账号', 'ok');
         break;
       case 'linkAccount': this.push('link'); break;
