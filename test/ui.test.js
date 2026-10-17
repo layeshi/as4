@@ -77,7 +77,7 @@ test('i18n：代码里用到的 t("键") 都有定义（含按前缀拼出的键
 });
 
 // 引擎里所有会到达观众的事件类型
-const NON_PUBLIC = new Set(['witness', 'will', 'ledger_mismatch', 'weather_scheduled', 'diary', 'dream', 'letter']);
+const NON_PUBLIC = new Set(['witness', 'will', 'ledger_mismatch', 'weather_scheduled', 'diary', 'dream', 'letter', 'relics_enabled']);
 function engineEventTypes() {
   const types = new Set();
   const walk = (dir) => {

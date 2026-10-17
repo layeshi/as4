@@ -1,4 +1,5 @@
 import { virtualRelic } from '../../p6/canon.js';
+import { relicsV2, relicV2 } from '../../p6/relics.js';
 import { ep, K } from '../tokens.js';
 import { rewardRepair } from '../prayer-rewards.js';
 // 环境层的动作（SPEC-E2 §25 第 3 步）：repair draw inscribe explore
@@ -173,11 +174,12 @@ const explore = {
       source(w, 'energy', 'wilds', amount);
     } else if (r < pE + pR) {
       outcome = 'relic';
-      const relic = (w.premise === 6 || w.premise === 7) ? virtualRelic(wilds.relicOrder[wilds.relicsFound]) : relicByN(wilds.relicOrder[wilds.relicsFound]);
+      const n = wilds.relicOrder[wilds.relicsFound];
+      const relic = relicsV2(w) ? relicV2(w, n) : (w.premise === 6 || w.premise === 7) ? virtualRelic(n) : relicByN(n);
       wilds.relicsFound++;
       const id = nextId(w, 'd');
       doc = {
-        id, kind: 'relic', title: relicTitle(relic.n), body: relic.body, lang: relic.lang,
+        id, kind: 'relic', title: relic.title ?? relicTitle(relic.n), body: relic.body, lang: relic.lang,
         author: a.id, source: null, ref: { zh: relic.ref.zh, en: relic.ref.en },
         tick: w.clock.tick, reads: 0, readsByDay: {}, redacted: false,
       };

@@ -104,6 +104,7 @@ export class Runtime {
       rt.snapshot();
     }
     if (created && w.physics === 2 && (w.premise === 6 || w.premise === 7)) rt.exec('admin', { op: 'program_services', args: { version: 1 } });
+    if (created && w.physics === 2 && w.premise === 7) rt.exec('admin', { op: 'relics', args: { version: 2 } });
     if (created && onCreate) onCreate(rt); // 例如创建沙盘脑（走命令日志，回放才能重建）
     return rt;
   }

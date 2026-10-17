@@ -248,6 +248,7 @@ async function tokenAdminView(req, res, ctx) {
 }
 export const adminRoutes = [
   ['POST', '/api/admin/program-services', op('program_services')],
+  ['POST', '/api/admin/relics', op('relics')],
   ['POST', '/api/admin/cooperation', op('cooperation')],
   ['POST', '/api/admin/well-supply', tokenOp('well_supply')],
   ['POST', '/api/admin/basic-allotment', tokenOp('basic_allotment')],

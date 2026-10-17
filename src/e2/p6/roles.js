@@ -3,6 +3,7 @@ import { bad, emit, pushInbox, fail } from '../engine/core.js';
 import { hasModuleAt, hasRelay } from '../engine/places.js';
 import { isWeatherActive } from '../engine/environment.js';
 import { withCity, cityValue } from '../engine/cities.js';
+import { relicsV2 } from './relics.js';
 const definitions = [
   ['guide','引舟','接引员','port','温和简短','先查看地点、余额、每日上限与当前法律。你可以自行决定目标；启动款每账号每世界首次新建一次。'],
   ['announcer','鸣钟','公告员','agora','清楚克制','我只复述已发生的公共事件。公告不改变法律或账本；没有新事件便不编造消息。'],
@@ -154,6 +155,10 @@ function islandRoleActivity(w, events) {
       }
     }
     const important = events.filter((e) => e.city === city && ['arrive', 'born', 'death', 'law_passed', 'built', 'weather_start', 'settle'].includes(e.type));
+    if (relicsV2(w)) {
+      important.push(...events.filter((e) => e.type === 'explore' && e.data?.outcome === 'relic' && w.agents[e.agent]?.city === city));
+      important.sort((left, right) => left.seq - right.seq);
+    }
     const chronicler = w.publicRoles[`chronicler-${city}`];
     chronicler.dailyEvents ??= [];
     chronicler.dailyEvents.push(...important.map((e) => ({ seq: e.seq, type: e.type, day: e.day, place: e.place ?? null })));
@@ -162,7 +167,7 @@ function islandRoleActivity(w, events) {
     if (important.length && announcer.lastTick !== w.clock.tick && rolePresent(w, announcer)) {
       announcer.lastTick = w.clock.tick;
       const citations = important.slice(0, 5).map((e) => e.seq);
-      const text = `本刻公共事件：${important.slice(0, 5).map((e) => `${e.type}（事件 ${e.seq}）`).join('；')}。请核查原始记录。`;
+      const text = `本刻公共事件：${important.slice(0, 5).map((e) => `${e.type === 'explore' && e.data?.outcome === 'relic' ? `relic ${e.data.docId}` : e.type}（事件 ${e.seq}）`).join('；')}。请核查原始记录。`;
       publishRole(w, announcer, text, { source: 'fixed', citations });
       const blocked = withCity(w, city, () => isWeatherActive(w, 'eclipse') && !hasRelay(w));
       if (!blocked) {
