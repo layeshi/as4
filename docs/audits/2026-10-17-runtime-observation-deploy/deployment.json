@@ -1,0 +1,87 @@
+{
+  "sha": "1a62faa1b26839faf648cdfd2916e97a600766f8",
+  "oldRelease": "/opt/houren/releases/main-ad0378a90682-20261017-wechat-login",
+  "newRelease": "/opt/houren/releases/main-1a62faa1b268-20261017-runtime-observation",
+  "backup": "/var/backups/houren/runtime-observation-20261017-1548",
+  "verificationMode": "final snapshot recovery",
+  "genesisReplay": false,
+  "archiveSha256": "bc6a0bb09275104f71c2653b9fcaea6be019fc8624eade39dd375729a6c5fc3e",
+  "localTests": {
+    "passed": 1884,
+    "failed": 0,
+    "skipped": 1
+  },
+  "phases": {
+    "preparing": "2026-10-17T07:47:46.055725+00:00",
+    "stopping": "2026-10-17T07:47:46.310923+00:00",
+    "consistent-backup": "2026-10-17T07:47:46.514004+00:00",
+    "offline-recovery": "2026-10-17T07:47:57.444119+00:00",
+    "permissions-preflight": "2026-10-17T07:48:06.145890+00:00",
+    "switching": "2026-10-17T07:48:09.148509+00:00",
+    "verifying-online": "2026-10-17T07:48:31.406999+00:00",
+    "complete": "2026-10-17T07:48:32.034715+00:00"
+  },
+  "phase": "complete",
+  "oldFilesVerified": 1141,
+  "releaseFilesVerified": 1149,
+  "otherServicePids": {
+    "nginx": "8608",
+    "xray": "13274"
+  },
+  "stopSeconds": 0.202,
+  "dataBackupSha256": "36148c035a364cc2a658b92867e9000916583cd3039607ac80d586b926a7b77a",
+  "oldReleaseBackupSha256": "12b7209870e50f25ae965529f001bdd5830113b755ad3ff2f84f325697d5a34b",
+  "recovery": {
+    "worldId": "p7-20261016",
+    "premise": 7,
+    "physics": 2,
+    "epoch": 2,
+    "map": "island-three-v1",
+    "tick": 67,
+    "commandN": 3239,
+    "logEnd": 3239,
+    "replayed": 0,
+    "stateHash": "8fcd2357d05817f94d7ea3af10a3ba4c9341607a29e22e1aca1a47f330b05b8a",
+    "residents": 17,
+    "accounts": 4,
+    "runners": 16,
+    "validRunners": 16,
+    "enabledRunners": 16,
+    "paused": false,
+    "shellsPaused": null,
+    "hostedEnabled": true,
+    "billingAccounts": 1,
+    "commandLogHash": "bffd7fb240a02e2e1ea6e84f02144b80ebb4741ca05ad63e0e2c6a91fc7c9dce",
+    "commandLogBytes": 57646632,
+    "eventSequence": 1702
+  },
+  "preflight": {
+    "ok": true,
+    "checks": [],
+    "version": "0.1.0",
+    "hash": "1a62faa1b26839faf648cdfd2916e97a600766f8",
+    "commandN": 3239,
+    "contentVerified": true
+  },
+  "downtimeSeconds": 45.095,
+  "health": {
+    "ok": true,
+    "worldId": "p7-20261016",
+    "login": 200,
+    "account": 200,
+    "state": 200,
+    "sse": 200
+  },
+  "historyPrefixPreserved": true,
+  "accountsPreserved": true,
+  "encryptedConfigurationPreserved": true,
+  "configurationPreserved": true,
+  "usagePreserved": true,
+  "service": {
+    "ActiveState": "active",
+    "SubState": "running",
+    "NRestarts": "0",
+    "Result": "success",
+    "MainPID": "205508"
+  }
+}

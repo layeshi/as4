@@ -1,0 +1,44 @@
+[
+  {
+    "url": "https://heirscity.site/login.html",
+    "status": "200",
+    "exit": 0,
+    "error": ""
+  },
+  {
+    "url": "https://www.heirscity.site/login.html",
+    "status": "200",
+    "exit": 0,
+    "error": ""
+  },
+  {
+    "url": "http://38.76.221.106/login.html",
+    "status": "200",
+    "exit": 0,
+    "error": ""
+  },
+  {
+    "url": "http://38.76.221.106/login.js",
+    "status": "200",
+    "exit": 0,
+    "error": ""
+  },
+  {
+    "url": "http://38.76.221.106/style.css",
+    "status": "200",
+    "exit": 0,
+    "error": ""
+  },
+  {
+    "url": "http://38.76.221.106/api/account",
+    "status": "200",
+    "exit": 0,
+    "error": ""
+  },
+  {
+    "url": "http://38.76.221.106/api/public/state",
+    "status": "401",
+    "exit": 0,
+    "error": ""
+  }
+]

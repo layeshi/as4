@@ -1,0 +1,11 @@
+{
+  "mode": "isolated in-memory metrics only",
+  "commandN": 3239,
+  "tick": 67,
+  "stored": 17,
+  "computedNonCitizens": 0,
+  "computedExiled": 0,
+  "clockUnchanged": true,
+  "commandsUnchanged": true,
+  "backupUnchanged": true
+}

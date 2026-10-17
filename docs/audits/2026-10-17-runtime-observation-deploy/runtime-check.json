@@ -1,0 +1,71 @@
+{
+  "checkedAt": "2026-10-17T15:49:45.825897+08:00",
+  "experiment": {
+    "lawProtection": null,
+    "capacityProtection": null,
+    "state": "running",
+    "paused": false,
+    "remainingMs": 810532,
+    "nextTickAt": 1792224195525,
+    "tick": 67,
+    "hostedActive": 16,
+    "shellsActive": 0
+  },
+  "attention": {
+    "day": "2026-10-17",
+    "totals": {
+      "agents": 12,
+      "wakings": 12,
+      "wakes": 0,
+      "turns": 26,
+      "looks": {
+        "self": 3,
+        "here": 6,
+        "inbox": 2,
+        "other": 5,
+        "places": 1,
+        "groups": 1,
+        "actions": 1
+      },
+      "acts": 17,
+      "ended": {
+        "error": 2,
+        "tokens_exhausted": 1,
+        "end": 4,
+        "actions": 2,
+        "tokens": 1,
+        "turns": 2
+      },
+      "tokens": {
+        "in": 732045,
+        "out": 3246
+      },
+      "bill": {
+        "reread": 20440,
+        "read": 22081,
+        "write": 2076
+      },
+      "refused": {
+        "tokens_exhausted": 1,
+        "cap_reached": 0
+      }
+    },
+    "residentsWithTraces": 12
+  },
+  "todayUsage": {
+    "calls": 1210,
+    "failed": 21,
+    "unreported": 0,
+    "input": 36555747,
+    "output": 620439,
+    "tokens": 37176186
+  },
+  "worldId": "p7-20261016",
+  "residents": 17,
+  "currentStoredMetrics": {
+    "day": 4,
+    "nonCitizens": 17,
+    "exiled": 0
+  },
+  "attentionFileExists": true
+}
