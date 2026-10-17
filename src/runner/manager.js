@@ -301,7 +301,9 @@ export class RunnerManager {
           if((this.rt.w.premise===6 || this.rt.w.premise === 7))this.usage.record(`${id}@${r.accountId}`,usage,meta,config.model);
         },
         waitWake: (this.rt.w.premise===6 || this.rt.w.premise === 7)?async args=>this.records[id]===r&&this.valid(id)?managedClient(this.ctx,id,()=>this.records[id]===r&&this.valid(id),controller.signal).wait(args):{ok:false,status:401}:this.waitWake(id),
-        onWaking: (_agentId, rec) => { if((this.rt.w.premise!==6 && this.rt.w.premise !== 7))this.traces?.append(id, rec, r.config.model); }, // 观察用的轨迹（第二前提，SPEC-P2 §14.1）；没有 traces 时什么也不做
+        // Account-managed residents use the same sanitized waking records,
+        // including refusals before a model call (e.g. tokens_exhausted).
+        onWaking: (_agentId, rec) => this.traces?.append(id, rec, config.model),
         onState: (event) => {
           if (controller.signal.aborted) return;
           Object.assign(state, event);

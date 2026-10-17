@@ -151,6 +151,34 @@ test('P7 residents arrive at the chosen port, become citizens there, and need a 
   assert.equal(e2.checkConservation(w).ok, true);
 });
 
+test('P7 island citizenship metrics count living residents across valid city namespaces once', () => {
+  const w = world(), h = harness(w);
+  const north = h.create('metric-north', '北人', 'north');
+  const west = h.create('metric-west', '西人', 'west');
+  const east = h.create('metric-east', '东人', 'east');
+  h.tick(12);
+  assert.equal(w.metrics.at(-1).nonCitizens, 0);
+  assert.equal(w.metrics.at(-1).exiled, 0);
+  const previous = structuredClone(w.metrics[0]);
+
+  // Residence and current location do not define citizenship. Multiple cities
+  // may grant it; exile is a separate tag, just as in single-city metrics.
+  w.agents[north].tags = ['west:citizen', 'north:exiled', 'east:exiled'];
+  w.agents[north].place = 'saltflats';
+  w.agents[west].tags = ['citizen', 'unknown:citizen', 'unknown:exiled'];
+  w.agents[east].tags = ['east:citizen', 'north:citizen'];
+  h.tick(12);
+  assert.equal(w.metrics.at(-1).nonCitizens, 1);
+  assert.equal(w.metrics.at(-1).exiled, 1);
+  assert.deepEqual(w.metrics[0], previous, 'previous daily snapshots are not rewritten');
+
+  w.agents[north].status = 'retired';
+  w.agents[west].status = 'dead';
+  h.tick(12);
+  assert.equal(w.metrics.at(-1).nonCitizens, 0);
+  assert.equal(w.metrics.at(-1).exiled, 0);
+});
+
 test('P7 wells pay 3:2:1 into their own treasuries; rations go to each city’s citizens', () => {
   const w = world();
   const h = harness(w);

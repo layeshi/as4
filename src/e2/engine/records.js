@@ -356,6 +356,12 @@ function dailyMetricsWorld(w, d, sample) {
   delete out.migrationsIn;
   const all = agentList(w);
   for (const k of ['awake', 'dormant', 'dead', 'retired']) out[k] = all.filter((a) => a.status === k).length;
+  // Island-wide status is a count of residents, not of city memberships.
+  // A citizen of any city is not a non-citizen, even while abroad; exile
+  // remains a separate tag and multiple exile tags count only once.
+  const alive = all.filter(isAlive);
+  out.nonCitizens = alive.filter((a) => !CITY_IDS.some((id) => a.tags.includes(`${id}:citizen`))).length;
+  out.exiled = alive.filter((a) => CITY_IDS.some((id) => a.tags.includes(`${id}:exiled`))).length;
   return out;
 }
 
