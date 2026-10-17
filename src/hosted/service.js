@@ -3,7 +3,7 @@ import { existsSync, readFileSync, mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { durableFile } from '../durable-file.js';
 import { runnerConfig, RunnerError } from '../runner/manager.js';
-import { MODEL_IDS, PRICING_URL, FX, selectCatalog, priceModel, checkMultiplier } from './catalog.js';
+import { MODEL_IDS, PRICING_URL, FX, selectCatalog, priceModel, checkMultiplier, canonicalRoutingGroup } from './catalog.js';
 import { modelURL, modelFetch } from '../runner/endpoint.js';
 import { BillingStore, emptyUsage, addUsage, reservationMicro, costMicro } from './billing.js';
 
@@ -151,7 +151,7 @@ export class HostedService {
       const config = { ...c, ...model, model: model.id, thinking: 'default' };
       let routingGroup = null;
       try {
-        const provider = await this.provider({ ...this.resolved(config), timeoutMs: 60000, onResponse: response => { routingGroup = response.routingGroup; } });
+        const provider = await this.provider({ ...this.resolved(config), timeoutMs: 60000, onResponse: response => { routingGroup = canonicalRoutingGroup(model.id, response.routingGroup); } });
         const result = await provider.step({ system: 'Connection test. Call done once.', transcript: [{ role: 'user', text: 'Call done with an empty object.' }], tools: [{ name: 'done', description: 'Finish.', schema: { type: 'object', properties: {}, additionalProperties: false } }], signal: AbortSignal.timeout(60000), timeoutMs: 60000 });
         if (!result?.calls?.some(call => call.name === 'done') || !Number.isSafeInteger(result.usage?.input) || !Number.isSafeInteger(result.usage?.output) || result.usage.input < 0 || result.usage.output < 0 || costMicro(result.usage, model.pricesMicro) === null) throw Error();
       } catch { throw new RunnerError('模型测试失败：请检查 Key 权限、模型接口、工具调用及用量返回。'); }

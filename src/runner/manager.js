@@ -13,7 +13,7 @@ import { UsageStore } from './usage.js';
 import { earthDay } from '../shells/budget.js';
 import { agentic, tokenized } from '../e2/facade.js';
 import { waitCore } from '../http/agent.js';
-import { reservePrices } from '../hosted/catalog.js';
+import { reservePrices, canonicalRoutingGroup } from '../hosted/catalog.js';
 import { reservationMicro } from '../hosted/billing.js';
 import { toolDefs } from '../../runner/loop.js';
 
@@ -274,7 +274,7 @@ export class RunnerManager {
       const dynamic = () => hosted?.config.version === 2;
       const provider = hosted ? { step: async args => {
         const selected = await hosted.provider({ ...hosted.resolved(hostedConfig), timeoutMs: r.config.timeoutMs, onResponse: ({ routingGroup }) => {
-          if (hostedConfig.version === 2 && routingGroup && routingGroup !== hostedConfig.group) throw Object.assign(new Error('模型实际线路价格已变化，请管理员重新核验。'), { status: 403 });
+          if (hostedConfig.version === 2 && routingGroup && canonicalRoutingGroup(hostedConfig.model, routingGroup) !== hostedConfig.group) throw Object.assign(new Error('模型实际线路价格已变化，请管理员重新核验。'), { status: 403 });
         } });
         return selected.step(args);
       } } : await (hosted ? hosted.provider(config) : this.provider(config));

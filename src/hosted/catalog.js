@@ -84,3 +84,6 @@ export function reservePrices(model) {
   if (!model.tiers) return model.pricesMicro;
   return Object.fromEntries(RATE_KEYS.map(k => [k, Math.max(0, ...model.tiers.map(t => t.pricesMicro[k] ?? 0))]));
 }
+
+// Confirmed by the platform operator: Luna's upstream alias denotes this billing group.
+export const canonicalRoutingGroup = (model, group) => model === 'gpt-6-luna' && group === 'openai' ? 'Openai-Gpt-1' : group;

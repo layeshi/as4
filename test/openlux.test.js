@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MODEL_IDS, selectCatalog, priceModel, product, applicablePrices, reservePrices } from '../src/hosted/catalog.js';
+import { MODEL_IDS, selectCatalog, priceModel, product, applicablePrices, reservePrices, canonicalRoutingGroup } from '../src/hosted/catalog.js';
 import { HostedService } from '../src/hosted/service.js';
 import { BillingStore, costMicro } from '../src/hosted/billing.js';
 import { estimateHosted } from '../public/hosted-estimate.js';
@@ -133,4 +133,14 @@ test('GPT models select Responses; automatic grouping prices the observed key ro
   await s.testCatalog({draftId:s.config.draft.id,model:'gpt-6-luna',autoGroup:true});
   assert.equal(s.config.draft.tested['gpt-6-luna'].group,'Openai-Gpt-1');
   await assert.rejects(s.testCatalog({draftId:s.config.draft.id,model:'gpt-6-luna',group:'Azure-Gpt-3',groupConfirmed:true}),/与所选分组不同/);
+});
+
+
+test('operator-confirmed Luna alias resolves only to Openai-Gpt-1',async t=>{
+  assert.equal(canonicalRoutingGroup('gpt-6-luna','openai'),'Openai-Gpt-1');
+  assert.equal(canonicalRoutingGroup('gpt-6-astra','openai'),'openai');
+  const {service:s}=setup(t);await prepare(s);
+  s.providerOverride=config=>({step:async()=>{config.onResponse({routingGroup:'openai'});return {calls:[{name:'done'}],usage:{input:100,output:5}};}});
+  await s.testCatalog({draftId:s.config.draft.id,model:'gpt-6-luna',autoGroup:true});
+  const m=s.config.draft.tested['gpt-6-luna'];assert.equal(m.group,'Openai-Gpt-1');assert.equal(m.pricesMicro.miss,494122);assert.equal(m.pricesMicro.output,2470608);
 });
