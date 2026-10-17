@@ -1,0 +1,28 @@
+{
+  "checkedAt": "2026-10-17T02:32:19.868Z",
+  "apiBase": "https://www.heirscity.site",
+  "checks": [
+    {
+      "path": "/api/wechat/public/state",
+      "status": 200,
+      "premise": 7,
+      "residentCount": 17,
+      "compatible": true
+    },
+    {
+      "path": "/api/wechat/public/map",
+      "status": 200,
+      "compatible": true
+    },
+    {
+      "path": "/api/wechat/public/events?recent=1&limit=3",
+      "status": 200,
+      "compatible": true
+    },
+    {
+      "path": "/api/account",
+      "status": 200,
+      "compatible": true
+    }
+  ]
+}
