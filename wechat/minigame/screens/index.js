@@ -8,4 +8,5 @@ const { messages, messageThread, messageEditor } = require('./messages');
 const { assistant, assistantSheet } = require('./assistant');
 const history = require('./history');
 const { announcements, announcement } = require('./announcements');
-module.exports = { assistant, ...history, announcements, announcement, startup, city, residents, resident, archive, detail, account, link, webLogin, mergeAccount, owner, entry, settings, about, messages, messageThread, messageEditor, sheet: (app, W) => ['assistantScope', 'assistantDelete'].includes(app.sheet.kind) ? assistantSheet(app, W) : placeSheet(app, W) };
+const { notifications, notificationRecords } = require('./notifications');
+module.exports = { assistant, ...history, announcements, announcement, startup, city, residents, resident, archive, detail, account, link, webLogin, mergeAccount, owner, entry, settings, about, messages, messageThread, messageEditor, notifications, notificationRecords, sheet: (app, W) => ['assistantScope', 'assistantDelete'].includes(app.sheet.kind) ? assistantSheet(app, W) : placeSheet(app, W) };

@@ -17,12 +17,13 @@ const { MessageBoard } = require('./messages');
 const { Assistant } = require('./assistant');
 const { History } = require('./history');
 const { Announcements } = require('./announcements');
+const { Notifications } = require('./notifications');
 const { C, font } = theme;
 
 const TABS = [['city', '观测', 'city'], ['residents', '居民', 'residents'], ['archive', '档案', 'archive'], ['account', '我的', 'me']];
 const TAB_IDS = TABS.map(t => t[0]);
 // 处理中仍可操作的界面动作；停止生成也保留入口。
-const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'contactChannel', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider', 'preset', 'modelChoice', 'messageExpand', 'assistantList', 'assistantCloseSource', 'assistantScope', 'assistantResetScope', 'assistantCancel']);
+const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'contactChannel', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider', 'preset', 'modelChoice', 'messageExpand', 'assistantList', 'assistantCloseSource', 'assistantScope', 'assistantResetScope', 'assistantCancel', 'notificationSkip', 'notificationPromptLater', 'launchCancel']);
 const PREFS_KEY = 'houren.prefs';
 const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null;
 const caf = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
@@ -43,11 +44,12 @@ class SocietyGame {
     this.pendingCount = 0; this.quickTries = 0; this.mapVersion = 0; this.dismissed = {};
     this.cityFocus = null; // 第七前提「三城」：城市页当前看的城，null 为全岛
     this.moderation = {}; this.loginRequired = {};
-    this.navigation = 0; this.readVersions = {};
+    this.navigation = 0; this.readVersions = {}; this.launch = null;
     this.messageBoard = new MessageBoard(this);
     this.history = new History(this);
     this.assistant = new Assistant(this);
     this.announcements = new Announcements(this);
+    this.notifications = new Notifications(this);
     this.modelPresets = modelPresets.bundled;
     this.cityMap = new CityMap(() => this.wx.createCanvas());
     this.filterScroller = new Scroller(); this.horizontalAreas = [];
@@ -76,7 +78,43 @@ class SocietyGame {
   }
   savePrefs() { try { this.wx.setStorageSync(PREFS_KEY, this.prefs); } catch (_) {} }
 
+  // 微信通知打开的页面参数；仍须先点「进入城市」才联网。未登录时保留待打开的提醒，主动登录成功后再重放，由服务端核验管理权。
+  setLaunch(query) {
+    const id = v => typeof v === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v) ? v : '';
+    const notification = id(query?.notification), agentId = id(query?.agentId);
+    if (!notification && !agentId) return false;
+    this.launch = { notification, agentId }; this.launchKey = notification + '|' + agentId;
+    this.invalidate();
+    return true;
+  }
+  // 回到前台时的启动参数：同一组参数在每次 onShow 都会重复给出，只处理新的一组。
+  receiveLaunch(query) {
+    const id = v => typeof v === 'string' ? v : '';
+    if (!query || id(query.notification) + '|' + id(query.agentId) === this.launchKey || !this.setLaunch(query)) return false;
+    if (!this.entered) { this.render(); return true; } // 停在启动页，点「进入城市」后再打开。
+    if (this.busy) this.launchQueued = true; else this.dispatch({ type: 'openLaunch' });
+    return true;
+  }
+  async openLaunch() {
+    const launch = this.launch;
+    if (!launch) return;
+    this.clearSecrets(); this.navigation++; this.tab = 'account'; this.stack = []; this.sheet = null;
+    if (!this.user) await this.loadAccount().catch(() => {});
+    if (this.user) await this.notifications.handle({ type: 'notificationRecords' });
+    if (this.launch !== launch) return; // 期间收到更新的一条提醒，由它接手。
+    if (!this.user) {
+      this.tab = 'account'; this.stack = []; this.invalidate();
+      this.showToast('请先登录，登录后将打开这条提醒', 'error'); return;
+    }
+    this.launch = null;
+    if (launch.notification && this.notifications.records.some(r => r.id === launch.notification)) return this.notifications.open(launch.notification);
+    if (!launch.agentId) return;
+    try { await this.handle({ type: 'owner', id: launch.agentId }); }
+    catch (error) { if ([403, 404].includes(error.status)) throw new Error('你已不再管理这位居民，无法查看提醒详情'); throw error; }
+  }
+  async resumeLaunch() { if (this.launch && this.user) await this.openLaunch(); }
   start() {
+    if (!this.launch && this.wx.getLaunchOptionsSync) { try { this.setLaunch(this.wx.getLaunchOptionsSync().query); } catch (_) {} }
     api.restoreSession();
     this.loadFont();
     this.wx.onTouchStart(e => this.touchStart(e));
@@ -84,7 +122,7 @@ class SocietyGame {
     this.wx.onTouchEnd(e => this.touchEnd(e));
     if (this.wx.onTouchCancel) this.wx.onTouchCancel(() => this.touchCancel());
     this.wx.onHide(() => this.hide());
-    this.wx.onShow(() => { this.visible = true; this.refresh(); });
+    this.wx.onShow(res => { this.visible = true; if (!this.receiveLaunch(res && res.query)) this.refresh(); });
     if (this.wx.onWindowResize) this.wx.onWindowResize(() => { this.measure(); this.invalidate(); this.render(); });
     if (this.wx.onKeyboardInput) this.wx.onKeyboardInput(e => { if (this.editing) { this.form[this.editing] = e.value; if (this.editing === 'contactValue') { delete this.form.contactChallenge; delete this.form.contactProof; } this.invalidate(); this.render(); } });
     this.wx.onKeyboardConfirm(e => { if (this.editing) { this.form[this.editing] = e.value; if (this.editing === 'contactValue') { delete this.form.contactChallenge; delete this.form.contactProof; } } this.editing = ''; if (this.wx.hideKeyboard) this.wx.hideKeyboard(); this.invalidate(); this.render(); });
@@ -110,6 +148,7 @@ class SocietyGame {
     this.animating = false;
     this.cityMap.endGesture(); this.touch = null; this.pressed = null;
     this.scroller().dragging = false; this.filterScroller.dragging = false;
+    if (this.wx.hideSubscribe) this.wx.hideSubscribe();
     this.clearSecrets();
   }
   clearSecrets() {
@@ -166,6 +205,13 @@ class SocietyGame {
     if (['announcements', 'announcement'].includes(this.tab)) {
       this.refreshing = true;
       try { await this.announcements.refresh(); }
+      finally { this.refreshing = false; this.invalidate(); this.render(); this.schedule(); }
+      return;
+    }
+    if (['notifications', 'notificationRecords'].includes(this.tab)) {
+      this.refreshing = true; this.render();
+      try { await this.notifications.refresh(); }
+      catch (error) { this.notifications.fail(error); this.showToast(error.message, 'error'); }
       finally { this.refreshing = false; this.invalidate(); this.render(); this.schedule(); }
       return;
     }
@@ -299,7 +345,10 @@ class SocietyGame {
       if (error.status === 401 && error.code === 'wechat_login_required' && error.sessionCurrent !== false) this.loginRequired[action.type] = 1;
       this.error = error.message || '操作失败，请重试'; this.showToast(this.error, 'error');
     }
-    finally { if (network) this.busy = false; this.invalidate(); this.render(); this.schedule(); }
+    finally {
+      if (network) this.busy = false; this.invalidate(); this.render(); this.schedule();
+      if (network && this.launchQueued) { this.launchQueued = false; this.dispatch({ type: 'openLaunch' }); }
+    }
   }
   async handle(a) {
     const f = this.form;
@@ -307,13 +356,16 @@ class SocietyGame {
     if (a.type?.startsWith('history')) return this.history.handle(a);
     if (a.type === 'announcements' || a.type?.startsWith('announcement')) return this.announcements.handle(a);
     if (a.type === 'messages' || a.type?.startsWith('message')) return this.messageBoard.handle(a);
+    if (a.type === 'notifications' || a.type?.startsWith('notification')) return this.notifications.handle(a);
     switch (a.type) {
-      case 'start': this.entered = true; this.tab = 'city'; this.stack = []; await Promise.all([this.refresh({ full: true }), this.loadAccount().catch(() => {})]); break;
+      case 'start': this.entered = true; this.tab = 'city'; this.stack = []; await Promise.all([this.refresh({ full: true }), this.loadAccount().catch(() => {})]); await this.openLaunch(); break;
+      case 'openLaunch': await this.openLaunch(); break;
+      case 'launchCancel': this.launch = null; break;
       case 'tab':
         if (!TAB_IDS.includes(a.tab)) return;
         if (this.tab === a.tab && !this.stack.length) { this.scroller().scrollTo(0); break; }
         this.clearSecrets(); this.navigation++; this.tab = a.tab; this.stack = []; this.sheet = null; this.quickTries = 0;
-        if (a.tab === 'account') await this.loadAccount();
+        if (a.tab === 'account') { await this.loadAccount(); if (this.user && this.wechatVerified) this.notifications.load({ quiet: true }); }
         if (a.tab === 'archive') await this.loadArchive();
         if (!this.state) await this.refresh({ full: true });
         break;
@@ -352,7 +404,8 @@ class SocietyGame {
         if (!f.accepted) throw new Error('请先阅读并同意隐私说明');
         try { await api.loginByPassword((f.username || '').trim(), f.password || ''); }
         finally { this.clearSecrets(); }
-        f.password = ''; this.navigation++; this.owner = null; this.residentId = ''; this.moderation = {}; this.loginRequired = {}; this.messageBoard.reset(); await this.loadAccount(); this.back(); this.showToast('已登录网站账号', 'ok');
+        f.password = ''; this.navigation++; this.owner = null; this.residentId = ''; this.moderation = {}; this.loginRequired = {}; this.messageBoard.reset(); this.notifications.reset(); await this.loadAccount(); this.back(); this.showToast('已登录网站账号', 'ok');
+        await this.resumeLaunch();
         break;
       case 'linkAccount': this.push('link'); break;
       case 'webLogin': this.push('webLogin'); break;
@@ -370,9 +423,10 @@ class SocietyGame {
         const ticket = this.mergePreview.ticket;
         await api.request('/api/wechat/merge/confirm', { method: 'POST', timeout: 60000, data: { ticket, confirm: true } });
         this.clearSecrets(); this.navigation++; this.owner = null; this.residentId = '';
-        this.messageBoard.reset();
+        this.messageBoard.reset(); this.notifications.reset();
         this.moderation = {}; this.loginRequired = {}; this.stack = []; this.tab = 'account';
         await this.loadAccount(); this.showToast('账号已合并，请使用网站账号登录', 'ok');
+        await this.resumeLaunch();
         break;
       }
       case 'copyUsername': this.wx.setClipboardData({ data: this.user.username, success() {} }); break;
@@ -411,9 +465,10 @@ class SocietyGame {
         this.navigation++; // Old readers must not restore a previous login's moderation state.
         this.refreshing = false; // A fresh read may replace an outstanding read from the previous login.
         this.moderation = {}; this.loginRequired = {}; this.updatePending();
-        this.messageBoard.reset();
+        this.messageBoard.reset(); this.notifications.reset();
         await this.loadAccount(); this.map = null; await this.refresh({ full: true });
         this.notice = '微信登录成功'; this.showToast('微信登录成功', 'ok');
+        await this.resumeLaunch();
         break;
       case 'logout':
         this.clearSecrets(); this.navigation++;
@@ -422,6 +477,7 @@ class SocietyGame {
         api.clearSession();
         this.user = null; this.owner = null; this.linked = []; this.created = []; this.wechatVerified = false;
         this.messageBoard.reset();
+        this.notifications.reset(); this.launch = null; this.launchQueued = false; // 只清本机状态；普通退出不取消服务器上的提醒订阅。
         this.loginRequired = {};
         this.form = {}; this.residentId = ''; this.letterDraft = ''; this.createDraft = ''; this.letterRequestId = null; this.createRequestId = null;
         this.stack = []; this.sheet = null; this.tab = 'account'; this.moderation.owner = 0; this.moderation.account = 0;

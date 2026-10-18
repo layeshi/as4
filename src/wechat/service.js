@@ -71,6 +71,16 @@ export class WechatService {
     })();
     try { return await this.pendingToken; } finally { this.pendingToken = null; }
   }
+  async sendSubscription({ token, openid, templateId, data, page, state = 'formal' }) {
+    const url = new URL('https://api.weixin.qq.com/cgi-bin/message/subscribe/send');
+    url.searchParams.set('access_token', token);
+    const result = await this.json(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ touser: openid, template_id: templateId, page, data, miniprogram_state: state, lang: 'zh_CN' }) });
+    if ([40001, 40014, 42001].includes(result.errcode)) this.token = null;
+    if (!Number.isInteger(result.errcode)) throw new Error('Invalid subscription response');
+    // Never expose provider messages: they may include identifiers or request details.
+    return { errcode: result.errcode };
+  }
   requireIdentity(identity) {
     if (identity && this.miniprogram && identity.appid === this.miniprogram.appid) return this.miniprogram.requireIdentity(identity);
     // The official v2 API requires an OpenID active in the last two hours.

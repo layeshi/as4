@@ -1,3 +1,5 @@
+import { NotificationService } from '../wechat/notifications.js';
+import { notificationRoutes } from './notifications.js';
 import { AssistantService } from '../assistant/service.js';
 import { assistantRoutes } from './assistant.js';
 import { WechatWebLogin } from '../wechat/web-login.js';
@@ -80,7 +82,7 @@ const roleAdminRoutes = [
   ['GET','/api/admin/public-model',accountWrap(({res,ctx})=>sendJson(res,200,ctx.publicRoles.view()),{admin:true})],
   ['POST','/api/admin/public-model',accountWrap(({res,ctx,body})=>{try{sendJson(res,200,ctx.publicRoles.save(body));}catch(e){sendJson(res,400,{error:{code:'invalid_config',message:e.message}});}},{admin:true})],
 ];
-const ROUTES = [...assistantRoutes, ...historyRoutes, ...announcementRoutes, ...wechatMessageBoardRoutes, ...messageBoardRoutes, ...wechatWebLoginRoutes,...wechatRoutes,...archiveRoutes,...residentRoutes,...hostedRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
+const ROUTES = [...notificationRoutes, ...assistantRoutes, ...historyRoutes, ...announcementRoutes, ...wechatMessageBoardRoutes, ...messageBoardRoutes, ...wechatWebLoginRoutes,...wechatRoutes,...archiveRoutes,...residentRoutes,...hostedRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
 
 function match(method, pathname) {
   for (const [m, pattern, handler] of ROUTES) {
@@ -200,6 +202,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
   ctx.hosted = new HostedService(ctx);
   ctx.accountMerger = new AccountMerger(ctx);
   ctx.accountMerger.recover();
+  ctx.notifications = new NotificationService(ctx);
   ctx.publicRoles = new PublicRoleService(ctx);
   ctx.history = new HistoryArchive(rt);
   ctx.historyExports = new ExportManager(ctx, ctx.history);
@@ -266,6 +269,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
   server.on('listening', () => {
     const address = server.address();
     const host = address.address === '::' ? '[::1]' : address.address === '0.0.0.0' ? '127.0.0.1' : address.address.includes(':') ? `[${address.address}]` : address.address;
+    ctx.notifications.start().catch(() => logger.error?.('居民提醒启动失败'));
     ctx.publicRoles.start();
     ctx.reports.start();
     ctx.historyExports.kick();
@@ -287,6 +291,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     server,
     ctx,
     async close() {
+      await ctx.notifications.close();
       ctx.loginChallenge?.close();
       ctx.serverStatus.close();
       await ctx.assistant.close();

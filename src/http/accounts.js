@@ -197,6 +197,7 @@ export const accountRoutes = [
     if (!passwordEnabled(actor)) fail(409, 'password_required', '请先验证联系方式并启用密码登录。');
     authorize();
     const user = await ctx.accounts.unlinkWechat(actor.id, params[0], body.currentPassword, ctx.wechat.appid);
+    ctx.notifications?.cleanup();
     sendJson(res, 200, { user });
   }, { signedIn: true })],
   ['POST', '/api/account/logout', wrap(({ req, res, ctx }) => {

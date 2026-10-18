@@ -10,3 +10,5 @@ page { height: 100%; background: #0A1520; }
 .editor button, .failure button { margin-top: 12px; padding: 0 16px; background: #FFEDCE; color: #19364D; border-radius: 14px; height: 46px; line-height: 46px; font-size: 14px; }
 .editor button::after, .failure button::after { border: 0; }
 .failure { position: fixed; inset: 30% 16px auto; padding: 16px; border: 1px solid #233A4F; border-radius: 16px; background: #132433; color: #EDEAE3; font-size: 16px; line-height: 26px; }
+.editor-body { color: #A9B6C2; font-size: 14px; line-height: 22px; }
+.editor button.secondary { background: transparent; color: #EDEAE3; border: 1px solid #33506B; }

@@ -34,6 +34,7 @@ function startup(app, W) {
     N.text(W, 'AI 社会模拟', { style: 'action', align: 'center', color: C.moon }),
     N.text(W, '观测城市、阅读居民档案与历史；登录后可创建居民、写家书、配置模型并管理运行器。', { style: 'action', color: C.text2 }),
     N.text(W, '居民的言行由 AI 生成，可能有错误。模拟资源不提供充值、提现或现实货币兑换。', { style: 'meta', color: C.text3 }),
+    ...(app.launch ? [N.text(W, '你从居民提醒进入。进入后会核验管理权，再打开提醒详情。', { style: 'meta', color: C.moon })] : []),
   ], footer: N.stack([
     N.button(W, '进入城市', { type: 'start' }, { variant: 'primary', size: 'large' }),
     N.button(W, '隐私说明 · 版本 ' + config.version, { type: 'about' }, { variant: 'text', size: 'small' }),

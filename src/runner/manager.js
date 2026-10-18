@@ -92,6 +92,12 @@ export class RunnerManager {
     const data = Buffer.concat([cipher.update(JSON.stringify(this.records)), cipher.final()]);
     durableFile(this.file, JSON.stringify({ iv: iv.toString('hex'), tag: cipher.getAuthTag().toString('hex'), data: data.toString('hex') })); chmodSync(this.file, 0o600);
   }
+  notificationChanged(id, recovered = false) {
+    queueMicrotask(() => {
+      try { this.ctx?.notifications?.runnerChanged(id, { recovered }); }
+      catch { this.rt.logger?.error?.('居民托管提醒记录失败'); }
+    });
+  }
   valid(id) {
     const r = this.records[id], a = this.rt.w.agents[id];
     if ((this.rt.w.premise === 6 || this.rt.w.premise === 7)) {
@@ -256,6 +262,7 @@ export class RunnerManager {
     const r = this.records[id]; r.enabled = true; this.persist();
     const hosted = r.config.hosted ? this.ctx.hosted : null;
     if (hosted && !hosted.available(hosted.config.version === 2 ? r.config.model : undefined)) {
+      this.notificationChanged(id);
       this.states.set(id, { status: 'hosted_unavailable', lastError: '所选模型不可用，请重新选择模型。', logs: [] });
       if (hosted.config.version === 2) { r.enabled = false; this.persist(); }
       return this.view(id);
@@ -269,6 +276,7 @@ export class RunnerManager {
     const state = { ...this.states.get(id), status: 'starting', lastError: null, logs: [] };
     if ((this.rt.w.premise === 6 || this.rt.w.premise === 7)) { delete state.nextWakeTick; delete state.wakeEvery; }
     this.states.set(id, state);
+    this.notificationChanged(id);
     const log = makeLogger(id, { secrets: [r.token, config.apiKey], quiet: true, out: () => {}, err: () => {} });
     const promise = Promise.resolve().then(async () => {
       const dynamic = () => hosted?.config.version === 2;
@@ -286,10 +294,10 @@ export class RunnerManager {
             try { hostedConfig = hosted.snapshot(r.config.model); } catch { unavailable = true; r.enabled = false; this.persist(); state.status = 'hosted_unavailable'; state.lastError = '所选模型不可用，请重新选择模型。'; controller.abort(); return { ok: false, status: 409, json: { error: { code: 'hosted_unavailable' } } }; }
           }
           if (hosted.billing.available(r.accountId) < reservationMicro(0, hostedConfig.maxOutputTokens, reservePrices(hostedConfig))) {
-            balanceLow = true; state.status = 'hosted_balance_low';
+            balanceLow = true; state.status = 'hosted_balance_low'; this.notificationChanged(id);
             return { ok: false, status: 409, json: { error: { code: 'hosted_balance_low' } } };
           }
-          balanceLow = false; state.status = 'waiting';
+          balanceLow = false; state.status = 'waiting'; this.notificationChanged(id);
           return wake(args);
         };
       }
@@ -304,10 +312,13 @@ export class RunnerManager {
           reservation = hosted.billing.reserve(r.accountId, id, chars, hostedConfig);
           balanceLow = !reservation;
           if (balanceLow) state.status = 'hosted_balance_low';
+          else if (state.status === 'hosted_balance_low') state.status = 'waiting';
+          this.notificationChanged(id, reservation ? ['balance_low'] : false);
           return !!reservation;
         } } : {}),
         ...(tokenized(this.rt.w) ? { refundWake: async wakeId => { if((this.rt.w.premise===6 || this.rt.w.premise === 7)&&(this.records[id]!==r||!this.valid(id)))return {ok:false};return this.rt.exec('meter', { op: 'refund', agentId: id, wakeId, day: earthDay(Date.now(), this.cfg.shellTz || 'Asia/Shanghai').key }).result; } } : {}),
         onUsage: (_agentId, usage, meta) => {
+          if (meta.ok && !meta.cancelled) this.notificationChanged(id, true);
           if (hosted) {
             hosted.billing.settle(reservation, usage, { ...meta, cancelled: meta.cancelled || controller.signal.aborted });
             reservation = null;
@@ -337,6 +348,7 @@ export class RunnerManager {
           if (controller.signal.aborted) return;
           Object.assign(state, event);
           if (balanceLow) state.status = 'hosted_balance_low';
+          this.notificationChanged(id);
           if (unavailable) state.status = 'hosted_unavailable';
           if (event.lastActionAt) state.logs = [...state.logs, { at: event.lastActionAt, actions: event.actions }].slice(-10);
         },
@@ -352,7 +364,7 @@ export class RunnerManager {
         state.status = 'error'; state.lastError = '运行失败，请检查模型配置。'; r.enabled = false;
         try { this.persist(); } catch { state.lastError = '运行状态无法保存，请检查服务器数据目录。'; }
       }
-    }).finally(() => { if (hosted) hosted.billing.release(reservation); this.jobs.delete(id); });
+    }).finally(() => { this.notificationChanged(id); if (hosted) hosted.billing.release(reservation); this.jobs.delete(id); });
     this.jobs.set(id, { controller, promise });
     return this.view(id);
   }

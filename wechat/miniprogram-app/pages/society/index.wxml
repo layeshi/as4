@@ -8,3 +8,11 @@
     <button bindtap="confirmInput">完成</button>
   </view>
 </view>
+<view wx:if="{{subscribing}}" class="editor-mask" catchtouchmove="noop">
+  <view class="editor">
+    <view class="editor-title">{{subscribeTitle}}</view>
+    <view class="editor-body">{{subscribeBody}}</view>
+    <button class="primary" bindtap="subscribe">{{subscribeLabel}}</button>
+    <button class="secondary" bindtap="cancelSubscribe">稍后再说</button>
+  </view>
+</view>

@@ -248,6 +248,8 @@ export class AccountStore {
       if (!u || u.revision !== before.revision || !hasContact(u) || !wechatBindings(u, legacyAppId).some(b => b.identity === binding.identity && b.appid === appid)) fail(409, 'account_changed', '微信绑定已变化，请刷新。');
       if (u.wechatIdentity === binding.identity) { delete u.wechatIdentity; delete u.wechatAppId; }
       else u.wechatBindings = (u.wechatBindings || []).filter(b => !(b.appid === appid && b.identity === binding.identity));
+      u.wechatNotificationEpochs ||= {};
+      u.wechatNotificationEpochs[appid] = (u.wechatNotificationEpochs[appid] || 0) + 1;
       u.updatedAt = new Date().toISOString();
       return publicUser(u);
     });
@@ -308,6 +310,7 @@ export class AccountStore {
       const next = { ...u, ...patch };
       if (u.role === 'admin' && u.status === 'active' && (next.role !== 'admin' || next.status !== 'active') && !users.some((v) => v.id !== id && v.role === 'admin' && v.status === 'active')) fail(409, 'last_admin', '必须保留至少一个启用的管理员。');
       const invalidate = patch.passwordHash || (patch.role && patch.role !== u.role) || (patch.status && patch.status !== u.status);
+      if (patch.status === 'disabled' && u.status !== 'disabled') u.notificationEpoch = (u.notificationEpoch || 0) + 1;
       Object.assign(u, patch, { updatedAt: new Date().toISOString() });
       if (invalidate) u.revision++;
       return publicUser(u);

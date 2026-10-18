@@ -52,6 +52,7 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
     aliyunSmsSign: env.ALIYUN_SMS_SIGN || null,
     smsDailyLimit: num(env.SMS_DAILY_LIMIT, 100),
     registrationOpen: env.REGISTRATION_OPEN !== '0',
+    wechatNotificationTemplates: env.WECHAT_NOTIFICATION_TEMPLATES || null,
     wechatAppId: env.WECHAT_APPID || null,
     wechatAppSecret: env.WECHAT_APP_SECRET || null,
     wechatWebLogin: env.WECHAT_WEB_LOGIN !== '0',

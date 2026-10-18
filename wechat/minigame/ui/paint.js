@@ -132,6 +132,7 @@ const ICONS = {
   token: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z',
   settings: circlePath(12, 12, 3.2) + 'M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1',
   mail: 'M4 6h16v12H4zM4 7l8 6 8-6',
+  bell: 'M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15zM10 20.5a2 2 0 0 0 4 0',
   info: circlePath(12, 12, 9) + 'M12 11v6M12 7.6v.4',
   copy: 'M9 9h10v11H9zM5 15V4h10',
   refresh: 'M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4',

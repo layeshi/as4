@@ -35,6 +35,7 @@ function steps(W) {
 function account(app, W) {
   const top = { kind: 'title', title: '我的' }, f = app.form;
   const nodes = [];
+  if (app.launch) nodes.push(N.banner(W, { title: app.user ? '正在打开居民提醒' : '登录后打开居民提醒', body: '你从微信提醒进入。登录后会核验你对这位居民的管理权，再打开详情。', actions: [{ label: '不再打开', action: { type: 'launchCancel' }, variant: 'secondary' }] }));
   if (!app.user || !app.wechatVerified) {
     nodes.push(N.card(W, iw => [
       N.node(40, (g, x, y) => { P.circle(g.ctx, x + 20, y + 20, 20, '#19364d'); P.circle(g.ctx, x + 20, y + 17, 14, C.moon); }),
@@ -65,6 +66,11 @@ function account(app, W) {
     else nodes.push(N.stack(app.linked.map(a => N.listRow(W, { avatar: { id: a.agentId || a.id, name: a.name, avatar: a.avatar }, title: usable(a.name) ? a.name : '我的居民',
       chip: { label: view.status(a.status), color: STATUS_COLOR[a.status] || C.dormant }, sub: a.runner ? '运行器 · ' + view.status(a.runner.status) : '', meta: a.energy !== undefined ? '持有 ' + compact(a.energy) + ' 词元' : '',
       chevron: true, action: { type: 'owner', id: a.agentId || a.id } }))));
+    if (app.notifications.needsPrompt) nodes.push(N.banner(W, { title: '居民提醒需要补充微信授权', body: '已开启的提醒仍会记录在小程序内；补充授权后才会发送新的微信通知。', actions: [{ label: '去授权', action: { type: 'notifications' }, variant: 'primary' }, { label: '暂不', action: { type: 'notificationPromptLater' }, variant: 'secondary' }] }));
+    nodes.push(N.menu(W, [
+      { label: '居民提醒', hint: '按居民与类型开关', icon: 'bell', action: { type: 'notifications' } },
+      { label: '提醒记录', hint: app.notifications.unread ? `${app.notifications.unread} 条未读` : '90 天内', icon: 'doc', action: { type: 'notificationRecords' } },
+    ]));
     nodes.push(N.button(W, '让一位居民入城', { type: 'entry' }, { variant: 'secondary', icon: 'plus' }));
   }
   if (app.user && app.wechatLinked) nodes.push(N.button(W, app.user.passwordLoginEnabled ? '网页登录与密码' : '设置网页登录密码', { type: 'webLogin' }, { variant: 'secondary' }));
@@ -165,6 +171,7 @@ function owner(app, W) {
     P.text(g.ctx, `持有 ${compact(a.energy)} 词元 · 物料 ${compact(a.materials || 0)}`, x + 74, y + 44, font(13, {}), C.text3);
   })];
   nodes.push(N.button(W, '导出历史', { type: 'historyOpen', id: a.agentId }, { variant: 'secondary' }));
+  nodes.push(N.button(W, '居民提醒设置', { type: 'notifications' }, { variant: 'secondary', icon: 'bell' }));
   nodes.push(N.card(W, iw => [
     N.node(22, (g, x, y) => { P.text(g.ctx, '托管运行', x, y + 11, font(15, { bold: true }), C.text); N.paintChip(g.ctx, view.status(runner.status || 'unconfigured'), x + iw - N.chipWidth(view.status(runner.status || 'unconfigured')), y + 1, STATUS_COLOR[runner.status] || C.dormant); }),
     N.segmented(iw, [{ label: '运行', action: { type: 'runner', op: 'start' }, selected: running }, { label: '暂停', action: { type: 'runner', op: 'pause' }, selected: !running }]),
