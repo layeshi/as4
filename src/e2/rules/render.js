@@ -291,7 +291,7 @@ export function renderTiming(when, lang = 'zh') {
   const [kind, what] = w.split(':');
   if (kind === 'before' && what === 'enter') return d.when.enter;
   if (kind === 'on') return d.when.on(EVENTS[what] ? EVENTS[what][lang === 'en' ? 'en' : 'zh'] : what);
-  const spec = ACTIONS_P2[what] ?? actionTable(7).ACTIONS[what]; // settle 只在第七前提的表里
+  const spec = ACTIONS_P2[what] ?? actionTable(7, false, false, false, true).ACTIONS[what]; // settle 只在第七前提的表里
   const verb = spec && spec.verb ? spec.verb[lang === 'en' ? 'en' : 'zh'] : what;
   return kind === 'before' ? d.when.before(verb) : d.when.after(verb);
 }

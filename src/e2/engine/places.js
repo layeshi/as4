@@ -2,7 +2,8 @@ import { filterValues } from '../../collections.js';
 import { ep } from './tokens.js';
 // SPEC-E2 §4.3、§10.1–§10.4：地点与模块的查询——模块是否运转、代价倍率、初始能量系数、储能的腐坏上限。
 //
-// 一座建筑能做什么，只取决于里面装了什么模块（DESIGN §6.3）。模块「运转」的条件：所在地点不是遗址，
+// 模块赋予建筑的专门能力（DESIGN §6.3）；实体功能启用后另有基础承载位，见 entities/views.js 与 ADR 0025。
+// 模块「运转」的条件：所在地点不是遗址，
 // 且完好度 ≥ 该模块的运转下限（SPEC-E2 §5.3）；空地（广场、荒野地带、遗址）不能装模块。
 
 import { P, MODULE_DEFS, RESEARCH_DEF } from '../params.js';

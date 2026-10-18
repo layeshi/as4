@@ -1,3 +1,4 @@
+import { entitiesEnabled } from '../entities/catalog.js';
 import { residentFlow } from '../p6/journal.js';
 import { materialsEnabled } from '../world.js';
 import { terminateProject } from './material-projects.js';
@@ -112,7 +113,7 @@ function timingOf(rule) {
     // 第二前提里的 before:standing、after:standing 才解析得出来（SPEC-P2 §5.3）
     t = parseWhen(rule.when, { kind: 'city', premise: 2, prayers: true });
     if (t.error) t = parseWhen(rule.when, { kind: 'place', premise: 2, prayers: true }); // before:enter 只有地点规则才有
-    if (t.error) t = parseWhen(rule.when, { kind: 'city', premise: 7 }); // 第七前提的 settle 动作与 on:settle、on:emigrate
+    if (t.error) t = parseWhen(rule.when, { kind: 'city', premise: 7, entities: true }); // 第七前提的 settle 动作与 on:settle、on:emigrate
     if (t.error) throw new Error(`stored rule has an invalid timing: ${rule.when}`);
     TIMING.set(rule, t);
   }
@@ -180,7 +181,7 @@ export function plainRecord(v, depth = 0, hidden = []) {
 
 /** args.<参数>：没给的数字参数为 0，其余为 null；居民的引用统一成 ID */
 export function argsRecord(w, type, raw) {
-  const spec = actionTable(w.premise || 0, prayersEnabled(w)).ACTIONS[type];
+  const spec = actionTable(w.premise || 0, prayersEnabled(w), false, false, entitiesEnabled(w)).ACTIONS[type];
   const hidden = HIDDEN_ARGS[type] || [];
   const out = {};
   for (const [name, kind] of spec.args) {

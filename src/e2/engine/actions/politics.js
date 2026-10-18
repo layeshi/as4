@@ -1,3 +1,4 @@
+import { entitiesEnabled } from '../../entities/catalog.js';
 import { tokenized } from '../../world.js';
 import { jsonWeight } from '../tokens.js';
 import { usesLawSemantics2 } from '../law-semantics.js';
@@ -60,7 +61,7 @@ const propose = {
     let procedure = null;
     const lookup = staticLookup(w);
     if (hasRules) {
-      const v = validateRules(args.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'city' }, lookup });
+      const v = validateRules(args.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), entities: entitiesEnabled(w), kind: 'city' }, lookup });
       if (!v.ok) ruleInvalid(v.issues);
       rules = v.rules;
     }
@@ -156,11 +157,11 @@ function draftData(ctx, plan) {
   const lookup = staticLookup(w);
   let data;
   if (plan.rules !== null) {
-    const v = validateRules(plan.rules, { scope: { ...plan.scope, premise: w.premise || 0, prayers: prayersEnabled(w) }, lookup });
+    const v = validateRules(plan.rules, { scope: { ...plan.scope, premise: w.premise || 0, prayers: prayersEnabled(w), entities: entitiesEnabled(w) }, lookup });
     if (!v.ok) data = { ok: false, errors: v.issues.map(pick), reading: null, preview: [] };
     else {
       const budget = usesLawVM2(w) ? lawDiagnostics(w, v.rules) : null;
-      const scopeOpts = plan.scope.kind === 'group' ? { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'group', id: plan.scope.id } } : {};
+      const scopeOpts = plan.scope.kind === 'group' ? { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), entities: entitiesEnabled(w), kind: 'group', id: plan.scope.id } } : {};
       data = {
         ok: budget ? budget.ok : true,
         ...(budget ? { staticOk: true, budget } : {}),
@@ -290,7 +291,7 @@ const rules = {
         kind = 'group_procedure';
         proc = args.procedure;
       } else {
-        const v = validateRules(args.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'group', id: g.id }, lookup });
+        const v = validateRules(args.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), entities: entitiesEnabled(w), kind: 'group', id: g.id }, lookup });
         if (!v.ok) ruleInvalid(v.issues);
         admit(w, v.rules, null, g.procedure === 'steward' ? g.id : null);
         kind = 'bylaws';
@@ -316,7 +317,7 @@ const rules = {
         direct = false;
       }
     }
-    const v = validateRules(args.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'place', id: place.id }, lookup });
+    const v = validateRules(args.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), entities: entitiesEnabled(w), kind: 'place', id: place.id }, lookup });
     if (!v.ok) ruleInvalid(v.issues);
     admit(w, v.rules, null, direct ? place.id : null);
     if (!direct && openGroupProposals(w, g.id).length >= LIMITS.openProposalsPerGroup) fail('limit_reached');

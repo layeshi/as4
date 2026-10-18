@@ -1,3 +1,5 @@
+import { entitiesEnabled } from '../entities/catalog.js';
+import { placeEntities } from '../entities/views.js';
 import { programsEnabled } from '../programs/catalog.js';
 import { cooperationEnabled } from '../cooperation/core.js';
 import { publicRoles } from '../p6/roles.js';
@@ -150,6 +152,7 @@ export function publicPlace(w, id) {
   const p = Object.prototype.hasOwnProperty.call(w.places, id) ? w.places[id] : null;
   if (!p) return null;
   return {
+    ...(entitiesEnabled(w) ? { entities: placeEntities(w,id) } : {}),
     ...placeBase(w, p),
     projects: openProjectsAt(w, id).map((j) => projectView(w, j)),
     inscriptions: Object.values(w.inscriptions).filter((i) => i.place === id).map((i) => inscriptionView(w, i)),
@@ -323,6 +326,7 @@ function cityPublicState(w, extra = {}) {
   return {
     ...(materialsEnabled(w)?materialPublicState(w):{}),
     world: {
+      ...(entitiesEnabled(w) ? { entities: { version: 1 } } : {}),
       ...(programsEnabled(w) ? { programServices: { version: 1 } } : {}),
       ...(cooperationEnabled(w) ? { cooperation: { version: 1, enabledTick: w.cooperation.enabledTick } } : {}),
       ...(w.ruleExecution ? { lawExecution: { version: w.ruleExecution.version, protected: !!w.ruleExecution.protection, protection: w.ruleExecution.protection } } : {}),

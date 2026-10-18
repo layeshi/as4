@@ -1,3 +1,4 @@
+import { enableEntities } from '../entities/core.js';
 import { enablePrograms } from '../programs/core.js';
 import { enableRelics } from '../p6/relics.js';
 import { enableCooperation } from '../cooperation/core.js';
@@ -52,6 +53,7 @@ export function adminCommand(w, p) {
   if (tokenized(w) && p.op === 'seed_sandbox') return bad('not_allowed');
   const args = p.args && typeof p.args === 'object' ? p.args : {};
   switch (p.op) {
+    case 'entities': return enableEntities(w, args);
     case 'program_services': return enablePrograms(w, args);
     case 'relics': return enableRelics(w, args);
     case 'cooperation': return enableCooperation(w, args);

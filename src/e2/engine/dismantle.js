@@ -1,3 +1,4 @@
+import { destroyPlaceEntities } from '../entities/core.js';
 import { recordRazed, recordDismantledModule } from './prayer-rewards.js';
 // SPEC-E2 §10.6–§10.7：拆解与遗址。
 //
@@ -30,6 +31,7 @@ export function cancelBoardOffers(w, placeId) {
  * 名字（p.name）保留为拆毁前的名字；遗址的显示名是「X 的遗址」（附录 A.7，按语言生成），也不占用 X 这个名字（placeNameTaken 跳过遗址）。
  */
 export function razePlace(w, p) {
+  destroyPlaceEntities(w, p.id);
   const day = clockDay(w);
   cancelBoardOffers(w, p.id);
   for (const j of openProjectsAt(w, p.id)) abandonProject(w, j, 'razed');

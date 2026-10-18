@@ -1,3 +1,4 @@
+import { entitiesEnabled } from '../entities/catalog.js';
 import { programsEnabled } from '../programs/catalog.js';
 import { cooperationEnabled } from '../cooperation/core.js';
 import { cooperationBrief } from '../cooperation/views.js';
@@ -87,6 +88,7 @@ export function buildPerception(w, agentId, opts = {}) {
   const out = multiCity(w) && a0 ? atAgent(w, a0, () => islandPerception(w, a0, perceptionRaw(w, agentId, opts), opts)) : perceptionRaw(w,agentId,opts);
   if((w.premise===6 || w.premise === 7)&&out) { out.publicRoles=publicRoles(w);stripCoins(out); }
   if (out && programsEnabled(w)) out.programServices = { version: 1 };
+  if (out && entitiesEnabled(w)) out.entities = { version: 1 };
   if (out && cooperationEnabled(w)) out.cooperation = { version: 1, brief: cooperationBrief(w, agentId, opts.lang) };
   return out;
 }
@@ -550,7 +552,7 @@ function renderProcedureOf(w, r, lang) {
 const MODULE_ACTIONS = new Set(['write', 'epitaph', 'offer', 'accept']);
 
 function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, projectsHere, openProposals, pendingRefounds, activeGroups) {
-  const { ACTIONS, ORDER: ACTION_ORDER } = actionTable(w.premise || 0, prayersEnabled(w), cooperationEnabled(w), programsEnabled(w));
+  const { ACTIONS, ORDER: ACTION_ORDER } = actionTable(w.premise || 0, prayersEnabled(w), cooperationEnabled(w), programsEnabled(w), entitiesEnabled(w));
   const relay = hasRelay(w);
   const fog = isWeatherActive(w, 'fog');
   const eclipse = isWeatherActive(w, 'eclipse');
@@ -720,7 +722,7 @@ function actionsView(w, a, l, lang, costs, wallCount, openOffers, openPacts, pro
         break;
     }
     // 规则的预求值（§7.13）：只有物理上可用的动作才有意义
-    if (!NO_PREVIEW.has(type) && !actionTable(w.premise || 0, prayersEnabled(w), cooperationEnabled(w), programsEnabled(w)).INNER.includes(type)) {
+    if (!NO_PREVIEW.has(type) && !actionTable(w.premise || 0, prayersEnabled(w), cooperationEnabled(w), programsEnabled(w), entitiesEnabled(w)).INNER.includes(type)) {
       const pre = previewBefore(w, a, type, lang, beforeRules);
       if (entry.available && pre.denied) deny({ code: 'forbidden', law: pre.denied.law, ...(pre.denied.ruleCode ? { rule: pre.denied.rule, ruleCode: pre.denied.ruleCode } : {}), text: fmt(R.forbidden, { law: pre.denied.law, reason: pre.denied.ruleCode ? `rules[${pre.denied.rule}] ${pre.denied.ruleCode}` : pre.denied.reason }) });
       if (entry.available && pre.fees.length) {

@@ -1,3 +1,4 @@
+import { entitiesEnabled } from '../entities/catalog.js';
 import { prayersEnabled } from './prayer-rewards.js';
 import { usesLawSemantics2 } from './law-semantics.js';
 // SPEC-E2 §8.7、PROTOCOL-2 §6.11：社群章程、地点规则与社群的程序。
@@ -155,7 +156,7 @@ function applyGroupProposal(w, p, g) {
     return true;
   }
   if (p.kind === 'bylaws') {
-    const v = validateRules(p.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'group', id: g.id }, lookup: staticLookup(w) });
+    const v = validateRules(p.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), entities: entitiesEnabled(w), kind: 'group', id: g.id }, lookup: staticLookup(w) });
     if (!v.ok) return false;
     setGroupBylaws(w, g, v.rules, by, meta);
     if (usesLawSemantics2(w)) p.enact = structuredClone(g.bylaws?.enact || { status: 'no_enact', diagnostics: [] });
@@ -163,7 +164,7 @@ function applyGroupProposal(w, p, g) {
   }
   const place = w.places[p.place];
   if (!place || place.owner.kind !== 'group' || place.owner.id !== g.id) return false;
-  const v = validateRules(p.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'place', id: place.id }, lookup: staticLookup(w) });
+  const v = validateRules(p.rules, { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), entities: entitiesEnabled(w), kind: 'place', id: place.id }, lookup: staticLookup(w) });
   if (!v.ok) return false;
   setPlaceRulesOf(w, place, v.rules, by, meta);
   if (usesLawSemantics2(w)) p.enact = structuredClone(place.rules?.enact || { status: 'no_enact', diagnostics: [] });

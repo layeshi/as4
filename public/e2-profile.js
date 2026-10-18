@@ -1,3 +1,4 @@
+import { renderPlaceEntities } from './entity-ui.js';
 import { projectAccessText, projectAudit } from './project-ui.js';
 import { residentAvatar } from './resident-avatar.js';
 // 第二纪的居民档案与地点详情：标签、志与立志史、多作者的谱系网、遗传的记忆的来源；
@@ -185,6 +186,7 @@ export function openPlace2(ctx, id) {
   const desc = p.origin === 'agent' && !p.razed ? p.description : (p.descriptionText && (p.descriptionText[lang] || p.descriptionText.zh)) || '';
   const readingList = (r) => (r && (r.reading[lang] || r.reading.zh) ? h('ol', { class: 'reading' }, (r.reading[lang] || r.reading.zh).rules.map((x) => h('li', null, x))) : null);
   const kids = [
+    renderPlaceEntities(p.entities, lang, id => ctx.agentName(id)),
     h('p', { class: 'muted' }, `${t('col_district')}${colon()}${ctx.districtName(p.district)} · ${t('col_origin')}${colon()}${t(`origin_${p.origin}`)}${p.founder ? ` · ${t('founder')}${colon()}` : ''}`, p.founder ? agentLink(ctx, p.founder.id) : null, p.foundedDay !== null && p.foundedDay !== undefined ? ` · ${t('foundedDay', { n: p.foundedDay + 1 })}` : ''),
     desc ? h('p', p.origin === 'agent' && !p.razed ? { class: 'ai' } : null, desc) : null,
     region

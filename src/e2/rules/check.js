@@ -95,7 +95,7 @@ export function parseWhen(when, scope) {
     if (scope.kind !== 'place') return bad('before:enter 只用于地点规则（且地点须有运转中的门）', 'before:enter is only for place rules (and the place needs a functioning gate)');
     return { kind: 'before', action: 'move', enter: true };
   }
-  const { ACTIONS, ORDER: ACTION_ORDER, NO_BEFORE: NO_BEFORE_ACTIONS, NO_AFTER: NO_AFTER_ACTIONS, isKnown: isKnownAction } = actionTable(scope.premise || 0, scope.prayers === true);
+  const { ACTIONS, ORDER: ACTION_ORDER, NO_BEFORE: NO_BEFORE_ACTIONS, NO_AFTER: NO_AFTER_ACTIONS, isKnown: isKnownAction } = actionTable(scope.premise || 0, scope.prayers === true, false, false, scope.entities === true);
   if (!isKnownAction(what)) {
     return bad(`不认识的动作「${what}」`, `unknown action "${what}"`, { zh: `可用的动作：${ACTION_ORDER.join(' ')}`, en: `Available actions: ${ACTION_ORDER.join(' ')}` });
   }
@@ -127,9 +127,9 @@ export function parseWhen(when, scope) {
  *   refs    收集字面的引用 [{ kind, id, pos }]，供校验层核对存在
  *   strs    收集字面的字符串 [{ text, pos }]，供校验层审核
  */
-export function makeCtx(kind, { action = null, event = null, premise = 0 } = {}) {
+export function makeCtx(kind, { action = null, event = null, premise = 0, entities = false } = {}) {
   // weight 里的 it 是投票者（PROTOCOL-2 §6.8）；premise 决定动作的参数名（actionArgNames）与哪些名字算「这里不可用」（nameError）
-  return { kind, names: namesFor(kind), it: kind === 'weight' ? T.AGENT : null, action, event, premise, refs: [], strs: [] };
+  return { kind, names: namesFor(kind), it: kind === 'weight' ? T.AGENT : null, action, event, premise, entities, refs: [], strs: [] };
 }
 
 const kindHere = {
@@ -173,7 +173,7 @@ function fieldType(ot, f, node, ctx) {
   }
   if (ot === T.ARGS) {
     if (ctx.action) {
-      const names = actionArgNames(ctx.action, ctx.premise);
+      const names = actionArgNames(ctx.action, ctx.premise, ctx.entities);
       if (!names.includes(f)) {
         const near = names.find((x) => x.toLowerCase() === f.toLowerCase());
         abort('unknown_arg', node.p, `动作 ${ctx.action} 没有参数「${f}」${near ? `（是不是想写 ${near}？）` : ''}`, `action ${ctx.action} has no argument "${f}"${near ? ` (did you mean ${near}?)` : ''}`,
@@ -1033,7 +1033,7 @@ function checkRule(rule, env, path, issues) {
     return null;
   }
   const kind = timing.kind;
-  const ctx = makeCtx(kind, { action: timing.action || null, event: timing.event || null, premise: env.scope.premise || 0 });
+  const ctx = makeCtx(kind, { action: timing.action || null, event: timing.event || null, premise: env.scope.premise || 0, entities: env.scope.entities === true });
   const rc = { scope: env.scope, timing, human: env.human, ctx, refs: env.refs, inEach: false };
   const out = { when: normalizeText(rule.when) };
   if (rule.if !== undefined && rule.if !== null) {

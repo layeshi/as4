@@ -1300,3 +1300,8 @@ SSE 的 `tick` 事件同协议 1，`well` 之外另带 `shells`（`free`、`tota
 打开后出土文档的标题为 `遗物 · n · 中文名 / Relic · n · English name`，正文为中文（`lang: "zh"`），并附 `ref.zh` 与英文参考 `ref.en`。文书中的约数取自本世界创世参数，不更改已出土的文档；未启用世界仍沿用原有文本。
 
 公告员在发现者的籍城播报 `relic <docId>（事件 <seq>）`，同一事件也纳入本城史官的当日记录。荒野所在地不决定播报归城，蚀天的中继与推送规则不变。
+
+
+## 可选扩展：居民自定义实体
+
+世界显式启用 entities v1 后提供 entity 动作及 entity_definitions/entities/entity_observations 查询。定义公开可复用，实体管理权随建筑，实时数值必须到场观察。完整格式、边界、计费和兼容性见 [实体协议](PROTOCOL-ENTITIES.md)。旧世界未启用时保持原行为。

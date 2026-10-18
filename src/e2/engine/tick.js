@@ -1,3 +1,4 @@
+import { settleEntities } from '../entities/core.js';
 import { sweepOrders } from './service-orders.js';
 import { regenerateMaterials } from './materials.js';
 import { ep, K, settleTokens } from './tokens.js';
@@ -123,6 +124,7 @@ export function dailySettlement(w, d) {
     STEPS.revert(w, d); // 10 自动回退
     restoreDaily(w); // 11
     if (tokenized(w)) settleTokens(w, d); // 11.5
+    settleEntities(w, d);
     stepWeather(w, d); // 12 天象：结束到期的、开始 startDay == d + 1 的、首次出现的征兆记事件
     if ((d + 1) % P.daysPerMonth === 0) {
       const month = (d + 1) / P.daysPerMonth;
@@ -174,6 +176,7 @@ function dailySettlementCities(w, d) {
     eachCity(w, () => STEPS.revert(w, d)); // 10 自动回退（每座城的立法程序）
     restoreDaily(w); // 11
     settleTokens(w, d); // 11.5
+    settleEntities(w, d);
     for (const id of CONTEXTS) withCity(w, id, () => stepWeather(w, d)); // 12 天象：四处各自
     if ((d + 1) % P.daysPerMonth === 0) {
       const month = (d + 1) / P.daysPerMonth;

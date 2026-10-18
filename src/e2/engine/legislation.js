@@ -1,3 +1,4 @@
+import { entitiesEnabled } from '../entities/catalog.js';
 import { filterValues } from '../../collections.js';
 import { usesLawSemantics2 } from './law-semantics.js';
 import { prayersEnabled } from './prayer-rewards.js';
@@ -43,7 +44,7 @@ export function seedHumanLaws(w) {
     let rules = [];
     let procedure = null;
     if (def.rules) {
-      const v = validateRules(structuredClone(def.rules), { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), kind: 'city' }, human: true });
+      const v = validateRules(structuredClone(def.rules), { scope: { premise: w.premise || 0, prayers: prayersEnabled(w), entities: entitiesEnabled(w), kind: 'city' }, human: true });
       if (!v.ok) throw new Error(`human law ${def.id} is invalid: ${JSON.stringify(v.issues)}`);
       rules = v.rules;
     }

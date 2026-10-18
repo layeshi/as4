@@ -57,7 +57,7 @@ export function signature2(tab, s) {
     case 'residents': return JSON.stringify(s.agents.map((a) => [a.id, a.status, a.energy, a.coins, a.place, a.groups.length, a.lastActTick, a.ageDays, a.tags.length, a.purpose, a.avatar, a.city, a.located]));
     case 'groups': return JSON.stringify(s.groups);
     case 'market': return JSON.stringify([s.world.tick,s.services,s.demands,s.orders,s.agents.map(a=>[a.id,a.name])]);
-    case 'environment': return JSON.stringify([...((s.world.premise === 5 || s.world.premise === 6 || s.world.premise === 7)?[s.materials,s.research,s.observations,s.projects]:[]),s.places.map((p) => [p.id, p.condition, p.salvage && p.salvage.left, p.modules.length, p.owner, p.razed, p.name]), s.lots, s.projects.map((j) => [j.id, j.have]), s.well, s.regions, s.weather.active, s.world.dayOfMonth]);
+    case 'environment': return JSON.stringify([...((s.world.premise === 5 || s.world.premise === 6 || s.world.premise === 7)?[s.materials,s.research,s.observations,s.projects]:[]),s.places.map((p) => [p.id, p.condition, p.salvage && p.salvage.left, p.modules.length, p.owner, p.razed, p.name, p.entities]), s.lots, s.projects.map((j) => [j.id, j.have]), s.well, s.regions, s.weather.active, s.world.dayOfMonth]);
     case 'cradle': return JSON.stringify([s.shells, s.cradle.map((c) => [c.id, c.fund, c.queued, c.queuePosition]), s.unborn.length, s.agents.length]);
     case 'library': return `${s.docs.length}:${s.lexicon.length}:${s.docs.reduce((n, d) => n + d.reads, 0)}`;
     case 'cemetery': return `${s.cemetery.length}:${s.retired.length}:${s.unborn.length}:${s.cemetery.reduce((n, g) => n + g.epitaphs.length, 0)}`;

@@ -1,3 +1,4 @@
+import { entityCatalog } from '../entities/catalog.js';
 import { programCatalog } from '../programs/catalog.js';
 import { COOP_ACTIONS } from '../cooperation/actions.js';
 import { MATERIAL_ACTIONS, MATERIAL_OVERRIDES } from './material-actions.js';
@@ -190,13 +191,13 @@ export const NO_AFTER_ACTIONS = INNER_ACTIONS;
 export const isKnownAction = (type) => typeof type === 'string' && Object.prototype.hasOwnProperty.call(ACTIONS, type);
 
 /** 一个动作在规则里可读的参数名（`args.<参数>`） */
-export const actionArgNames = (type, premise = 0) => {
-  const t = actionTable(premise, true);
+export const actionArgNames = (type, premise = 0, entities = false) => {
+  const t = actionTable(premise, true, false, false, entities);
   return t.isKnown(type) ? t.ACTIONS[type].args.map(([n]) => n) : [];
 };
 /** 参数的类型：int 参数没给时读到 0，其余读到 null */
-export const actionArgKind = (type, name, premise = 0) => {
-  const t = actionTable(premise, true);
+export const actionArgKind = (type, name, premise = 0, entities = false) => {
+  const t = actionTable(premise, true, false, false, entities);
   const hit = t.isKnown(type) ? t.ACTIONS[type].args.find(([n]) => n === name) : null;
   return hit ? hit[1] : null;
 };
@@ -279,7 +280,12 @@ const PRAYER_ACTIONS = Object.freeze({
   invent: { base: 1, place: null, module: null, params: 'title, text, ref, submission?', args: [['title', 'str'], ['text', 'str'], ['ref', 'obj'], ['submission', 'str']], where: null, verb: W('提交发明', 'submits an invention'), desc: W('提交成果名称（至多100字）、说明（至多600字），关联自己的作品或已建成工程：ref={kind:"doc"或"project",id}。获独立认定奖励10祈愿点，驳回后以submission编号补充重提。', 'Submit a title (100 characters), explanation (600), and your own work or completed project: ref={kind:"doc" or "project",id}. Independent recognition awards 10 prayer points once. Revise a rejected submission using its submission ID.') },
 });
 const PRAYER_TABLE = Object.freeze({ ...TABLE2, ACTIONS: PRAYER_ACTIONS, ORDER: Object.freeze([...ACTION_ORDER_P2, 'pray', 'invent']), isKnown: (t) => typeof t === 'string' && Object.hasOwn(PRAYER_ACTIONS, t) });
-export const actionTable = (premise = 0, prayers = false, cooperation = false, programs = false) => premise === 7 ? (programs ? (cooperation ? TABLE7_PROGRAMS_COOP : TABLE7_PROGRAMS) : cooperation ? TABLE7_COOP : TABLE7) : premise === 6 ? (programs ? (cooperation ? TABLE_PROGRAMS_COOP : TABLE_PROGRAMS) : cooperation ? TABLE_COOP : TABLE6) : premise === 5 ? TABLE5 : tokenized({ premise }) ? TABLE4 : premise >= 2 ? (prayers ? PRAYER_TABLE : TABLE2) : premise >= 1 ? TABLE1 : TABLE0;
+const baseActionTable = (premise = 0, prayers = false, cooperation = false, programs = false) => premise === 7 ? (programs ? (cooperation ? TABLE7_PROGRAMS_COOP : TABLE7_PROGRAMS) : cooperation ? TABLE7_COOP : TABLE7) : premise === 6 ? (programs ? (cooperation ? TABLE_PROGRAMS_COOP : TABLE_PROGRAMS) : cooperation ? TABLE_COOP : TABLE6) : premise === 5 ? TABLE5 : tokenized({ premise }) ? TABLE4 : premise >= 2 ? (prayers ? PRAYER_TABLE : TABLE2) : premise >= 1 ? TABLE1 : TABLE0;
+
+export const actionTable = (premise=0, prayers=false, cooperation=false, programs=false, entities=false) => {
+  const base=baseActionTable(premise,prayers,cooperation,programs);
+  return entities && [6,7].includes(premise) ? entityCatalog(base) : base;
+};
 
 // Fourth premise adds only rhythm and removes shell sponsorship.
 export const TEXT_ONLY_P4 = new Set(['say', 'whisper', 'write', 'define', 'inscribe', 'epitaph', 'declare', 'diary', 'remember', 'vote', 'reveal', 'retire', 'give', 'offer', 'accept', 'cancel', 'will']);

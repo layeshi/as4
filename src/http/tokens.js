@@ -1,3 +1,5 @@
+import { entitiesEnabled, ENTITY_LOOKS } from '../e2/entities/catalog.js';
+import { entityLook } from '../e2/entities/views.js';
 import { programsEnabled } from '../e2/programs/catalog.js';
 import { cityDef, cityValue } from '../e2/engine/cities.js';
 import { programLook } from '../e2/programs/core.js';
@@ -41,7 +43,7 @@ export function tokenStatus(ctx, id, { lang = 'zh' } = {}) {
   const day = clockDay(w), v = tokenView(a);
   return {
     protocol: 2, premise: w.premise, lang: normLang(lang),
-    ...(programsEnabled(w) ? { programServices: { version: 1 } } : {}), ...(cooperationEnabled(w) ? { cooperation: { version: 1 } } : {}),
+    ...(entitiesEnabled(w) ? { entities: { version: 1 } } : {}), ...(programsEnabled(w) ? { programServices: { version: 1 } } : {}), ...(cooperationEnabled(w) ? { cooperation: { version: 1 } } : {}),
     now: { tick: w.clock.tick, day, ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, tickOfDay: w.clock.tick % P.ticksPerDay,
       nextTickAt: rt.nextTickAt, tickMs: P.tickMs, paused: w.paused, ...(w.experimentControl ? { experimentGeneration: w.experimentControl.generation } : {}) },
     you: { ...materialSummary(w,a), id: a.id, name: a.name, status: a.status, place: a.place, actionsLeft: Math.max(0, P.maxActionsPerTick - a.actsThisTick), maxActionsPerTick: P.maxActionsPerTick,
@@ -61,7 +63,7 @@ export function rulesCore(ctx, id, lang = 'zh') {
     cityName: promptCityName(w, w.agents[id], lang), maxActions: P.maxActionsPerTick,
     ticksPerDay: P.ticksPerDay, daysPerMonth: P.daysPerMonth, memorySlots: P.memorySlots,
     floor: ep(w, 'lawFloor'), soul: null, trained: bodyOf(w, w.agents[id]).trained.map(entry => entry.text),
-    toolMode: 'mcp', prayers: false, cooperation: cooperationEnabled(w), programs: programsEnabled(w), tokenValues: tokenValues(w) }) } };
+    toolMode: 'mcp', prayers: false, cooperation: cooperationEnabled(w), programs: programsEnabled(w), entities: entitiesEnabled(w), tokenValues: tokenValues(w) }) } };
 }
 /** 提示词里的城名；第七前提用居民籍城的名字（没改过名时按语言给默认名） */
 function promptCityName(w, a, lang) {
@@ -84,7 +86,7 @@ function perception(ctx, id, lang) {
 function prompt(ctx, id, p, lang, toolMode = 'native', actionTools = 'legacy', trained = p.you.trained) {
   const w = ctx.rt.w;
   return buildSystemPrompt({ ...promptParams(p), premise: w.premise, lang, cityName: promptCityName(w, w.agents[id], lang),
-    toolMode, actionTools, trained, prayers: false, cooperation: cooperationEnabled(w), programs: programsEnabled(w), tokenValues: tokenValues(w) });
+    toolMode, actionTools, trained, prayers: false, cooperation: cooperationEnabled(w), programs: programsEnabled(w), entities: entitiesEnabled(w), tokenValues: tokenValues(w) });
 }
 export function wakeCore(ctx, id, body, lang) {
   const w = ctx.rt.w, a = w.agents[id];
@@ -104,7 +106,7 @@ export function wakeCore(ctx, id, body, lang) {
     system: systemWeight, brief: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) }).result;
   if (!result.ok) return failed(lang, result);
   ctx.wakings.set(id, { wakeId, tick: w.clock.tick, kind: body.kind, turn: 1, ctx: systemWeight + textWeight(text), fresh: textWeight(text), requests: 0, cooperationRead: 0 });
-  return { status: 200, json: { ...(materialsEnabled(w)?{premise:w.premise}:{}), ...(programsEnabled(w) ? { programServices: { version: 1 } } : {}), ...(cooperationEnabled(w) ? { cooperation: { version: 1 } } : {}), wakeId, system: prompt(ctx, id, p, lang, body.toolMode ?? 'native', body.actionTools ?? 'legacy'), text,
+  return { status: 200, json: { ...(materialsEnabled(w)?{premise:w.premise}:{}), ...(entitiesEnabled(w) ? { entities: { version: 1 } } : {}), ...(programsEnabled(w) ? { programServices: { version: 1 } } : {}), ...(cooperationEnabled(w) ? { cooperation: { version: 1 } } : {}), wakeId, system: prompt(ctx, id, p, lang, body.toolMode ?? 'native', body.actionTools ?? 'legacy'), text,
     bill: result.bill, you: tokenStatus(ctx, id, { lang }).you, attention: { ...limits(ctx) } } };
 }
 function turnFor(s, body) {
@@ -131,7 +133,9 @@ export function lookCore(ctx, id, body, lang) {
   let cooperationPage;
   let full;
   try {
-    if (body.what === 'programs') {
+    if (ENTITY_LOOKS.includes(body.what)) {
+      full = JSON.stringify(entityLook(ctx.rt.w, body.what, body));
+    } else if (body.what === 'programs') {
       full = JSON.stringify(programLook(ctx.rt.w, body, id));
     } else if (coop) {
       const remaining = COOP_LIMITS.read - (s.cooperationRead || 0);
@@ -175,6 +179,7 @@ export function actTokens(ctx, id, body, lang) {
   // archive price. Failed/rolled-back actions and short fee receipts stay free.
   const readWeight = result.results.reduce((n, r) => {
     if (!r.ok) return n;
+    if (r.type === 'entity' && r.data?.observation) return n + jsonWeight({observation:r.data.observation});
     if (programsEnabled(w) && typeof r.data?.output === 'string' && ['program','service_order'].includes(r.type)) return n + jsonWeight({output:r.data.output});
     if (!['read', 'draft'].includes(r.type)) return n;
     const { fees, ...data } = r.data;
