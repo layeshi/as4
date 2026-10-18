@@ -17,7 +17,7 @@ function createPlatform(native, canvas, page) {
   api.showKeyboard = options => {
     if (disposed) return;
     const field = page.game.editing;
-    const labels = { assistantResidentId: '历史居民 ID', assistantText: '你的实验问题', assistantAdminKey: '管理密钥', assistantOwnerKey: '旧世界造者密钥', assistantFrom: '起始世界日', assistantTo: '结束世界日', password: '网站账号密码', confirmPassword: '确认新密码', apiKey: '模型 API Key', letter: '家书', messageText: '留言正文', name: '居民名字', bio: '简介', soul: '灵魂', username: '网站账号', baseURL: '模型接口地址', model: '模型名称', invite: '邀请码' };
+    const labels = { assistantText: '你的实验问题', assistantAdminKey: '管理密钥', assistantOwnerKey: '旧世界造者密钥', assistantFrom: '起始世界日', assistantTo: '结束世界日', password: '网站账号密码', confirmPassword: '确认新密码', apiKey: '模型 API Key', letter: '家书', messageText: '留言正文', name: '居民名字', bio: '简介', soul: '灵魂', username: '网站账号', baseURL: '模型接口地址', model: '模型名称', invite: '邀请码' };
     page.setData({ editing: true, inputValue: options.defaultValue || '', inputLabel: labels[field] || '编辑内容', multiple: !!options.multiple, secret: ['apiKey', 'assistantAdminKey', 'assistantOwnerKey'].includes(field) || (field === 'password' || field === 'confirmPassword') && !options.showPassword, maxLength: options.maxLength || 4000 });
   };
   api.hideKeyboard = () => {

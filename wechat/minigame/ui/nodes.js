@@ -34,16 +34,17 @@ function text(W, value, opts = {}) {
 /** 富文本：segments = [{ text, color, bold, action }]，同一字号。 */
 function rich(W, segments, opts = {}) {
   const st = styleFont(opts.style || 'action');
-  const segs = segments.filter(s => s && s.text !== '' && s.text != null).map(s => ({ text: String(s.text), font: font(st.size, { bold: !!s.bold }), color: s.color || opts.color || C.text2, action: s.action || null }));
+  const segs = segments.filter(s => s && s.text !== '' && s.text != null).map(s => ({ text: String(s.text), font: font(st.size, { bold: s.bold === undefined ? !!opts.bold : !!s.bold }), color: s.color || opts.color || C.text2, action: s.action || null }));
   note('rich', segs.map(s => s.text).join(''));
   let rows = T.wrapRich(measureCtx, segs, W);
   if (opts.maxLines && rows.length > opts.maxLines) rows = rows.slice(0, opts.maxLines);
   return node(rows.length * st.line, (g, x, y) => {
     rows.forEach((row, i) => {
-      const cy = y + i * st.line + st.line / 2;
+      const cy = y + i * st.line + st.line / 2, dx = opts.align === 'right' ? W - row.width : opts.align === 'center' ? (W - row.width) / 2 : 0;
       for (const run of row.runs) {
-        P.text(g.ctx, run.text, x + run.x, cy, run.seg.font, run.seg.color, 'left');
-        if (run.seg.action) g.hit(x + run.x - 2, y + i * st.line, run.w + 4, st.line, run.seg.action);
+        P.text(g.ctx, run.text, x + dx + run.x, cy, run.seg.font, run.seg.color, 'left');
+        const hitHeight = Math.max(st.line, opts.hitHeight || 0);
+        if (run.seg.action) g.hit(x + dx + run.x - 2, cy - hitHeight / 2, run.w + 4, hitHeight, run.seg.action);
       }
     });
   });

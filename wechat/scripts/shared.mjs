@@ -6,6 +6,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const SHARED_TARGET = join('utils', 'shared-text.js');
+export const ANSWER_TARGET = join('utils', 'answer-markdown.js');
+
+export async function buildAnswerModule() {
+  const source = await readFile(join(repo, 'public', 'answer-markdown.js'), 'utf8');
+  return '// 由 wechat/scripts/shared.mjs 从 public/answer-markdown.js 生成，不要手改。\n' +
+    source.replace(/^export function parseAnswer\(/m, 'function parseAnswer(') +
+    '\nmodule.exports = { parseAnswer };\n';
+}
 
 // 网站 i18n 里给事件模板取值用的小工具：按名字从源码里取出原样的声明。
 function declaration(source, name) {
@@ -90,4 +98,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const target = join(repo, 'wechat', 'minigame', SHARED_TARGET);
   await writeFile(target, await buildSharedModule());
   console.log('已生成 ' + target);
+  const answer = join(repo, 'wechat', 'minigame', ANSWER_TARGET);
+  await writeFile(answer, await buildAnswerModule());
+  console.log('已生成 ' + answer);
 }

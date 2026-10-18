@@ -82,3 +82,16 @@ test('random and hostile input never throws, never builds other elements, and st
   renderAnswer('['.repeat(50000) + '*'.repeat(50000) + '`'.repeat(5000) + '**a '.repeat(10000));
   assert.ok(Date.now() - started < 2000, `${Date.now() - started}ms`);
 });
+
+test('shared parser preserves table inline formatting, escaped pipes, long-cell wrapping and source actions', t => {
+  withDom(t);
+  const opened = [];
+  const long = '这是一段超过二十四个字符的表格内容用于核对长单元格自动换行的规则';
+  const out = renderAnswer('| **项目** | 依据 |\n|---|---|\n| `甲\\|乙` | [S1] |\n| ' + long + ' | *说明* |', { sources, onSource: source => opened.push(source.id) });
+  assert.equal(out.querySelector('th strong').textContent, '项目');
+  assert.equal(out.querySelector('td code').textContent, '甲|乙');
+  assert.equal(out.querySelector('td.wrap').textContent, long);
+  assert.equal(out.querySelector('td em').textContent, '说明');
+  out.querySelector('td button').click();
+  assert.deepEqual(opened, ['s1']);
+});

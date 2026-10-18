@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { boot } from './http-helpers.js';
 import { readFileSync } from 'node:fs';
+import { assistantRoutes } from '../src/http/assistant.js';
 
 async function setup(t,options) {
  const e=await boot(options);t.after(()=>e.close());const c=e.app.ctx;
@@ -114,7 +115,7 @@ test('storage failure in a detached job is contained and reservations remain cha
  assert.equal((await e.call('/api/public/state')).status,200);
 });
 
-test('private scope without a provable resident is refused before quota; titles use the first question except on WeChat',async t=>{
+test('private scope without a provable resident is refused before quota; WeChat titles await moderation',async t=>{
  const {e,c,u,headers}=await setup(t);
  const none=await e.call('/api/assistant/questions',{method:'POST',headers,body:{text:'我的居民怎么样',scope:{mode:'resident'}}});assert.equal(none.status,403);assert.equal(c.assistant.store.quota(u.id).used,0);
  const long='三城公库最近为什么差这么多？\n'.repeat(4);
@@ -125,6 +126,49 @@ test('private scope without a provable resident is refused before quota; titles 
  const key=c.accounts.issue(u.id,{wechat:{appid:c.wechat.appid,openid:'title-openid',verifiedAt:Date.now()}}),wh={...headers,Cookie:`houren_session=${key}`,'X-Houren-Client':'wechat'};
  assert.equal((await e.call('/api/assistant/status',{headers:wh})).json.conversations[0].title,'实验对话');
  assert.equal((await e.call(`/api/assistant/conversations/${r.json.conversationId}`,{headers:wh})).json.conversation.title,'实验对话');
+});
+
+for(const reason of ['approved','pending','rejected','loginRequired','unavailable','withheld','other']) {
+ test(`WeChat conversation titles respect ${reason} moderation in status and detail; web titles remain unchanged`,async()=>{
+  const title='三城公库最近为什么差这么多？',identity={appid:'test-app',openid:'title-user',verifiedAt:Date.now()},user={id:'title-user',revision:1},calls=[];
+  const ctx={
+   accounts:{session:()=>user,sessionMetadata:()=>({wechat:identity})},
+   wechat:{requireIdentity:value=>assert.equal(value,identity)},
+   assistant:{status:async()=>({conversations:[{id:'abc',title}],residents:[],branches:[]}),conversation:()=>({conversation:{id:'abc',title,messages:[]}})},
+   wechatProjection:{filter:(value,who,key,meta)=>{calls.push({value,who,key});assert.ok(meta);meta.pending=0;if(reason!=='approved')meta[reason]=1;return reason==='approved'?value:'审核占位';}},
+  };
+  async function read(path,isWechat) {
+   const req={method:'GET',headers:{cookie:'houren_session=test',...(isWechat?{'x-houren-client':'wechat'}:{})}};
+   let status,payload;
+   const res={getHeader:()=>undefined,writeHead:code=>{status=code;},end:data=>{payload=JSON.parse(data);}};
+   const route=assistantRoutes.find(([method,pattern])=>method==='GET'&&(typeof pattern==='string'?pattern===path:pattern.test(path)));
+   await route[2](req,res,ctx,new URL(path,'https://example.test'),['abc']);
+   assert.equal(status,200);return path.endsWith('/status')?payload.conversations[0].title:payload.conversation.title;
+  }
+  for(const path of ['/api/assistant/status','/api/assistant/conversations/abc']) {
+   assert.equal(await read(path,true),reason==='approved'?title:'实验对话');
+   const count=calls.length;assert.equal(await read(path,false),title);assert.equal(calls.length,count);
+  }
+  assert.deepEqual(calls,[{value:title,who:identity,key:'text'},{value:title,who:identity,key:'text'}]);
+ });
+}
+test('WeChat status shows city names only after moderation; web city names remain unchanged',async()=>{
+ const identity={appid:'test-app',openid:'city-user',verifiedAt:Date.now()},user={id:'city-user',revision:1};
+ const ctx={
+  accounts:{session:()=>user,sessionMetadata:()=>({wechat:identity})},
+  wechat:{requireIdentity:value=>assert.equal(value,identity)},
+  assistant:{status:async()=>({world:{cities:[{id:'north',name:'北城'},{id:'west',name:'居民改的城名'}]},residents:[],branches:[],conversations:[]})},
+  wechatProjection:{filter:value=>value==='北城'?value:'审核占位'},
+ };
+ async function names(isWechat) {
+  const req={method:'GET',headers:{cookie:'houren_session=test',...(isWechat?{'x-houren-client':'wechat'}:{})}};
+  let payload;
+  const res={getHeader:()=>undefined,writeHead:()=>{},end:data=>{payload=JSON.parse(data);}};
+  await assistantRoutes.find(([method,pattern])=>method==='GET'&&pattern==='/api/assistant/status')[2](req,res,ctx,new URL('/api/assistant/status','https://example.test'),[]);
+  return payload.world.cities.map(c=>c.name);
+ }
+ assert.deepEqual(await names(true),['北城','审核占位']);
+ assert.deepEqual(await names(false),['北城','居民改的城名']);
 });
 test('P7 answers about all residents stay out of a narrower follow-up and are withheld once any resident leaves',async t=>{
  const {fileURLToPath}=await import('node:url');

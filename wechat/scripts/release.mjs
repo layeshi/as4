@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { Script } from 'node:vm';
 import { isIP } from 'node:net';
 import { syncMiniprogram } from './miniprogram.mjs';
-import { buildSharedModule, SHARED_TARGET } from './shared.mjs';
+import { buildSharedModule, SHARED_TARGET, buildAnswerModule, ANSWER_TARGET } from './shared.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const build = join(root, process.env.WECHAT_TARGET === 'game' ? 'build' : 'build-miniprogram');
@@ -59,6 +59,7 @@ async function check() {
       if ((await readFile(join(source, 'utils', name + '.js'), 'utf8')) !== (await readFile(join(root, 'miniprogram', 'utils', name + '.js'), 'utf8'))) throw new Error('小游戏公共模块待同步，请运行 prepare');
     }
     if ((await readFile(join(source, SHARED_TARGET), 'utf8')) !== await buildSharedModule()) throw new Error('小游戏句式模块与网站 public/i18n.js 不一致，请运行 prepare');
+    if ((await readFile(join(source, ANSWER_TARGET), 'utf8')) !== await buildAnswerModule()) throw new Error('小游戏回答解析模块与网站 public/answer-markdown.js 不一致，请运行 prepare');
   } else {
     const app = JSON.parse(await readFile(join(source, 'app.json'), 'utf8'));
     for (const page of app.pages) for (const ext of ['.js', '.json', '.wxml']) await stat(join(source, page + ext));
@@ -105,6 +106,7 @@ async function main() {
   if (game && mode !== 'check') {
     for (const name of ['view']) await cp(join(root, 'miniprogram', 'utils', name + '.js'), join(source, 'utils', name + '.js'));
     await writeFile(join(source, SHARED_TARGET), await buildSharedModule());
+    await writeFile(join(source, ANSWER_TARGET), await buildAnswerModule());
   }
   if (!game) await syncMiniprogram(root);
   const checked = await check();

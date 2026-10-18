@@ -281,6 +281,7 @@ JS 照 `public/billing.js`（最短的完整例子）：`mountShell(header, { ac
 | 要做的 | 用 |
 |---|---|
 | 段落 / 富文本 | `text(W, value, { style, color, maxLines, align })` / `rich(W, segments)` |
+| 助手回答 | `ui/answer.js`：共用安全 Markdown 解析，正文、表格、代码与可点依据标号；`pre` 保留结构化记录缩进 |
 | 卡片 | `card(W, inner, { pad, fill, border, action })`：城影底加 1px 描边，可以整块点按（按下变石阶） |
 | 按钮 | `button(W, label, action, { variant, size, icon })`：`primary` 月白实心、`secondary` 描边、`text` 月白文字、`danger` 警示色文字；一行几个用 `buttonRow` |
 | 标签 / 筛选 | `chips`（可换行，选中为月白实心）、`chipStrip`（可横向滑动）、`segmented`（分段控件） |

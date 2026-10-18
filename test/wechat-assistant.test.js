@@ -48,7 +48,7 @@ test('WeChat source moderation stays hidden and can recover after polling', asyn
   assert.match(JSON.stringify(m.game.blocks), /审核中/); assert.ok([...m.timers.values()].some(t => t.delay === 1500));
   reviewed = true; await m.fire(1500); m.game.render(); assert.match(JSON.stringify(m.game.blocks), /Reviewed evidence/);
 });
-test('historical resident ID overrides current resident choice within selected branch', () => {
-  const m = minigame(); m.game.user = { id: 'alice' }; const a = m.game.assistant; a.sync(); a.scope = { mode: 'resident', agentId: 'current', branchId: 'historic' }; m.game.form.assistantResidentId = 'old';
-  assert.equal(a.questionScope().agentId, 'old'); assert.equal(a.questionScope().branchId, 'historic');
+test('私人记录不选居民时不带 agentId', () => {
+  const m = minigame(); m.game.user = { id: 'alice' }; const a = m.game.assistant; a.sync(); a.scope = { mode: 'resident', branchId: 'historic' };
+  assert.equal(a.questionScope().agentId, undefined); assert.equal(a.questionScope().branchId, 'historic');
 });

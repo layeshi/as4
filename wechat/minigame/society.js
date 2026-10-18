@@ -21,8 +21,8 @@ const { C, font } = theme;
 
 const TABS = [['city', '观测', 'city'], ['residents', '居民', 'residents'], ['archive', '档案', 'archive'], ['account', '我的', 'me']];
 const TAB_IDS = TABS.map(t => t[0]);
-// 不访问网络、也不改数据的动作，处理中也可以点。
-const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'contactChannel', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider', 'preset', 'modelChoice', 'messageExpand']);
+// 处理中仍可操作的界面动作；停止生成也保留入口。
+const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'contactChannel', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider', 'preset', 'modelChoice', 'messageExpand', 'assistantList', 'assistantCloseSource', 'assistantScope', 'assistantResetScope', 'assistantCancel']);
 const PREFS_KEY = 'houren.prefs';
 const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null;
 const caf = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
@@ -324,7 +324,7 @@ class SocietyGame {
       case 'segment': this.segment = a.value; break;
       case 'sort': this.sort = a.value; break;
       case 'expand': if (this.expanded.has(a.key)) this.expanded.delete(a.key); else this.expanded.add(a.key); break;
-      case 'sheet': this.sheet = { kind: a.kind, id: a.id }; break;
+      case 'sheet': this.sheet = { kind: a.kind, id: a.id }; if (a.kind === 'assistantScope') this.scroller('assistant-sheet').reset(); break;
       case 'closeSheet': this.sheet = null; break;
       case 'dismiss': this.dismissed[a.key] = true; break;
       case 'toggle': f[a.name] = !f[a.name]; break;
@@ -539,12 +539,13 @@ class SocietyGame {
       this.cityMap.startGesture(this.mapPoints(e));
       this.render(); return;
     }
-    this.touch = { x: t.clientX, y: t.clientY, moved: false, scroll: !this.sheet && t.clientY >= this.contentTop() && t.clientY <= this.contentBottom() };
+    const inSheet = this.sheet?.kind === 'assistantScope' && this.sheetArea && t.clientY >= this.sheetArea.top && t.clientY <= this.sheetArea.bottom;
+    this.touch = { x: t.clientX, y: t.clientY, moved: false, sheet: !!inSheet, vertical: inSheet ? this.scroller('assistant-sheet') : this.scroller(), scroll: inSheet || !this.sheet && t.clientY >= this.contentTop() && t.clientY <= this.contentBottom() };
     const area = this.horizontalAreas.find(h => t.clientX >= h.x && t.clientX <= h.x + h.w && t.clientY >= h.y && t.clientY <= h.y + h.h);
     if (area && this.touch.scroll) { this.touch.horizontal = area.scroller; area.scroller.start(t.clientX, now); }
     const hit = this.hitAt(t.clientX, t.clientY);
     this.pressed = hit ? hit.action : null;
-    if (this.touch.scroll) this.scroller().start(t.clientY, now);
+    if (this.touch.scroll) this.touch.vertical.start(t.clientY, now);
     this.render();
   }
   touchMove(e) {
@@ -561,7 +562,7 @@ class SocietyGame {
     }
     if (this.touch.scroll && this.touch.moved) {
       if (this.touch.axis === 'horizontal') this.touch.horizontal.move(t.clientX, Date.now());
-      else this.scroller().move(t.clientY, Date.now());
+      else this.touch.vertical.move(t.clientY, Date.now());
     }
     this.render();
   }
@@ -580,15 +581,17 @@ class SocietyGame {
       if (action) { this.haptic(); this.dispatch(action); }
       this.render(); return;
     }
-    const horizontal = touch.axis === 'horizontal', sc = horizontal ? touch.horizontal : this.scroller();
+    const horizontal = touch.axis === 'horizontal', sc = horizontal ? touch.horizontal : touch.vertical;
     if (touch.horizontal && !horizontal) touch.horizontal.dragging = false;
-    if (horizontal) this.scroller().dragging = false;
-    if (touch.scroll) { const pull = sc.end(Date.now()); if (!horizontal && pull && this.page && this.page.pull && !this.refreshing) this.dispatch({ type: 'refresh', pull: true }); }
+    if (horizontal) touch.vertical.dragging = false;
+    if (touch.scroll) { const pull = sc.end(Date.now()); if (!touch.sheet && !horizontal && pull && this.page && this.page.pull && !this.refreshing) this.dispatch({ type: 'refresh', pull: true }); }
     if (action) { this.haptic(); this.dispatch(action); }
     this.kick(sc);
   }
   touchCancel() {
     this.cityMap.endGesture();
+    if (this.touch?.vertical) this.touch.vertical.dragging = false;
+    if (this.touch?.horizontal) this.touch.horizontal.dragging = false;
     this.scroller().dragging = false; this.filterScroller.dragging = false;
     this.touch = null; this.pressed = null; this.render();
   }
@@ -633,6 +636,9 @@ class SocietyGame {
     ctx.fillStyle = C.bg; ctx.fillRect(0, 0, this.width, this.height);
     const top = this.contentTop(), bottom = this.contentBottom(), sc = this.scroller();
     sc.setMax(page.height - (bottom - top));
+    if (this.tab === 'assistant' && this.assistant.pendingScroll != null) {
+      sc.scrollTo(this.assistant.pendingScroll === 'bottom' ? sc.max : this.assistant.pendingScroll); this.assistant.pendingScroll = null;
+    }
     ctx.save(); ctx.beginPath(); ctx.rect(0, top, this.width, bottom - top); ctx.clip();
     if (page.pull) this.paintPull(top, sc);
     const g = this.context(top, bottom, !!this.sheet);
@@ -679,7 +685,7 @@ class SocietyGame {
       const f = font(19, { bold: true, serif: true, text: top.title });
       P.text(ctx, T.ellipsize(ctx, top.title, maxW - 52, f), 52, cy, f, C.text);
     } else if (top.kind === 'back') {
-      const back = { type: 'back' };
+      const back = top.back || { type: 'back' };
       if (g.pressed(back)) P.fillRound(ctx, 6, cy - 18, 36, 36, 18, C.raised);
       P.icon(ctx, 'left', 12, cy - 12, 24, C.text, 2.2);
       g.hit(0, y, 48, h, back);
@@ -688,7 +694,7 @@ class SocietyGame {
       const f = font(22, { bold: true, serif: true, text: top.title });
       P.text(ctx, top.title || '', 16, cy, f, C.text);
     }
-    if (this.busy || this.refreshing) {
+    if (this.tab !== 'assistant' && (this.busy || this.refreshing)) {
       const label = this.busy ? '处理中…' : '更新中…', lw = T.measure(ctx, font(12, {}), label);
       P.text(ctx, label, this.menu.left - 10 - lw, cy, font(12, {}), C.text3);
     }
@@ -724,8 +730,12 @@ class SocietyGame {
     P.line(ctx, 22, top + 0.5, this.width - 22, top + 0.5, C.lineStrong, 1);
     P.fillRound(ctx, this.width / 2 - 19, top + 9, 38, 5, 2.5, C.lineStrong);
     this.hits.push({ x: 0, y: top, w: this.width, h, action: { type: 'noop' } });
-    ctx.save(); ctx.beginPath(); ctx.rect(0, top, this.width, h); ctx.clip();
-    body.paint(this.context(top, this.height, false), 18, top + 28);
+    const scrollable = this.sheet.kind === 'assistantScope', sc = scrollable ? this.scroller('assistant-sheet') : null;
+    const start = top + 28, bottom = this.height - this.bottomInset - 20;
+    this.sheetArea = scrollable ? { top: start, bottom } : null;
+    if (sc) sc.setMax(body.height - (bottom - start));
+    ctx.save(); ctx.beginPath(); ctx.rect(0, scrollable ? start : top, this.width, scrollable ? bottom - start : h); ctx.clip();
+    body.paint(this.context(scrollable ? start : top, scrollable ? bottom : this.height, false), 18, start - (sc ? Math.round(sc.offset) : 0));
     ctx.restore();
   }
   paintToast() {
