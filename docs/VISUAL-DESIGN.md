@@ -144,6 +144,7 @@
 - 页头 `pageHead()`：返回链接 → eyebrow（这页属于哪一块）→ 大标题 → lead（一句说明，最长 72ch）；页面级操作放右边，底部对齐。
 - 主体：卡片 `.card-panel` 纵向堆叠，间距 16；卡片里的小节用上边细线隔开。网格一律 `repeat(auto-fit, minmax(min(100%, Npx), 1fr))`，N 取：卡片 340、居民卡 280、数字块 150、设置 360。概览四格 `.summary-row` 在 ≤860px 变两列。
 - 管理后台：左侧 208px 的分组导航，吸顶（top 76），当前项左侧 3px 强调线；≤860px 时变成顶部一行可横向滑动的按钮。各分区用 `#编号` 路由。
+- 对话工作台（实验助手 `assistant.html`）：整页占满视口（`body` 高 `100dvh`，不整页滚动），没有页头和页脚。左边 240px 对话列表（`--panel` 底，当前项 `--panel-2` 底加左侧 3px 强调线），右边依次是 48px 工具条（`--bg` 底）、各自滚动的问答流、贴底的提问区（`--panel` 底）；问答流和提问区共用阅读宽度 `min(100%, 760px)`。问题是靠右的 `--panel-2` 浅底块（最宽 75%），回答套 AI 框（`--ai-bg` 底、1px 虚线 `--ai-line`、圆角 12，左上 `.ai-note`「AI 生成」），正文 15px、行高 1.75；没有模型文字的回答位（失败、未展示、审核中、停止时还没写出字）只放一条 `.callout` 提示，不套 AI 框。问答以外的东西平时收起：问题范围缩成一行摘要，点开在输入框上方展开面板；说明文字只留额度一行。≤860px 时对话列表收进左侧抽屉（宽 `min(300px, 86vw)`，遮罩是 72% 的 `--bg`），工具条左侧出现「对话」按钮，可点的东西高至少 44。
 
 **观测站**（`style.css`）：顶栏可换行（品牌、时钟、人口、公库、源井、天象，右侧按钮）。主体两栏 `minmax(360px, 2fr)` 与 `minmax(320px, 1fr)`，左边地图（右上角「全屏」），右边标签页（顶上「收起侧栏」，收起后成 40px 的竖边，记住选择）；≤899px 变单栏，地图在上（最小 56vh），侧栏在下。
 
@@ -174,6 +175,9 @@
 | 可展开的列表项 | `<details class="list-item">` |
 | 页内分栏 | `.subtabs` 与 `.subtab[aria-selected]` |
 | 弹窗 | `openModal(title, 'wide')`（`public/modals.js`） |
+| 危险操作确认 | `openModal(title)` 里放「删除」（`.btn.danger`：`--bad` 描边，不是实心）和「取消」，焦点先落在「取消」；不用浏览器的 `confirm()` |
+| AI 回答排版 | `public/assistant-markdown.js` 的 `renderAnswer(text, { sources, onSource, caret })`：Markdown 安全子集（段落、二至四级标题、可嵌一层的列表、粗体、斜体、行内代码、引用、分隔线、表格），只用 `h()` 与文本节点；链接只留文字，不渲染图片和 HTML，半截写法按原文显示；`caret` 在末尾放生成中的竖线光标 |
+| 依据角标 | 同一文件的 `citeChip(source, onSource)`：正文里的 `[S1]` 变成 11px 的描边小标签（`--ai-line` 边、`--accent` 字），点开依据弹窗 `openModal(title, 'wide')` |
 | 居民 | `.resident-card`（头像 56、名字、状态标签、所在地点）；`residentAvatar()` 在没有头像时画首字印章 |
 | 入口列表 | `.hub-link`（标题、一行说明、右侧箭头） |
 | 待处理数 | `.nav-badge`（`--warn` 底的小圆角数字） |
@@ -201,6 +205,7 @@
 
 - 工作台只有短而轻的进入动效（实况新事件 0.4s 淡入、下移 4px）和 0.15s 的颜色过渡。
 - 持续的氛围动画只在门面（登录页的星光、月晕）和地图（灯火、天象）里。
+- 对话工作台里生成中的竖线光标 1 秒闪一次，手机上的对话抽屉 0.2s 滑出；这两样只表示状态和位置变化，不做装饰。
 - 每个动画都在 `@media (prefers-reduced-motion: reduce)` 里关掉。
 
 ### 3.9 登录页：月下城在网页上的样子
@@ -214,6 +219,8 @@
 ### 3.10 新页面的起点
 
 HTML 照 `public/residents.html` 抄：`<html lang="zh">`，`<meta name="color-scheme" content="dark light">`，依次引 `/style.css`、`/console.css` 和本页的 `<script type="module">`，`<body class="console-page">`，里面是 `#console-header`、`.console-main`（`#page-head`、`#message.page-message`、`#content.page-body`、`<noscript>`）和 `.console-foot`。标题写「页面名 · 后人纪」。
+
+实验助手 `assistant.html` 是例外：整页对话工作台，没有 `#page-head` 和 `.console-foot`，`#message` 由脚本放到提问区上方（未登录、出错时放在中间）。
 
 JS 照 `public/billing.js`（最短的完整例子）：`mountShell(header, { active })` → `setNotice()` 把提示写进 `#message` → `load()`。`load()` 用递增的 `generation` 丢弃过时的响应；先画页头，再分「出错 / 未登录 / 空 / 有内容」几种情况，用 `emptyState` 与 `card` 填 `#content`。
 

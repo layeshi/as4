@@ -25,7 +25,6 @@ export function normalizeScope(ctx, raw = {}, question = '') {
     if (typeof raw[k] !== 'string' || raw[k].length > 160) fail(400,'invalid_scope','查询对象无效。');scope[k]=raw[k];
   }
   if (scope.agentId && !has(branch.residents,scope.agentId)) fail(400,'invalid_scope','此分支中没有指定居民。');
-  if (mode === 'resident' && !scope.agentId) fail(400,'invalid_scope','请选择要查询私人记录的居民。');
   if (scope.city && !['north','west','east'].includes(scope.city)) fail(400,'invalid_scope','城市无效。');
   if(!scope.city) { const mentions=[['north',/北城|north city/i],['west',/西城|west city/i],['east',/东城|east city/i]].filter(([,re])=>re.test(question));if(mentions.length===1)scope.city=mentions[0][0]; }
   if(scope.lawId && branchId===ctx.history.branchId && !ctx.rt.engine.publicLaw?.(ctx.rt.w,scope.lawId))fail(400,'invalid_scope','此世界中没有指定法律。');
@@ -45,13 +44,28 @@ export function authorizeScope(ctx, user, scope, credentials = {}) {
   if(scope.mode==='research') {
     if(user?.role!=='admin' || !ctx.cfg.adminKey || typeof credentials.adminKey!=='string' || !timingEqual(credentials.adminKey,ctx.cfg.adminKey)) fail(403,'research_verification','读取私有研究记录需要管理员及管理密钥验证。');
   } else if(scope.mode==='resident') {
-    if(b.id===ctx.history.branchId && ![6,7].includes(ctx.rt.w.premise)) {
-      if(!credentials.ownerKey || ctx.tokens.ownerFor(ctx.rt.w,credentials.ownerKey)!==scope.agentId) fail(403,'forbidden','请验证此居民的造者凭证。');
-    } else if(![6,7].includes(b.premise)) {
-      const stored=b.residents[scope.agentId]?.legacyOwnerHash;
-      if(!stored || typeof credentials.ownerKey!=='string' || !timingEqual(createHash('sha256').update(credentials.ownerKey).digest('hex'),stored))fail(403,'forbidden','请验证该历史分支居民的造者凭证；原凭证记录缺失时无法授权。');
-    } else if(!owns(ctx,ctx.history,user,b.id,scope.agentId)) fail(403,'forbidden','你已不具备此居民的管理权。');
+    const ids=residentsOf(scope);
+    if(!ids.length)fail(403,'forbidden','请选择要查询私人记录的居民。');
+    for(const id of ids) {
+      if(b.id===ctx.history.branchId && ![6,7].includes(ctx.rt.w.premise)) {
+        if(!credentials.ownerKey || ctx.tokens.ownerFor(ctx.rt.w,credentials.ownerKey)!==id) fail(403,'forbidden','请验证此居民的造者凭证。');
+      } else if(![6,7].includes(b.premise)) {
+        const stored=b.residents[id]?.legacyOwnerHash;
+        if(!stored || typeof credentials.ownerKey!=='string' || !timingEqual(createHash('sha256').update(credentials.ownerKey).digest('hex'),stored))fail(403,'forbidden','请验证该历史分支居民的造者凭证；原凭证记录缺失时无法授权。');
+      } else if(!owns(ctx,ctx.history,user,b.id,id)) fail(403,'forbidden','你已不具备此居民的管理权。');
+    }
   }
+}
+export const residentsOf = scope => scope.agentId ? [scope.agentId] : scope.agentIds ?? [];
+// 私人记录未选居民时，取提问者此刻能验证管理权的全部居民；名单随回答保存，之后逐位复核（ADR 0027）。
+export function resolveResidents(ctx, user, scope, credentials = {}) {
+  if(scope.mode!=='resident' || scope.agentId)return scope;
+  const b=ctx.history.branch(scope.branchId);
+  if(!b)fail(403,'forbidden','此历史分支已不可用。');
+  const legacy=![6,7].includes(b.id===ctx.history.branchId?ctx.rt.w.premise:b.premise);
+  const ids=Object.keys(b.residents).filter(id=>{try{authorizeScope(ctx,user,{...scope,agentId:id},credentials);return true;}catch{return false;}});
+  if(!ids.length)fail(403,'forbidden',!legacy?'你目前没有管理中的居民。':credentials.ownerKey?'造者密钥不对应此世界的居民。':'请输入该世界的造者密钥。');
+  scope.agentIds=ids;return scope;
 }
 export function authorizeSources(ctx, user, dependencies, credentials = {}) {
   for(const dependency of dependencies ?? []) {
@@ -91,6 +105,8 @@ export async function gatherEvidence(ctx,user,scope,question,credentials,signal)
   add('实验与操作说明',GUIDE,20);
   const w=ctx.rt.w;
   let agentIds=scope.agentId?[scope.agentId]:Object.entries(branch.residents).filter(([,a])=>a.profile.name && question.includes(a.profile.name)).map(([id])=>id);
+  // 私人记录按名单取证；问题点名了名单里的某几位时只取这几位。
+  const owned=residentsOf(scope),named=agentIds.filter(id=>owned.includes(id)),privateIds=named.length?named:owned;
   if(agentIds.length>1 && !scope.agentId) add('居民名称匹配', {matches:agentIds.map(id=>({id,name:branch.residents[id].profile.name})),note:'如有同名或问题对象不清楚，请先澄清。'},60);
   if(current && scope.toDay===Math.floor(branch.tick/branch.ticksPerDay)) {
     const state=ctx.rt.engine.publicState(w,{nextTickAt:ctx.rt.nextTickAt});
@@ -118,7 +134,7 @@ export async function gatherEvidence(ctx,user,scope,question,credentials,signal)
     }
     if(scope.lawId) {const law=ctx.rt.engine.publicLaw?.(w,scope.lawId);if(!law)fail(400,'invalid_scope','此世界中没有指定法律。');add(`法律 ${scope.lawId} 的引擎读法`,law,120);}
     if(scope.mode==='resident'||scope.mode==='research') {
-      const ids=scope.mode==='resident'?[scope.agentId]:agentIds.length?agentIds:Object.keys(w.agents);
+      const ids=scope.mode==='resident'?privateIds:agentIds.length?agentIds:Object.keys(w.agents);
       for(const id of ids.slice(0,100)) {
         const a=w.agents[id];if(!a)continue;
         const {soul,...basic}=profile(a);add(`私有居民档案 ${a.name}`,basic,65);
@@ -135,7 +151,7 @@ export async function gatherEvidence(ctx,user,scope,question,credentials,signal)
     for(const c of chronicles.slice(-50))add(`编年史 第${c.day+1}日`,c,15,{day:c.day});
   } else {
     add('旧纪元记录范围',{...observation,note:'此分支只提供已保存历史，当前世界状态与当前规则不能代表该分支当时状态。'},100);
-    if(scope.mode!=='public')for(const id of scope.agentId?[scope.agentId]:agentIds.slice(0,20)) {const {soul,...basic}=branch.residents[id]?.profile??{};add(`旧纪元私人档案 ${id}`,basic,60);if(/灵魂|性格|soul|personality/i.test(question))add(`旧纪元居民灵魂 ${id}`,soul,90);}
+    if(scope.mode!=='public')for(const id of (scope.mode==='resident'?privateIds:scope.agentId?[scope.agentId]:agentIds).slice(0,20)) {const {soul,...basic}=branch.residents[id]?.profile??{};add(`旧纪元私人档案 ${id}`,basic,60);if(/灵魂|性格|soul|personality/i.test(question))add(`旧纪元居民灵魂 ${id}`,soul,90);}
   }
   const matched=[],counts={},seen=new Set(),maxSamples=50;let scanned=0,total=0,incomplete=false;
   const privateKinds=new Set();
@@ -154,13 +170,13 @@ export async function gatherEvidence(ctx,user,scope,question,credentials,signal)
         if(!row.public||!Number.isSafeInteger(row.releaseTick)||row.releaseTick>branch.tick)continue;
         record=row.public;
       } else if(scope.mode==='resident') {
-        if(!privateEventFor(e,scope.agentId))continue;
+        if(!privateIds.some(id=>privateEventFor(e,id)))continue;
         record=clean(e);
-        if(e.type==='whisper' && e.data?.anonymous && e.agent!==scope.agentId)record={...record,data:{...record.data,from:null}};
+        if(e.type==='whisper' && e.data?.anonymous && !owned.includes(e.agent))record={...record,data:{...record.data,from:null}};
       } else record=clean(e);
       seq=e.seq;
     } else if(row.kind==='metrics')record=row;
-    else if(scope.mode!=='public' && (!scope.agentId||row.agentId===scope.agentId) && (row.commandN??0)<=branch.commandN && (row.tick??0)<=branch.tick)record=row;
+    else if(scope.mode!=='public' && (scope.mode==='resident'?privateIds.includes(row.agentId):!scope.agentId||row.agentId===scope.agentId) && (row.commandN??0)<=branch.commandN && (row.tick??0)<=branch.tick)record=row;
     if(!record)continue;
     const kind=record.type??record.kind;
     const contentKind=row.kind==='action'?row.type:kind;

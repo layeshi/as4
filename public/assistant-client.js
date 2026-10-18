@@ -8,7 +8,6 @@ export function questionScope(fields) {
     scope[key] = day - 1;
   }
   if (scope.fromDay > scope.toDay) throw Error('起止日期顺序无效 / Invalid date range');
-  if (scope.mode === 'resident' && !scope.agentId) throw Error('请选择居民 / Select a resident');
   return scope;
 }
 export async function assistantRequest(path, { method = 'GET', body, keys = {} } = {}) {
@@ -26,7 +25,8 @@ export class AssistantClient {
   constructor(request = assistantRequest) { this.request = request; this.version = 0; this.owner = null; this.reset(); }
   reset() { this.version++; this.keys = {}; this.conversation = null; this.source = null; this.status = null; this.questionId = null; this.lastQuestion = null; }
   account(id) { if (id !== this.owner) { this.reset(); this.owner = id; } }
-  async statusRead() { const v = this.version; const data = await this.request('/api/assistant/status'); if (v === this.version) this.status = data; return data; }
+  // 带上本页内存里的密钥：旧世界私人对话的标题也要凭密钥复核后才显示。
+  async statusRead() { const v = this.version; const data = await this.request('/api/assistant/status', { keys: this.keys }); if (v === this.version) this.status = data; return data; }
   async open(id) {
     const v = ++this.version; this.source = null;
     try { const data = await this.request('/api/assistant/conversations/' + encodeURIComponent(id), { keys: this.keys }); if (v === this.version) this.conversation = data.conversation; }

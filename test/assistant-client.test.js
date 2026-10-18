@@ -6,6 +6,16 @@ test('assistant sends one-based displayed days as zero-based API values', () => 
   assert.deepEqual(questionScope({ mode: 'resident', agentId: 'a', fromDay: '1', toDay: '4', city: '' }), { mode: 'resident', agentId: 'a', fromDay: 0, toDay: 3 });
   assert.throws(() => questionScope({ fromDay: '4', toDay: '2' }), /日期/);
 });
+test('private records without a resident mean every resident you manage (ADR 0027)', () => {
+  assert.deepEqual(questionScope({ mode: 'resident', agentId: '', city: 'north', fromDay: '', toDay: '' }), { mode: 'resident', city: 'north' });
+});
+test('status reads carry the in-memory keys so legacy private titles can be rechecked', async () => {
+  const seen = [];
+  const c = new AssistantClient(async (path, options) => { seen.push([path, options?.keys]); return { signedIn: true }; });
+  c.account('alice'); c.keys.ownerKey = 'test-owner-key';
+  await c.statusRead();
+  assert.deepEqual(seen, [['/api/assistant/status', { ownerKey: 'test-owner-key' }]]);
+});
 test('account changes reject stale replies and clear credentials and sources', async () => {
   let finish;
   const c = new AssistantClient(() => new Promise(resolve => { finish = resolve; }));

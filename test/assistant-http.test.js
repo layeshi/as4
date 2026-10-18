@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { boot } from './http-helpers.js';
 import { readFileSync } from 'node:fs';
 
-async function setup(t) {
- const e=await boot();t.after(()=>e.close());const c=e.app.ctx;
+async function setup(t,options) {
+ const e=await boot(options);t.after(()=>e.close());const c=e.app.ctx;
  const u=await c.accounts.create({username:'assistant_user',password:'assistant-password'});
  const headers={Cookie:`houren_session=${c.accounts.issue(u.id)}`,'X-Houren-Request':'1'};
  c.hosted.config={version:2,enabled:true,apiKey:'TEST-SECRET-KEY',baseURL:'https://example.com/v1',priceVersion:'p',maxOutputTokens:2048,models:[{id:'gpt-6-luna',provider:'openai-responses',group:'Openai-Gpt-1',tiers:[{upTo:null,usd:{miss:'1',hit:'0.1',output:'2',write:null,writeHour:null}}]}]};
@@ -112,4 +112,32 @@ test('storage failure in a detached job is contained and reservations remain cha
  const r=await e.call('/api/assistant/questions',{method:'POST',headers,body:{text:'解释实验'}});await started;const job=c.assistant.jobs.get(r.json.questionId);let rejected=false;const handled=job.promise.catch(()=>{rejected=true;});release();await handled;
  assert.equal(rejected,false);assert.equal(c.assistant.available(),false);assert.ok(Object.keys(c.assistant.store.data.reservations).length>0);
  assert.equal((await e.call('/api/public/state')).status,200);
+});
+
+test('private scope without a provable resident is refused before quota; titles use the first question except on WeChat',async t=>{
+ const {e,c,u,headers}=await setup(t);
+ const none=await e.call('/api/assistant/questions',{method:'POST',headers,body:{text:'我的居民怎么样',scope:{mode:'resident'}}});assert.equal(none.status,403);assert.equal(c.assistant.store.quota(u.id).used,0);
+ const long='三城公库最近为什么差这么多？\n'.repeat(4);
+ const r=await e.call('/api/assistant/questions',{method:'POST',headers,body:{text:long}});assert.equal(r.status,202,r.text);await c.assistant.idle();
+ const status=(await e.call('/api/assistant/status',{headers})).json,title=[...long.replace(/\s+/g,' ').trim()].slice(0,40).join('')+'…';
+ assert.equal(status.conversations[0].title,title);assert.ok(status.branches.every(b=>Object.hasOwn(b,'premise')));
+ assert.equal((await e.call(`/api/assistant/conversations/${r.json.conversationId}`,{headers})).json.conversation.title,title);
+ const key=c.accounts.issue(u.id,{wechat:{appid:c.wechat.appid,openid:'title-openid',verifiedAt:Date.now()}}),wh={...headers,Cookie:`houren_session=${key}`,'X-Houren-Client':'wechat'};
+ assert.equal((await e.call('/api/assistant/status',{headers:wh})).json.conversations[0].title,'实验对话');
+ assert.equal((await e.call(`/api/assistant/conversations/${r.json.conversationId}`,{headers:wh})).json.conversation.title,'实验对话');
+});
+test('P7 answers about all residents stay out of a narrower follow-up and are withheld once any resident leaves',async t=>{
+ const {fileURLToPath}=await import('node:url');
+ const {e,c,u,headers}=await setup(t,{premise:7,physics:2,map:'island-three-v1',hiddenPhysicsFile:fileURLToPath(new URL('./fixtures/p7-hidden-physics.json',import.meta.url)),shellSlots:0});
+ const make=(name,requestId)=>{const r=e.rt.exec('account',{op:'create',accountId:u.id,name,soul:'soul',model:'m',dailyCap:1000000,requestId,city:'north'}).result;assert.equal(r.ok,true,JSON.stringify(r));return r.agentId;};
+ const a=make('甲居民','assistant-http-a'),b=make('乙居民','assistant-http-b');await c.history.flush();
+ c.assistant.generate=async()=>({text:'ALL_RESIDENTS_ANSWER [S1]',usage:{input:10,output:10}});
+ const first=await e.call('/api/assistant/questions',{method:'POST',headers,body:{text:'我的居民最近怎么样',scope:{mode:'resident'}}});assert.equal(first.status,202,first.text);await c.assistant.idle();
+ const stored=c.assistant.store.get(u.id,first.json.conversationId).messages.at(-1);assert.equal(stored.status,'complete');assert.deepEqual([...stored.scope.agentIds].sort(),[a,b].sort());
+ let prompt='';c.assistant.generate=async(_,{messages})=>{prompt=JSON.stringify(messages);return {text:'追问回答 [S1]',usage:{input:10,output:10}};};
+ const ask=async(text,scope)=>{const r=await e.call('/api/assistant/questions',{method:'POST',headers,body:{text,scope,conversationId:first.json.conversationId}});assert.equal(r.status,202,r.text);await c.assistant.idle();return prompt;};
+ assert.ok(!(await ask('甲居民呢',{mode:'resident',agentId:a})).includes('ALL_RESIDENTS_ANSWER'));
+ assert.ok((await ask('再说说全部',{mode:'resident'})).includes('ALL_RESIDENTS_ANSWER'));
+ e.rt.w.access.residents[b].managerAccountId='someone-else';
+ const view=(await e.call(`/api/assistant/conversations/${first.json.conversationId}`,{headers})).json.conversation;assert.equal(view.messages[1].status,'withheld');assert.equal(view.messages[1].text,'');assert.equal(view.messages[3].status,'complete');
 });

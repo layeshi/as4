@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { boot } from './http-helpers.js';
-import { gatherEvidence, authorizeScope, normalizeScope } from '../src/assistant/evidence.js';
+import { gatherEvidence, authorizeScope, authorizeSources, normalizeScope, resolveResidents } from '../src/assistant/evidence.js';
 
 test('public evidence never includes private soul or provider credentials, private scope requires proof',async t=>{
  const env=await boot();t.after(()=>env.close());const ctx=env.app.ctx;
@@ -81,4 +81,24 @@ test('document withdrawal remains effective after active history branch changes'
  env.rt.exec('admin',{op:'redact',args:{kind:'doc',id:'oldDoc'}});await ctx.history.flush();
  const old=ctx.history.branchId,active={...structuredClone(ctx.history.branch()),id:'new-active'};ctx.history.index.branches.push(active);ctx.history.branchId=active.id;
  const {authorizeSources}=await import('../src/assistant/evidence.js');assert.throws(()=>authorizeSources(ctx,{id:'u'},result.dependencies,{}),{code:'forbidden'});ctx.history.branchId=old;
+});
+
+test('P7 private scope without a resident covers every resident the account manages, and losing one revokes it',async t=>{
+ const {fileURLToPath}=await import('node:url');
+ const env=await boot({premise:7,physics:2,map:'island-three-v1',hiddenPhysicsFile:fileURLToPath(new URL('./fixtures/p7-hidden-physics.json',import.meta.url)),shellSlots:0});t.after(()=>env.close());const ctx=env.app.ctx;
+ const make=(accountId,name,requestId)=>{const r=env.rt.exec('account',{op:'create',accountId,name,soul:'soul',model:'m',dailyCap:1000000,requestId,city:'north'}).result;assert.equal(r.ok,true,JSON.stringify(r));return r.agentId;};
+ const a=make('alice','甲居民','assistant-all-a'),b=make('alice','乙居民','assistant-all-b'),c=make('bob','丙居民','assistant-all-c');await ctx.history.flush();
+ for(const [id,text]of [[a,'DIARY_A'],[b,'DIARY_B'],[c,'DIARY_C']])(env.rt.w.agents[id].diary??=[]).push({text,tick:0});
+ const scope=resolveResidents(ctx,{id:'alice'},normalizeScope(ctx,{mode:'resident'}),{});assert.deepEqual([...scope.agentIds].sort(),[a,b].sort());
+ const all=await gatherEvidence(ctx,{id:'alice'},scope,'看看日记',{},new AbortController().signal),text=JSON.stringify(all.sources);
+ assert.ok(text.includes('DIARY_A')&&text.includes('DIARY_B'));assert.ok(!text.includes('DIARY_C'));
+ const named=JSON.stringify((await gatherEvidence(ctx,{id:'alice'},scope,'甲居民的日记',{},new AbortController().signal)).sources);assert.ok(named.includes('DIARY_A'));assert.ok(!named.includes('DIARY_B'));
+ assert.throws(()=>resolveResidents(ctx,{id:'carol'},normalizeScope(ctx,{mode:'resident'}),{}),{code:'forbidden',message:'你目前没有管理中的居民。'});
+ env.rt.w.access.residents[b].managerAccountId='bob';assert.throws(()=>authorizeSources(ctx,{id:'alice'},all.dependencies,{}),{code:'forbidden'});
+});
+test('legacy private scope without a resident is the one the owner key proves',async t=>{
+ const env=await boot();t.after(()=>env.close());const ctx=env.app.ctx,a=await env.register('旧钥居民');await env.register('旁人居民');await ctx.history.flush();
+ assert.deepEqual(resolveResidents(ctx,{id:'u'},normalizeScope(ctx,{mode:'resident'}),{ownerKey:a.ownerKey}).agentIds,[a.agentId]);
+ assert.throws(()=>resolveResidents(ctx,{id:'u'},normalizeScope(ctx,{mode:'resident'}),{}),{code:'forbidden',message:'请输入该世界的造者密钥。'});
+ assert.throws(()=>resolveResidents(ctx,{id:'u'},normalizeScope(ctx,{mode:'resident'}),{ownerKey:'wrong-key'}),{code:'forbidden',message:'造者密钥不对应此世界的居民。'});
 });
