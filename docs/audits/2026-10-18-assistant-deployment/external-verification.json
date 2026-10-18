@@ -1,0 +1,64 @@
+{
+  "origin": "https://heirscity.site",
+  "ok": true,
+  "network": "direct HTTPS, normal certificate verification",
+  "checks": [
+    {
+      "path": "/assistant.html",
+      "status": 200,
+      "sha256": "dae5fc63234477c51a4913a8f64bf9b781189c2580250bdf22e74c3ff2b80217",
+      "matchesSource": true
+    },
+    {
+      "path": "/assistant.js",
+      "status": 200,
+      "sha256": "a3cc527cc109363987a20d482b5ad41a8202d023d5f40978a2d1e04a62e117e7",
+      "matchesSource": true
+    },
+    {
+      "path": "/assistant-client.js",
+      "status": 200,
+      "sha256": "98926f0838dd742e5d0ccd98288227e2bf7cb3b241943b12ddce265ae481bd30",
+      "matchesSource": true
+    },
+    {
+      "path": "/assistant-ui.js",
+      "status": 200,
+      "sha256": "ef038f0cb4fbcf8a00142441c5c3b17b27a5b3742b60d6b07f7054c6e4e7bd51",
+      "matchesSource": true
+    },
+    {
+      "path": "/assistant.css",
+      "status": 200,
+      "sha256": "8f315790a55089580d61fd640ed556dcf365d5e378a2a6ca35ddb76da2101822",
+      "matchesSource": true
+    },
+    {
+      "path": "/assistant-admin.js",
+      "status": 200,
+      "sha256": "3c156e9b1157d3e397e9a84d52491696fd9b83321fe662d2a2a26dc3763ebb4f",
+      "matchesSource": true
+    },
+    {
+      "path": "/login.html",
+      "status": 200,
+      "sha256": "69567836f8da18b5bcc44011d385dbfbcf4601780db389263e9ef9fb83c7285f",
+      "matchesSource": true
+    },
+    {
+      "path": "/api/account",
+      "status": 200,
+      "valid": true
+    },
+    {
+      "path": "/api/assistant/status",
+      "status": 200,
+      "valid": true
+    },
+    {
+      "path": "/api/public/state",
+      "status": 401,
+      "loginWallPreserved": true
+    }
+  ]
+}

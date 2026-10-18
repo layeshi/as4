@@ -51,3 +51,7 @@
 ## 设计依据
 
 完整要求与 A1–A14 验收条件见 [设计](plans/2026-10-18-experiment-assistant-design.md)，观测边界见 [ADR](adr/0026-experiment-assistant-observation-boundary.md)，接口合同和实现任务见 [实施计划](superpowers/plans/2026-10-18-experiment-assistant.md)。
+
+## 2026-10-18 服务器上线
+
+功能提交 `491d932` 已合并并推送到 main，服务器保状态部署完成。停服约63秒，世界与18位居民、4个账号、18个启用运行器保留；Linux专项94项通过，一次真实公开规则模型问答及公网验收通过。详细证据见[上线记录](audits/2026-10-18-assistant-deployment/REPORT.md)。微信客户端新包仍待发布。以上“未部署/未调用真实模型”为实现阶段记录，本节为其后续状态。

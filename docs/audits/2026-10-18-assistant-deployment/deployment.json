@@ -1,0 +1,96 @@
+{
+  "sha": "491d932355d5addd4959a80ee821435995f8be5a",
+  "baseSha": "9c8f57539a5720963f8ce5661a8f7cfc1114ac4a",
+  "newRelease": "/opt/houren/releases/main-491d932355d5-20261018-assistant",
+  "oldRelease": "/opt/houren/releases/main-9c8f57539a57-20261018-entities",
+  "dataDir": "/var/lib/houren/data",
+  "worldId": "p7-20261016",
+  "archivePath": "/var/backups/houren/assistant-20261018/source.tar.gz",
+  "archiveSha256": "e60ce79f3acff4d3f958eaf065d6b5d7f6611901d2c633d0fa113df8495558f0",
+  "backup": "/var/backups/houren/assistant-20261018",
+  "verificationMode": "final snapshot recovery",
+  "genesisReplay": false,
+  "phases": {
+    "preparing": "2026-10-18T08:17:34.885961+00:00",
+    "stopping": "2026-10-18T08:17:35.287409+00:00",
+    "consistent-backup": "2026-10-18T08:17:35.551844+00:00",
+    "offline-recovery": "2026-10-18T08:17:48.341234+00:00",
+    "permissions-preflight": "2026-10-18T08:18:00.604071+00:00",
+    "switching": "2026-10-18T08:18:04.349382+00:00",
+    "verifying-online": "2026-10-18T08:18:38.424154+00:00",
+    "complete": "2026-10-18T08:18:47.296519+00:00"
+  },
+  "phase": "complete",
+  "oldFilesVerified": 1200,
+  "releaseFilesVerified": 1226,
+  "otherServicePids": {
+    "nginx": "8608",
+    "xray": "13274"
+  },
+  "stopSeconds": 0.264,
+  "dataBackupSha256": "786110b04eb8c218402bd5a4652e9ed914f01379d365636d13cbdedc2c9d45ae",
+  "oldReleaseBackupSha256": "7faa8f31aeb123c18d836c66a9bc74fa6f2f56e6322766a84821f075f10905e5",
+  "recovery": {
+    "worldId": "p7-20261016",
+    "premise": 7,
+    "physics": 2,
+    "epoch": 2,
+    "map": "island-three-v1",
+    "tick": 160,
+    "commandN": 5991,
+    "logEnd": 5991,
+    "replayed": 0,
+    "stateHash": "ba73e39d937b6d25e6695af6093be3b59a367629f5ac6deb0716b08fcc7155be",
+    "residents": 18,
+    "accounts": 4,
+    "runners": 18,
+    "validRunners": 18,
+    "enabledRunners": 18,
+    "paused": false,
+    "shellsPaused": null,
+    "hostedEnabled": true,
+    "billingAccounts": 2,
+    "commandLogHash": "cb1daee70f1dd0d63297589cf626a86fbae12b9d54be2a50c1b078c4b226acff",
+    "commandLogBytes": 93265817,
+    "eventSequence": 2560
+  },
+  "preflight": {
+    "ok": true,
+    "checks": [],
+    "version": "0.1.0",
+    "hash": "491d932355d5addd4959a80ee821435995f8be5a",
+    "commandN": 5991,
+    "contentVerified": true
+  },
+  "downtimeSeconds": 63.136,
+  "effectiveConfigurationPreserved": true,
+  "health": {
+    "assistant": {
+      "guestRoute": true,
+      "model": "gpt-6-luna",
+      "dailyQuestions": 20,
+      "dailyBudgetYuan": 20
+    },
+    "loginCaptcha": {
+      "provider": "altcha"
+    },
+    "ok": true,
+    "worldId": "p7-20261016",
+    "login": 200,
+    "account": 200,
+    "state": 200,
+    "sse": 200
+  },
+  "historyPrefixPreserved": true,
+  "accountsPreserved": true,
+  "otherEncryptedConfigurationPreserved": true,
+  "configurationChange": null,
+  "usagePreserved": true,
+  "service": {
+    "ActiveState": "active",
+    "SubState": "running",
+    "NRestarts": "0",
+    "Result": "success",
+    "MainPID": "211924"
+  }
+}

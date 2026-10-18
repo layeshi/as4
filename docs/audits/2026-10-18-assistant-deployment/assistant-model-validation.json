@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "model": "gpt-6-luna",
+  "source": "public fixed instructions only",
+  "residentActions": 0,
+  "userBalanceDebited": false,
+  "chunks": 18,
+  "elapsedMs": 2866,
+  "usage": {
+    "input": 77,
+    "output": 52,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cacheWriteHour": 0
+  },
+  "costYuan": 0.000139,
+  "answer": "不能。我是只读问答助手，不能代为暂停世界。[S1]"
+}
