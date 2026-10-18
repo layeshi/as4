@@ -1,3 +1,5 @@
+import { AssistantService } from '../assistant/service.js';
+import { assistantRoutes } from './assistant.js';
 import { WechatWebLogin } from '../wechat/web-login.js';
 import { HistoryArchive } from '../history/archive.js';
 import { ExportManager } from '../history/exports.js';
@@ -78,7 +80,7 @@ const roleAdminRoutes = [
   ['GET','/api/admin/public-model',accountWrap(({res,ctx})=>sendJson(res,200,ctx.publicRoles.view()),{admin:true})],
   ['POST','/api/admin/public-model',accountWrap(({res,ctx,body})=>{try{sendJson(res,200,ctx.publicRoles.save(body));}catch(e){sendJson(res,400,{error:{code:'invalid_config',message:e.message}});}},{admin:true})],
 ];
-const ROUTES = [...historyRoutes, ...announcementRoutes, ...wechatMessageBoardRoutes, ...messageBoardRoutes, ...wechatWebLoginRoutes,...wechatRoutes,...archiveRoutes,...residentRoutes,...hostedRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
+const ROUTES = [...assistantRoutes, ...historyRoutes, ...announcementRoutes, ...wechatMessageBoardRoutes, ...messageBoardRoutes, ...wechatWebLoginRoutes,...wechatRoutes,...archiveRoutes,...residentRoutes,...hostedRoutes,...supportRoutes,...roleAdminRoutes,...accountRoutes, ...prayerRoutes, ...agentRoutes, ...portRoutes, ...ownerRoutes, ...publicRoutes, ...adminRoutes, ...snapshotRoutes, ...runnerRoutes];
 
 function match(method, pathname) {
   for (const [m, pattern, handler] of ROUTES) {
@@ -202,6 +204,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
   ctx.history = new HistoryArchive(rt);
   ctx.historyExports = new ExportManager(ctx, ctx.history);
   ctx.reports = new ReportManager(ctx, ctx.history);
+  ctx.assistant = new AssistantService(ctx);
   rt.agentLoop = (ctx.shells && ctx.shells.config.agentLoop) || DEFAULT_AGENT_LOOP;
   if (agentic(rt.w) && cfg.tickMs < 4 * rt.agentLoop.marginSec * 1000) {
     logger.warn?.(`第二前提：TICK_MS=${cfg.tickMs} 小于 4 × marginSec=${rt.agentLoop.marginSec} 秒，醒来的可用窗口很短；请检查刻长与截止余量。`);
@@ -286,6 +289,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     async close() {
       ctx.loginChallenge?.close();
       ctx.serverStatus.close();
+      await ctx.assistant.close();
       await ctx.reports.close();
       await ctx.historyExports.close();
       await ctx.history.close();

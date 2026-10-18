@@ -123,6 +123,7 @@ export function renderProfile2(ctx, data) {
   return h(
     'div',
     { class: 'profile' },
+    h('a', { class: 'btn', href: `/assistant.html?agentId=${encodeURIComponent(a.id)}` }, getLang() === 'en' ? 'Ask the assistant' : '询问实验助手'),
     h('h3', null, residentAvatar(a), a.name),
     h('p', { class: 'muted' }, t('aiContent'), ' · ', a.body ? `${t('model')}${colon()}${a.body.model} · ${t('bodyKind')}${colon()}${t(`bodyKind_${a.body.kind}`)}${a.creatorName ? ` · ${t('creator')}${colon()}${a.creatorName}` : ''}` : t('trueBody')),
     h('dl', { class: 'kv' }, facts.flatMap(([k, v]) => [h('dt', null, k), h('dd', null, v)])),

@@ -63,7 +63,7 @@ function resident(app, W) {
   const top = { kind: 'back', title: usable(a.name) ? a.name : '居民' };
   if (p.loading || !p.agent) return { top, nodes: [N.space(40), N.text(W, p.loading ? '正在读取档案…' : '档案暂不可用', { style: 'body', color: C.text2, align: 'center' })], tabbar: false };
   const s = app.state || {};
-  const nodes = [];
+  const nodes = [N.button(W, '询问实验助手', { type: 'assistantOpen', agentId: p.agent.id }, { variant: 'secondary' })];
   const name = nameOf(a), bio = textOf(a.bio);
   const header = N.stack([
     N.text(W - 84, name, { style: 'title', bold: true, serif: true }),

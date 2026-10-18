@@ -1,7 +1,7 @@
 // 居民档案（抽屉）：公开档案 + 父母子女 + 延迟公开的记忆与独白 + 公共物品记录 + 著述与铭刻 + 相关事件。
 
 import { h, ai } from './dom.js';
-import { t, colon } from './i18n.js';
+import { t, getLang, colon } from './i18n.js';
 import { agentLink, placeLink, groupChip, statusChip, section, emptyNote, eventRow, dayTag } from './render.js';
 
 /** data：GET /api/public/agents/:id 的返回 */
@@ -24,6 +24,7 @@ export function renderProfile(ctx, data) {
   const out = h(
     'div',
     { class: 'profile' },
+    h('a', { class: 'btn', href: `/assistant.html?agentId=${encodeURIComponent(a.id)}` }, getLang() === 'en' ? 'Ask the assistant' : '询问实验助手'),
     h('h3', null, a.name, ' ', a.exiled ? h('span', { class: 'chip exile' }, t('exiled')) : null, a.fosterable ? h('span', { class: 'chip' }, t('fosterable')) : null),
     h('p', { class: 'muted' }, t('aiContent'), ' · ', a.body ? `${t('model')}${colon()}${a.body.model}${a.creatorName ? ` · ${t('creator')}${colon()}${a.creatorName}` : ''}` : t('trueBody')),
     h('dl', { class: 'kv' }, facts.flatMap(([k, v]) => [h('dt', null, k), h('dd', null, v)])),

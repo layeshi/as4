@@ -230,6 +230,7 @@ function lawCard(ctx, l) {
   return h(
     'article',
     { class: `card law ${l.status !== 'active' ? 'inactive' : ''}` },
+    h('a', { class: 'link', href: `/assistant.html?lawId=${encodeURIComponent(l.id)}` }, getLang() === 'en' ? 'Ask the assistant' : '询问实验助手'),
     h('h4', null, `${l.id} · `, h('span', { class: 'ai' }, l.title)),
     h('p', { class: 'ai' }, l.text),
     effectList(ctx, l.effects, l.results),

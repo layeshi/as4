@@ -51,6 +51,8 @@ function request(path, options = {}) {
     const header = { 'Content-Type': 'application/json', 'X-Houren-Request': '1', 'X-Houren-Client': 'wechat' };
     const cookie = Object.keys(cookies).map(name => name + '=' + cookies[name]).join('; ');
     if (cookie) header.Cookie = cookie;
+    if (options.assistantAdminKey) header['X-Admin-Key'] = options.assistantAdminKey;
+    if (options.assistantOwnerKey) header['X-Owner-Key'] = options.assistantOwnerKey;
     if (options.ownerKey) header.Authorization = 'Bearer ' + options.ownerKey;
     wx.request({
       url: config.apiBase + path, method: options.method || 'GET', data: options.data,

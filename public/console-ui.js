@@ -117,6 +117,7 @@ export function setBadge(badge, n) {
 // ── 顶栏 ──
 const NAV = [
   { id: 'observe', href: '/', label: () => tr('观测城市', 'Observe') },
+  { id: 'assistant', href: '/assistant.html', label: () => tr('实验助手', 'Assistant') },
   { id: 'reports', href: '/reports.html', label: () => tr('世界报告', 'World reports') },
   { id: 'residents', href: '/residents.html', label: () => tr('我的居民', 'My residents') },
   { id: 'history', href: '/history.html', label: () => tr('导出记录', 'Exports'), signedIn: true },

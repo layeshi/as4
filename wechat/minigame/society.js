@@ -14,6 +14,7 @@ const serifChars = require('./ui/serif-chars');
 const modelPresets = require('./utils/model-presets');
 const { GAME_NAME } = require('./copy');
 const { MessageBoard } = require('./messages');
+const { Assistant } = require('./assistant');
 const { History } = require('./history');
 const { Announcements } = require('./announcements');
 const { C, font } = theme;
@@ -45,6 +46,7 @@ class SocietyGame {
     this.navigation = 0; this.readVersions = {};
     this.messageBoard = new MessageBoard(this);
     this.history = new History(this);
+    this.assistant = new Assistant(this);
     this.announcements = new Announcements(this);
     this.modelPresets = modelPresets.bundled;
     this.cityMap = new CityMap(() => this.wx.createCanvas());
@@ -113,6 +115,7 @@ class SocietyGame {
   clearSecrets() {
     this.editing = ''; this.mergePreview = null;
     this.messageBoard.stash();
+    this.assistant.stash();
     delete this.form.apiKey; delete this.form.password; delete this.form.confirmPassword; delete this.form.currentPassword; delete this.form.showPassword;
     delete this.form.contactValue; delete this.form.contactCode; delete this.form.contactChallenge; delete this.form.contactProof;
     if (this.wx.hideKeyboard) this.wx.hideKeyboard();
@@ -156,6 +159,7 @@ class SocietyGame {
     clearTimeout(this.timer); this.timer = null;
     if (!this.entered) { this.render(); return; }
     if (this.refreshing) return;
+    if (this.tab === 'assistant') { await this.assistant.refresh(); return; }
     if (['reports', 'worldReport', 'historyExport', 'exports'].includes(this.tab)) {
       await this.history.refresh(); return;
     }
@@ -299,6 +303,7 @@ class SocietyGame {
   }
   async handle(a) {
     const f = this.form;
+    if (a.type?.startsWith('assistant')) return this.assistant.handle(a);
     if (a.type?.startsWith('history')) return this.history.handle(a);
     if (a.type === 'announcements' || a.type?.startsWith('announcement')) return this.announcements.handle(a);
     if (a.type === 'messages' || a.type?.startsWith('message')) return this.messageBoard.handle(a);

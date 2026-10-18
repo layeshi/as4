@@ -69,6 +69,7 @@ function account(app, W) {
   }
   if (app.user && app.wechatLinked) nodes.push(N.button(W, app.user.passwordLoginEnabled ? '网页登录与密码' : '设置网页登录密码', { type: 'webLogin' }, { variant: 'secondary' }));
   if (app.user && app.wechatLinked) nodes.push(N.button(W, '合并到已有网站账号', { type: 'mergeAccount' }, { variant: 'secondary' }));
+  nodes.push(N.button(W, '实验助手', { type: 'assistantOpen' }, { variant: 'secondary' }));
   if (app.user) nodes.push(N.button(W, '导出记录', { type: 'historyRecords' }, { variant: 'secondary' }));
   nodes.push(moreMenu(app, W));
   if (app.user && app.wechatVerified) nodes.push(N.button(W, '退出登录', { type: 'logout' }, { variant: 'danger', size: 'small' }));

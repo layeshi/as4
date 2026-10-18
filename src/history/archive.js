@@ -27,7 +27,7 @@ export class HistoryArchive {
     this.indexFile = join(this.root, 'index.json');
     this.index = existsSync(this.indexFile) ? JSON.parse(readFileSync(this.indexFile, 'utf8')) : { version: 1, branches: [] };
     const state = this.capture(); const boundary = rt.w.commandN;
-    this.ready = this.initialize(state, boundary).then(() => importArchives ? this.importExistingArchives() : undefined); this.pending = this.ready;
+    this.ready = this.initialize(state, boundary).then(() => importArchives ? this.importExistingArchives() : undefined).then(() => this.restoreLegacyOwnerProofs()); this.pending = this.ready;
     this.unsubscribe = rt.onCommand(({ cmd, result, events, before }) => {
       const captured = this.capture(), rows = this.commandRows(cmd, result, events, before);
       this.pending = this.pending.then(() => this.commit(captured, cmd, rows)).catch(error => { this.fault = error; rt.logger.error?.('历史归档写入失败', error.message); });
@@ -37,8 +37,8 @@ export class HistoryArchive {
     const w = this.rt.w, p = { ...(w.physics === 2 ? P2 : P1), ...(this.calendar ?? {}) };
     return { worldId: w.id, epoch: w.epoch, physics: w.physics ?? 1, premise: w.premise ?? 0, identity: hash([w.id, w.seed, w.physics, w.premise]),
       tick: w.clock.tick, commandN: w.commandN, eventSeq: w.counters.event, ticksPerDay: p.ticksPerDay, daysPerMonth: p.daysPerMonth,
-      residents: Object.fromEntries(Object.values(w.agents).map(a => [a.id, { profile: profile(a), managerId: w.access?.residents?.[a.id]?.managerAccountId ?? null, legacyToken: a.tokenHash ?? null }])),
-      redacted: [...(w.redacted?.events ?? [])],
+      residents: Object.fromEntries(Object.values(w.agents).map(a => [a.id, { profile: profile(a), managerId: w.access?.residents?.[a.id]?.managerAccountId ?? null, legacyToken: a.tokenHash ?? null, legacyOwnerHash: a.owner?.keyHash ?? null }])),
+      redacted: [...(w.redacted?.events ?? [])], redactedDocs: Object.values(w.docs ?? {}).filter(d => d.redacted).map(d => d.id),
       ended: w.paused && !w.experimentControl?.active && w.clock.tick >= p.ticksPerDay * p.daysPerMonth * p.monthsPerEpoch,
     };
   }
@@ -95,6 +95,20 @@ export class HistoryArchive {
       await imported.ready; await imported.close();
       this.index = imported.index; this.meta = this.index.branches.find(b => b.id === this.branchId);
     }
+  }
+  restoreLegacyOwnerProofs() {
+    let changed = false;
+    for (const branch of this.index.branches) {
+      if ([6, 7].includes(branch.premise) || !/^[a-zA-Z0-9_-]{1,100}$/.test(branch.worldId) || !Object.values(branch.residents).some(r => !Object.hasOwn(r, 'legacyOwnerHash'))) continue;
+      const w = readSnapshot(join(this.rt.cfg.dataDir, branch.worldId));
+      // Never authorize an old branch with the credentials from a different timeline.
+      if (!w || w.commandN !== branch.commandN || hash([w.id, w.seed, w.physics, w.premise]) !== branch.identity) continue;
+      for (const [id, resident] of Object.entries(branch.residents)) {
+        if (w.agents[id]?.tokenHash !== resident.legacyToken) continue;
+        resident.legacyOwnerHash = w.agents[id]?.owner?.keyHash ?? null; changed = true;
+      }
+    }
+    if (changed) this.save();
   }
   eventRows(events) {
     const w = this.rt.w;

@@ -3,6 +3,7 @@ import { lookup } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
 import http from 'node:http';
 import https from 'node:https';
+import { Readable, Transform } from 'node:stream';
 
 const blocked = new BlockList();
 for (const [ip, prefix] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.168.0.0', 16], ['192.0.2.0', 24], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 3]]) blocked.addSubnet(ip, prefix);
@@ -32,7 +33,7 @@ export async function checkEndpoint(raw, allowLocal = false, requestURL = false)
 }
 
 /** timeoutMs：这一路线的超时（缺省 120000）；超时的错误带 name = 'TimeoutError'，提供者据此写「timeout（N 秒）」（SPEC-P2 §9.4） */
-export function modelFetch(allowLocal = false, { timeoutMs } = {}) {
+export function modelFetch(allowLocal = false, { timeoutMs, stream = false } = {}) {
   return async (input, init = {}) => {
     const incoming = input instanceof Request ? input : null;
     const raw = incoming ? incoming.url : String(input);
@@ -47,6 +48,21 @@ export function modelFetch(allowLocal = false, { timeoutMs } = {}) {
         lookup: (_host, opts, cb) => opts.all ? cb(null, [address]) : cb(null, address.address, address.family),
       }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400) { res.resume(); reject(new Error('模型接口重定向被拒绝。')); return; }
+        if (stream) {
+          let size = 0;
+          const limited = new Transform({ transform(chunk, _encoding, done) {
+            size += chunk.length;
+            if (size > 4 * 1024 * 1024) { done(new Error('模型响应过大。')); req.destroy(); }
+            else done(null, chunk);
+          } });
+          res.on('error', error => limited.destroy(error));
+          res.on('aborted', () => limited.destroy(new Error('模型响应中断。')));
+          const responseHeaders = new Headers();
+          for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) responseHeaders.set(k, Array.isArray(v) ? v.join(', ') : v);
+          if ([204, 205, 304].includes(res.statusCode)) { res.resume(); resolve(new Response(null, { status: res.statusCode, headers: responseHeaders })); }
+          else resolve(new Response(Readable.toWeb(res.pipe(limited)), { status: res.statusCode, headers: responseHeaders }));
+          return;
+        }
         let size = 0;
         const chunks = [];
         res.on('data', (chunk) => {

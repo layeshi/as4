@@ -3,6 +3,7 @@
 
 import { announcementsPanel } from './announcements-admin.js';
 import { h, clear } from './dom.js';
+import { assistantPanel } from './assistant-admin.js';
 import { reportsPanel } from './reports-admin.js';
 import { mountShell, tr, pageHead, emptyState, setNotice, setBadge, reportPending, watchPending } from './console-ui.js';
 import { initAccounts, refreshAccount, openAccount } from './accounts.js';
@@ -26,6 +27,7 @@ export function adminSections() {
       ['topups', tr('充值审核', 'Top-up review'), tr('核对入账申请、手动调整余额、查看各账号的余额与累计用量；新申请每 30 秒自动检查一次。', 'Review top-up requests, adjust balances and see account balances; new requests are checked every 30 seconds.'), () => hostedBillingPanel({ onPending: reportPending })],
     ]],
     [tr('模型', 'Models'), [
+      ['assistant', tr('实验助手', 'Experiment assistant'), tr('问答专用模型、每用户次数与全站成本预算。', 'Assistant model, user quotas and site budget.'), () => assistantPanel()],
       ['reports', tr('AI 史官', 'AI chronicler'), tr('世界报告的专用模型、独立额度与历史补生成。', 'Report model, separate budget and past report generation.'), () => reportsPanel()],
       ['hosted', tr('平台托管', 'Hosted model'), tr('平台托管 OpenLux 的开放状态、接口、单价与今日统计。', 'Hosted DeepSeek availability, endpoint, prices and today’s statistics.'), () => hostedConfigPanel()],
       ['usage', tr('托管用量', 'Hosted usage'), tr('所有托管居民的 token 用量、全城合计与近 14 日走势。', 'Token usage of every hosted resident, city totals and the last 14 days.'), () => { const root = h('div'); adminUsageView(root); return root; }],

@@ -319,6 +319,17 @@ test('前端引用的公共接口都存在（按路径前缀）', async () => {
       if (path === '/api/public/avatars' || path === '/api/public/worlds') continue; // ID-based P6 endpoints are exercised by p6.test.js.
       if (path === '/api/public') continue; // Dynamic P5 collection names are covered by p5-http.test.js.
       if (path === '/api/public/stream') continue; // SSE，长连接
+      if (path === '/api/assistant/questions' || path === '/api/assistant/conversations') {
+        const id = '00000000-0000-0000-0000-000000000000';
+        const routes = path.endsWith('/questions')
+          ? [['POST', path], ['POST', `${path}/${id}/cancel`]]
+          : [['GET', `${path}/${id}`], ['DELETE', `${path}/${id}`], ['GET', `${path}/${id}/sources/${id}`]];
+        for (const [method, route] of routes) {
+          const reply = await env.call(route, { method, ...(method === 'GET' ? {} : { body: {}, headers: { 'X-Houren-Request': '1' } }) });
+          assert.equal(reply.status, 401, `${method} ${route} 路由存在且要求登录`);
+        }
+        continue;
+      }
       if (path === '/api/account/wechat') {
         assert.equal((await env.call('/api/account/wechat/wx0000000000000000', { method: 'DELETE', body: {} })).status, 403);
         continue;

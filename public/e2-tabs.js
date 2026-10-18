@@ -103,6 +103,7 @@ function lawCard2(ctx, l) {
   return h(
     'article',
     { class: `card law ${inactive ? 'inactive' : ''}`.trim() },
+    h('a', { class: 'link', href: `/assistant.html?lawId=${encodeURIComponent(l.id)}` }, getLang() === 'en' ? 'Ask the assistant' : '询问实验助手'),
     h('h4', null, `${l.id} · `, l.i18n ? title : ai(title), ' ', h('span', { class: `chip ls-${l.status}` }, t(`lawStatus_${l.status}`)), l.procedure ? h('span', { class: 'chip' }, t('lawIsProcedure')) : null, l.suspended ? h('span', { class: 'chip warn' }, t('suspendedChip')) : null),
     text ? (l.i18n ? h('p', null, text) : h('p', { class: 'ai' }, text)) : null,
     readingBlock(l.reading && (l.reading[lang] || l.reading.zh)),

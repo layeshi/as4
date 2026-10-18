@@ -88,7 +88,7 @@ function archive(app, W) {
   if (!s) return { top, nodes: [N.empty(W, '正在连接这座城…')], tabbar: true, pull: true };
   const count = k => (s[k] || []).length;
   const tabs = [['chronicle', '编年史'], ['laws', `法典 ${count('laws')}`], ['docs', `典籍 ${count('docs')}`], ['groups', `社群 ${count('groups')}`], ['cradle', `摇篮 ${count('cradle')}`]];
-  const nodes = [N.button(W, '世界报告', { type: 'historyReports' }, { variant: 'secondary' }), N.chips(W, tabs.map(([v, l]) => ({ label: l, action: { type: 'archive', tab: v }, selected: app.archiveTab === v })))];
+  const nodes = [N.button(W, '实验助手', { type: 'assistantOpen' }, { variant: 'secondary' }), N.button(W, '世界报告', { type: 'historyReports' }, { variant: 'secondary' }), N.chips(W, tabs.map(([v, l]) => ({ label: l, action: { type: 'archive', tab: v }, selected: app.archiveTab === v })))];
   if (app.archiveTab === 'chronicle') nodes.push(...chronicleNodes(app, W));
   else if (app.archiveTab === 'laws') { const laws = (s.laws || []).slice().sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1)); if (!laws.length) nodes.push(N.empty(W, '还没有法律')); laws.forEach(l => nodes.push(lawCard(W, l))); }
   else if (app.archiveTab === 'docs') { if (!count('docs')) nodes.push(N.empty(W, '还没有典籍')); (s.docs || []).forEach(d => nodes.push(docCard(W, d))); }
@@ -108,6 +108,7 @@ function detail(app, W) {
   const title = kind === 'place' ? (item.displayName && item.displayName.zh) || item.name : kind === 'doc' ? '《' + (textOf(item.title) || '典籍') + '》' : textOf(item.title || item.name);
   const nodes = [N.text(W, usable(title) ? title : '档案', { style: 'title', bold: true, serif: true, line: 32 })];
   if (kind === 'law') {
+    nodes.push(N.button(W, '询问实验助手', { type: 'assistantOpen', lawId: item.id }, { variant: 'secondary' }));
     nodes.push(N.text(W, [view.status(item.status), item.author === 'humans' ? '遗法 · 人类留下' : '居民制定'].join(' · '), { style: 'meta', color: C.text3 }));
     const body = contentOf(item.i18n && item.i18n.zh ? item.i18n.zh.text : item.text);
     if (body) nodes.push(N.text(W, body, { style: 'body' }));

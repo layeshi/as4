@@ -28,3 +28,11 @@ test('Mini Program adapter routes canvas, input, touch and disposal without pers
   assert.equal(page.data.inputValue, ''); assert.equal(page.data.editing, false);
   p.dispose(); p.emit('TouchStart', { touches: [{ x: 99, y: 99 }] }); assert.equal(touch.clientX, 15);
 });
+test('assistant verification keys use native password inputs and clear on hide', () => {
+  const page = { game: { editing: '' }, data: {}, setData(d) { Object.assign(this.data, d); } };
+  const p = createPlatform({ hideKeyboard() {} }, {}, page);
+  for (const name of ['assistantAdminKey', 'assistantOwnerKey']) {
+    page.game.editing = name; p.api.showKeyboard({ defaultValue: 'verification-secret', showPassword: true });
+    assert.equal(page.data.secret, true); p.api.hideKeyboard(); assert.equal(page.data.inputValue, '');
+  }
+});
