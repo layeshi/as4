@@ -49,12 +49,14 @@ class Assistant {
       }
       if (!this.current(t)) return;
       this.app.rememberModeration('assistant', status, ...(this.conversation?.messages || []).map(m => ({ moderation: m.moderation })));  this.schedule();
-    } catch (error) { if (this.current(t)) this.fail(error); }
+    } catch (error) { if (this.current(t)) { this.fail(error); this.schedule(); } }
     finally { if (this.current(t)) { this.loading = false; this.paint(); } }
   }
+  // 只有权限失效或内容已删除才清空；网络、超时、限流与校验错误保留当前对话、依据与草稿。
   fail(error) {
-    const needsToast = !!this.sourceId || !this.ownerId;
-    this.conversation = null; this.source = null; this.sourceId = null; this.sourceModeration = null; this.error = error.message;
+    const needsToast = !!this.sourceId || !this.ownerId, revoked = [401, 403, 404].includes(error.status);
+    if (revoked) { this.conversation = null; this.source = null; this.sourceId = null; this.sourceModeration = null; }
+    this.error = error.message;
     if (needsToast) this.app.showToast(error.message, 'error');
     if (error.status === 401 && error.sessionCurrent !== false) {
       if (error.code === 'wechat_login_required') this.app.loginRequired.assistant = 1;
@@ -71,10 +73,12 @@ class Assistant {
   }
   setSource(result) { this.source = result.source; this.sourceModeration = result.moderation || null; this.app.rememberModeration('assistantSource', result); }
   async open(id) {
-    this.version++; clearTimeout(this.timer); this.loading = false; this.sending = false; this.source = null; this.sourceId = null; this.sourceModeration = null; this.conversation = null; this.polls = 0;
+    this.version++; clearTimeout(this.timer); this.loading = false; this.sending = false; this.source = null; this.sourceId = null; this.sourceModeration = null; this.polls = 0;
+    // 追问后重读同一对话时保留旧内容，读取失败也不退回列表。
+    if (this.conversation?.id !== id) this.conversation = null;
     const t = this.ticket();
     try { const data = await api.request('/api/assistant/conversations/' + enc(id), this.options()); if (!this.current(t)) return; this.conversation = data.conversation; this.pendingScroll = 'bottom'; this.schedule(); return true; }
-    catch (error) { if (this.current(t)) this.fail(error); }
+    catch (error) { if (this.current(t)) { this.fail(error); this.schedule(); } }
   }
   questionScope() {
     const scope = {};

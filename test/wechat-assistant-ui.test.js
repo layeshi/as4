@@ -289,3 +289,64 @@ test('branch choices list only history branches besides the current world', () =
   a.scope.branchId = 'current';
   assert.match(sheet('assistantScope').text, /世界 · 第 2 纪 · current/);
 });
+
+test('a network failure during the 15-second poll keeps the conversation, source and draft and keeps polling', async () => {
+  let offline = false;
+  const m = setup({ respond: path => {
+    if (offline) throw Error('offline');
+    if (path.includes('/sources/')) return { source: { id: 's', title: '北城公库', text: '可读记录' } };
+    return path === '/api/assistant/status' ? status() : { conversation: conversation() };
+  } });
+  const { g, a, render } = m;
+  await a.handle({ type: 'assistantSession', id: 'c' }); g.form.assistantText = '追问草稿';
+  offline = true; await m.fire(15000); render();
+  assert.equal(a.conversation.id, 'c'); assert.equal(g.page.top.back.type, 'assistantList'); assert.equal(g.form.assistantText, '追问草稿');
+  assert.match(a.error, /连接失败/); assert.ok(g.blocks.some(b => b.text === a.error)); assert.equal(a.loading, false);
+  assert.ok([...m.timers.values()].some(t => t.delay === 15000));
+  offline = false; await a.handle({ type: 'assistantSource', id: 's' }); assert.equal(a.source.text, '可读记录');
+  offline = true; await m.fire(15000); render();
+  assert.equal(a.sourceId, 's'); assert.equal(a.source.text, '可读记录'); assert.equal(g.page.top.title, '依据 S1'); assert.match(g.toast.text, /连接失败/);
+  offline = false; await m.fire(15000); assert.equal(a.error, ''); assert.equal(a.conversation.id, 'c');
+});
+
+test('a source that fails to load stays on the source view with a pull-to-retry hint', async () => {
+  const { g, a, render, wx } = setup(); a.conversation = conversation();
+  wx.request = o => o.fail({ errMsg: 'timeout' });
+  await a.handle({ type: 'assistantSource', id: 's' }); render();
+  assert.equal(a.sourceId, 's'); assert.equal(g.page.top.back.type, 'assistantCloseSource'); assert.match(JSON.stringify(g.blocks), /读取失败，下拉刷新重试/);
+  assert.match(g.toast.text, /连接失败/);
+});
+
+for (const [name, response, expected] of [
+  ['a rejected follow-up (400)', o => o.success({ statusCode: 400, data: { error: { code: 'content_risky', message: '问题未通过内容检查' } } }), /未通过内容检查/],
+  ['a rate limit (429)', o => o.success({ statusCode: 429, data: { error: { code: 'rate_limited', message: '请求过于频繁' } } }), /过于频繁/],
+  ['a server error (503)', o => o.success({ statusCode: 503, data: { error: { code: 'assistant_timeout', message: '文本检查超过等待时限，请重试。' } } }), /等待时限/],
+]) test(`${name} keeps the conversation and the draft and shows the error in the composer`, async () => {
+  const { g, a, wx, render } = setup(); a.conversation = conversation(); g.form.assistantText = '追问'; wx.request = response;
+  await a.handle({ type: 'assistantAsk' }); render();
+  assert.equal(a.conversation.id, 'c'); assert.equal(g.form.assistantText, '追问'); assert.equal(a.sending, false); assert.match(a.error, expected);
+  assert.equal(g.page.top.back.type, 'assistantList'); assert.ok(g.blocks.some(b => b.text === a.error));
+  assert.ok(g.hits.some(h => h.action.type === 'assistantAsk'));
+});
+
+test('an invalid world day keeps the conversation and the draft', async () => {
+  const { g, a, requests } = setup(); a.conversation = conversation(); g.form.assistantText = '追问'; g.form.assistantFrom = '0';
+  await a.handle({ type: 'assistantAsk' });
+  assert.equal(requests.length, 0); assert.equal(a.conversation.id, 'c'); assert.equal(g.form.assistantText, '追问'); assert.match(a.error, /正整数/);
+});
+
+test('a failed reload after a follow-up keeps the conversation instead of returning to the list', async () => {
+  const { g, a, wx } = setup(); a.conversation = conversation(); g.form.assistantText = '追问';
+  wx.request = o => o.url.endsWith('/api/assistant/questions') ? o.success({ statusCode: 202, data: { conversationId: 'c' } }) : o.fail({ errMsg: 'timeout' });
+  await a.handle({ type: 'assistantAsk' });
+  assert.equal(a.conversation.id, 'c'); assert.equal(g.form.assistantText, undefined); assert.match(a.error, /连接失败/); assert.equal(g.page.top.back.type, 'assistantList');
+});
+
+for (const [statusCode, code] of [[403, 'forbidden'], [404, 'not_found'], [401, 'wechat_login_required']]) test(`${statusCode} ${code} still clears the conversation and source`, async () => {
+  const { g, a, wx, render } = setup(); a.conversation = conversation(); a.sourceId = 's'; a.source = { title: '依据', text: '记录' }; g.form.assistantText = '草稿';
+  wx.request = o => o.url.endsWith('/api/assistant/status') ? o.success({ statusCode: 200, data: status() }) : o.success({ statusCode, data: { error: { code, message: '无权访问' } } });
+  await a.refresh(); render();
+  assert.equal(a.conversation, null); assert.equal(a.sourceId, null); assert.equal(a.source, null); assert.equal(a.error, '无权访问');
+  assert.equal(g.page.top.title, '实验助手'); assert.match(g.toast.text, /无权访问/); assert.equal(g.form.assistantText, '草稿');
+  assert.equal(g.user.id, 'alice'); assert.equal(g.loginRequired.assistant, statusCode === 401 ? 1 : undefined);
+});

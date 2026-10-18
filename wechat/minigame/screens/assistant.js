@@ -127,7 +127,7 @@ function assistant(app, W) {
     const src = a.source, state = reason(a.sourceModeration) || moderationState(src?.text) || moderationState(src?.title);
     const sourceLabel = a.sourceLabel || src?.label;
     page.top = { kind: 'back', title: sourceLabel ? '依据 ' + sourceLabel : '依据', back: { type: 'assistantCloseSource' } };
-    if (!src) { nodes.push(N.text(W, '正在读取…', { color: C.text3 })); return page; }
+    if (!src) { nodes.push(N.text(W, a.error && !a.loading ? '读取失败，下拉刷新重试' : '正在读取…', { color: C.text3 })); return page; }
     nodes.push(N.text(W, state ? '依据' : label(src.title, '依据'), { style: 'heading', bold: true }));
     const meta = metaText(src); if (meta) nodes.push(N.text(W, meta, { style: 'caption', color: C.text3 }));
     const text = state ? moderationNotice(state) : src.text || '';
