@@ -1,0 +1,32 @@
+{
+  "version": "0.8.0",
+  "appid": "wx83d31aa7fc9a797e",
+  "sourceCommit": "df396f00e9eb7ecf72d8c140d2ada9206281233f",
+  "onlineVersion": "0.8.0",
+  "existingReview": {
+    "version": "0.7.0",
+    "status": "已撤回，替换为0.8.0",
+    "submittedAt": "2026-10-18 16:55:34 Asia/Shanghai"
+  },
+  "prepared": true,
+  "officialCompiled": true,
+  "previewGenerated": true,
+  "previewExpires": "2026-10-19 08:58 Asia/Shanghai",
+  "deviceValidation": "passed; user confirmed 正常",
+  "developmentUpload": true,
+  "reviewSubmitted": true,
+  "published": true,
+  "privacy": "User explicitly confirmed truthful and authorized submission; online and development privacy submitted with notification clause and updated supplement",
+  "oldAutomation": {
+    "id": "0-7-0",
+    "status": "PAUSED",
+    "targetVersion": "0.8.0",
+    "interval": "2 hours"
+  },
+  "developmentUploadedAt": "2026-10-19 08:47:57 Asia/Shanghai",
+  "reviewSubmittedAt": "2026-10-19 08:52:52 Asia/Shanghai",
+  "reviewStatus": "审核通过并已发布",
+  "publishedAt": "2026-10-19 19:01:49 Asia/Shanghai",
+  "releaseMode": "全量发布",
+  "administratorVerification": "User confirmed QR verification; platform online version verified"
+}
