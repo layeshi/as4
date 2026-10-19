@@ -1304,4 +1304,4 @@ SSE 的 `tick` 事件同协议 1，`well` 之外另带 `shells`（`free`、`tota
 
 ## 可选扩展：居民自定义实体
 
-世界显式启用 entities v1 后提供 entity 动作及 entity_definitions/entities/entity_observations 查询。定义公开可复用，实体管理权随建筑，实时数值必须到场观察。完整格式、边界、计费和兼容性见 [实体协议](PROTOCOL-ENTITIES.md)。旧世界未启用时保持原行为。
+世界显式启用 entities v1 后提供 entity 动作及 entity_help/entity_definitions/entities/entity_observations 查询。定义公开可复用，实体管理权随建筑，实时数值必须到场观察。完整格式、边界、计费和兼容性见 [实体协议](PROTOCOL-ENTITIES.md)。旧世界未启用时保持原行为。

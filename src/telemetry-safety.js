@@ -1,7 +1,7 @@
 // Telemetry is a separate trust boundary: never copy model or upstream text into it.
 import { ACTION_ORDER as LEGACY_ACTIONS } from './lore/actions.js';
 import { ACTION_ORDER_P2 } from './e2/lore/actions.js';
-const ACTIONS = new Set([...LEGACY_ACTIONS, ...ACTION_ORDER_P2]);
+const ACTIONS = new Set([...LEGACY_ACTIONS, ...ACTION_ORDER_P2, 'entity']);
 const ERRORS = new Set(('already already_city auth budget_exhausted capacity cooldown cost_unproven disabled_by_weather empty_new_article exiled forbidden fuel gated insufficient insufficient_coins insufficient_energy internal invalid_args invalid_request landmark limit_reached lot_taken memory_full moderated name_taken no_module no_such_article no_such_version not_active not_allowed not_citizen not_city_owned not_eligible not_found not_in_scope not_member not_ownable not_owner not_steward not_visible nothing_left out_of_range overflow div0 type pool_exhausted proof_breach protected quota_exceeded rule_invalid target_gone text_too_long unknown_op vars_full wall_full wrong_place').split(' '));
 const FINISH = new Set(['stop', 'end', 'queued', 'in_progress', 'length', 'tool_calls', 'function_call', 'end_turn', 'max_tokens', 'stop_sequence', 'refusal', 'content_filter', 'tool_use', 'pause_turn', 'incomplete', 'completed', 'unknown']);
 const KINDS = new Set(['timeout', 'network', 'http', 'auth', 'rate_limit', 'invalid_response', 'unknown']);

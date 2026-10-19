@@ -1,6 +1,7 @@
 // SPEC-P2 T7：工具循环（runner/loop.js 的 runWaking；mock 脚本，文本 JSON 与原生各一遍）。
 // 城是真的（第二前提的 Runtime，进程内客户端），模型是脚本：每一轮回复写死，运行器的行为就可以逐项断言。
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { DEFAULT_AGENT_LOOP, toolDefs } from '../runner/loop.js';
 import { ProviderError } from '../runner/providers.js';
@@ -49,7 +50,14 @@ test('P2 T7 原生：看两段、行动、再行动并结束——结果的文�
     // 轨迹：一条，不含文本
     assert.equal(out.wakings.length, 1);
     const { rec } = out.wakings[0];
-    assert.deepEqual({ ...rec, ms: typeof rec.ms }, {
+    const { capabilities, toolAttempts, toolRejections, modelAttempts, ...baseRec } = rec;
+    assert.equal(capabilities.systemHash, createHash('sha256').update(first.system).digest('hex'));
+    assert.equal(capabilities.toolsHash, createHash('sha256').update(JSON.stringify(first.tools)).digest('hex'));
+    assert.equal(capabilities.features.entities, false);
+    assert.deepEqual(toolAttempts.map(x => [x.tool, x.turn]), [['look', 1], ['look', 1], ['act', 2], ['act', 3]]);
+    assert.deepEqual(toolRejections, []);
+    assert.deepEqual(modelAttempts.map(x => x.outcome), ['success', 'success', 'success']);
+    assert.deepEqual({ ...baseRec, ms: typeof rec.ms }, {
       tick: 0, kind: 'main', mode: 'native', turns: 3, looks: ['here', 'laws'], acts: [{ type: 'say', ok: true }, { type: 'whisper', ok: true }],
       ended: 'end', tokens: { in: 0, out: 0 }, ms: 'number',
     });

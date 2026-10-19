@@ -134,7 +134,7 @@ export function lookCore(ctx, id, body, lang) {
   let full;
   try {
     if (ENTITY_LOOKS.includes(body.what)) {
-      full = JSON.stringify(entityLook(ctx.rt.w, body.what, body));
+      full = JSON.stringify(entityLook(ctx.rt.w, body.what, body, lang));
     } else if (body.what === 'programs') {
       full = JSON.stringify(programLook(ctx.rt.w, body, id));
     } else if (coop) {

@@ -382,12 +382,32 @@ export function hereWilds({ p, d, P }) {
   return h && h.wilds ? [`  ${d.wilds}${P.col}${h.wilds.text}`] : [];
 }
 
+/** Local capabilities, without current values or promises about legal permission. */
+export function hereEntities({ p, code }, { details = false } = {}) {
+  const e = p.here?.entities;
+  if (!e) return [];
+  const en = code === 'en';
+  const reasons = en
+    ? { ineligible: 'this place cannot host entities', not_manager: 'you do not manage this building', condition: 'creation/interaction requires 30% condition', full: 'slots are full' }
+    : { ineligible: '此处不能承载实体', not_manager: '你无此建筑管理权', condition: '创建/交互需完好度≥30%', full: '承载位已满' };
+  const status = e.createBlock ? reasons[e.createBlock] : en ? 'you can request creation here' : '你可在此申请创建';
+  const lines = [en
+    ? `Entities [${p.here.place}]: ${e.available}/${e.capacity} slots available, ${e.occupied} occupied; ${status}. look entity_help: steps/example; look entities target=${p.here.place}: directory. Ordinary costs and laws apply.`
+    : `实体 [${p.here.place}]：承载位空闲 ${e.available}/${e.capacity}，运行中 ${e.occupied}；${status}。look entity_help 看步骤/示例；look entities target=${p.here.place} 查目录。照常计费并受法律约束。`];
+  if (details) {
+    lines.push(en ? 'Current values require entity op=observe on site; visitors can observe too. Managers can interact (condition permitting) or archive active instances.' : '当前数值须到场 entity op=observe；访客也可观察。管理者可交互（需完好度达标）或封存运行中实例。');
+    for (const item of e.items) lines.push(`  ${item.id} · ${item.name} · ${item.definition} · ${item.status}`);
+    if (e.omitted) lines.push(en ? `  ${e.omitted} more; query the directory.` : `  另有 ${e.omitted} 个，请查目录。`);
+  }
+  return lines;
+}
+
 /** 【你在】（不随分级裁剪） */
 export function secHere(c) {
   const { p, code, d, P, now, ownerText, moduleName, amount } = c;
   const h = p.here;
   if (!h) return [];
-  const lines = [...hereLine(c)];
+  const lines = [...hereLine(c), ...hereEntities(c, { details: true })];
   if((p.premise===6 || p.premise === 7))for(const r of p.publicRoles??[])if(r.place===p.you.place)lines.push(`  公共角色 ${r.id} · ${r.name} · ${r.duty}；say 指定 publicRoleId 公开提问。`);
   if (h.origin === 'agent' && h.description && h.description.text) lines.push(`  ${h.description.text}`);
   if (h.modules && h.modules.length) lines.push(`  ${d.modules}${P.col}${h.modules.map((m) => `${moduleName(m.type)}${P.open}${m.functioning ? d.functioning : d.notFunctioning}${P.close}${m.inscription ? `${d.inscription}${P.col}${m.inscription}` : ''}`).join(P.sep)}`);
@@ -611,11 +631,11 @@ export function secMemories({ p, code, d, P, you }) {
 }
 
 /** 【动作的即时状态】只列出与基础代价不同的、此刻不可用的、或受法律约束的动作 */
-export function secActions({ p, d, P }) {
+export function secActions({ p, d, P }, { all = false } = {}) {
   // 「没有可作用的对象」与静态的代价说明（路程、投入的能量、告示板）不是状态，系统提示的动作表里已有，不列
   const STATIC_NOTES = new Set(['variable', 'distance', 'noBoard']);
   const NO_TARGET = new Set(['not_found', 'invalid_args']);
-  const notable = (p.actions || []).filter((a) => (a.available ? (a.note && !STATIC_NOTES.has(a.note.code)) || (a.laws && a.laws.length) : !(a.reason && NO_TARGET.has(a.reason.code))));
+  const notable = (p.actions || []).filter((a) => all || (a.available ? (a.note && !STATIC_NOTES.has(a.note.code)) || (a.laws && a.laws.length) : !(a.reason && NO_TARGET.has(a.reason.code))));
   if (!notable.length) return [];
   const lines = [d.actions];
   for (const a of notable) {

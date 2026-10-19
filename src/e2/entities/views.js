@@ -1,4 +1,6 @@
 import { entitiesEnabled, ENTITY_LIMITS as L } from './catalog.js';
+import { entityHelp } from './help.js';
+import { isOwnerOrSteward } from '../engine/places.js';
 import { fail } from '../engine/core.js';
 export function instanceView(w,e) {
   const p=w.places[e.place];
@@ -14,10 +16,26 @@ export function placeEntities(w,id) {
     items:shown.map(e=>({...instanceView(w,e),observations:structuredClone(e.observations.slice(-4)),observationsDropped:e.observationsDropped})),
     omitted:all.length-shown.length };
 }
-export function entityLook(w,what,args={}) {
+// Permission facts only: action budgets and laws are still checked on submission.
+export function residentPlaceEntities(w, a) {
+  const view = placeEntities(w, a.place);
+  if (!view) return null;
+  const p = w.places[a.place];
+  const manager = view.capacity > 0 && isOwnerOrSteward(w, p, a);
+  const working = view.capacity > 0 && p.condition >= 3000;
+  return {
+    capacity: view.capacity, occupied: view.occupied, available: view.available,
+    manager, working,
+    createBlock: !view.capacity ? 'ineligible' : !manager ? 'not_manager' : !working ? 'condition' : !view.available ? 'full' : null,
+    items: view.items.map(({ id, name, definition, status }) => ({ id, name, definition, status })),
+    omitted: view.omitted,
+  };
+}
+export function entityLook(w,what,args={},lang='zh') {
   if (!entitiesEnabled(w)) fail('not_found');
   if (args.limit!==undefined && (!Number.isInteger(args.limit)||args.limit<1||args.limit>50)) fail('invalid_args');
   for (const k of ['id','after','target']) if (args[k]!==undefined && typeof args[k]!=='string') fail('invalid_args');
+  if (what === 'entity_help') return entityHelp(lang);
   let rows, dropped=0;
   if (what==='entity_definitions') rows=Object.values(w.entities.definitions);
   else if (what==='entities') rows=Object.values(w.entities.instances).filter(e=>!args.target||e.place===args.target).map(e=>instanceView(w,e));

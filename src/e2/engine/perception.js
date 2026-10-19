@@ -1,3 +1,4 @@
+import { residentPlaceEntities } from '../entities/views.js';
 import { entitiesEnabled } from '../entities/catalog.js';
 import { programsEnabled } from '../programs/catalog.js';
 import { cooperationEnabled } from '../cooperation/core.js';
@@ -291,6 +292,7 @@ function hereView(w, a, l, lang, wallList, openOffers, allAgents, projectsHere) 
   const cradle = moduleOf(place, 'cradle');
   const humanName = place.origin === 'human' && place.humanName ? place.humanName[lang] : null;
   const here = {
+    ...(entitiesEnabled(w) ? { entities: residentPlaceEntities(w, a) } : {}),
     place: a.place,
     name: placeDisplayName(place, lang),
     humanName,

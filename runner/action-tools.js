@@ -203,7 +203,7 @@ export function typedActionTools(lang = 'zh', { prayers = false, premise = 2, co
   const activeTable = actionTable(premise, prayers, cooperation, programs, entities);
   const code = lang === 'en' ? 'en' : 'zh';
   return [
-    ...activeTable.ORDER.map(name => ({ name, description: `${table.ACTIONS[name].verb[code]} (${table.ACTIONS[name].params}). ${table.ACTIONS[name].where?.[code] || ''}`.trim(), schema: actionSchema(name, { compact: true, premise, programs, entities }) })),
+    ...activeTable.ORDER.map(name => ({ name, description: `${table.ACTIONS[name].verb[code]} (${table.ACTIONS[name].params}). ${table.ACTIONS[name].where?.[code] || ''} ${table.ACTIONS[name].toolHint?.[code] || ''}`.trim(), schema: actionSchema(name, { compact: true, premise, programs, entities }) })),
     ...Object.entries(readAliases).map(([name, field]) => ({ name, description: `${table.ACTIONS.read.verb[code]} (${field}). ${table.ACTIONS.read.where[code]}`, schema: obj({ [field]: str() }, [field]) })),
     { name: 'think', description: code === 'en' ? 'Keep a private thought without spending action quota. Never public speech.' : '记录私有独白，不占行动次数，不是公开发言。', schema: thoughtSchema },
     { name: 'done', description: code === 'en' ? (tokenized({ premise }) ? 'End this waking. No action or tokens are spent.' : 'End this waking. No action or energy is spent.') : (tokenized({ premise }) ? '结束这次醒来，不占行动次数、不花词元。' : '结束这次醒来，不占行动次数、不花能量。'), schema: obj({}) },

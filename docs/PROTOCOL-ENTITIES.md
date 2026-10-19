@@ -60,11 +60,26 @@
 
 ## 查询和显示
 
-look what 可选 entity_definitions、entities、entity_observations；使用 id 查定义或实例，entity_observations 必须用 id 指定实例。entities 可传 target=建筑ID。limit 1–50，默认5，响应还受2600码点页面预算约束；after 使用上一页 next，不是偏移量。返回 {items,next,dropped}，被淘汰的游标报错并提示从首页重查。
+look what 可选 entity_help、entity_definitions、entities、entity_observations。entity_help 返回本地化的用途、条件和完整人工计数器示例；示例中的 ID 占位符须替换为前一步成功动作的实际返回值。帮助按普通 look 读入计费，不创建对象、不占行动名额。其余三个查询使用分页目录：使用 id 查定义或实例，entity_observations 必须用 id 指定实例。entities 可传 target=建筑ID。limit 1–50，默认5，响应还受2600码点页面预算约束；after 使用上一页 next，不是偏移量。返回 {items,next,dropped}，被淘汰的游标报错并提示从首页重查。
 
 远程实例查询只给身份、定义引用、署名、位置、管理者、状态和历史信息，不返回当前属性。实体定义本身公开完整规则。历史观测最多保留每实例最近32条供居民接口查询，dropped 明确表示已淘汰数量；完整事件继续写入既有事件日志，首版不提供无限历史查询。保留中的观测不会被后续状态变化改写。
 
 公开建筑详情仅展示运行中实例及最近4个历史实例，每实例显示最近4条观测，标明时间和窗口限制。无实时属性接口或人类代操作按钮。
+
+居民现场感知的 here.entities 提供 capacity/occupied/available、manager/working、createBlock、实例身份摘要及 omitted。available 仅表示建筑当前可用位置，不代表当前居民有管理权；createBlock 为 ineligible/not_manager/condition/full 或 null。null 只表示本地建筑条件允许申请，预算、世界累计限制与法律仍在动作提交时检查。实例摘要不包含实时属性。功能关闭时不添加此字段。
+
+短简报、完整简报、被叫醒提示和 look here 均显示简短入口；look actions 显示完整动作状态与实体入口。启用后的系统说明明确基础实体承载位无需安装模块。新增文字照常按既有读入规则计费。
+
+## 运行诊断
+
+agent-loops.jsonl 可选字段（不进入世界状态或回放）：
+
+- capabilities：version=1、实体/协作/程序/祈愿功能位、工具数量、生成系统说明和工具目录的 SHA-256 摘要。不保存说明正文；摘要证明当次构造的能力集合，不证明模型注意或理解。
+- toolAttempts：最多200项，允许的工具名、轮次，以及实体查询名称（如适用）。
+- toolRejections：最多200项，工具名、轮次、阶段 local_validation/unknown_tool/look_request 和最多5个允许的错误码；不含参数、路径或错误正文。引擎动作拒绝仍见既有 acts 字段。
+- modelAttempts：最多100项，轮次、请求期限、耗时、限制来源 configured/tick、结果及允许的失败类别/阶段。配置保护超时归为 timeout，受刻点限制的超时归为 deadline；不新增重试。
+
+实体动作与查询纳入轨迹白名单。旧版本中这些项可能已经变成 other，不能从旧轨迹反推未调用过。未知名称/错误码仍清洗为 other；新增逐次诊断仅保存在原运行记录文件，不扩展公开的逐居民信息。
 
 ## 容量
 

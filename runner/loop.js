@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { cleanCapabilities, cleanToolAttempt, cleanToolRejection, cleanModelAttempt } from '../src/runner/tool-diagnostics.js';
 import { ENTITY_LOOKS } from '../src/e2/entities/catalog.js';
 import { COOP_LOOKS } from '../src/e2/cooperation/core.js';
 import { MATERIAL_LOOKS } from '../src/e2/engine/material-views.js';
@@ -17,7 +19,7 @@ import { missedTokensLine, stoppedTokensLine } from './render-p4.js';
 import { completeUntilAborted } from './abortable.js';
 import { parseModelJson, normalizeReply } from './parse.js';
 import { ProviderError } from './providers.js';
-import { safeActionType, safeErrorCode, safeFinishReason, providerErrorLabel, boundedCount } from '../src/telemetry-safety.js';
+import { safeActionType, safeErrorCode, safeFinishReason, providerErrorLabel, classifyProviderError, boundedCount } from '../src/telemetry-safety.js';
 import { buildSystemPrompt, promptParams } from './prompt.js';
 import { D2, LOOK_WHATS, LOOK_WHATS_P4, renderHistory, renderEarlier, clipLook, renderActResult, renderBrief, renderLook, renderWake } from './render-p2.js';
 import { typedActionTools, typedActSchema, typedCall, validateAction, schemaIssues, correctionText, thoughtSchema } from './action-tools.js';
@@ -189,6 +191,17 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
   const first = corrections ? `${brief}\n\n${corrections}` : brief;
 
   const rec = { tick, kind, mode, turns: 0, looks: [], acts: [], ended: null, tokens: { in: 0, out: 0 }, ms: 0, ...(p4 ? { bill: billNumbers(tokenWake.bill), wakeId: tokenWake.wakeId } : {}) };
+  rec.capabilities = cleanCapabilities({
+    features: { entities: !!p0.entities, cooperation: !!p0.cooperation, programs: !!p0.programServices, prayers: !!p0.you?.prayers?.enabled },
+    toolCount: tools.length,
+    systemHash: createHash('sha256').update(system).digest('hex'),
+    toolsHash: createHash('sha256').update(JSON.stringify(tools)).digest('hex'),
+  });
+  rec.toolAttempts = []; rec.toolRejections = []; rec.modelAttempts = [];
+  let currentCall;
+  const rejectTool = (stage, codes) => {
+    if (rec.toolRejections.length < 200) rec.toolRejections.push(cleanToolRejection({ tool: currentCall?.name, section: currentCall?.args?.what, turn: rec.turns, stage, codes }));
+  };
   const transcript = [{ role: 'user', text: first }]; // 原生：中立的对话记录
   const messages = [{ role: 'user', content: first }]; // 文本 JSON：user 与 assistant 交替的纯文本
   const shown = [...(p0.inbox || [])]; // 这次醒来里渲染过的收件
@@ -226,6 +239,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
     if (S.corrections.length > 4) S.corrections.shift();
   };
   const malformed = (type, issues) => {
+    rejectTool('local_validation', issues.map(i => i.code));
     rememberCorrection(type, JSON.stringify(issues));
     report({ status: 'error', lastError: lang === 'en' ? 'Tool arguments failed local validation; no world action was submitted.' : '工具参数未通过本地校验，本次调用未提交世界动作。' });
     return { text: correctionText([{ type, detail: cp(JSON.stringify(issues), 1400) }], lang, p0.premise), isError: true };
@@ -246,6 +260,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
       const r = await client.look({ wakeId: tokenWake.wakeId, turn: rec.turns, what: args.what, id, lang, ...((p0.premise === 5 || p0.premise === 6 || p0.premise === 7)?{kind:args.kind,target:args.target,after:args.after,limit:args.limit,mine:args.mine,offset:args.offset,version:args.version,agent:args.agent,archived:args.archived}:{}) });
       if (!r.ok) {
         const code = r.json?.error?.code;
+        rejectTool('look_request', [code]);
         if (r.status === 402) { ended = 'tokens'; tokenEnded = true; return { text: stoppedTokensLine(code, lang), isError: true }; }
         if (r.status === 429) { S.looks.n = limits.looks; return { text: res.looksOut }; }
         if (r.status === 401) stop = 'auth';
@@ -353,6 +368,8 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
   };
 
   const runCall = async (call) => {
+    currentCall = call;
+    if (rec.toolAttempts.length < 200) rec.toolAttempts.push(cleanToolAttempt({ tool: call.name, section: call.args?.what, turn: rec.turns }));
     if (call.name === 'look') return doLook(call.args);
     if (call.name === 'act') return doAct(call.args);
     if (typed && call.name === 'think') {
@@ -374,6 +391,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
       const converted = typedCall(call.name, call.args, p4 ? { premise: p0.premise, cooperation: p0.cooperation, programServices: p0.programServices, entities: p0.entities } : latest, p0.premise);
       if (converted) return converted.issues.length ? malformed(converted.action?.type || call.name, converted.issues) : doAct({ actions: [converted.action] });
     }
+    rejectTool('unknown_tool', ['not_found']);
     return { text: res.noTool(String(call.name).slice(0, 40)), isError: true };
   };
 
@@ -405,6 +423,9 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
     const lineTimeout = Number.isFinite(cfg.timeoutMs) ? cfg.timeoutMs : 120000;
     const limit = Math.max(1000, Math.min(lineTimeout, nextAt - Date.now()));
     const bounded = limit < lineTimeout;
+    const recordModel = (outcome, error) => {
+      if (rec.modelAttempts.length < 100) rec.modelAttempts.push(cleanModelAttempt({ ...(error ? classifyProviderError(error) : {}), turn, timeoutMs: limit, ms: Date.now() - t0, limitedBy: bounded ? 'tick' : 'configured', outcome }));
+    };
     const guard = new AbortController();
     const timer = setTimeout(() => guard.abort(), limit + 1000);
     const onAbort = () => guard.abort();
@@ -422,11 +443,14 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
       rec.ms += ms;
       if (signal && signal.aborted) {
         reportUsage(null, { ok: false, replyChars: 0, ms, error: e, waking, toolCallCount: 0 });
+        recordModel('aborted', e);
         stop = 'aborted';
         break;
       }
       // 因截止而中止：guard 中止了请求，或者提供者按「离下一刻的剩余时间」超时了（不是线路自己的超时）
-      const cut = guard.signal.aborted || (bounded && e && e.timeout === true);
+      if (guard.signal.aborted && !bounded) e = new ProviderError('Request guard timeout', { timeout: true, phase: 'request' });
+      const cut = bounded && (guard.signal.aborted || e?.timeout === true);
+      recordModel(cut ? 'deadline' : 'failure', e);
       if (cut) {
         reportUsage(null, { ok: false, replyChars: 0, ms, error: e, cancelled: true, waking });
         ended = 'deadline';
@@ -457,6 +481,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
 
     // 成功的一轮
     const ms = Date.now() - t0;
+    recordModel('success');
     rec.turns++;
     rec.ms += ms;
     S.rejected = 0;

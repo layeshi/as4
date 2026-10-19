@@ -10,7 +10,7 @@ import { inboxMoreLine, emptyInboxLine } from './render-p4.js';
 import {
   makeCtx, secDiagnostics, secNow, secAbsent, secInbox, secMemories, secActions, secHere,
   youHead, youBio, youLetters, youOffers, youPacts, youWill, youTraining, youMemoryOffers, youPrayers,
-  hereLine, herePresent, hereOmens, hereWell, hereWilds,
+  hereLine, herePresent, hereEntities, hereOmens, hereWell, hereWilds,
   cityHead, cityProcedure, cityVars, cityCharter, cityLawLine, cityProposalLines, cityRefoundLines, cityGroupLines,
   cityResidents, cityPlaces, cityRoads, cityLexicon, cityCradleLines, cityDeaths, cityPetitions,
   ref, resultLine,
@@ -326,9 +326,9 @@ export function renderBrief(p, { lang, history = [], missed = null, brief } = {}
   const lines = [...secDiagnostics(c), ...secNow(c)];
   const absent = secAbsent(c);
   if (absent) return [...lines, ...absent].join('\n'); // 沉睡、长眠、归隐：同原来
-  if (tokenized(p) && (brief ?? p.you.tokens.routine.brief) === 'short') return [...lines, ...youHead(c), ...tokenInbox(c), ...secMemories(c), ...(p.cooperation?.brief ? [p.cooperation.brief] : [])].join('\n');
+  if (tokenized(p) && (brief ?? p.you.tokens.routine.brief) === 'short') return [...lines, ...youHead(c), ...hereEntities(c), ...tokenInbox(c), ...secMemories(c), ...(p.cooperation?.brief ? [p.cooperation.brief] : [])].join('\n');
   lines.push(...youHead(c), ...youCounts(c), ...youTraining(c));
-  lines.push(...hereLine(c), ...herePresent(c), ...hereCounts(c), ...hereWell(c), ...hereWilds(c), ...hereOmens(c));
+  lines.push(...hereLine(c), ...hereEntities(c), ...herePresent(c), ...hereCounts(c), ...hereWell(c), ...hereWilds(c), ...hereOmens(c));
   lines.push(...(tokenized(p) ? tokenInbox(c) : secInbox(c)), ...cityBrief(c), ...homeBrief(c), ...elsewhereBrief(c), ...secMemories(c), ...secActions(c));
   if (p.cooperation?.brief) lines.push(p.cooperation.brief);
   if (!tokenized(p)) lines.push(...renderHistory(history, { code, now: p.now || {}, missed }));
@@ -347,7 +347,7 @@ export function renderWake(p, { lang, earlier = null } = {}) {
   lines.push(...secNow(c));
   const absent = secAbsent(c);
   if (absent) return [...lines, ...absent].join('\n');
-  lines.push(...youHead(c).slice(0, 1), ...(tokenized(p) ? tokenInbox(c) : secInbox(c)), ...hereLine(c), ...herePresent(c));
+  lines.push(...youHead(c).slice(0, 1), ...(tokenized(p) ? tokenInbox(c) : secInbox(c)), ...hereLine(c), ...hereEntities(c), ...herePresent(c));
   if (p.cooperation?.brief) lines.push(p.cooperation.brief);
   return lines.join('\n');
 }
@@ -424,7 +424,7 @@ export function renderLook(p, what, id, { lang } = {}) {
   const city = p.city;
   switch (what) {
     case 'inbox': return tokenInbox(c).join('\n') || emptyInboxLine(code);
-    case 'actions': return secActions(c).join('\n');
+    case 'actions': return [...hereEntities(c), ...secActions(c, { all: true })].join('\n');
     case 'here': lines = secHere(c); break;
     case 'self': lines = tokenized(p) ? [...youHead(c), ...lookSelf(c)] : lookSelf(c); break;
     case 'laws': case 'law': lines = lookLaws(c, key); break;

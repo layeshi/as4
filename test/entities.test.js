@@ -139,3 +139,61 @@ test('entities and program-service activation remain independent in resident per
  const p=e2.buildPerception(programOnly.w,programOnly.a.id);assert.equal(p.entities,undefined);assert.equal(p.programServices.version,1);
  entityOnly.cmd('admin',{op:'program_services',args:{version:1}});const both=e2.buildPerception(entityOnly.w,entityOnly.a.id);assert.equal(both.entities.version,1);assert.equal(both.programServices.version,1);
 });
+
+
+test('resident field views expose slots and permission facts without live values', async () => {
+ const {residentPlaceEntities}=await import('../src/e2/entities/views.js');
+ const {renderBrief,renderLook,renderWake}=await import('../runner/render-p2.js');
+ const {w,a,b,good}=fixture();
+ let p=e2.buildPerception(w,a.id,{ack:false});
+ assert.equal(p.here.entities.capacity,2); assert.equal(p.here.entities.available,2);
+ assert.equal(p.here.entities.manager,true); assert.equal(p.here.entities.createBlock,null);
+ for(const text of [renderBrief(p,{brief:'short'}),renderBrief(p,{brief:'full'}),renderLook(p,'here'),renderLook(p,'actions'),renderWake(p)]) {
+  assert.match(text,/entity_help/); assert.match(text,/承载位空闲 2\/2/);
+ }
+ assert.match(renderLook(p,'actions'),/entity ✓/);
+ assert.equal(residentPlaceEntities(w,b).createBlock,'not_manager');
+ const definition=good(a,{op:'define',spec:plant()}).definition;
+ const entity=good(a,{op:'create',definition,name:'样株'}).entity;
+ good(a,{op:'observe',entity});good(a,{op:'interact',entity,operation:'care'});
+ p=e2.buildPerception(w,a.id,{ack:false});
+ assert.deepEqual(Object.keys(p.here.entities.items[0]).sort(),['definition','id','name','status']);
+ assert.equal(JSON.stringify(p.here.entities).includes('water'),false);
+ good(a,{op:'create',definition,name:'二'});assert.equal(residentPlaceEntities(w,a).createBlock,'full');
+ w.places.garden.condition=2000;
+ assert.equal(residentPlaceEntities(w,a).available,0);assert.equal(residentPlaceEntities(w,a).createBlock,'condition');
+ good(a,{op:'archive',entity});assert.equal(residentPlaceEntities(w,a).occupied,1);
+ w.places.garden.owner={kind:'city'};assert.equal(residentPlaceEntities(w,a).capacity,0);
+ w.groups.g_entity={id:'g_entity',steward:a.id,dissolved:false};w.places.garden.owner={kind:'group',id:'g_entity'};
+ assert.equal(residentPlaceEntities(w,a).manager,true);
+ w.groups.g_entity.dissolved=true;assert.equal(residentPlaceEntities(w,a).capacity,0);assert.equal(residentPlaceEntities(w,a).manager,false);
+ w.places.garden.owner={kind:'agent',id:a.id};w.places.garden.razed=true;
+ assert.equal(residentPlaceEntities(w,a).createBlock,'ineligible');
+ const disabled=fixture(false);const before=stateHash(disabled.w);
+ assert.equal(e2.buildPerception(disabled.w,disabled.a.id,{ack:false}).here.entities,undefined);
+ assert.equal(stateHash(disabled.w),before);
+});
+
+test('entity help gives executable returned-ID steps and a real daily change', async () => {
+ const {entityLook}=await import('../src/e2/entities/views.js');
+ const {buildSystemPrompt}=await import('../runner/prompt.js');
+ const {typedActionTools}=await import('../runner/action-tools.js');
+ for(const lang of ['zh','en']) {
+  const {w,a,good,cmd}=fixture();const before=stateHash(w),help=entityLook(w,'entity_help',{},lang);
+  assert.equal(stateHash(w),before);assert.ok([...JSON.stringify(help)].length<=2600);
+  const [define,create,observe]=help.steps.map(x=>x.action);
+  const {type:unused,...defineArgs}=define;
+  const definition=good(a,defineArgs).definition;
+  const {type:unused2,...createArgs}=create;
+  const entity=good(a,{...createArgs,definition}).entity;
+  const {type:unused3,...observeArgs}=observe;
+  assert.equal(good(a,{...observeArgs,entity}).observation.values.count,0);
+  for(let i=0;i<12;i++)cmd('tick');
+  assert.equal(good(a,{...observeArgs,entity}).observation.values.count,1);
+  const prompt=buildSystemPrompt({protocol:2,premise:7,entities:true,lang});
+  assert.match(prompt,/entity_help/);
+  assert.doesNotMatch(prompt,/一个地方能做什么，取决于它装了什么|What a place can do depends on what it is fitted with/);
+  assert.match(typedActionTools(lang,{premise:7,entities:true}).find(t=>t.name==='entity').description,/entity_help/);
+ }
+ const disabled=fixture(false);assert.throws(()=>entityLook(disabled.w,'entity_help'));
+});

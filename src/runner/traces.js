@@ -1,3 +1,5 @@
+import { ENTITY_LOOKS } from '../e2/entities/catalog.js';
+import { cleanCapabilities, cleanToolAttempt, cleanToolRejection, cleanModelAttempt } from './tool-diagnostics.js';
 import { tokenized } from '../e2/world.js';
 // 注意力轨迹（SPEC-P2 §14.1）：运行器每次醒来（含被叫醒）结束时回报一条记录，这里追加到世界目录的 agent-loops.jsonl，
 // 并按地球日汇总：公开的日平均（没有逐位居民的数据）与管理员的逐位汇总。
@@ -23,8 +25,8 @@ const ENDED = new Set(['end', 'reply', 'actions', 'turns', 'deadline', 'budget',
 const SECTIONS = new Set(LOOK_WHATS);
 const ACTIONS = new Set(ACTION_ORDER_P2);
 const P4_ENDED = new Set([...ENDED, 'tokens', 'tokens_exhausted', 'cap_reached']);
-const P4_SECTIONS = new Set(LOOK_WHATS_P4);
-const P4_ACTIONS = new Set(ACTION_ORDER_P4);
+const P4_SECTIONS = new Set([...LOOK_WHATS_P4, ...ENTITY_LOOKS]);
+const P4_ACTIONS = new Set([...ACTION_ORDER_P4, 'entity']);
 const REFUSED = new Set(['tokens_exhausted', 'cap_reached']);
 const P4_ERRORS = new Set([...REFUSED, 'no_waking', 'looks_exhausted']);
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
@@ -68,6 +70,10 @@ export function cleanRecord(rec, premise = 0) {
     ended: endings.has(r.ended) ? r.ended : 'other',
     tokens: { in: count(r.tokens && r.tokens.in), out: count(r.tokens && r.tokens.out) },
     ms: count(r.ms),
+    ...(r.capabilities ? { capabilities: cleanCapabilities(r.capabilities) } : {}),
+    ...(Array.isArray(r.toolAttempts) ? { toolAttempts: r.toolAttempts.slice(0, 200).map(cleanToolAttempt) } : {}),
+    ...(Array.isArray(r.toolRejections) ? { toolRejections: r.toolRejections.slice(0, 200).map(cleanToolRejection) } : {}),
+    ...(Array.isArray(r.modelAttempts) ? { modelAttempts: r.modelAttempts.slice(0, 100).map(cleanModelAttempt) } : {}),
     ...(p4 ? { bill: { reread: count(r.bill?.reread), read: count(r.bill?.read), write: count(r.bill?.write) },
       ...(REFUSED.has(r.refused) ? { refused: r.refused } : {}),
       ...(typeof r.wakeId === 'string' && /^w\d{1,15}-[a-f0-9]{6}$/.test(r.wakeId) ? { wakeId: r.wakeId } : {}) } : {}),

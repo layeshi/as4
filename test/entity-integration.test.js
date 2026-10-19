@@ -56,12 +56,15 @@ test('managed runner and MCP discover, create and query public definitions',asyn
   env.rt.exec('admin',{op:'entities',args:{version:1}});const [a]=env.people;
   const client=managedClient(env.ctx,a,()=>true,new AbortController().signal);let turn=0;
   const S={client,cfg:{toolMode:'native',actionTools:'typed',lang:'zh'},provider:{async step(){return {text:'',calls:++turn===1?[{id:'define-call',name:'entity',args:{op:'define',spec}}]:[{id:'done-call',name:'done',args:{}}]};}},log:{info(){},warn(){},error(){}},deps:{},report(){},history:[],looks:{tick:-1,n:0},wakes:{tick:-1,n:0},system:null,cursor:0};
-  const result=await runWaking4(S,tokenStatus(env.ctx,a),{kind:'main'});assert.equal(Object.keys(env.rt.w.entities.definitions).length,1,JSON.stringify(result));
+  const result=await runWaking4(S,tokenStatus(env.ctx,a),{kind:'main'});assert.equal(result.rec.capabilities.features.entities,true);assert.equal(result.rec.toolAttempts[0].tool,'entity');assert.equal(Object.keys(env.rt.w.entities.definitions).length,1,JSON.stringify(result));
   const fetch=async(url,options={})=>{const path=new URL(url).pathname,body=options.body?JSON.parse(options.body):{};const r=path==='/api/me'?await client.me():path==='/api/me/wake'?await client.wake(body):path==='/api/me/look'?await client.look(body):path==='/api/me/rules'?await client.rules(body):await client.act(body);return new Response(JSON.stringify(r.json),{status:r.status});};
   const mcp=createMcp({env:{HOUREN_SERVER:'http://127.0.0.1:9876',HOUREN_TOKEN:'local-test',HOUREN_LANG:'zh'},fetch});
   const listed=await mcp.handle({jsonrpc:'2.0',id:1,method:'tools/list'});assert.ok(listed.result.tools.find(t=>t.name==='houren_look').inputSchema.properties.what.enum.includes('entities'));
+  assert.ok(listed.result.tools.find(t=>t.name==='houren_look').inputSchema.properties.what.enum.includes('entity_help'));
   const call=(name,args={})=>mcp.handle({jsonrpc:'2.0',id:2,method:'tools/call',params:{name,arguments:args}});
-  await call('houren_perceive');const page=await call('houren_look',{what:'entity_definitions'});assert.match(JSON.stringify(page),/盐滩植物/);
+  await call('houren_perceive');
+  const help=await call('houren_look',{what:'entity_help'});assert.match(JSON.stringify(help),/每日计数器/);assert.match(JSON.stringify(help),/RETURNED_DEFINITION_ID/);
+  const page=await call('houren_look',{what:'entity_definitions'});assert.match(JSON.stringify(page),/盐滩植物/);
   const saved=await call('houren_act',{actions:[{type:'entity',op:'define',spec:{...spec,name:'第二种样株'}}]});assert.equal(Object.keys(env.rt.w.entities.definitions).length,2,JSON.stringify(saved));
  }finally{await env.close();}
 });
