@@ -1,0 +1,16 @@
+{
+  "sha": "f1c2ee1fa65aeac47460a6572c4bf4fe9733abc3",
+  "localFullSuite": {
+    "tests": 2142,
+    "pass": 2141,
+    "fail": 0,
+    "skipped": 1
+  },
+  "linuxSpecializedTests": {
+    "tests": 46,
+    "pass": 46,
+    "fail": 0
+  },
+  "checkpointExtensionMatchesGenesisRebuild": true,
+  "serviceUserImportsPassed": true
+}

@@ -1,0 +1,13 @@
+{
+  "release": {
+    "sha256": "34b6ccffd5e9c6de090b0de1ee8ec01cac73dde0db75903b0b67e38cd0ce79c8",
+    "files": 1283,
+    "bytes": 33261849
+  },
+  "rollback": {
+    "sha256": "664c4f45a22073c34d5df2986a84877cc135600de9f80fbc8a4291ba7fda56b9",
+    "files": 1266,
+    "bytes": 32840918
+  },
+  "sha": "f1c2ee1fa65aeac47460a6572c4bf4fe9733abc3"
+}

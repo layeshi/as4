@@ -1,6 +1,6 @@
 # 三项统计缺陷修复交付
 
-已在独立工作树实现，尚未部署或启用线上统计版本。生产仍为 `6ac35c27ef3c80aa17ef043ea3f8ac96a3461b54`，服务 active。原工作区的其他开发保持原状。
+本报告记录上线前修复与验证；现已部署并启用统计 v2，上线结果见[保状态部署记录](../releases/2026-10-20-statistics-v2/REPORT.md)。原工作区的其他开发保持原状。
 
 ## 修复结果
 
@@ -26,7 +26,7 @@
 
 ## 交付与后续操作
 
-- 代码：`codex/statistics-fixes` 工作树中的未提交变更。
+- 代码：已合并至 GitHub main，提交 `f1c2ee1fa65aeac47460a6572c4bf4fe9733abc3`。
 - 完整实施与启用说明：[statistics-v2.md](2026-10-20-statistics-v2.md)。
 - 源码与测试摘要：[文件清单](statistics-v2-files.json)；[结构化验证记录](2026-10-20-statistics-validation.json)。
 - 可应用补丁与候选源码包保存于 `/Users/mac/.codex/artifacts/as4-statistics-v2-20261020/`。

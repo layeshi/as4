@@ -1,0 +1,17 @@
+{
+  "origin": "http://38.76.221.106",
+  "home": 302,
+  "login": 200,
+  "account": 200,
+  "loginCaptcha": "altcha",
+  "state": 401,
+  "authenticatedStateExpected": true,
+  "assetHashesMatch": true,
+  "assets": {
+    "/style.css": "8cd67b23c434b6d0c5d3c895888578a47583dffa6df9c740cd10b1886d36ad05",
+    "/login.js": "12a860b7f3451a1295f95d1c8a2a867221aa6831a3eb3c15942ccd33da8f9405",
+    "/entity-ui.js": "a1d931ccf08a54731c777d5930cd2744370a12ab5cefd87cfdf3a559d14df637",
+    "/console.css": "8ff5a0940986998cff445bc3c151232058b33c4e04a1d31ab6bc81a982061849",
+    "/assistant.js": "a3cc527cc109363987a20d482b5ad41a8202d023d5f40978a2d1e04a62e117e7"
+  }
+}

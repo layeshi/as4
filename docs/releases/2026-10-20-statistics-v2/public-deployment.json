@@ -1,0 +1,152 @@
+{
+  "phase": "complete",
+  "sha": "f1c2ee1fa65aeac47460a6572c4bf4fe9733abc3",
+  "baseSha": "6ac35c27ef3c80aa17ef043ea3f8ac96a3461b54",
+  "newRelease": "/opt/houren/releases/main-f1c2ee1fa65a-20261020-statistics-v2",
+  "oldRelease": "/opt/houren/releases/main-6ac35c27ef3c-20261019-entity-discovery",
+  "rollbackRelease": "/opt/houren/releases/compat-6ac35c27-statistics-v2-f1c2ee1-20261020",
+  "worldId": "p7-20261016",
+  "backup": "/var/backups/houren/statistics-v2-20261020-f1c2ee1",
+  "verificationMode": "final snapshot recovery",
+  "genesisReplay": false,
+  "phases": {
+    "preparing": "2026-10-20T03:03:57.944907+00:00",
+    "stopping": "2026-10-20T03:03:59.179667+00:00",
+    "consistent-backup": "2026-10-20T03:03:59.498489+00:00",
+    "offline-recovery": "2026-10-20T03:04:10.269799+00:00",
+    "rollback-compatibility-probe": "2026-10-20T03:04:26.531424+00:00",
+    "permissions-preflight": "2026-10-20T03:04:55.134824+00:00",
+    "switching": "2026-10-20T03:05:00.404231+00:00",
+    "installing-historical-projection": "2026-10-20T03:05:01.238583+00:00",
+    "failed": "2026-10-20T03:06:15.252097+00:00",
+    "rollback-blocked": "2026-10-20T03:06:15.276723+00:00",
+    "resuming-online-validation": "2026-10-20T03:09:21.714546+00:00",
+    "verifying-online": "2026-10-20T03:09:21.738863+00:00",
+    "activating-statistics-v2": "2026-10-20T03:09:30.502280+00:00",
+    "complete": "2026-10-20T03:11:26.795478+00:00"
+  },
+  "oldFilesVerified": 1263,
+  "releaseFilesVerified": 1283,
+  "rollbackFilesVerified": 1266,
+  "stopSeconds": 0.318,
+  "downtimeSeconds": 228.276,
+  "downtimeBasis": "wall clock stop phase to successful server listen log",
+  "successfulListenAt": "2026-10-20T03:07:47.456014+00:00",
+  "dataBackupSha256": "cc2c50447cd0c72b782fa66a7469098e37567dc5eebf9897d2a14e2808015a47",
+  "oldReleaseBackupSha256": "d256c7a04ff3baf3d0e97f48d3c9631e4c12b63383535c7dbb5c60f15fc1c990",
+  "historyPrefixPreserved": true,
+  "accountsPreserved": true,
+  "usagePreserved": true,
+  "effectiveConfigurationPreserved": true,
+  "otherEncryptedConfigurationPreserved": true,
+  "rollbackCompatibleWithStatistics2": true,
+  "service": {
+    "ActiveState": "active",
+    "SubState": "running",
+    "NRestarts": "0",
+    "Result": "success",
+    "MainPID": "221562"
+  },
+  "initialFailure": {
+    "phase": "rollback-blocked",
+    "errorType": "RuntimeError",
+    "errorSummary": "HTTP readiness timeout",
+    "cause": "root-only npm dependency ownership",
+    "worldAndCommandsUnchangedAtFailure": true,
+    "recovered": true,
+    "failedStarts": 12
+  },
+  "statistics": {
+    "activation": {
+      "ok": true,
+      "version": 2,
+      "enabledCommand": 9317,
+      "enabledTick": 329,
+      "firstCompleteDay": 28
+    },
+    "throughCommand": 9317,
+    "sourceHash": "9716a43841767afa26e35b22aa381543e4ec0370994cf10bd670be8dc36fecc9",
+    "rebuiltDays": 22,
+    "unresolved": [
+      {
+        "commandN": 757,
+        "kind": "metrics",
+        "reason": "settlement_replay_mismatch"
+      },
+      {
+        "commandN": 1318,
+        "kind": "metrics",
+        "reason": "settlement_replay_mismatch"
+      },
+      {
+        "commandN": 1811,
+        "kind": "metrics",
+        "reason": "settlement_replay_mismatch"
+      },
+      {
+        "commandN": 2489,
+        "kind": "metrics",
+        "reason": "settlement_replay_mismatch"
+      },
+      {
+        "commandN": 3043,
+        "kind": "metrics",
+        "reason": "settlement_replay_mismatch"
+      }
+    ],
+    "residents": 18,
+    "residentCoverageComplete": true,
+    "nonStatisticalWorldPreserved": true,
+    "lastDay": {
+      "day": 26,
+      "wakes": 36,
+      "basicIssued": 324000,
+      "coverage": "rebuilt"
+    },
+    "repair9123": {
+      "expense": 54990,
+      "repairRows": 3
+    },
+    "conservation": true
+  },
+  "recovery": {
+    "worldId": "p7-20261016",
+    "premise": 7,
+    "physics": 2,
+    "epoch": 2,
+    "map": "island-three-v1",
+    "tick": 329,
+    "commandN": 9266,
+    "logEnd": 9266,
+    "replayed": 0,
+    "stateHash": "2dfa14e745d4791c5a9cbdffec99b2dbbef4328bf0e0592e1cc7accfe51164c2",
+    "residents": 18,
+    "accounts": 5,
+    "runners": 18,
+    "validRunners": 18,
+    "enabledRunners": 18,
+    "paused": false,
+    "shellsPaused": null,
+    "hostedEnabled": true,
+    "billingAccounts": 3,
+    "commandLogHash": "cd03e9827cb3e14913a40ebcef19b651a5f7db13f71d1a814bc82a5b0db2398d",
+    "commandLogBytes": 152406631,
+    "eventSequence": 3689
+  },
+  "health": {
+    "ok": true,
+    "worldId": "p7-20261016",
+    "login": 200,
+    "account": 200,
+    "state": 200,
+    "sse": 200,
+    "notificationRoutes": {
+      "authenticatedOnly": true,
+      "templatesConfigured": false
+    },
+    "loginCaptcha": {
+      "provider": "altcha"
+    },
+    "assistantGuestRoute": true
+  }
+}

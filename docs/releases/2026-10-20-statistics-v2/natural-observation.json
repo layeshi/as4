@@ -1,0 +1,27 @@
+{
+  "afterCommand": 9317,
+  "latestCommand": 9319,
+  "wakeCommands": 0,
+  "actCommands": 2,
+  "successfulActions": 1,
+  "failedActions": 1,
+  "actions": {
+    "remember": 1,
+    "forget": 1
+  },
+  "errors": {
+    "memory_full": 1
+  },
+  "metricsMs": 74,
+  "lastMetric": {
+    "day": 26,
+    "wakes": 36,
+    "basicIssued": 324000
+  },
+  "release": "/opt/houren/releases/main-f1c2ee1fa65a-20261020-statistics-v2",
+  "service": {
+    "NRestarts": "0",
+    "ActiveState": "active",
+    "SubState": "running"
+  }
+}

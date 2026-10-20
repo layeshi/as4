@@ -1,6 +1,6 @@
 # 三项统计修复：候选实现与上线说明
 
-状态：已实现，尚未部署；生产世界的统计版本尚未启用。基于实际生产提交 `6ac35c27ef3c80aa17ef043ea3f8ac96a3461b54`，隔离分支 `codex/statistics-fixes`。
+状态：已部署到生产并启用统计 v2；详见[上线记录](../releases/2026-10-20-statistics-v2/REPORT.md)。基于实际生产提交 `6ac35c27ef3c80aa17ef043ea3f8ac96a3461b54`，隔离分支 `codex/statistics-fixes`。
 
 ## 修改范围
 
