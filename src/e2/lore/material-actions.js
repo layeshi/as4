@@ -3,7 +3,7 @@ const rows = {
   gather: [
     'amount?',
     2,
-    '在所在回收地带采集物料，每次至多 10，费用 2K。实际结果以回执为准。',
+    '在所在回收地带采集物料，每次至多 10，费用 {2K} 词元。实际结果以回执为准。',
   ],
   claim: [
     'claim, amount?',
@@ -14,7 +14,7 @@ const rows = {
   construct: [
     'project, research?, maxResearchFee?, order?',
     1,
-    '到工程现场施工。资源齐备才可施工；名义上限 10，研究所为 15。费用 1K，研究所费另计。',
+    '到工程现场施工。资源齐备才可施工；名义上限 10，研究所为 15。费用 {K} 词元，研究所费另计。',
   ],
   cancel_project: [
     'project',
@@ -147,7 +147,7 @@ export const MATERIAL_OVERRIDES = {
       ['claim', 'str'],
       ['order', 'str'],
     ],
-    zh: '现场修复。energy/materials 是支付上限；每物料至多 100bp，每 K 词元 10bp，低完好度为 5bp；每次至多 500bp，研究所为 750bp，只扣实用量。',
+    zh: '现场修复。energy/materials 是支付上限；每物料至多 100bp，每 {K} 词元 10bp，低完好度为 5bp；每次至多 500bp，研究所为 750bp，只扣实用量。',
   },
   dismantle: {
     params: 'materials?, module?, project?',
@@ -156,6 +156,6 @@ export const MATERIAL_OVERRIDES = {
       ['module', 'str'],
       ['project', 'str'],
     ],
-    zh: '现场拆解回收至多 15 物料，费用 2K，受现行拆解许可法约束。不能拆源井与港口。',
+    zh: '现场拆解回收至多 15 物料，费用 {2K} 词元，受现行拆解许可法约束。不能拆源井与港口。',
   },
 };
