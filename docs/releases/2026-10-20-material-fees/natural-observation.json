@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-20T12:51:23.714Z",
+  "since": "2026-10-20T12:46:33.469855+00:00",
+  "fromN": 9972,
+  "throughN": 10035,
+  "commands": 63,
+  "actions": 10,
+  "successfulActions": 10,
+  "actionTypes": {
+    "say": 2,
+    "whisper": 3,
+    "remember": 1,
+    "read": 3,
+    "move": 1
+  },
+  "actionErrors": {},
+  "calls": 46,
+  "successfulCalls": 34,
+  "failedCalls": 12,
+  "modelErrors": {
+    "timeout": 12
+  }
+}

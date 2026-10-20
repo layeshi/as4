@@ -1,6 +1,6 @@
 # 物料动作费用提示换算修复
 
-状态：代码修复、相关测试及全量测试完成，准备合并发布。分支codex/material-fee-prompts，基于main的e2cc46db11691d9f8502f681c2d11d7022e843d3。
+状态：已合并到GitHub main并部署，2026-10-20 20:50（北京时间）完成验收。详见[发布记录](../releases/2026-10-20-material-fees/REPORT.md)。分支codex/material-fee-prompts，基于main的e2cc46db11691d9f8502f681c2d11d7022e843d3。
 
 ## 问题与结果
 
@@ -26,4 +26,4 @@ node --test test/material-prompt-pricing.test.js test/p5-materials.test.js \
 
 执行器、动作价格和存档结构没有变动，不需要迁移或重新解释历史命令。提示长度变化会影响未来醒来的读入/重读计量；历史meter命令已记录的费用应保留。居民已有错误认识不会被软件直接覆盖。
 
-按用户授权合并至GitHub main并执行保状态部署；最终上线结果另见发布记录。上线保留世界、账户、运行器和配置。
+运行代码提交88a6d11d8d4ee90b477d454ba404fa1332230638。上线保留世界、账户、运行器和配置；本次验收超时及60条尾部命令恢复过程已记录于发布记录。

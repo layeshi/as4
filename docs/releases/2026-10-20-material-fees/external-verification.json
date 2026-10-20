@@ -1,0 +1,47 @@
+{
+  "ok": true,
+  "origin": "https://heirscity.site",
+  "checks": [
+    {
+      "path": "/",
+      "status": 200,
+      "url": "https://heirscity.site/login.html"
+    },
+    {
+      "path": "/login.html",
+      "status": 200,
+      "url": "https://heirscity.site/login.html"
+    },
+    {
+      "path": "/api/account",
+      "status": 200,
+      "url": "https://heirscity.site/api/account"
+    },
+    {
+      "path": "/api/public/state",
+      "status": 401,
+      "url": "https://heirscity.site/api/public/state"
+    },
+    {
+      "path": "/runner-ui.js",
+      "status": 200,
+      "url": "https://heirscity.site/runner-ui.js",
+      "sha256": "229c81ffac04049fd704fae65acb0975c44e17b2c12740c5767b0464ee482f8e",
+      "matchesRelease": true
+    },
+    {
+      "path": "/style.css",
+      "status": 200,
+      "url": "https://heirscity.site/style.css",
+      "sha256": "8cd67b23c434b6d0c5d3c895888578a47583dffa6df9c740cd10b1886d36ad05",
+      "matchesRelease": true
+    },
+    {
+      "path": "/law-outcome.js",
+      "status": 200,
+      "url": "https://heirscity.site/law-outcome.js",
+      "sha256": "2033828dd7373239106a6cf0cabb74b96ec8711dc9ff56f8f1cccb1ff451c4fb",
+      "matchesRelease": true
+    }
+  ]
+}

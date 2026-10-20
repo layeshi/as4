@@ -1,0 +1,24 @@
+{
+  "full": {
+    "tests": 2155,
+    "passed": 2154,
+    "failed": 0,
+    "skipped": 1
+  },
+  "linux": {
+    "tests": 100,
+    "passed": 100,
+    "failed": 0,
+    "skipped": 0
+  },
+  "localRelated": {
+    "tests": 91,
+    "passed": 91,
+    "failed": 0
+  },
+  "regressionBeforeFix": {
+    "failed": 12,
+    "passed": 1
+  },
+  "codeCommit": "88a6d11d8d4ee90b477d454ba404fa1332230638"
+}

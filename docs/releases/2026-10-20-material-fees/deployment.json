@@ -1,0 +1,126 @@
+{
+  "phase": "complete",
+  "sha": "88a6d11d8d4ee90b477d454ba404fa1332230638",
+  "baseSha": "f1c2ee1fa65aeac47460a6572c4bf4fe9733abc3",
+  "newRelease": "/opt/houren/releases/main-88a6d11d8d4e-20261020-material-fees",
+  "oldRelease": "/opt/houren/releases/main-f1c2ee1fa65a-20261020-statistics-v2",
+  "backup": "/var/backups/houren/material-fees-20261020-88a6d11",
+  "verificationMode": "final snapshot recovery",
+  "genesisReplay": false,
+  "phases": {
+    "preparing": "2026-10-20T12:37:56.608011+00:00",
+    "stopping": "2026-10-20T12:37:56.999585+00:00",
+    "consistent-backup": "2026-10-20T12:37:57.320920+00:00",
+    "offline-recovery": "2026-10-20T12:38:09.992318+00:00",
+    "permissions-preflight": "2026-10-20T12:38:28.403246+00:00",
+    "switching": "2026-10-20T12:38:33.726904+00:00",
+    "verifying-online": "2026-10-20T12:48:55.348198+00:00",
+    "failed": "2026-10-20T12:39:48.542965+00:00",
+    "rollback-blocked": "2026-10-20T12:40:55.515831+00:00",
+    "resuming-service": "2026-10-20T12:46:33.469855+00:00",
+    "waiting-for-recovered-service": "2026-10-20T12:48:11.987722+00:00",
+    "complete": "2026-10-20T12:50:04.213853+00:00"
+  },
+  "oldFilesVerified": 1283,
+  "releaseFilesVerified": 1290,
+  "stopSeconds": 0.312,
+  "maintenanceWindowSeconds": 658.348,
+  "dataBackupSha256": "b288531d203b00856158bd0618af57c084ccd946d61bbe2aebc21edf12ba0d56",
+  "oldReleaseBackupSha256": "7e15d7c4fa8d1d571fb0653aa0c902dd63c1cdae58b94566cfda2ee4f83175b7",
+  "historyPrefixPreserved": true,
+  "accountsPreserved": true,
+  "usagePreserved": true,
+  "effectiveConfigurationPreserved": true,
+  "otherEncryptedConfigurationPreserved": true,
+  "configurationChange": null,
+  "service": {
+    "ActiveState": "active",
+    "SubState": "running",
+    "NRestarts": "0",
+    "Result": "success",
+    "MainPID": "222873"
+  },
+  "feeCheck": {
+    "ok": true,
+    "worldId": "p7-20261016",
+    "k": 1833,
+    "lines": [
+      "repair(target?, energy, materials, research?, maxResearchFee?, claim?, order?) 投入的词元 [目标所在地点]：现场修复。energy/materials 是支付上限；每物料至多 100bp，每 1833 词元 10bp，低完好度为 5bp；每次至多 500bp，研究所为 750bp，只扣实用量。",
+      "dismantle(materials?, module?, project?) 3666 [所在之处的建筑（源井与港口除外）]：现场拆解回收至多 15 物料，费用 3666 词元，受现行拆解许可法约束。不能拆源井与港口。",
+      "gather(amount?) 3666：在所在回收地带采集物料，每次至多 10，费用 3666 词元。实际结果以回执为准。",
+      "construct(project, research?, maxResearchFee?, order?) 1833：到工程现场施工。资源齐备才可施工；名义上限 10，研究所为 15。费用 1833 词元，研究所费另计。"
+    ],
+    "modelCalled": false
+  },
+  "initialFailure": {
+    "phase": "rollback-blocked",
+    "errorType": "CalledProcessError",
+    "errorSummary": "Command '['/opt/houren-node/bin/node', '/var/backups/houren/material-fees-20261020-88a6d11/offline-verify.mjs', 'health', '222759', '/var/backups/houren/material-fees-20261020-88a6",
+    "forcedStop": true,
+    "stopResult": "timeout",
+    "signal": 9
+  },
+  "tailRecovery": {
+    "ok": true,
+    "start": {
+      "n": 9912,
+      "tick": 367,
+      "hash": "1290d2a5a841b8cfea0677365a354277628b24541bf04a12505654f0b4de7e7b"
+    },
+    "end": {
+      "n": 9972,
+      "tick": 367,
+      "hash": "23a3da3fce32dad93586029972fbfdf05d3cbc466be0069018e7e36666e52d6d"
+    },
+    "tailCommands": 60,
+    "logHash": "3a87c7af126c37d63cb35644a51fad26bae74c677545ee524df0d20807c2fe4a",
+    "logBytes": 168010582,
+    "oldCompatible": true,
+    "newCompatible": true,
+    "productionDataModified": false
+  },
+  "recoveryModeAfterFailure": "receipt-verified crash tail; production Runtime replays all 60 pending commands",
+  "firstAttemptReadinessSeconds": 85.494,
+  "maintenanceWindowMeaning": "Initial stop to recovered login readiness; includes a brief first attempt. Not a measurement of continuous unavailability.",
+  "fullAcceptanceElapsedSeconds": 727.214,
+  "recovery": {
+    "notificationStateLoaded": true,
+    "worldId": "p7-20261016",
+    "premise": 7,
+    "physics": 2,
+    "epoch": 2,
+    "map": "island-three-v1",
+    "tick": 367,
+    "commandN": 9912,
+    "logEnd": 9912,
+    "replayed": 0,
+    "stateHash": "1290d2a5a841b8cfea0677365a354277628b24541bf04a12505654f0b4de7e7b",
+    "residents": 19,
+    "accounts": 5,
+    "runners": 19,
+    "validRunners": 19,
+    "enabledRunners": 19,
+    "paused": false,
+    "shellsPaused": null,
+    "hostedEnabled": true,
+    "assistantConfigPreserved": true,
+    "commandLogHash": "27b7b60e66c809b58454284998822e250026bf76eeade266b220a32fd50362b3",
+    "commandLogBytes": 167469458,
+    "eventSequence": 3922
+  },
+  "health": {
+    "notificationRoutes": {
+      "authenticatedOnly": true,
+      "templatesConfigured": false
+    },
+    "loginCaptcha": {
+      "provider": "altcha"
+    },
+    "ok": true,
+    "worldId": "p7-20261016",
+    "login": 200,
+    "account": 200,
+    "state": 200,
+    "sse": 200
+  }
+}

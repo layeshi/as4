@@ -1,0 +1,12 @@
+{
+  "since": "2026-10-20T12:50:04.213853+00:00",
+  "at": "2026-10-20T12:52:27.752Z",
+  "calls": 14,
+  "successful": 14,
+  "failed": 0,
+  "errors": {},
+  "lastFailure": null,
+  "lastSuccess": "2026-10-20T12:52:24.019Z",
+  "runners": 19,
+  "enabled": 19
+}
