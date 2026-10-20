@@ -1,4 +1,5 @@
 import { enableEntities } from '../entities/core.js';
+import { enableStatistics } from '../statistics-version.js';
 import { enablePrograms } from '../programs/core.js';
 import { enableRelics } from '../p6/relics.js';
 import { enableCooperation } from '../cooperation/core.js';
@@ -53,6 +54,12 @@ export function adminCommand(w, p) {
   if (tokenized(w) && p.op === 'seed_sandbox') return bad('not_allowed');
   const args = p.args && typeof p.args === 'object' ? p.args : {};
   switch (p.op) {
+    case 'statistics': {
+      const already = w.statistics?.version === 2;
+      const r = enableStatistics(w, args);
+      if (r.ok && !already) emit(w, 'admin', { data: { op: 'statistics', version: 2, firstCompleteDay: r.firstCompleteDay } });
+      return r;
+    }
     case 'entities': return enableEntities(w, args);
     case 'program_services': return enablePrograms(w, args);
     case 'relics': return enableRelics(w, args);

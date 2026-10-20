@@ -1,4 +1,5 @@
 import { archivedWorlds } from '../world-archives.js';
+import { projectedResident, statisticsProjection } from '../statistics-projection.js';
 import { assetPosition } from '../e2/p6/journal.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
@@ -82,7 +83,7 @@ function detail(ctx,id) {
   const w=ctx.rt.w,a=w.agents[id];
   const assets=assetPosition(w,a),escrow=assets.escrow;
   const runner=ctx.runners.view(id);
-  return {resident:row(ctx,id),overview:{assets,energy:a.energy,basic:a.basic,materials:a.materials,escrow,dailyCap:a.tokens.cap,usedToday:usedToday(a,earthDayKey(ctx)),routine:a.routine,model:a.body.model,runner,nextWake:nextWake(ctx,a,runner),nextTickAt:ctx.rt.nextTickAt},statistics:w.residentStats[id]??null,usage:ctx.runners.usageView(id)};
+  return {resident:row(ctx,id),overview:{assets,energy:a.energy,basic:a.basic,materials:a.materials,escrow,dailyCap:a.tokens.cap,usedToday:usedToday(a,earthDayKey(ctx)),routine:a.routine,model:a.body.model,runner,nextWake:nextWake(ctx,a,runner),nextTickAt:ctx.rt.nextTickAt},statistics:projectedResident(w,id,statisticsProjection(ctx.rt).data),usage:ctx.runners.usageView(id)};
 }
 export const residentRoutes=[
   ['GET','/api/account/residents',wrap(({res,ctx,actor})=>{

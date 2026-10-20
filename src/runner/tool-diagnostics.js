@@ -1,10 +1,8 @@
 // Allowlisted, bounded telemetry shared by the runner and its persistence boundary.
-import { ACTION_ORDER_P2, ACTION_ORDER_P4 } from '../e2/lore/actions.js';
-import { ENTITY_LOOKS } from '../e2/entities/catalog.js';
+import { TOOL_TYPES as TOOLS, lookSections } from '../telemetry-catalog.js';
 import { safeErrorCode, classifyProviderError, boundedCount } from '../telemetry-safety.js';
 
-const TOOLS = new Set([...ACTION_ORDER_P2, ...ACTION_ORDER_P4, 'entity', 'look', 'act', 'think', 'done', 'read_law', 'read_document', 'read_inscription', 'read_agent']);
-const SECTIONS = new Set(ENTITY_LOOKS);
+const SECTIONS = new Set(lookSections(7));
 const LOOK_ERRORS = new Set(['looks_exhausted', 'no_waking', 'paused', 'not_awake', 'tokens_exhausted', 'cap_reached']);
 const STAGES = new Set(['local_validation', 'unknown_tool', 'look_request']);
 const FEATURES = ['entities', 'cooperation', 'programs', 'prayers'];

@@ -1,4 +1,5 @@
 import { capDistribution, custodyOf } from './tokens.js';
+import { usesStatistics2 } from '../statistics-version.js';
 // SPEC-E2 §20：每日指标（20.1）与人类遗产存活表（20.2），以及史官（附录 A.8）的接线。
 //
 // 每日结算的第 15–16 步（STEPS.metrics）：算出今日指标、更新遗产存活表、写史官，然后才清空 dayLog。
@@ -306,7 +307,9 @@ STEPS.metrics = (w, d) => {
     eachCity(w, () => { w.chronicle.push(writeChronicle(w, d)); });
     return;
   }
-  w.metrics.push(dailyMetrics(w, d)); // 16 指标快照与人类遗产存活表
+  const metric=dailyMetrics(w, d);
+  if(usesStatistics2(w))Object.assign(metric,{statisticsVersion:2,statisticsCoverage:d>=w.statistics.firstCompleteDay?'complete':'transition'});
+  w.metrics.push(metric); // 16 指标快照与人类遗产存活表
   w.legacy = (w.premise === 6 || w.premise === 7) ? null : computeLegacy(w, d);
   w.chronicle.push(writeChronicle(w, d)); // 17 史官
 };
@@ -326,7 +329,7 @@ const DAYLOG_SUMS = {
 /** 来自城的状态的计数：全岛的值是三城之和 */
 const CITY_SUMS = ['treasuryEnergy', 'lawsActive', 'votersOrdinary', 'rulesActive', 'ruleNodes', 'procedureChanges', 'refounds', 'reverts'];
 
-function islandMetrics(w, d) {
+export function islandMetrics(w, d, corrected = usesStatistics2(w)) {
   const cities = eachCity(w, (id) => {
     const m = dailyMetrics(w, d);
     // 人口按籍计；present 是日终时身在本城地界的人数
@@ -346,6 +349,35 @@ function islandMetrics(w, d) {
   base.rationPerCapita = null;
   base.publicInvestmentRate = null;
   base.cities = Object.fromEntries(CITY_IDS.map((id) => [id, cityMetricView(cities[id])]));
+  if (corrected) {
+    // Only flows add across contexts; stocks above are computed once globally.
+    const holders=[...Object.values(eachCity(w,()=>activeHolders(w).filter(h=>h.kind==='city'))).flat(),...activeHolders(w).filter(h=>h.kind!=='city')];
+    const rules=holders.flatMap(h=>h.rules.filter(isPersistent));
+    base.rulesActive=rules.length;
+    base.ruleNodes=rules.reduce((n,r)=>n+countRuleNodes(r),0);
+    const fingerprints=new Map();
+    for(const h of holders)for(const fp of new Set(h.fingerprints))fingerprints.set(fp,(fingerprints.get(fp)??0)+1);
+    base.fingerprintsShared=[...fingerprints.values()].filter(n=>n>=2).length;
+    const births=logs.flatMap(log=>log.births);
+    base.birthsSolo=births.filter(b=>b.authors.length===1).length;
+    base.birthsPair=births.filter(b=>b.authors.length===2).length;
+    base.birthsGroup=births.filter(b=>b.authors.length>=3).length;
+    base.inheritedMemories=births.reduce((n,b)=>n+(b.memories??0),0);
+    for (const [section, fields] of Object.entries({
+      p4: ['wakes','called','refusedTokens','refusedCap','suffocated','reread','read','write','refunded','basicIssued','basicExpired','custody','upgradesBuilt','dividends'],
+      p2: ['standingSets','standingFired','standingFailed','standingSkipped','standingErrors','standingUpkeep','standingSuspended','standingExpired','anonymousWhispers','mutes','muteBlocked'],
+      p1: ['imparts','impartsAccepted','dormancyLosses','internalized','trainedEvicted','trainedWiped'],
+    })) for (const key of fields) {
+      const total = logs.reduce((n, log) => n + (log[section]?.[key] ?? 0), 0);
+      if (section === 'p4') base.p4[key] = total; else base[key] = total;
+    }
+    for (const key of ['forks','backstage']) base[key] = logs.reduce((n, log) => n + (log.p1?.[key]?.length ?? 0), 0);
+    base.scripts = {};
+    for (const log of logs) for (const [script, count] of Object.entries(log.scripts ?? {})) base.scripts[script] = (base.scripts[script] ?? 0) + count;
+    base.scriptEntropy = shannon(Object.values(base.scripts));
+    base.statisticsVersion = 2;
+    base.statisticsCoverage = d >= (w.statistics?.firstCompleteDay ?? 0) ? 'complete' : 'transition';
+  }
   return base;
 }
 

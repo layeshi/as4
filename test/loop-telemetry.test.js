@@ -71,7 +71,7 @@ test('trace persistence recognizes entities and strictly cleans tool diagnostics
   toolAttempts:[{tool:'entity',turn:1,args:privateText},{tool:privateText,turn:2},null],
   toolRejections:[{tool:'entity',turn:1,stage:'local_validation',codes:['invalid_args',privateText],message:privateText},null],
   modelAttempts:[{turn:1,timeoutMs:120000,ms:120001,limitedBy:'configured',outcome:'failure',errorKind:'timeout',phase:'request',message:privateText},null]},7);
- assert.deepEqual(row.looks,['entity_help','entity_definitions','entities','entity_observations']);
+ assert.deepEqual(row.looks,['entity_help','entity_definitions','entities:en1','entity_observations:en1']);
  assert.equal(row.acts[0].type,'entity');assert.equal(row.capabilities.features.entities,true);
  assert.equal(row.toolRejections[0].stage,'local_validation');assert.deepEqual(row.toolRejections[0].codes,['invalid_args','other']);
  assert.equal(row.modelAttempts[0].errorKind,'timeout');assert.equal(JSON.stringify(row).includes(privateText),false);

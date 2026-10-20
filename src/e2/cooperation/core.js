@@ -3,7 +3,7 @@ import { bad, emit, fail, needText } from '../engine/core.js';
 import { cpLength, truncateCp } from '../../text.js';
 
 export const COOP_LIMITS = Object.freeze({ brief: 400, page: 1200, read: 3600, cards: 32, body: 2000, collaborations: 8, participants: 8, tasks: 8, notes: 32, note: 200 });
-export const COOP_LOOKS = Object.freeze(['cards', 'collaborations', 'relations', 'cooperation_rules']);
+export { COOP_LOOKS } from '../lore/look-sections.js';
 export const cooperationEnabled = w => (w.premise === 6 || w.premise === 7) && w.cooperation?.version === 1;
 export function enableCooperation(w, args = {}) {
   if ((w.premise !== 6 && w.premise !== 7)) return bad('not_allowed');

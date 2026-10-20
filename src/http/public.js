@@ -1,4 +1,5 @@
 import { cooperationEnabled } from '../e2/cooperation/core.js';
+import { queryMetrics, statisticsProjection } from '../statistics-projection.js';
 import { cooperationQuery } from '../e2/cooperation/views.js';
 import { archivedObservations } from './material-observations.js';
 import { materialsEnabled } from '../e2/world.js';
@@ -25,11 +26,12 @@ const intParam = (url, name, def, { min = 0, max = Number.MAX_SAFE_INTEGER } = {
 /** GET /api/public/state：全量概览（按命令编号缓存：世界没变时不重复计算） */
 export async function getState(req, res, ctx) {
   const { rt } = ctx;
-  const key = `${rt.w.commandN}:${rt.nextTickAt}`;
+  const projection=statisticsProjection(rt);
+  const key = `${rt.w.commandN}:${rt.nextTickAt}:${projection.revision}`;
   if (!ctx.cache.state || ctx.cache.state.key !== key) {
     const state = rt.engine.publicState(rt.w, { nextTickAt: rt.nextTickAt });
+    if (state.metrics) state.metrics=queryMetrics(rt,state.metrics,projection.data);
     if (rt.engine.physics === 2 && rt.events.fiscal) {
-      if (state.metrics) state.metrics = rt.events.fiscal.metrics(rt.w, state.metrics);
       state.ruleDiagnostics = rt.events.fiscal.diagnostics(rt.w);
     }
     ctx.cache.state = { key, text: JSON.stringify(state) };
@@ -159,7 +161,8 @@ export async function getMetrics(req, res, ctx, url) {
   if (Number.isNaN(from) || Number.isNaN(to)) return sendError(res, lang, 'invalid_request', { field: Number.isNaN(from) ? 'from' : 'to' });
   const { rt } = ctx;
   const metrics = rt.w.metrics.filter((m) => m.day >= from && m.day <= to);
-  sendJson(res, 200, { metrics: rt.engine.physics === 2 && rt.events.fiscal ? metrics.map(m => rt.events.fiscal.metrics(rt.w, m)) : metrics });
+  const projection=statisticsProjection(rt).data;
+  sendJson(res, 200, { metrics: metrics.map(m=>queryMetrics(rt,m,projection)) });
 }
 
 /**

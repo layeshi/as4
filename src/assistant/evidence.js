@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
+import { queryMetrics } from '../statistics-projection.js';
 import { fail } from '../accounts/store.js';
 import { timingEqual } from '../http/util.js';
 import { owns } from '../history/exports.js';
@@ -117,7 +118,7 @@ export async function gatherEvidence(ctx,user,scope,question,credentials,signal)
     const counts={residents:citizens.length,present:present.length,status:{},definition:'residents=仍在世且籍城相符；present=仍在世且当前位于该城。不同口径不得相加。'};for(const a of citizens)counts.status[a.status]=(counts.status[a.status]??0)+1;
     add('当前世界与居民统计',{world:state.world,now:state.now,paused:!!w.paused,counts,city:scope.city??'all',premise:w.premise,physics:w.physics},100);
     for(const key of ['metrics','cities','treasury','well','tokens','laws','proposals','groups','environment','weather','shells','legacy','projects','entities'])if(state[key]) {
-      const value=key==='metrics'&&ctx.rt.events.fiscal?ctx.rt.events.fiscal.metrics(w,state[key]):state[key];
+      const value=key==='metrics'?queryMetrics(ctx.rt,state[key]):state[key];
       if(key==='cities') { for(const item of value)if(!scope.city||scope.city===item.id) { const {laws,proposals,chronicle,...summary}=item;add(`城市 ${item.cityName??item.id}`,summary,85); } }
       else if(Array.isArray(value))for(const item of value.slice(0,200))add(`当前${key} ${item.name??item.id??''}`,item,key==='metrics'?65:5);
       else if(key==='cities')for(const [id,item]of Object.entries(value)) {if(!scope.city||scope.city===id)add(`城市 ${id}`,item,70);}

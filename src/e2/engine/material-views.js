@@ -3,16 +3,8 @@ import { materialConservation, pageRecords } from './materials.js';
 import { researchView } from './research.js';
 import { fail } from './core.js';
 import { materialProjectView, projectAccounting } from './project-views.js';
-export const MATERIAL_LOOKS = [
-  'materials',
-  'services',
-  'demands',
-  'orders',
-  'research',
-  'observations',
-  'projects',
-  'project',
-];
+import { MATERIAL_LOOKS } from '../lore/look-sections.js';
+export { MATERIAL_LOOKS };
 export function materialSummary(w, a) {
   if (!materialsEnabled(w)) return {};
   const orders = Object.values(w.orders).filter(

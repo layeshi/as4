@@ -1,4 +1,6 @@
 import { entitiesEnabled } from '../entities/catalog.js';
+import { usesStatistics2 } from '../statistics-version.js';
+import { residentFlow } from '../p6/journal.js';
 import { entityHandler } from '../entities/core.js';
 import { programHandler } from '../programs/core.js';
 import { programsEnabled } from '../programs/catalog.js';
@@ -167,6 +169,7 @@ function runOneHere(w, a, type, act, index, lang) {
   if (cost > 0) {
     a.energy -= cost;
     sink(w, 'energy', 'action_cost', cost);
+    if (usesStatistics2(w)) residentFlow(w, a.id, 'expense', `action:${type}`, 'energy', cost, { actionIndex: index });
     w.dayLog.actionCost += cost;
     ctx.spent += cost;
   }

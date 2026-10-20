@@ -1,0 +1,118 @@
+{
+  "baseCommit": "6ac35c27ef3c80aa17ef043ea3f8ac96a3461b54",
+  "branch": "codex/statistics-fixes",
+  "files": [
+    {
+      "path": "runner/render-p2.js",
+      "sha256": "f67352bafe232f5e567b3bedbb098351f980c28ed7f661437a33d8cb60880330"
+    },
+    {
+      "path": "src/assistant/evidence.js",
+      "sha256": "3a0ab0bb197e1bfffb870fefd2032d704166cf7e52ea4d7a41c0b51b9169abb4"
+    },
+    {
+      "path": "src/e2/cooperation/core.js",
+      "sha256": "4f5127be49c3210668de2d48f0273d6211641af65d7829dcb85792b427d75f5c"
+    },
+    {
+      "path": "src/e2/engine/actions.js",
+      "sha256": "ebd7b5688c10a50c869adfaf115b1f8cda430b102f00bdac1d2141582bf18121"
+    },
+    {
+      "path": "src/e2/engine/actions/materials.js",
+      "sha256": "ba47450456ee6634c8689a0942214995384c350dd0941e8764450f5c16f3db63"
+    },
+    {
+      "path": "src/e2/engine/admin.js",
+      "sha256": "9d8735acfb48cde514ef66d9173361d30478fe4a71cc3aee71d0f4ff52b45c0a"
+    },
+    {
+      "path": "src/e2/engine/material-views.js",
+      "sha256": "ca20ca08519eb83117efc8b56e30e4d848fdfd784436babf456ec74a6abb903e"
+    },
+    {
+      "path": "src/e2/engine/records.js",
+      "sha256": "4d461622bb626c81e91e7c697b36a1a4c8296fb1b57b7a5bd65db64f679e990b"
+    },
+    {
+      "path": "src/e2/lore/look-sections.js",
+      "sha256": "44770c9b84ef096b8e667a4f0f58df7d0565de70b25a86633be7aa510af39a3f"
+    },
+    {
+      "path": "src/e2/p6/journal.js",
+      "sha256": "e511d579486de95fdcd00ce894b7fa70b6aa0c58545c63171a1365baeb45c267"
+    },
+    {
+      "path": "src/e2/p6/statistics.js",
+      "sha256": "4ca16be3c5fb3eb9d10dd27ac16ce3d23a3ba3601463e898e4737d314485ccd9"
+    },
+    {
+      "path": "src/e2/statistics-version.js",
+      "sha256": "6a5afce099805aac9f1ec27e9b0c21b8a139f9609dc8e5a1bb37602f9d9b360b"
+    },
+    {
+      "path": "src/e2/world.js",
+      "sha256": "170fdf962dade51840c63fa7e487b0334176c220570c98aed9f9ca62a414420f"
+    },
+    {
+      "path": "src/http/admin.js",
+      "sha256": "3c969c48fac5442de269a26c96428957564789d8eb39b18628a27e0ce4264ee2"
+    },
+    {
+      "path": "src/http/public.js",
+      "sha256": "27c286e655bc0251dc6699b3d62166ff27ea38930c97097f06251c71b12f0830"
+    },
+    {
+      "path": "src/http/residents.js",
+      "sha256": "17c0e0443147ef2062ba30424fea8e9caaba36efd52ad4a46ff02e3a6f248edb"
+    },
+    {
+      "path": "src/runner/tool-diagnostics.js",
+      "sha256": "a2839dc8e36af7d53c592d9abe5d8cc9ed7539c07d7e714fd3c621230157c4cf"
+    },
+    {
+      "path": "src/runner/traces.js",
+      "sha256": "82edc12ebb9daa99e421666a5076085b3aee3ecfcb1bab923a3a405852c36758"
+    },
+    {
+      "path": "src/statistics-projection.js",
+      "sha256": "621afaf9238252b365d86b26b30ef3c8696e0c41fea5cee7f4b02fe2dec84864"
+    },
+    {
+      "path": "src/telemetry-catalog.js",
+      "sha256": "5da336ce3841d29aefc3dd394949dc142bf48af733b2d69b445eb20fef3c32c3"
+    },
+    {
+      "path": "src/telemetry-safety.js",
+      "sha256": "03933807c5e2af9cd9df828fa59017ab16953c6bfe356457ddbc0c307d045fb9"
+    },
+    {
+      "path": "src/tools/statistics-projection.js",
+      "sha256": "991a2283d53f9833c7157092a7b0095c858e1399ae4a3693e34b1e7f8294067b"
+    },
+    {
+      "path": "test/cooperation.test.js",
+      "sha256": "4e0671c57919f588b7e1a81dfd063dc3948359ac088bb21ffdeff8bfbff40cab"
+    },
+    {
+      "path": "test/loop-telemetry.test.js",
+      "sha256": "05e621c75615cb15e135f523fe300df8dfd0fa38ec0a00990d46c584198a6d68"
+    },
+    {
+      "path": "test/p6.test.js",
+      "sha256": "e62f231e085c84af71e1fa3864d317f48683fe25c15b8edbcea1149e78145283"
+    },
+    {
+      "path": "test/statistics-projection.test.js",
+      "sha256": "ef9347d0f8768f4ca76e62524e07292db380904f8fa2d53a422e058671f0d917"
+    },
+    {
+      "path": "test/statistics-v2.test.js",
+      "sha256": "105d5040d751fe2214b5ce182b3807a9180ea4a4abb6c81d551389492bdef5c7"
+    },
+    {
+      "path": "test/telemetry-catalog.test.js",
+      "sha256": "277e4dff8c204446e429aa307182ba4627930eb9fa35159f4210e895a19a97c7"
+    }
+  ]
+}

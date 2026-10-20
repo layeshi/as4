@@ -1,0 +1,9 @@
+// Finite protocol names only. Never accept action arguments or upstream text here.
+import { ACTION_ORDER as LEGACY_ACTIONS } from './lore/actions.js';
+import { actionTable } from './e2/lore/actions.js';
+export { lookSections } from './e2/lore/look-sections.js';
+const actionSets = new Map([0,1,2,4,5,6,7].map(p => [p, new Set(actionTable(p, true, true, true, true).ORDER)]));
+export const knownActionTypes = premise => actionSets.get(premise) ?? actionSets.get(0);
+export const ALL_ACTION_TYPES = new Set([...LEGACY_ACTIONS, ...[...actionSets.values()].flatMap(s => [...s])]);
+export const TOOL_TYPES = new Set([...ALL_ACTION_TYPES, 'look', 'act', 'think', 'done', 'read_law', 'read_document', 'read_inscription', 'read_agent']);
+export const ERROR_CODES = new Set(('already already_city auth budget_exhausted capacity cooldown cost_unproven disabled_by_weather empty_new_article exiled forbidden fuel gated insufficient insufficient_coins insufficient_energy internal invalid_args invalid_request landmark limit_reached lot_taken memory_full moderated name_taken no_module no_such_article no_such_version not_active not_allowed not_citizen not_city_owned not_eligible not_found not_in_scope not_member not_ownable not_owner not_steward not_visible nothing_left out_of_range overflow div0 type pool_exhausted proof_breach protected quota_exceeded rule_invalid target_gone text_too_long unknown_op vars_full wall_full wrong_place conflict evidence_predates_order evidence_used experiment_changed insufficient_materials insufficient_points invalid_evidence no_waking not_awake not_refundable order_not_active order_target_mismatch paused project_unfunded rate_limited research_unavailable target_unavailable unauthorized unsupported_criterion tokens_exhausted cap_reached looks_exhausted').split(' '));

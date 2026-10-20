@@ -1,0 +1,73 @@
+{
+  "at": "2026-10-20T02:38:43.015067+00:00",
+  "baseCommit": "6ac35c27ef3c80aa17ef043ea3f8ac96a3461b54",
+  "productionDeployed": false,
+  "productionStatisticsActivated": false,
+  "fullSuite": {
+    "tests": 2141,
+    "pass": 2140,
+    "fail": 0,
+    "skipped": 1
+  },
+  "fullSuiteSeconds": 173.094915459,
+  "sourceManifest": "statistics-v2-files.json",
+  "productionValidation": {
+    "stage": "complete",
+    "throughCommand": 9169,
+    "sourceHash": "2f5581d44569edc30b9f5b85b948150394dfff5ec6bb852c908f025d5d5d5d61",
+    "unchanged": true,
+    "rebuiltDays": 22,
+    "unresolved": [
+      {
+        "commandN": 757,
+        "kind": "metrics",
+        "reason": "settlement_replay_mismatch"
+      },
+      {
+        "commandN": 1318,
+        "kind": "metrics",
+        "reason": "settlement_replay_mismatch"
+      },
+      {
+        "commandN": 1811,
+        "kind": "metrics",
+        "reason": "settlement_replay_mismatch"
+      },
+      {
+        "commandN": 2489,
+        "kind": "metrics",
+        "reason": "settlement_replay_mismatch"
+      },
+      {
+        "commandN": 3043,
+        "kind": "metrics",
+        "reason": "settlement_replay_mismatch"
+      }
+    ],
+    "repair9123": {
+      "rawExpense": 109980,
+      "correctedExpense": 54990,
+      "actualRepairRows": 3
+    },
+    "lastDay": {
+      "day": 26,
+      "rawWakes": 0,
+      "correctedWakes": 36,
+      "rawBasicIssued": 0,
+      "correctedBasicIssued": 324000,
+      "coverage": "rebuilt"
+    },
+    "activation": {
+      "ok": true,
+      "statistics": {
+        "version": 2,
+        "enabledCommand": 9170,
+        "enabledTick": 324,
+        "firstCompleteDay": 28
+      },
+      "conservation": true,
+      "protectedStateUnchanged": true
+    }
+  },
+  "scopeNote": "Production-data verification covers legacy receipt hashes, repair correction and island flow aggregation. The final rule-stock deduplication is covered by the final full suite and independent review. No rebuilt sidecar was installed."
+}

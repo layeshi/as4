@@ -164,7 +164,7 @@ test('publishing a revised card does not disclose older private drafts to reside
 
 test('disabled capability reproduces the frozen pre-feature P6 scenario hash',()=>{
   // Generated with pristine origin/main 0b26e34 before this feature, using the same default physics.
-  const w=createWorld({id:'legacy-cooperation-golden',seed:'legacy-cooperation-golden',premise:6,hiddenPhysics});
+  const w=createWorld({id:'legacy-cooperation-golden',seed:'legacy-cooperation-golden',premise:6,statisticsVersion:1,hiddenPhysics});
   for(let i=0;i<2;i++)e2.applyCommand(w,{type:'account',payload:{op:'create',accountId:`legacy-${i}`,name:`旧居民${i}`,requestId:`legacy-create-${i}`,soul:'独立判断',model:'mock',lang:'zh',dailyCap:1000000}});
   for(let i=0;i<36;i++)e2.applyCommand(w,{type:'tick',payload:{}});
   assert.equal(w.cooperation,undefined);

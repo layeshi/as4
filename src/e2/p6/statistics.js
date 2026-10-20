@@ -1,4 +1,5 @@
 import { residentRecord, assetPosition, residentFlow } from './journal.js';
+import { usesStatistics2 } from '../statistics-version.js';
 import { P } from '../params.js';
 const balances = a => ({energy:a.energy,basic:a.basic,materials:a.materials});
 export function beforeResidents(w) {
@@ -30,7 +31,7 @@ export function recordResidents(w,before,cmd,result,events) {
     if(cmd.type==='act'&&cmd.payload?.agentId===a.id&&result.results&&!result.replayed){
       for(const r of result.results){st.actions.attempted++;st.actions[r.ok?'succeeded':'failed']++;d.actions++;
         const t=st.actions.types[r.type]??={attempted:0,succeeded:0,failed:0};t.attempted++;t[r.ok?'succeeded':'failed']++;
-        if(r.ok)residentFlow(w,a.id,'expense','action:'+r.type,'energy',r.cost);
+        if(r.ok&&!usesStatistics2(w))residentFlow(w,a.id,'expense','action:'+r.type,'energy',r.cost);
         if(!r.ok)st.actions.errors[r.error.code]=(st.actions.errors[r.error.code]??0)+1;
       }
     }

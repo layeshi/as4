@@ -146,12 +146,13 @@ export function validateFounders(list, { premise = 0 } = {}) {
 
 export function createWorld({
   id = 'baihua', seed, codeVersion = '0.0.0', sandboxAdoption = false, map,
-  founders = [], shellModels = [], sandboxShells = false, shellSlots, premise = 0, lawSemanticsVersion, tokens = {}, hiddenPhysics,
+  founders = [], shellModels = [], sandboxShells = false, shellSlots, premise = 0, lawSemanticsVersion, statisticsVersion, tokens = {}, hiddenPhysics,
 } = {}) {
   if ((premise === 5 || premise === 6 || premise === 7) && lawSemanticsVersion === undefined) lawSemanticsVersion = 2;
   if (shellSlots === undefined) shellSlots = tokenized({ premise }) ? 0 : P.shellSlots;
   if (typeof seed !== 'string' || seed === '') throw new Error('createWorld: seed is required');
   if (lawSemanticsVersion !== undefined && lawSemanticsVersion !== 2) throw new Error('createWorld: lawSemanticsVersion must be 2');
+  if (statisticsVersion !== undefined && (![6, 7].includes(premise) || ![1, 2].includes(statisticsVersion))) throw new Error('createWorld: statisticsVersion must be 1 or 2 in P6/P7');
   const expectedMap = premise === 7 ? 'island-three-v1' : (premise === 5 || premise === 6) ? 'compact-materials-v1' : 'frontier';
   map ??= expectedMap;
   if ((premise === 5 || premise === 6 || premise === 7)) validateHiddenPhysics(hiddenPhysics, map);
@@ -249,6 +250,10 @@ export function createWorld({
   }
 
   if (premise === 6 || premise === 7) {
+    if (statisticsVersion !== 1) {
+      w.statistics = { version: 2, enabledCommand: 0, enabledTick: 0, firstCompleteDay: 0 };
+      w.genesis.statisticsVersion = 2;
+    }
     w.access = { residents: {}, startupClaims: {}, requests: {}, transfers: {} };
     w.residentStats = {};
     w.weather = { scheduled: null, active: [], history: [] };
@@ -410,6 +415,7 @@ export function genesisOpts(snap) {
     shellModels: g.shellModels,
     sandboxShells: !!snap.sandboxShells,
     premise: g.premise,
+    ...(accountWorld(snap) ? { statisticsVersion: g.statisticsVersion ?? 1 } : {}),
     ...(materialsEnabled(snap) ? { hiddenPhysics: structuredClone(g.hiddenPhysics) } : {}),
     ...(tokenized(snap) ? { tokens: { ...g.tokens } } : {}),
     ...(g.lawSemanticsVersion === 2 ? { lawSemanticsVersion: 2 } : {}),

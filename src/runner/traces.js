@@ -1,4 +1,4 @@
-import { ENTITY_LOOKS } from '../e2/entities/catalog.js';
+import { knownActionTypes, lookSections } from '../telemetry-catalog.js';
 import { cleanCapabilities, cleanToolAttempt, cleanToolRejection, cleanModelAttempt } from './tool-diagnostics.js';
 import { tokenized } from '../e2/world.js';
 // 注意力轨迹（SPEC-P2 §14.1）：运行器每次醒来（含被叫醒）结束时回报一条记录，这里追加到世界目录的 agent-loops.jsonl，
@@ -12,8 +12,6 @@ import { tokenized } from '../e2/world.js';
 import { existsSync, readFileSync, writeFileSync, appendFileSync, renameSync } from 'node:fs';
 import { earthDay } from '../shells/budget.js';
 import { validTimeZone } from '../shells/config.js';
-import { LOOK_WHATS, LOOK_WHATS_P4 } from '../../runner/render-p2.js';
-import { ACTION_ORDER_P2, ACTION_ORDER_P4 } from '../e2/lore/actions.js';
 import { safeErrorCode } from '../telemetry-safety.js';
 
 export const TRACE_TZ = 'Asia/Shanghai';
@@ -22,11 +20,7 @@ export const TRACE_KEEP_DAYS = 30;
 const KINDS = new Set(['main', 'wake']);
 const MODES = new Set(['native', 'json']);
 const ENDED = new Set(['end', 'reply', 'actions', 'turns', 'deadline', 'budget', 'error', 'refusal', 'asleep', 'paused', 'format']);
-const SECTIONS = new Set(LOOK_WHATS);
-const ACTIONS = new Set(ACTION_ORDER_P2);
 const P4_ENDED = new Set([...ENDED, 'tokens', 'tokens_exhausted', 'cap_reached']);
-const P4_SECTIONS = new Set([...LOOK_WHATS_P4, ...ENTITY_LOOKS]);
-const P4_ACTIONS = new Set([...ACTION_ORDER_P4, 'entity']);
 const REFUSED = new Set(['tokens_exhausted', 'cap_reached']);
 const P4_ERRORS = new Set([...REFUSED, 'no_waking', 'looks_exhausted']);
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
@@ -50,7 +44,7 @@ function dayBefore(key, n) {
 /** 一条回报 → 文件里的一行里「rec」那一部分：每个字段都规整成合法的形状，不认识的字符串记作 other */
 export function cleanRecord(rec, premise = 0) {
   const p4 = tokenized({ premise });
-  const sections = p4 ? P4_SECTIONS : SECTIONS, actions = p4 ? P4_ACTIONS : ACTIONS, endings = p4 ? P4_ENDED : ENDED;
+  const sections = new Set(lookSections(premise)), actions = knownActionTypes(premise || 2), endings = p4 ? P4_ENDED : ENDED;
   const r = rec && typeof rec === 'object' ? rec : {};
   return {
     tick: count(r.tick),
@@ -61,7 +55,7 @@ export function cleanRecord(rec, premise = 0) {
       const [what, id] = String(x).split(':');
       if (!sections.has(what)) return 'other';
       // 轨迹保留看过的具体条目；只接受城内编号，不能把模型给出的文本写进文件。
-      return id && /^[lpg][1-9]\d{0,11}$/.test(id) ? `${what}:${id}` : what;
+      return id && /^(?:[alpgjkoq]|pg|sv|en|ed|eo)[1-9]\d{0,11}$/.test(id) ? `${what}:${id}` : what;
     }),
     acts: (Array.isArray(r.acts) ? r.acts : []).slice(0, 200).map((a) => {
       const o = a && typeof a === 'object' ? a : {};

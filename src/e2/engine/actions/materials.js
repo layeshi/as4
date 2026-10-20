@@ -1,4 +1,5 @@
 import { residentFlow } from '../../p6/journal.js';
+import { usesStatistics2 } from '../../statistics-version.js';
 import { fail, needInt, emit } from '../core.js';
 import { nextId, isAlive } from '../../world.js';
 import { K } from '../tokens.js';
@@ -297,8 +298,9 @@ const repair = {
       emit(w, 'restored', { place: a.place, data: { target: obj.id } });
       w.dayLog.restored.push({ target: obj.id, place: a.place });
     }
-    residentFlow(w,a.id,'expense','repair','energy',energy);
-    residentFlow(w,held?.beneficiary.kind==='agent'?held.beneficiary.id:held?null:a.id,'expense','repair','materials',materials);
+    const origin=usesStatistics2(w)?{actionIndex:ctx.index}:undefined;
+    residentFlow(w,a.id,'expense','repair','energy',energy,origin);
+    residentFlow(w,held?.beneficiary.kind==='agent'?held.beneficiary.id:held?null:a.id,'expense','repair','materials',materials,origin);
     a.energy -= energy;
     takeMaterials(a, materials, held);
     w.materialLedger.lost += materials;

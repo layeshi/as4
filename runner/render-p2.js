@@ -18,7 +18,8 @@ import {
 import { summarizeResults } from './render.js';
 
 /** 展开的段（附录 A.3 的 enum；单数形式带 id 看其中一项） */
-export const LOOK_WHATS = Object.freeze(['here', 'self', 'laws', 'law', 'proposals', 'proposal', 'procedure', 'groups', 'group', 'residents', 'places', 'refounds', 'cradle', 'lexicon', 'petitions']);
+import { LOOK_WHATS, LOOK_WHATS_P4 } from '../src/e2/lore/look-sections.js';
+export { LOOK_WHATS, LOOK_WHATS_P4 };
 
 const codeOf = (lang) => (lang === 'en' ? 'en' : 'zh');
 
@@ -26,7 +27,6 @@ const codeOf = (lang) => (lang === 'en' ? 'en' : 'zh');
 // 字典 D2（附录 A.3–A.7）
 // ═══════════════════════════════════════════════════════════════
 
-export const LOOK_WHATS_P4 = Object.freeze([...LOOK_WHATS, 'inbox', 'actions']);
 
 export const D2 = {
   zh: {

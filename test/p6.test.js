@@ -246,6 +246,8 @@ test('P6 actual construction work and partial refunds reconcile held assets',()=
   const j=w.projects[first.project];
   residentAction(w,id,{type:'contribute',project:j.id,energy:j.needEnergy,materials:j.needMaterials});
   assert.equal(w.residentStats[id].totals['energy:expense:repair'],undefined);
+  assert.equal(w.residentStats[id].totals['energy:expense:action:contribute'],undefined);
+  assert.equal(w.residentStats[id].totals['energy:escrow:project'],j.needEnergy);
   const before=assetPosition(w,a),one=residentAction(w,id,{type:'construct',project:j.id}),two=residentAction(w,id,{type:'construct',project:j.id});
   assert.equal(w.residentStats[id].achievements.constructionWork,one.workAdded+two.workAdded);
   assert.equal(w.residentStats[id].totals['materials:expense:construction'],j.spentMaterials);
@@ -254,6 +256,7 @@ test('P6 actual construction work and partial refunds reconcile held assets',()=
   residentAction(w,id,{type:'cancel_project',project:j.id});
   assert.equal(assetPosition(w,a).escrow.projects,0);
   assert.equal(w.residentStats[id].totals['energy:refund:project'],j.needEnergy-j.spentEnergy);
+  assert.equal(w.residentStats[id].totals['energy:income:project'],undefined);
   assert.equal(assetPosition(w,a).materialEscrow,j.needMaterials-j.spentMaterials);
   assert.equal(e2.checkConservation(w).ok,true);
 });
