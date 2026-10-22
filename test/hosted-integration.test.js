@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, statSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -21,11 +21,12 @@ async function eventually(check) {
   while (Date.now() < until) { if (await check()) return; await new Promise(r => setTimeout(r, 10)); }
   assert.fail('condition did not become true');
 }
-async function setup(t) {
+async function setup(t, { premise = 6 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'heirs-hosted-')), physicsFile = join(dir, 'physics.json');
-  writeFileSync(physicsFile, JSON.stringify(hiddenPhysics));
+  const physics = premise === 7 ? JSON.parse(readFileSync(new URL('./fixtures/p7-hidden-physics.json', import.meta.url), 'utf8')) : hiddenPhysics;
+  writeFileSync(physicsFile, JSON.stringify(physics));
   const saved = snapshotP(); configure({ tickMs: 1000 });
-  const cfg = { ...loadConfig({}, []), dataDir: dir, worldId: 'w', seed: 'hosted', physics: 2, premise: 6, map: 'compact-materials-v1', shellSlots: 0, hiddenPhysicsFile: physicsFile };
+  const cfg = { ...loadConfig({}, []), dataDir: dir, worldId: 'w', seed: 'hosted', physics: 2, premise, map: premise === 7 ? 'island-three-v1' : 'compact-materials-v1', shellSlots: 0, hiddenPhysicsFile: physicsFile };
   const logs = [], logger = { error: (...args) => logs.push(args.map(String).join(' ')), warn: (...args) => logs.push(args.map(String).join(' ')) };
   const rt = Runtime.open(cfg, { logger }), app = createApp(rt, cfg, { logger }), ctx = app.ctx;
   rt.agentLoop = { ...rt.agentLoop, marginSec: 0 }; rt.nextTickAt = Date.now() + 60000;
@@ -48,7 +49,7 @@ async function setup(t) {
     await app.server.listeners('request')[0](req, res); assert.ok(!result.text.includes(TEST_KEY)); return result;
   }
   async function resident(as = 'alice') {
-    const result = await call('/api/account/residents', { as, body: { name: `${as}居民`, soul: '观察城市', dailyCap: 1000000, requestId: `create-${as}` } });
+    const result = await call('/api/account/residents', { as, body: { name: `${as}居民`, soul: '观察城市', dailyCap: 1000000, requestId: `create-${as}`, ...(premise === 7 ? { city: 'north' } : {}) } });
     assert.equal(result.status, 201, result.text); const id = result.json.agentId;
     rt.w.agents[id].routine.every = 1; rt.w.agents[id].routine.called = false;
     return id;
@@ -317,3 +318,102 @@ test('OpenLux route drift pauses instead of charging a different group at publis
   e.ctx.runners.activate('http://unused.invalid');e.ctx.runners.start(id);await eventually(()=>e.ctx.runners.jobs.size===0);
   assert.equal(e.ctx.runners.view(id).status,'hosted_unavailable');assert.equal(e.ctx.hosted.billing.balance(e.users.alice.id),1000000);
 });
+
+async function usageFixture(t, premise = 6) {
+  const e = await setup(t, { premise });
+  await openlux(e);
+  const id = await e.resident();
+  await e.saveChoice(id, { hosted: true, model: 'deepseek-v4.1-flash' });
+  e.fund();
+  return { e, id };
+}
+
+function modelAttempts(e, id) {
+  const file = join(e.rt.dir, 'agent-loops.jsonl');
+  if (!existsSync(file)) return [];
+  return readFileSync(file, 'utf8').split('\n').filter(Boolean).map(JSON.parse)
+    .filter(row => row.agentId === id).flatMap(row => row.modelAttempts ?? []);
+}
+
+function assertFailedUsage(e, id, statuses) {
+  const file = join(e.rt.dir, 'runner-usage.json');
+  const persisted = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).agents : {};
+  for (const key of [id, `${id}@${e.users.alice.id}`]) {
+    const view = e.ctx.runners.usage.view(key);
+    assert.equal(view.total.calls, statuses.length, `${key}: completed calls`);
+    assert.equal(view.total.failed, statuses.length, `${key}: provider failures`);
+    assert.deepEqual(view.recent.map(call => call.status), statuses);
+    assert.equal(persisted[key]?.total.calls ?? 0, statuses.length, `${key}: persisted calls`);
+    assert.equal(persisted[key]?.total.failed ?? 0, statuses.length, `${key}: persisted failures`);
+  }
+  assert.equal(e.ctx.hosted.billing.balance(e.users.alice.id), 1000000);
+  assert.equal(e.ctx.hosted.billing.reserved(), 0);
+}
+
+for (const [premise, status] of [[6, 401], [6, 403], [6, 404], [7, 403]]) {
+  test(`P${premise} hosted usage keeps the ${status} failure that auto-stops its runner`, async t => {
+    const { e, id } = await usageFixture(t, premise);
+    let requests = 0;
+    e.ctx.hosted.providerOverride = () => ({ step: async () => {
+      requests++;
+      throw Object.assign(new Error('synthetic provider failure'), { status });
+    } });
+    e.ctx.runners.activate('http://unused.invalid'); e.ctx.runners.start(id);
+    await eventually(() => !e.ctx.runners.jobs.has(id));
+    assert.equal(requests, 1);
+    assert.equal(e.ctx.runners.records[id].enabled, false);
+    assert.equal(e.ctx.runners.view(id).status, 'hosted_unavailable');
+    assert.deepEqual(modelAttempts(e, id).map(attempt => attempt.status), [status]);
+    assertFailedUsage(e, id, [status]);
+  });
+}
+
+for (const premise of [6, 7]) {
+  test(`P${premise} hosted usage counts the third consecutive failure before auto-stop`, async t => {
+    const { e, id } = await usageFixture(t, premise);
+    // Remove scheduler jitter only for this test; the mock is restored automatically.
+    t.mock.method(Math, 'random', () => 0);
+    e.rt.nextTickAt = Date.now() + 1100;
+    let requests = 0;
+    e.ctx.hosted.providerOverride = () => ({ step: async () => {
+      requests++;
+      throw Object.assign(new Error('synthetic retryable failure'), { status: 500 });
+    } });
+    e.ctx.runners.activate('http://unused.invalid'); e.ctx.runners.start(id);
+    for (let count = 1; count <= 3; count++) {
+      await eventually(() => modelAttempts(e, id).length >= count);
+      if (count < 3) {
+        assert.equal(e.ctx.runners.records[id].enabled, true);
+        assertFailedUsage(e, id, Array(count).fill(500));
+        e.rt.nextTickAt = Date.now() + 1100; e.rt.exec('tick');
+      }
+    }
+    await eventually(() => !e.ctx.runners.jobs.has(id));
+    assert.equal(requests, 3);
+    assert.equal(e.ctx.runners.records[id].enabled, false);
+    assert.equal(e.ctx.runners.view(id).status, 'hosted_unavailable');
+    assert.deepEqual(modelAttempts(e, id).map(attempt => attempt.status), [500, 500, 500]);
+    assertFailedUsage(e, id, [500, 500, 500]);
+  });
+}
+
+for (const stop of ['pause', 'close']) {
+  test(`hosted usage excludes a request cancelled by ${stop}`, async t => {
+    const { e, id } = await usageFixture(t, 7);
+    let requests = 0;
+    e.ctx.hosted.providerOverride = () => ({ step: ({ signal }) => {
+      requests++;
+      return new Promise((resolve, reject) => {
+        const abort = () => reject(Object.assign(new Error('synthetic cancellation'), { name: 'AbortError' }));
+        if (signal.aborted) abort();
+        else signal.addEventListener('abort', abort, { once: true });
+      });
+    } });
+    e.ctx.runners.activate('http://unused.invalid'); e.ctx.runners.start(id);
+    await eventually(() => requests === 1);
+    if (stop === 'pause') await e.ctx.runners.pause(id);
+    else await e.ctx.runners.close();
+    assert.equal(e.ctx.runners.jobs.has(id), false);
+    assertFailedUsage(e, id, []);
+  });
+}

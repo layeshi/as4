@@ -318,6 +318,8 @@ export class RunnerManager {
         } } : {}),
         ...(tokenized(this.rt.w) ? { refundWake: async wakeId => { if((this.rt.w.premise===6 || this.rt.w.premise === 7)&&(this.records[id]!==r||!this.valid(id)))return {ok:false};return this.rt.exec('meter', { op: 'refund', agentId: id, wakeId, day: earthDay(Date.now(), this.cfg.shellTz || 'Asia/Shanghai').key }).result; } } : {}),
         onUsage: (_agentId, usage, meta) => {
+          // Auto-stopping below must not reclassify a completed failure as cancellation.
+          const cancelledBeforeUsage = controller.signal.aborted || meta.cancelled;
           if (meta.ok && !meta.cancelled) this.notificationChanged(id, true);
           if (hosted) {
             hosted.billing.settle(reservation, usage, { ...meta, cancelled: meta.cancelled || controller.signal.aborted });
@@ -332,7 +334,7 @@ export class RunnerManager {
             }
           }
           // A request we cancelled ourselves (pause, saving new settings, shutdown, the tick boundary) is not a provider failure.
-          if (!meta.ok && (controller.signal.aborted || meta.cancelled)) return;
+          if (!meta.ok && cancelledBeforeUsage) return;
           this.usage.record(id, usage, meta, hostedConfig?.model ?? config.model);
           if((this.rt.w.premise===6 || this.rt.w.premise === 7))this.usage.record(`${id}@${r.accountId}`,usage,meta,hostedConfig?.model ?? config.model);
         },
