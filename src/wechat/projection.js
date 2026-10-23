@@ -11,6 +11,9 @@ const structural = new Set([
   'id', 'agentId', 'worldId', 'map', 'place', 'type', 'status', 'op', 'lang', 'a', 'b', 'actor', 'author', 'owner', 'from', 'to', 'kind', 'vis', 'scope', 'seq', 'hash', 'cursor', 'world', 'publicRoleId',
   'agent', 'agents', 'docId', 'lawId', 'proposalId', 'groupId', 'placeId', 'projectId', 'project', 'offerId', 'order', 'requestId', 'refoundId', 'facilityId', 'inscriptionId',
   'target', 'by', 'law', 'with', 'deceased', 'parents', 'authors', 'children', 'groups', 'members', 'home', 'lot', 'zone', 'replacedBy', 'repealedBy', 'basedOn',
+  'city', 'provider', 'requester', 'founder', 'assignee', 'visibility', 'next', 'invited', 'orders',
+  'residentId', 'accountId', 'model', 'modelId', 'priceVersion', 'timezone', 'day', 'through', 'at', 'createdAt', 'updatedAt', 'expiresAt',
+  'runnerStatus', 'state', 'blockedBy', 'resource', 'thinking', 'finishReason', 'errorKind', 'settlement', 'baseURL', 'tags',
   'outcome', 'origin', 'band', 'district', 'landmark', 'richness', 'phase', 'access', 'build', 'mode', 'types', 'choice', 'direction', 'procedure', 'class', 'code', 'field', 'decision', 'source', 'script', 'module',
 ]);
 const machine = /^[A-Za-z0-9_.:/-]{1,160}$/;
@@ -95,6 +98,7 @@ export class WechatProjection {
     if (key === 'avatar') return typeof value === 'string' && roleAvatar.test(value) ? value : null; // Uploaded images need image moderation first.
     if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, item]) => [k, this.filter(item, identity, k, meta, label)]));
     if (typeof value !== 'string' || !value.trim()) return value;
+    if (key === 'fingerprints' && /^[a-f0-9]{12}$/.test(value)) return value;
     // Only machine identifiers/enum values can bypass prose moderation.
     if (structural.has(key) && machine.test(value)) return value;
     if (this.system(value)) return value;

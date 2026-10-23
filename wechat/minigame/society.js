@@ -18,16 +18,21 @@ const { Assistant } = require('./assistant');
 const { History } = require('./history');
 const { Announcements } = require('./announcements');
 const { Notifications } = require('./notifications');
+const { Observe, OBSERVE_PAGES } = require('./observe');
+const { Stewardship, DEFAULT_CAP } = require('./stewardship');
+const { Profile } = require('./profile');
 const { C, font } = theme;
 
 const TABS = [['city', '观测', 'city'], ['residents', '居民', 'residents'], ['archive', '档案', 'archive'], ['account', '我的', 'me']];
 const TAB_IDS = TABS.map(t => t[0]);
 // 处理中仍可操作的界面动作；停止生成也保留入口。
-const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'contactChannel', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider', 'preset', 'modelChoice', 'messageExpand', 'assistantList', 'assistantCloseSource', 'assistantScope', 'assistantResetScope', 'assistantCancel', 'notificationSkip', 'notificationPromptLater', 'launchCancel']);
+const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'contactChannel', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider', 'preset', 'modelChoice', 'messageExpand', 'assistantList', 'assistantCloseSource', 'assistantScope', 'assistantResetScope', 'assistantCancel', 'notificationSkip', 'notificationPromptLater', 'launchCancel', 'stewardModelSource', 'stewardHostedModel', 'stewardConfirmCancel', 'profileCancel', 'createCity', 'createLang']);
 const PREFS_KEY = 'houren.prefs';
 const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null;
 const caf = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
 
+// 经过审核投影的配置里，接口地址与模型名若仍在审核就不回填，保留当前选择的服务商。
+function usableConfig(config) { return config.hosted || [config.baseURL, config.model].every(v => typeof v === 'string' && !['内容审核中', '内容未通过安全检查', '内容暂不可用', '请微信登录后阅读', '内容暂未展示'].includes(v)); }
 class SocietyGame {
   constructor(platform = wx) {
     this.wx = platform;
@@ -50,6 +55,9 @@ class SocietyGame {
     this.assistant = new Assistant(this);
     this.announcements = new Announcements(this);
     this.notifications = new Notifications(this);
+    this.observe = new Observe(this);
+    this.steward = new Stewardship(this);
+    this.profileState = new Profile(this);
     this.modelPresets = modelPresets.bundled;
     this.cityMap = new CityMap(() => this.wx.createCanvas());
     this.filterScroller = new Scroller(); this.horizontalAreas = [];
@@ -152,7 +160,7 @@ class SocietyGame {
     this.clearSecrets();
   }
   clearSecrets() {
-    this.editing = ''; this.mergePreview = null;
+    this.editing = ''; this.mergePreview = null; if (this.steward) this.steward.confirm = null; if (this.profileState) this.profileState.confirm = null;
     this.messageBoard.stash();
     this.assistant.stash();
     delete this.form.apiKey; delete this.form.password; delete this.form.confirmPassword; delete this.form.currentPassword; delete this.form.showPassword;
@@ -215,6 +223,14 @@ class SocietyGame {
       finally { this.refreshing = false; this.invalidate(); this.render(); this.schedule(); }
       return;
     }
+    if (OBSERVE_PAGES.includes(this.tab)) { await this.observe.refresh(); return; }
+    if (['billing', 'soulImport'].includes(this.tab)) {
+      this.refreshing = true; this.render();
+      try { if (this.tab === 'billing') await this.steward.loadHosted(); else await this.steward.loadImports(); }
+      catch (error) { this.showToast(error.message, 'error'); }
+      finally { this.refreshing = false; this.invalidate(); this.render(); }
+      return;
+    }
     if (['messages', 'messageThread'].includes(this.tab)) {
       this.refreshing = true; this.render();
       try { await this.messageBoard.refresh(); }
@@ -275,29 +291,44 @@ class SocietyGame {
     const mine = result.user ? await api.request('/api/account/residents') : null;
     if (!this.readCurrent('account', ticket)) return;
     this.user = result.user; this.registrationOpen = result.registrationOpen;
-    this.wechatLinked = status.linked; this.wechatEnabled = status.enabled; this.wechatVerified = status.verified;
+    this.wechatLinked = status.linked; this.wechatEnabled = status.enabled; this.wechatVerified = status.verified; this.wechatAppId = status.appid || config.appid || null;
     this.messageBoard.sync();
-    this.linked = mine?.managed || []; this.created = mine?.created || [];
+    this.linked = mine?.managed || []; this.created = mine?.created || []; this.startupAvailable = !!mine?.startupAvailable;
     this.rememberModeration('account', mine);
+    // 过继邀请与托管余额不阻塞登录与刷新；各自的卡片读到后再重绘。
+    if (this.tab === 'account') this.steward.loadAccountExtras().then(() => { this.invalidate(); this.render(); });
   }
   async loadArchive() {
     if (!this.state) return;
+    const loreStale = !this.archiveLore || this.archiveLore.world !== this.state.world.id || ['pending', 'loginRequired', 'unavailable'].some(k => this.archiveLore.moderation && this.archiveLore.moderation[k]);
+    if (this.archiveTab === 'laws' && loreStale) {
+      // 物理定律等系统文本（网站 /api/public/lore）：一个世界读一次，经审核代理。
+      const ticket = this.beginRead('lore');
+      try { const lore = await api.request('/api/public/lore?lang=zh'); if (this.readCurrent('lore', ticket)) { this.archiveLore = Object.assign(lore, { world: this.state.world.id }); this.archiveLoreError = ''; this.rememberModeration('archive', lore); } }
+      catch (error) { if (this.readCurrent('lore', ticket)) this.archiveLoreError = '物理定律暂时读不到：' + error.message; }
+      return;
+    }
     if (this.archiveTab !== 'chronicle') return;
     const perMonth = this.state.world.daysPerMonth || 24, current = Math.floor(this.state.world.day / perMonth);
     if (this.chronicleMonth === null || this.chronicleMonth > current) this.chronicleMonth = current;
     const from = this.chronicleMonth * perMonth;
     const month = this.chronicleMonth, ticket = this.beginRead('archive');
-    const result = await api.request('/api/public/chronicle?lang=zh&from=' + from);
-    if (!this.readCurrent('archive', ticket) || this.archiveTab !== 'chronicle' || this.chronicleMonth !== month) return;
+    // 第七前提：聚焦一座城时只读那座城的编年史；全岛时三城合在一起，各条标出城。
+    const focus = this.state.cities && this.cityFocus ? this.cityFocus : null;
+    const result = await api.request('/api/public/chronicle?lang=zh&from=' + from + (focus ? '&city=' + encodeURIComponent(focus) : ''));
+    if (!this.readCurrent('archive', ticket) || this.archiveTab !== 'chronicle' || this.chronicleMonth !== month || (this.state.cities && this.cityFocus ? this.cityFocus : null) !== focus) return;
     this.rememberModeration('archive', result);
-    this.chronicle = (result.chronicle || []).filter(c => c.day < from + perMonth).slice().reverse().map(parseChronicle);
+    const short = id => { const c = (this.state.cities || []).find(x => x.id === id); return c ? (c.short && c.short.zh) || c.id : ''; };
+    this.chronicle = (result.chronicle || []).filter(c => c.day < from + perMonth).slice().reverse().map(c => { const d = parseChronicle(c); if (!focus && c.city && short(c.city)) d.title = short(c.city) + ' · ' + d.title; return d; });
   }
   async loadOwner() {
     const id = this.residentId, ticket = this.beginRead('owner');
     const path = '/api/account/residents/' + encodeURIComponent(id);
     const [detail, privateData] = await Promise.all([api.request(path), api.request(path + '/private')]);
     if (!this.readCurrent('owner', ticket) || this.residentId !== id) return false;
-    this.owner = Object.assign({}, detail.resident, privateData, detail.overview, { agentId: id, usage: detail.usage });
+    this.owner = Object.assign({}, detail.resident, privateData, detail.overview, { agentId: id, usage: detail.usage, statistics: detail.statistics || null, publicOnly: !!detail.publicOnly });
+    // 每日上限输入框跟随当前居民；换了居民或上限被别处改过时重新预填。
+    if (this.form.capFor !== id + ':' + this.owner.dailyCap) { this.form.dailyCap = this.owner.dailyCap === undefined ? '' : String(this.owner.dailyCap); this.form.capFor = id + ':' + this.owner.dailyCap; }
     this.rememberModeration('owner', detail, privateData);
     return true;
   }
@@ -357,6 +388,9 @@ class SocietyGame {
     if (a.type === 'announcements' || a.type?.startsWith('announcement')) return this.announcements.handle(a);
     if (a.type === 'messages' || a.type?.startsWith('message')) return this.messageBoard.handle(a);
     if (a.type === 'notifications' || a.type?.startsWith('notification')) return this.notifications.handle(a);
+    if (a.type === 'observe' || a.type?.startsWith('observe')) return this.observe.handle(a);
+    if (a.type?.startsWith('steward')) return this.steward.handle(a);
+    if (a.type?.startsWith('profile') && a.type !== 'profileTab') return this.profileState.handle(a);
     switch (a.type) {
       case 'start': this.entered = true; this.tab = 'city'; this.stack = []; await Promise.all([this.refresh({ full: true }), this.loadAccount().catch(() => {})]); await this.openLaunch(); break;
       case 'openLaunch': await this.openLaunch(); break;
@@ -372,7 +406,7 @@ class SocietyGame {
       case 'back': this.back(); break;
       case 'refresh': await this.refresh({ full: true, pull: !!a.pull }); break;
       case 'filter': this.feedFilter = a.value; break;
-      case 'cityFocus': this.cityFocus = a.city || null; this.cityMap.resetView(); this.mapVersion++; break;
+      case 'cityFocus': this.cityFocus = a.city || null; this.cityMap.resetView(); this.mapVersion++; if (this.tab === 'archive') await this.loadArchive(); break;
       case 'segment': this.segment = a.value; break;
       case 'sort': this.sort = a.value; break;
       case 'expand': if (this.expanded.has(a.key)) this.expanded.delete(a.key); else this.expanded.add(a.key); break;
@@ -404,7 +438,7 @@ class SocietyGame {
         if (!f.accepted) throw new Error('请先阅读并同意隐私说明');
         try { await api.loginByPassword((f.username || '').trim(), f.password || ''); }
         finally { this.clearSecrets(); }
-        f.password = ''; this.navigation++; this.owner = null; this.residentId = ''; this.moderation = {}; this.loginRequired = {}; this.messageBoard.reset(); this.notifications.reset(); await this.loadAccount(); this.back(); this.showToast('已登录网站账号', 'ok');
+        f.password = ''; this.navigation++; this.owner = null; this.residentId = ''; this.moderation = {}; this.loginRequired = {}; this.messageBoard.reset(); this.notifications.reset(); this.steward.reset(); await this.loadAccount(); this.back(); this.showToast('已登录网站账号', 'ok');
         await this.resumeLaunch();
         break;
       case 'linkAccount': this.push('link'); break;
@@ -423,7 +457,7 @@ class SocietyGame {
         const ticket = this.mergePreview.ticket;
         await api.request('/api/wechat/merge/confirm', { method: 'POST', timeout: 60000, data: { ticket, confirm: true } });
         this.clearSecrets(); this.navigation++; this.owner = null; this.residentId = '';
-        this.messageBoard.reset(); this.notifications.reset();
+        this.messageBoard.reset(); this.notifications.reset(); this.steward.reset();
         this.moderation = {}; this.loginRequired = {}; this.stack = []; this.tab = 'account';
         await this.loadAccount(); this.showToast('账号已合并，请使用网站账号登录', 'ok');
         await this.resumeLaunch();
@@ -465,7 +499,7 @@ class SocietyGame {
         this.navigation++; // Old readers must not restore a previous login's moderation state.
         this.refreshing = false; // A fresh read may replace an outstanding read from the previous login.
         this.moderation = {}; this.loginRequired = {}; this.updatePending();
-        this.messageBoard.reset(); this.notifications.reset();
+        this.messageBoard.reset(); this.notifications.reset(); this.steward.reset();
         await this.loadAccount(); this.map = null; await this.refresh({ full: true });
         this.notice = '微信登录成功'; this.showToast('微信登录成功', 'ok');
         await this.resumeLaunch();
@@ -477,7 +511,7 @@ class SocietyGame {
         api.clearSession();
         this.user = null; this.owner = null; this.linked = []; this.created = []; this.wechatVerified = false;
         this.messageBoard.reset();
-        this.notifications.reset(); this.launch = null; this.launchQueued = false; // 只清本机状态；普通退出不取消服务器上的提醒订阅。
+        this.notifications.reset(); this.steward.reset(); this.launch = null; this.launchQueued = false; // 只清本机状态；普通退出不取消服务器上的提醒订阅。
         this.loginRequired = {};
         this.form = {}; this.residentId = ''; this.letterDraft = ''; this.createDraft = ''; this.letterRequestId = null; this.createRequestId = null;
         this.stack = []; this.sheet = null; this.tab = 'account'; this.moderation.owner = 0; this.moderation.account = 0;
@@ -489,11 +523,16 @@ class SocietyGame {
         break;
       case 'owner': {
         const navigation = this.navigation;
-        if (this.residentId !== a.id) this.clearSecrets(); this.residentId = a.id;
-        await this.loadModelPresets();
+        if (this.residentId !== a.id) { this.clearSecrets(); this.steward.tab = 'overview'; this.steward.timeline = null; this.steward.confirm = null; delete f.modelSource; }
+        this.residentId = a.id;
+        await Promise.all([this.loadModelPresets(), this.user ? this.steward.loadHosted() : null]);
         if (this.navigation !== navigation || this.residentId !== a.id) break;
         if (!f.presetId && !f.baseURL) this.selectPreset('deepseek');
-        if (await this.loadOwner() && this.tab !== 'owner') this.push('owner');
+        if (await this.loadOwner()) {
+          const config = this.owner.runner && this.owner.runner.config;
+          if (!f.modelSource) { if (!this.steward.prefill(config && usableConfig(config) ? config : null)) f.modelSource = 'own'; }
+          if (this.tab !== 'owner') this.push('owner');
+        }
         break;
       }
       case 'letter': {
@@ -514,6 +553,8 @@ class SocietyGame {
         if (!this.user || !this.wechatVerified) throw new Error('请先使用微信登录');
         await this.loadModelPresets(); if (this.navigation !== navigation) break;
         if (!f.presetId && !f.baseURL) this.selectPreset('deepseek');
+        if (!f.createCap) f.createCap = String(DEFAULT_CAP);
+        if (!f.lang) f.lang = 'zh';
         this.push('entry'); break;
       }
       case 'provider': f.providerIndex = a.index !== undefined ? a.index : ((f.providerIndex || 0) + 1) % 3; f.apiKey = ''; break;
@@ -521,6 +562,8 @@ class SocietyGame {
       case 'modelChoice': f.model = a.model; break;
       case 'modelTest': case 'modelSave': await this.configureRunner(a.type === 'modelTest'); break;
       case 'create': await this.enter(); break;
+      case 'createCity': f.createCity = a.city; break;
+      case 'createLang': f.lang = a.lang; break;
       case 'support':
         await new Promise((resolve, reject) => this.wx.setClipboardData({ data: 'wong.laye@outlook.com', success: resolve, fail: () => reject(new Error('复制失败，请手动记录邮箱')) }));
         this.notice = '客服邮箱已复制'; this.showToast('客服邮箱已复制', 'ok');
@@ -532,12 +575,19 @@ class SocietyGame {
     const f = this.form;
     if (!f.entryAccepted) throw new Error('请先阅读并同意隐私说明');
     if (!(f.name || '').trim() || !(f.soul || '').trim()) throw new Error('请填写居民名字与灵魂');
-    const draft = JSON.stringify([f.name.trim(), f.bio || '', f.soul.trim(), f.invite || '']);
+    const cities = this.state && this.state.cities;
+    if (cities && !cities.some(c => c.id === f.createCity)) throw new Error('请选一座城落籍');
+    const lang = /^[a-z]{2}(?:-[A-Za-z]{2,4})?$/.test(f.lang || '') ? f.lang : 'zh';
+    const capText = String(f.createCap === undefined ? DEFAULT_CAP : f.createCap).trim();
+    if (!/^\d{1,9}$/.test(capText) || Number(capText) > 50000000) throw new Error('每日游戏词元上限须为 0–50,000,000 的整数');
+    const dailyCap = Number(capText);
+    const draft = JSON.stringify([f.name.trim(), f.bio || '', f.soul.trim(), f.invite || '', cities ? f.createCity : null, lang, dailyCap]);
     if (this.createDraft !== draft) { this.createRequestId = api.requestId(); this.createDraft = draft; }
     this.createRequestId = this.createRequestId || api.requestId();
     try {
-      const result = await api.request('/api/account/residents', { method: 'POST', timeout: 60000, data: { name: f.name.trim(), bio: f.bio || '', soul: f.soul.trim(), lang: 'zh', dailyCap: 18000, invite: (f.invite || '').trim(), requestId: this.createRequestId } });
-      this.residentId = result.agentId; this.createRequestId = null; f.soul = ''; f.name = ''; f.bio = '';
+      const result = await api.request('/api/account/residents', { method: 'POST', timeout: 60000, data: { name: f.name.trim(), bio: f.bio || '', soul: f.soul.trim(), lang, dailyCap, ...(cities ? { city: f.createCity } : {}), invite: (f.invite || '').trim(), requestId: this.createRequestId } });
+      this.residentId = result.agentId; this.createRequestId = null; f.soul = ''; f.name = ''; f.bio = ''; delete f.createCity;
+      this.steward.tab = 'overview'; this.steward.timeline = null; f.modelSource = 'own';
       this.clearSecrets(); this.navigation++; this.stack = ['account']; this.tab = 'owner'; this.scroller('owner').reset();
       await this.loadOwner(); this.notice = '居民已创建，请配置模型后启动'; this.showToast('居民已创建', 'ok');
     } catch (error) { if (!error.status) throw new Error('结果未确认。保留原提交编号，再次提交不会重复创建居民。'); throw error; }
@@ -545,10 +595,13 @@ class SocietyGame {
   async configureRunner(testOnly) {
     const f = this.form;
     if (!f.modelAccepted) throw new Error('请先同意模型调用说明');
-    const runner = { provider: ['openai', 'openai-responses', 'anthropic'][f.providerIndex || 0], model: (f.model || '').trim(), baseURL: (f.baseURL || '').trim(), apiKey: (f.apiKey || '').trim(), actEveryTicks: 1, historyRounds: 6 };
-    if (!runner.model || !runner.apiKey || !runner.baseURL.startsWith('https://')) throw new Error('请填写模型名、API Key 和 HTTPS 接口地址');
-    await api.request('/api/account/residents/' + encodeURIComponent(this.residentId) + '/runner', { method: 'POST', timeout: 60000, data: { op: testOnly ? 'test' : 'save', config: runner } });
-    if (!testOnly) { f.apiKey = ''; await this.loadOwner(); }
+    if (testOnly && f.modelSource === 'hosted') { delete f.apiKey; throw new Error('平台托管无需测试连接，保存后即可启动'); }
+    // 密钥只在这一次请求里使用：成功、失败或校验不通过都不留在手机内存的表单里。
+    try {
+      const runner = this.steward.runnerConfig(this.owner && this.owner.runner && this.owner.runner.config);
+      await api.request('/api/account/residents/' + encodeURIComponent(this.residentId) + '/runner', { method: 'POST', timeout: 60000, data: { op: testOnly ? 'test' : 'save', config: runner } });
+    } finally { delete f.apiKey; }
+    if (!testOnly) await this.loadOwner();
     this.notice = testOnly ? '模型连接成功' : '模型配置已保存，可主动启动运行器';
     this.showToast(this.notice, 'ok');
   }

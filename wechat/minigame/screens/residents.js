@@ -58,6 +58,34 @@ function residents(app, W) {
   return { top, nodes, tabbar: true, pull: true };
 }
 
+// 谱系（网站 e2-profile.js lineageGraph 的列表版）：上溯至多三代作者、下传至多两代子女；
+// 多作者的孩子在每一行注明全部作者，网图里的每条亲属连线都能在这里找到，每一行都可点开档案。
+function lineage(app, W, a, all, who) {
+  const byId = new Map(all.map(x => [x.id, x])), levels = new Map([[a.id, 0]]);
+  const walk = (key, depth, sign) => {
+    let frontier = [a.id];
+    for (let d = 1; d <= depth; d++) {
+      const next = [];
+      for (const id of frontier) for (const rel of ((byId.get(id) || {})[key] || [])) if (!levels.has(rel)) { levels.set(rel, sign * d); next.push(rel); }
+      frontier = next;
+    }
+  };
+  walk('authors', 3, -1); walk('children', 2, 1);
+  if (levels.size === 1) return [];
+  const LABEL = { '-1': '作者', '-2': '作者的作者', '-3': '上溯三代', '1': '子女', '2': '孙辈' };
+  const nodes = [N.section(W, '谱系', { small: true, sub: `${levels.size - 1} 位亲属` })];
+  for (const level of [-1, -2, -3, 1, 2]) {
+    const ids = [...levels].filter(([, l]) => l === level).map(([id]) => id);
+    if (!ids.length) continue;
+    nodes.push(N.text(W, LABEL[level], { style: 'caption', color: C.text3 }));
+    ids.forEach(id => {
+      const x = byId.get(id), authors = (x && x.authors) || [];
+      nodes.push(N.listRow(W, { avatar: { id, name: who(id), avatar: x && x.avatar }, title: who(id), chip: x ? { label: view.status(x.status), color: STATUS_COLOR[x.status] || C.dormant } : null,
+        sub: authors.length ? '作者 ' + authors.map(who).join('、') : '人类写下', meta: x && x.generation !== undefined ? `第 ${x.generation} 代` : '', chevron: true, action: { type: 'resident', id } }));
+    });
+  }
+  return nodes;
+}
 function resident(app, W) {
   const p = app.profile || {}, a = p.agent || {};
   const top = { kind: 'back', title: usable(a.name) ? a.name : '居民' };
@@ -75,6 +103,25 @@ function resident(app, W) {
   nodes.push(N.columns(W, [cw => N.stat(cw, '词元', compact(a.energy), null, C.token), cw => N.stat(cw, '物料', num(a.materials || 0)), cw => N.stat(cw, '发言', num(st.utterances || 0))], 10));
   nodes.push(N.columns(W, [cw => N.stat(cw, '修缮', compact(st.repaired || 0)), cw => N.stat(cw, '出资', compact(st.contributed || 0)), cw => N.stat(cw, '领取', compact(st.drawn || 0))], 10));
   if (a.place) nodes.push(N.button(W, '在地图上看它在哪', { type: 'sheet', kind: 'place', id: a.place }, { variant: 'secondary', icon: 'locate' }));
+  // 与网站档案抽屉（e2-profile.js）相同的公开资料：籍、社群、标签、志与立志史、作者与子女、著述、模型与生卒。
+  const dirAgents = (s.agents || []).concat(s.cemetery || [], s.retired || []), who = id => { const x = dirAgents.find(y => y.id === id); return x && usable(x.name) ? x.name : pendingName(id); };
+  const home = s.cities && a.city ? s.cities.find(c => c.id === a.city) : null;
+  const groups = (a.groups || []).map(id => (s.groups || []).find(g => g.id === id)).filter(Boolean).map(g => usable(g.name) ? g.name : '一个社群');
+  const facts = [
+    home ? ['籍', (home.short && home.short.zh) || home.id] : null,
+    groups.length ? ['社群', groups.join('、')] : null,
+    (a.tags || []).filter(usable).length ? ['标签', a.tags.filter(usable).join('、')] : null,
+    a.body && usable(a.body.model) ? ['模型', a.body.model] : null,
+    a.bornDay !== undefined && a.bornDay !== null ? ['生卒', `第 ${a.bornDay + 1} 日入城` + (a.diedDay !== undefined && a.diedDay !== null ? ` · 第 ${a.diedDay + 1} 日离世` : '')] : null,
+    ['作者', (a.authors || []).length ? a.authors.map(who).join('、') : '人类写下'],
+  ].filter(Boolean);
+  nodes.push(N.card(W, iw => facts.map(([k, v]) => N.rich(iw, [{ text: k + '  ', color: C.text3 }, { text: v, color: C.text }], { style: 'meta' })), { pad: 14, gap: 4 }));
+  nodes.push(...lineage(app, W, a, dirAgents, who));
+  if (textOf(a.purpose)) nodes.push(N.section(W, '志', { small: true, sub: 'AI 生成' }), N.text(W, textOf(a.purpose), { style: 'body' }));
+  if ((a.purposeHistory || []).length) nodes.push(N.text(W, '立志史：' + a.purposeHistory.slice().reverse().map(x => `第 ${(x.day || 0) + 1} 日 ${x.text === '' ? '放下了志' : textOf(x.text) || '（审核中）'}`).join('；'), { style: 'caption', color: C.text3, maxLines: 6 }));
+  if (textOf(a.soul)) nodes.push(N.section(W, '灵魂', { small: true, sub: 'AI 生成' }), N.text(W, textOf(a.soul), { style: 'feed', color: C.text2 }));
+  const writings = (s.docs || []).filter(d => d.author && d.author.id === a.id);
+  if (writings.length) { nodes.push(N.section(W, '著述', { small: true })); writings.forEach(d => nodes.push(N.listRow(W, { title: '《' + (textOf(d.title) || '一篇典籍') + '》', sub: `阅读 ${d.reads || 0} 次`, chevron: true, action: { type: 'detail', kind: 'doc', id: d.id } }))); }
   const tabs = [['events', '动态'], ['memories', '记忆'], ['thoughts', '独白'], ['inscriptions', '铭刻']];
   nodes.push(N.segmented(W, tabs.map(([v, l]) => ({ label: l, action: { type: 'profileTab', value: v }, selected: (p.tab || 'events') === v }))));
   const tab = p.tab || 'events';

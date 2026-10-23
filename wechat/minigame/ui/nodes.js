@@ -111,6 +111,7 @@ function chips(W, items, opts = {}) {
   const f = font(13, {}), fb = font(13, { bold: true }), h = 32, gap = 8, rows = [];
   let row = [], used = 0;
   for (const item of items) {
+    note('chip', item.label, { action: item.action, selected: !!item.selected });
     const w = Math.max(44, Math.min(W, Math.ceil(T.measure(measureCtx, item.selected ? fb : f, item.label)) + 28));
     if (row.length && used + w > W) { rows.push(row); row = []; used = 0; }
     row.push({ item, w }); used += w + gap;
@@ -251,6 +252,7 @@ function paintToggle(ctx, x, y, on) {
 /** 统计块。 */
 function stat(W, label, value, sub, color) {
   const h = 76;
+  note('stat', label, { value });
   return node(h, (g, x, y) => {
     P.fillRound(g.ctx, x, y, W, h, 14, C.card); P.strokeRound(g.ctx, x, y, W, h, 14, C.line, 1);
     P.text(g.ctx, label, x + 12, y + 18, font(12, {}), C.text3);

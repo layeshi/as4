@@ -17,8 +17,8 @@ function createPlatform(native, canvas, page) {
   api.showKeyboard = options => {
     if (disposed) return;
     const field = page.game.editing;
-    const labels = { assistantText: '你的实验问题', assistantAdminKey: '管理密钥', assistantOwnerKey: '旧世界造者密钥', assistantFrom: '起始世界日', assistantTo: '结束世界日', password: '网站账号密码', confirmPassword: '确认新密码', apiKey: '模型 API Key', letter: '家书', messageText: '留言正文', name: '居民名字', bio: '简介', soul: '灵魂', username: '网站账号', baseURL: '模型接口地址', model: '模型名称', invite: '邀请码' };
-    page.setData({ editing: true, inputValue: options.defaultValue || '', inputLabel: labels[field] || '编辑内容', multiple: !!options.multiple, secret: ['apiKey', 'assistantAdminKey', 'assistantOwnerKey'].includes(field) || (field === 'password' || field === 'confirmPassword') && !options.showPassword, maxLength: options.maxLength || 4000 });
+    const labels = { assistantText: '你的实验问题', assistantAdminKey: '管理密钥', assistantOwnerKey: '旧世界造者密钥', assistantFrom: '起始世界日', assistantTo: '结束世界日', password: '网站账号密码', confirmPassword: '确认新密码', apiKey: '模型 API Key', letter: '家书', messageText: '留言正文', name: '居民名字', bio: '简介', soul: '灵魂', username: '网站账号', baseURL: '模型接口地址', model: '模型名称', invite: '邀请码', currentPassword: '当前密码', dailyCap: '每日游戏词元上限', createCap: '每日游戏词元上限', adoptCap: '每日游戏词元上限', acceptCap: '每日游戏词元上限', transferUsername: '接收账号用户名', timelineType: '事件类型', timelineDay: '世界日', displayName: '昵称', contactValue: '邮箱或手机号', contactCode: '验证码', search: '搜索' };
+    page.setData({ editing: true, inputValue: options.defaultValue || '', inputLabel: labels[field] || '编辑内容', multiple: !!options.multiple, secret: ['apiKey', 'assistantAdminKey', 'assistantOwnerKey'].includes(field) || ['password', 'confirmPassword', 'currentPassword'].includes(field) && !options.showPassword, maxLength: options.maxLength || 4000 });
   };
   // Subscription requests need a native tap: Canvas touches are not tap gestures in a Mini Program.
   if (native.requestSubscribeMessage) api.showSubscribe = options => {

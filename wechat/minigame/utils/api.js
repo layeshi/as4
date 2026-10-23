@@ -45,7 +45,9 @@ function request(path, options = {}) {
   if (!/^\/api\//.test(path) || path.includes('..')) return Promise.reject(new Error('接口路径无效'));
   if (path.startsWith('/api/public/')) path = path.replace('/api/public/', '/api/wechat/public/');
   if (/^\/api\/messages(?:[/?]|$)/.test(path)) path = path.replace('/api/messages', '/api/wechat/messages');
-  if ((!options.method || options.method === 'GET') && /^\/api\/account\/residents(?:\/|$)/.test(path)) path = path.replace('/api/account/residents', '/api/wechat/residents');
+  if ((!options.method || options.method === 'GET') && /^\/api\/account\/residents(?:[/?]|$)/.test(path)) path = path.replace('/api/account/residents', '/api/wechat/residents');
+  // 账户里含文字的只读资料（过继邀请、托管账目、旧世界灵魂）走审核代理，与网站同一份数据。
+  if ((!options.method || options.method === 'GET') && /^\/api\/account\/(?:transfers|hosted|worlds)(?:[/?]|$)/.test(path)) path = path.replace('/api/account/', '/api/wechat/account/');
   const generation = sessionGeneration, session = cookies.houren_session;
   return new Promise((resolve, reject) => {
     const header = { 'Content-Type': 'application/json', 'X-Houren-Request': '1', 'X-Houren-Client': 'wechat' };
@@ -76,13 +78,13 @@ function request(path, options = {}) {
     });
   });
 }
-function wechatProof(path, data, codeKey = 'code') {
+function wechatProof(path, data, codeKey = 'code', method = 'POST') {
   const generation = sessionGeneration, session = cookies.houren_session;
   return new Promise((resolve, reject) => {
     wx.login({ timeout: 10000, success: result => result.code ? resolve(result.code) : reject(new Error('微信登录失败，请重试')), fail: () => reject(new Error('微信登录失败，请重试')) });
   }).then(code => {
     if (!sessionCurrent(generation, session)) throw new Error('登录会话已变更，请重试');
-    return request(path, { method: 'POST', timeout: 30000, data: { ...data, [codeKey]: code, ...(config.appid ? { appid: config.appid } : {}) } });
+    return request(path, { method, timeout: 30000, data: { ...data, [codeKey]: code, ...(config.appid ? { appid: config.appid } : {}) } });
   });
 }
 function loginWeChat(bindCurrent) { return wechatProof('/api/wechat/login', { bindCurrent: !!bindCurrent }); }
@@ -90,14 +92,19 @@ function loginByPassword(username, password) { return wechatProof('/api/wechat/p
 function setWebPassword(password) { return wechatProof('/api/wechat/password', { password }); }
 function setContactByWechat(proof) { return wechatProof('/api/account/contacts', { proof }, 'wechatCode'); }
 function setContactByPassword(proof, currentPassword) { return request('/api/account/contacts', { method: 'POST', data: { proof, currentPassword } }); }
+// 解除联系方式需要重新验证：有网页密码时用当前密码，否则用一次新的微信登录凭证（与网站 reauthenticate 相同）。
+function removeContactByWechat(kind) { return wechatProof('/api/account/contacts/' + kind, {}, 'wechatCode', 'DELETE'); }
+function removeContactByPassword(kind, currentPassword) { return request('/api/account/contacts/' + kind, { method: 'DELETE', data: { currentPassword } }); }
 function previewMerge(username, password) { return wechatProof('/api/wechat/merge/preview', { username, password }); }
 function requestId() {
   // Idempotency identifier, not an authentication credential.
   return 'wx-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
+// 历史包与居民流水 CSV（只有数字与命令代码，无居民文字）。其他导出不经下载通道。
+const DOWNLOADS = [/^\/api\/history\/exports\/[a-zA-Z0-9-]+\/download$/, /^\/api\/account\/residents\/[A-Za-z0-9_-]{1,128}\/export\?format=csv$/];
 function download(path) {
-  if (!/^\/api\/history\/exports\/[a-zA-Z0-9-]+\/download$/.test(path)) return Promise.reject(new Error('下载路径无效'));
+  if (!DOWNLOADS.some(pattern => pattern.test(path))) return Promise.reject(new Error('下载路径无效'));
   if (!cookies.houren_session) return Promise.reject(new Error('请先登录后下载历史'));
   const generation = sessionGeneration, token = cookies.houren_session;
   return new Promise((resolve, reject) => {
@@ -115,4 +122,4 @@ function download(path) {
   });
 }
 
-module.exports = { request, download, restoreSession, clearSession, loginWeChat, loginByPassword, setWebPassword, setContactByWechat, setContactByPassword, previewMerge, requestId };
+module.exports = { request, download, restoreSession, clearSession, loginWeChat, loginByPassword, setWebPassword, setContactByWechat, setContactByPassword, removeContactByWechat, removeContactByPassword, previewMerge, requestId };

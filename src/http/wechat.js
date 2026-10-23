@@ -1,4 +1,6 @@
 import { residentRoutes } from './residents.js';
+import { archiveRoutes } from './archives.js';
+import { hostedRoutes } from './hosted.js';
 import { publicRoutes } from './public.js';
 import { accountWrap, accountFor, setSession } from './accounts.js';
 import { fail, publicUser, wechatBindings, hasWechatIdentity } from '../accounts/store.js';
@@ -14,8 +16,25 @@ function project(ctx, req, payload) {
   if (out && typeof out === 'object' && !Array.isArray(out)) out.moderation = meta;
   return out;
 }
-const publicPath = /^\/api\/public\/(?:state|map|events|chronicle|(?:agents|places|laws|docs)\/[^/]+)$/;
+// Keep the WeChat observation surface explicit; every response below still passes
+// through project(), including text from market, research and cooperation records.
+const publicPath = /^\/api\/public\/(?:state|map|events|chronicle|metrics|attention|lore|legacy|weather|cooperation|materials|services|demands|orders|research|observations|projects|project|(?:agents|places|laws|docs)\/[^/]+)$/;
 export const wechatRoutes = [
+  ['GET', /^\/api\/wechat\/account\/(?:transfers|hosted|worlds(?:\/[^/]+\/(?:souls|residents))?)$/, accountWrap(async ({ req, res, ctx, url }) => {
+    const target = url.pathname.replace('/api/wechat/account/', '/api/account/');
+    for (const [method, pattern, handler] of [...residentRoutes, ...archiveRoutes, ...hostedRoutes]) {
+      if (method !== 'GET') continue;
+      const match = typeof pattern === 'string' ? pattern === target && [] : pattern.exec(target);
+      if (!match) continue;
+      let status, payload;
+      const capture = { getHeader: name => res.getHeader(name), writeHead: code => { status = code; }, end: data => { payload = JSON.parse(data); } };
+      const originalUrl = new URL(url); originalUrl.pathname = target;
+      await handler(req, capture, ctx, originalUrl, typeof pattern === 'string' ? [] : match.slice(1).map(decodeURIComponent));
+      if (!status || !payload) fail(503, 'unavailable', '内容暂不可用。');
+      return sendJson(res, status, status >= 400 ? payload : project(ctx, req, payload));
+    }
+    fail(404, 'not_found', '接口不存在。');
+  }, { signedIn: true })],
   ['GET', '/api/wechat/model-presets', accountWrap(({ res }) => sendJson(res, 200, { presets: MODEL_PRESETS }))],
   ['GET', /^\/api\/wechat\/public\/(.+)$/, accountWrap(async ({ req, res, ctx, url }) => {
     const target = '/api/public/' + url.pathname.slice('/api/wechat/public/'.length);
@@ -39,7 +58,7 @@ export const wechatRoutes = [
     // The raw public response never reaches this client. Checks run outside the world log.
     sendJson(res, status, project(ctx, req, payload));
   })],
-  ['GET', /^\/api\/wechat\/residents(?:\/([^/]+)(?:\/(private))?)?$/, accountWrap(async ({ req, res, ctx, url }) => {
+  ['GET', /^\/api\/wechat\/residents(?:\/([^/]+)(?:\/(private|events))?)?$/, accountWrap(async ({ req, res, ctx, url }) => {
     const target = '/api/account/residents' + url.pathname.slice('/api/wechat/residents'.length);
     let matched, params;
     for (const [method, pattern, handler] of residentRoutes) {
