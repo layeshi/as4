@@ -1,0 +1,10 @@
+{
+  "account": {
+    "valid": true,
+    "fieldsPresent": true
+  },
+  "weather": {
+    "valid": true,
+    "fieldsPresent": true
+  }
+}

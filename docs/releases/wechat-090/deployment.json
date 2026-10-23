@@ -1,0 +1,121 @@
+{
+  "sha": "0a38cfbec1fe7b76b0c07a3750f779eeb9e02d81",
+  "baseSha": "af14e3050187114f246d730f99b253c161aabb90",
+  "newRelease": "/opt/houren/releases/main-0a38cfbec1fe-wechat-parity-090",
+  "oldRelease": "/opt/houren/releases/main-af14e3050187-20261022-hosted-usage",
+  "dataDir": "/var/lib/houren/data",
+  "worldId": "p7-20261016",
+  "archivePath": "/var/backups/houren/wechat-parity-090-0a38cfbe/release.tar",
+  "archiveSha256": "10bdec13c6114b6bcc3b7e1e617dec4fe2dc0e35c2557bccb6b6d8083bf1d5e1",
+  "backup": "/var/backups/houren/wechat-parity-090-0a38cfbe",
+  "verificationMode": "final snapshot recovery",
+  "genesisReplay": false,
+  "phases": {
+    "preparing": "2026-10-23T15:24:07.747300+00:00",
+    "stopping": "2026-10-23T15:24:08.290938+00:00",
+    "consistent-backup": "2026-10-23T15:24:08.679292+00:00",
+    "offline-recovery": "2026-10-23T15:24:23.892777+00:00",
+    "permissions-preflight": "2026-10-23T15:24:53.492776+00:00",
+    "switching": "2026-10-23T15:25:02.361809+00:00",
+    "verifying-online": "2026-10-23T15:26:13.703771+00:00",
+    "complete": "2026-10-23T15:27:48.506175+00:00"
+  },
+  "phase": "complete",
+  "oldFilesVerified": 1297,
+  "releaseFilesVerified": 1305,
+  "otherServicePids": {
+    "nginx": "8608",
+    "xray": "13274"
+  },
+  "permissions": {
+    "/var/lib/houren/data": {
+      "mode": "0o755",
+      "uid": 999,
+      "gid": 996
+    },
+    "/etc/houren": {
+      "mode": "0o750",
+      "uid": 0,
+      "gid": 996
+    },
+    "/etc/houren/houren.env": {
+      "mode": "0o600",
+      "uid": 0,
+      "gid": 0
+    }
+  },
+  "stopSeconds": 0.379,
+  "dataBackupSha256": "92a9702b4b26d84daf634e7c0b64aa9dc06367ecef807351487e018783b09cb6",
+  "oldReleaseBackupSha256": "772722a5cdae6dfdf764c297a1fb89f083911790f2c30852fe34bca40c8a275e",
+  "recovery": {
+    "seedDigest": "14d7bebb1c7500fbd4df72df2b1a127cbf2ad3a2a29477337b4a0b722e7e28c3",
+    "notificationStateLoaded": true,
+    "worldId": "p7-20261016",
+    "premise": 7,
+    "physics": 2,
+    "epoch": 2,
+    "map": "island-three-v1",
+    "tick": 664,
+    "commandN": 14770,
+    "logEnd": 14770,
+    "replayed": 0,
+    "stateHash": "de75254b81f75da0640ee19ec8ee9ef4614ff0a7756b0bf37877fb1c4c7b5ed6",
+    "residents": 20,
+    "accounts": 6,
+    "runners": 20,
+    "validRunners": 20,
+    "enabledRunners": 19,
+    "paused": false,
+    "shellsPaused": null,
+    "hostedEnabled": true,
+    "assistantConversations": 3,
+    "assistantConfigPreserved": true,
+    "billingAccounts": 3,
+    "commandLogHash": "ac753ba4158291580bf2184d7789b17be4da8a930dcbfaf1424c4dd8fadaa9cd",
+    "commandLogBytes": 316110073,
+    "eventSequence": 5645
+  },
+  "preflight": {
+    "ok": true,
+    "checks": [],
+    "version": "0.1.0",
+    "hash": "0a38cfbec1fe7b76b0c07a3750f779eeb9e02d81",
+    "commandN": 14770,
+    "contentVerified": true
+  },
+  "downtimeSeconds": 125.411,
+  "effectiveConfigurationPreserved": true,
+  "health": {
+    "notificationRoutes": {
+      "authenticatedOnly": true,
+      "templatesConfigured": false
+    },
+    "assistant": {
+      "guestRoute": true,
+      "model": "gpt-6-luna",
+      "dailyQuestions": 20,
+      "dailyBudgetYuan": 20
+    },
+    "loginCaptcha": {
+      "provider": "altcha"
+    },
+    "ok": true,
+    "worldId": "p7-20261016",
+    "login": 200,
+    "account": 200,
+    "state": 200,
+    "sse": 200
+  },
+  "historyPrefixPreserved": true,
+  "accountsPreserved": true,
+  "otherEncryptedConfigurationPreserved": true,
+  "configurationChange": null,
+  "usagePreserved": true,
+  "service": {
+    "ActiveState": "active",
+    "SubState": "running",
+    "NRestarts": "0",
+    "Result": "success",
+    "MainPID": "230533"
+  }
+}
