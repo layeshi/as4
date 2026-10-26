@@ -17,7 +17,7 @@ async function setup() {
 }
 const drain = async projection => { for (let i = 0; i < 100 && (projection.active || projection.queue.length || projection.pending.size); i++) await new Promise(r => setImmediate(r)); assert.equal(projection.active, 0); };
 
-test('微信留言要求账号与微信身份，写入检查昵称与正文，网页可读同一数据', async () => {
+test('微信留言要求账号与微信身份，只读同一批网页留言，手机写入被拒绝', async () => {
   const { e, login } = await setup();
   try {
     const a = await login('alice');
@@ -28,13 +28,18 @@ test('微信留言要求账号与微信身份，写入检查昵称与正文，�
     assert.equal(plain.status, 401); assert.equal(plain.json.error.code, 'wechat_login_required');
     const checks = [];
     e.app.ctx.wechat.check = async (text, identity, scene) => { e.app.ctx.wechat.requireIdentity(identity); checks.push({ text, appid: identity.appid, scene }); };
-    const created = await a.call('/api/wechat/messages', { text: '小程序的留言\n可以换行' });
-    assert.equal(created.status, 201); assert.equal(created.json.message.text, '小程序的留言\n可以换行');
-    assert.deepEqual(checks.map(c => c.scene), [1, 2]); assert.ok(checks.every(c => c.appid === appid));
-    const web = await a.call('/api/messages');
-    assert.equal(web.json.messages[0].text, created.json.message.text);
-    assert.equal(created.headers.get('cache-control'), 'no-store');
-    assert.equal(created.headers.get('access-control-allow-origin'), null);
+    const denied = await a.call('/api/wechat/messages', { text: '小程序的留言' });
+    assert.equal(denied.status, 403); assert.equal(denied.json.error.code, 'wechat_observation_only');
+    assert.equal(checks.length, 0);
+    const webToken = e.app.ctx.accounts.issue(a.user.id);
+    const created = await e.call('/api/messages', { method: 'POST', headers: { Cookie: 'houren_session=' + webToken, 'X-Houren-Request': '1' }, body: { text: '来自网页的留言' } });
+    assert.equal(created.status, 201, created.text);
+    await a.call('/api/wechat/messages'); await drain(e.app.ctx.wechatProjection);
+    const read = await a.call('/api/wechat/messages');
+    assert.equal(read.json.messages[0].text, created.json.message.text);
+    assert.ok(checks.length > 0 && checks.every(c => c.appid === appid));
+    assert.equal(read.headers.get('cache-control'), 'no-store');
+    assert.equal(read.headers.get('access-control-allow-origin'), null);
   } finally { await e.close(); }
 });
 
@@ -61,49 +66,40 @@ test('微信读取不泄露未检查文字，编号、时间、游标、回复�
   } finally { await e.close(); }
 });
 
-test('检查拒绝、不可用和非法输入不写入；检查期间撤销会话不能提交', async () => {
+test('微信写入在内容检查之前拒绝，模型与审核服务不可用也不会改变结果', async () => {
   const { e, login } = await setup();
   try {
     const a = await login('alice'), store = e.app.ctx.messageBoard;
     let checks = 0;
-    e.app.ctx.wechat.check = async () => { checks++; throw new AccountError(422, 'moderated', '请修改文字'); };
-    assert.equal((await a.call('/api/wechat/messages', { text: '' })).status, 400);
-    assert.equal((await a.call('/api/wechat/messages', { text: '长'.repeat(2001) })).status, 400);
-    assert.equal(checks, 0);
-    assert.equal((await a.call('/api/wechat/messages', { text: '被拒绝' })).status, 422);
-    e.app.ctx.wechat.check = async () => { throw new AccountError(503, 'moderation_unavailable', '稍后重试'); };
-    assert.equal((await a.call('/api/wechat/messages', { text: '服务不可用' })).status, 503);
-    assert.equal(store.data.entries.length, 0);
-    let release, started;
-    const waiting = new Promise(resolve => { started = resolve; });
-    e.app.ctx.wechat.check = async (_, __, scene) => { if (scene === 2) { started(); await new Promise(resolve => { release = resolve; }); } };
-    const pending = a.call('/api/wechat/messages', { text: '不得在退出后提交' });
-    await waiting;
-    e.app.ctx.accounts.logout(a.cookie.split('=')[1]);
-    release();
-    assert.equal((await pending).status, 401); assert.equal(store.data.entries.length, 0);
+    e.app.ctx.wechat.check = async () => { checks++; throw new AccountError(503, 'moderation_unavailable', '稍后重试'); };
+    for (const text of ['', '长'.repeat(2001), '新留言']) {
+      const r = await a.call('/api/wechat/messages', { text });
+      assert.equal(r.status, 403); assert.equal(r.json.error.code, 'wechat_observation_only');
+    }
+    assert.equal(checks, 0); assert.equal(store.data.entries.length, 0);
   } finally { await e.close(); }
 });
 
-test('微信回复、编辑与删除复用权限和讨论边界，拒绝的网页文字也可以由作者删除', async () => {
+test('微信不能回复、编辑或删除，独立网页会话仍可处理自己的留言', async () => {
   const { e, login } = await setup();
   try {
     const a = await login('alice'), b = await login('bob'), store = e.app.ctx.messageBoard;
     e.app.ctx.wechat.check = async () => {};
-    const root = (await a.call('/api/wechat/messages', { text: '主留言' })).json.message;
-    const other = (await b.call('/api/wechat/messages', { text: '另一个讨论' })).json.message;
-    const r = (await b.call(`/api/wechat/messages/${root.id}/replies`, { text: '答复' })).json.message;
-    const second = await a.call(`/api/wechat/messages/${root.id}/replies`, { text: '回复乙', replyToId: r.id });
-    assert.equal(second.status, 201); assert.equal(second.json.message.replyTo.id, r.id);
-    assert.equal((await a.call(`/api/wechat/messages/${root.id}/replies`, { text: '跨讨论', replyToId: other.id })).status, 400);
-    assert.equal((await b.call(`/api/wechat/messages/${root.id}`, { text: '越权编辑' }, 'PATCH')).status, 403);
-    assert.equal((await b.call(`/api/wechat/messages/${root.id}`, {}, 'DELETE')).status, 403);
-    assert.equal((await a.call(`/api/wechat/messages/${root.id}`, { text: '修改后' }, 'PATCH')).status, 200);
-    e.app.ctx.wechat.check = async () => { throw new Error('删除不应检查原文'); };
-    assert.equal((await a.call(`/api/wechat/messages/${root.id}`, {}, 'DELETE')).status, 200);
+    const root = store.create(a.user, '主留言');
+    const r = store.create(b.user, '答复', { threadId: root.id });
+    const snapshot = JSON.stringify(store.data);
+    for (const who of [a, b]) for (const [method, path, body] of [
+      ['POST', `/api/wechat/messages/${root.id}/replies`, { text: '回复乙' }],
+      ['PATCH', `/api/wechat/messages/${root.id}`, { text: '修改后' }],
+      ['DELETE', `/api/wechat/messages/${root.id}`, {}],
+      ['POST', `/api/messages/${root.id}/replies`, { text: '绕开投影的回复' }],
+    ]) assert.equal((await who.call(path, body, method)).json.error.code, 'wechat_observation_only');
+    assert.equal(JSON.stringify(store.data), snapshot);
+    const webToken = e.app.ctx.accounts.issue(a.user.id), headers = { Cookie: 'houren_session=' + webToken, 'X-Houren-Request': '1' };
+    assert.equal((await e.call(`/api/messages/${root.id}`, { method: 'PATCH', body: { text: '网页修改后' }, headers })).status, 200);
+    assert.equal((await e.call(`/api/messages/${root.id}`, { method: 'DELETE', body: {}, headers })).status, 200);
     const data = (await a.call(`/api/wechat/messages/${root.id}/replies`)).json;
-    assert.equal(data.root.text, null); assert.equal(data.messages.length, 2);
-    assert.equal(store.get(r.id).text, '答复');
+    assert.equal(data.root.text, null); assert.equal(data.messages.length, 1); assert.equal(store.get(r.id).text, '答复');
   } finally { await e.close(); }
 });
 

@@ -171,7 +171,7 @@ function lawFold(app, W, l) {
     (l.fingerprints || []).length ? N.text(iw, '指纹：' + l.fingerprints.map(f => String(f).slice(0, 8)).join(' '), { style: 'caption', color: C.text3 }) : null,
     l.enact ? N.text(iw, enactText(l.enact), { style: 'caption', color: C.text3 }) : (l.results || []).length ? N.text(iw, '施行结果：' + l.results.map(r => `${r.op}${r.ok ? '✓' : '✗'}`).join(' '), { style: 'caption', color: C.text3 }) : null,
     jsonText(iw, '规则 JSON', l.procedure || l.rules),
-    N.buttonRow(iw, [{ label: '询问实验助手', action: { type: 'assistantOpen', lawId: l.id }, variant: 'secondary' }].concat(app.state.cities ? [] : [{ label: '法律详情', action: { type: 'detail', kind: 'law', id: l.id }, variant: 'secondary' }]), 8, { size: 'small' }),
+    app.state.cities ? null : N.button(iw, '法律详情', { type: 'detail', kind: 'law', id: l.id }, { variant: 'secondary', size: 'small' }),
   ]);
 }
 function physicsNodes(app, W) {
@@ -254,7 +254,7 @@ function archive(app, W) {
   const count = k => (s[k] || []).length;
   const islandLaws = raw.cities && !focus;
   const tabs = [['chronicle', '编年史'], ['laws', islandLaws ? '法典' : `法典 ${count('laws')}`], ['docs', `典籍 ${count('docs')}`], ['groups', `社群 ${count('groups')}`], ['cradle', `摇篮 ${count('cradle')}`]];
-  const nodes = [N.button(W, '实验助手', { type: 'assistantOpen' }, { variant: 'secondary' }), N.button(W, '世界报告', { type: 'historyReports' }, { variant: 'secondary' }), N.chips(W, tabs.map(([v, l]) => ({ label: l, action: { type: 'archive', tab: v }, selected: app.archiveTab === v })))];
+  const nodes = [N.button(W, '世界报告', { type: 'historyReports' }, { variant: 'secondary' }), N.chips(W, tabs.map(([v, l]) => ({ label: l, action: { type: 'archive', tab: v }, selected: app.archiveTab === v })))];
   if (app.archiveTab === 'chronicle') nodes.push(...chronicleNodes(app, W));
   else if (app.archiveTab === 'laws') {
     if (islandLaws) nodes.push(...cityComparison(app, W), N.text(W, '法典各城一套：点上面的城，或在观测页选一座城。', { style: 'meta', color: C.text3 }));
@@ -267,12 +267,11 @@ function archive(app, W) {
       gp.bylaws && !gp.dissolved ? N.text(iw, '章程' + (gp.bylaws.suspended ? '（停摆）' : '') + '：' + (view.reading(gp.bylaws) || '—'), { style: 'caption', color: C.text2, maxLines: 6 }) : null], { pad: 14, gap: 4 })));
   } else {
     if (!count('cradle')) nodes.push(N.empty(W, '摇篮里还没有灵魂', '居民孕育的灵魂会在这里等待领养。'));
-    if ([6, 7].includes(s.world.premise) && count('cradle')) nodes.push(N.text(W, app.wechatVerified ? '领养后由你管理并配置模型。' : '登录后可以领养摇篮里的灵魂并配置模型。', { style: 'caption', color: C.text3 }));
     (s.cradle || []).forEach(c => nodes.push(N.card(W, iw => [
       N.text(iw, textOf(c.name) || '一个灵魂', { style: 'heading', bold: true }),
       N.text(iw, [(c.authors || []).filter(Boolean).map(a => usable(a.name) ? a.name : '').filter(Boolean).join('、') ? '作者 ' + (c.authors || []).filter(Boolean).map(a => usable(a.name) ? a.name : '').filter(Boolean).join('、') : '', c.generation !== undefined ? `第 ${c.generation} 代` : '', c.expiresDay !== undefined ? `还剩 ${Math.max(0, c.expiresDay - s.world.day)} 日` : ''].filter(Boolean).join(' · '), { style: 'caption', color: C.text3 }),
       contentOf(c.soul || c.bio || c.description) ? N.text(iw, contentOf(c.soul || c.bio || c.description), { style: 'meta', color: C.text2, maxLines: 4 }) : null,
-      [6, 7].includes(s.world.premise) && app.wechatVerified ? N.button(iw, '领养', { type: 'stewardAdoptOpen', id: c.id }, { variant: 'secondary', size: 'small' }) : null,
+      contentOf(c.soul || c.bio || c.description) ? N.text(iw, 'AI 生成', { style: 'caption', color: C.ai }) : null,
     ], { pad: 14, gap: 4 })));
   }
   return { top, nodes, tabbar: true, pull: true };
@@ -284,7 +283,6 @@ function detail(app, W) {
   const title = kind === 'place' ? (item.displayName && item.displayName.zh) || item.name : kind === 'doc' ? '《' + (textOf(item.title) || '典籍') + '》' : textOf(item.title || item.name);
   const nodes = [N.text(W, usable(title) ? title : '档案', { style: 'title', bold: true, serif: true, line: 32 })];
   if (kind === 'law') {
-    nodes.push(N.button(W, '询问实验助手', { type: 'assistantOpen', lawId: item.id }, { variant: 'secondary' }));
     nodes.push(N.text(W, [view.status(item.status), item.author === 'humans' ? '遗法 · 人类留下' : '居民制定'].join(' · '), { style: 'meta', color: C.text3 }));
     const body = contentOf(item.i18n && item.i18n.zh ? item.i18n.zh.text : item.text);
     if (body) nodes.push(N.text(W, body, { style: 'body' }));

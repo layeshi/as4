@@ -7,13 +7,15 @@
     android: { w: 393, h: 851, dpr: 2.75, status: 32, bottom: 0 },
   };
   const deviceName = devices[query.get('device')] ? query.get('device') : 'iphone15';
-  const mode = query.get('data') === 'anon' ? 'anon' : 'approved';
+  const mode = ['anon', 'approved', 'fixture', 'fixture-guest'].includes(query.get('data')) ? query.get('data') : 'fixture';
+  const client = query.get('client') === 'game' ? 'game' : 'miniprogram';
+  const local = mode.startsWith('fixture');
   const device = devices[deviceName];
   document.getElementById('device').value = deviceName;
   document.getElementById('data').value = mode;
-  const reload = () => { const q = new URLSearchParams({ device: document.getElementById('device').value, data: document.getElementById('data').value }); location.search = q.toString(); };
-  document.getElementById('device').onchange = reload;
-  document.getElementById('data').onchange = reload;
+  document.getElementById('client').value = client;
+  const reload = () => { const q = new URLSearchParams({ device: document.getElementById('device').value, data: document.getElementById('data').value, client: document.getElementById('client').value }); location.search = q.toString(); };
+  for (const id of ['device', 'data', 'client']) document.getElementById(id).onchange = reload;
   document.getElementById('reload').onclick = () => location.reload();
 
   const phone = document.getElementById('phone');
@@ -58,7 +60,8 @@
     setStorageSync(key, value) { localStorage.setItem('wx:' + key, JSON.stringify(value)); },
     removeStorageSync(key) { localStorage.removeItem('wx:' + key); },
     setClipboardData({ data, success, fail }) { navigator.clipboard.writeText(data).then(() => success && success({}), () => fail && fail({})); },
-    login({ fail }) { setTimeout(() => fail && fail({ errMsg: 'login:fail 预览里不能微信登录' }), 50); },
+    // 本地测试数据里微信登录只是本机模拟；线上模式不能登录。
+    login({ success, fail }) { setTimeout(() => local ? success && success({ code: 'preview-test-code' }) : fail && fail({ errMsg: 'login:fail 预览里不能微信登录' }), 50); },
     request(options) {
       const url = String(options.url).replace(/^https:\/\/[^/]+/, '/proxy/' + mode);
       const init = { method: options.method || 'GET', headers: options.header || {} };
@@ -110,7 +113,9 @@
   }
   function load(path) {
     if (modules[path]) return modules[path].exports;
-    const xhr = new XMLHttpRequest(); xhr.open('GET', '/minigame/' + path, false); xhr.send();
+    // 普通小程序用自己的配置（版本、AppID、clientType），其余模块与小游戏同源。
+    const source = client === 'miniprogram' && path === 'config.js' ? '/miniprogram-app/config.js' : '/minigame/' + path;
+    const xhr = new XMLHttpRequest(); xhr.open('GET', source, false); xhr.send();
     if (xhr.status !== 200) throw new Error('模块不存在：' + path);
     const module = { exports: {} }; modules[path] = module;
     new Function('require', 'module', 'exports', 'wx', 'GameGlobal', xhr.responseText + '\n//# sourceURL=/minigame/' + path)(name => load(resolvePath(path, name)), module, module.exports, wx, window);

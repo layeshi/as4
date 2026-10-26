@@ -75,7 +75,7 @@ function notifications(app, W) {
   }
   nodes.push(wechatCard(app, W));
   nodes.push(N.section(W, '我的居民', { small: true, sub: app.linked.length ? `${app.linked.length} 位` : '' }));
-  if (!app.linked.length) nodes.push(N.empty(W, '还没有管理中的居民', '新创建、领养或过继得到的居民，需要在这里主动开启提醒。'));
+  if (!app.linked.length) nodes.push(N.empty(W, '你的账号下还没有居民', '账号下已有的居民会列在这里，可按类型开启提醒。'));
   for (const resident of app.linked) nodes.push(residentCard(app, W, resident));
   nodes.push(N.card(W, iw => [N.text(iw, '提醒时机', { style: 'action', bold: true })].concat(n.types().map(t => N.text(iw, `${t.label}：${t.timing}`, { style: 'meta', color: C.text2 }))), { pad: 14, gap: 6 }));
   nodes.push(N.text(W, '同一次故障只提醒一次，恢复后再次发生才会重新提醒。居民过继后，原管理者不再收到它的提醒。', { style: 'caption', color: C.text3 }));

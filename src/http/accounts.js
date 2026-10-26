@@ -19,6 +19,7 @@ function cookie(req, ctx, token = '') {
   return `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${token ? 604800 : 0}${secure ? '; Secure' : ''}`;
 }
 export function setSession(req, res, ctx, id, metadata = {}) {
+  if (req.headers['x-houren-client'] === 'wechat') metadata = { ...metadata, client: 'wechat' };
   ctx.accounts.logout(tokenOf(req));
   res.setHeader('Set-Cookie', cookie(req, ctx, ctx.accounts.issue(id, metadata)));
 }
@@ -107,7 +108,7 @@ async function passwordLogin({ req, res, ctx, body }, wechat = false) {
     const verified = ctx.verification.consume(body.proof, 'first_login');
     ctx.accounts.setContact(user.id, verified.channel, verified.contact, { expectedRevision: user.revision });
   }
-  setSession(req, res, ctx, user.id);
+  setSession(req, res, ctx, user.id, wechat ? { client: 'wechat' } : {});
   sendJson(res, 200, { user: publicUser(ctx.accounts.get(user.id)) });
 }
 export async function verifyLoginTurnstile(secret, token, ip, fetchImpl = fetch, action = 'login') {

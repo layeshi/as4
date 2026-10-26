@@ -61,8 +61,9 @@ test('answer Markdown source and generated copy avoid unsupported WeChat syntax 
 });
 
 
-test('assistant WeChat code avoids unsupported syntax and built-ins', async () => {
-  for (const file of ['minigame/assistant.js', 'minigame/screens/assistant.js', 'minigame/screens/index.js', 'minigame/ui/answer.js', 'minigame/ui/nodes.js', 'minigame/society.js', 'miniprogram-app/platform.js', 'scripts/shared.mjs', 'scripts/release.mjs']) {
+// 助手已从微信客户端移除；回答解析模块只因旧小游戏构建的同源检查而保留，不进入普通小程序运行包。
+test('the observation WeChat client avoids unsupported syntax and built-ins', async () => {
+  for (const file of ['minigame/records.js', 'minigame/screens/records.js', 'minigame/screens/index.js', 'minigame/screens/me.js', 'minigame/ui/nodes.js', 'minigame/society.js', 'minigame/utils/api.js', 'miniprogram-app/platform.js', 'scripts/miniprogram.mjs', 'scripts/shared.mjs', 'scripts/release.mjs']) {
     const text = await readFile(new URL('../wechat/' + file, import.meta.url), 'utf8');
     const code = text.replace(/^\s*\/\/.*$/gm, '');
     for (const [name, pattern] of forbidden) assert.doesNotMatch(code, pattern, `${file}: ${name}`);

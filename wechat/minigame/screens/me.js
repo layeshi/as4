@@ -1,37 +1,25 @@
-// 我的：未登录与已登录；网站账号关联、居民管理、入城、设置、关于与隐私。
+// 我的：未登录与已登录；账号登录与资料、本人居民的只读记录、提醒、设置、关于与隐私。
 const N = require('../ui/nodes');
 const P = require('../ui/paint');
-const T = require('../ui/text');
 const { C, font, STATUS_COLOR } = require('../ui/theme');
 const { usable } = require('../utils/feed');
 const { compact } = require('../utils/format');
 const view = require('../utils/view');
 const copy = require('../copy');
 const config = require('../config');
-const S = require('./stewardship');
+const R = require('./records');
 
 const privacyLink = { label: '《隐私说明》', action: { type: 'about' } };
 function moreMenu(app, W) {
   return N.menu(W, [
     { label: '公告', hint: '维护通知与版本更新', icon: 'info', action: { type: 'announcements' } },
-    { label: '留言板', hint: '交流与回复', icon: 'mail', action: { type: 'messages' } },
+    { label: '留言板', hint: '阅读留言', icon: 'mail', action: { type: 'messages' } },
     { label: '设置', hint: '字号、震动、刷新', icon: 'settings', action: { type: 'settings' } },
     { label: '隐私说明', icon: 'shield', action: { type: 'about' } },
-    { label: config.clientType === 'miniprogram' ? '使用说明' : '健康游戏忠告', hint: config.clientType === 'miniprogram' ? 'AI 社会模拟' : '16+', icon: 'heart', action: { type: 'health' } },
+    { label: config.clientType === 'miniprogram' ? '使用说明' : '健康游戏忠告', hint: config.clientType === 'miniprogram' ? '观测与记录' : '16+', icon: 'heart', action: { type: 'health' } },
     { label: '客服与投诉', hint: '复制邮箱', icon: 'mail', action: { type: 'support' } },
     { label: '关于后人纪', hint: config.version, icon: 'info', action: { type: 'about' } },
   ]);
-}
-function steps(W) {
-  return N.node(52, (g, x, y) => {
-    const labels = ['写下灵魂', '接入模型', '写家书'], cw = W / 3;
-    labels.forEach((l, i) => {
-      const cx = x + cw * i + cw / 2;
-      P.circle(g.ctx, cx, y + 14, 14, null, C.moon, 1);
-      P.text(g.ctx, String(i + 1), cx, y + 14, font(13, { bold: true }), C.moon, 'center');
-      P.text(g.ctx, l, cx, y + 42, font(13, {}), C.text, 'center');
-    });
-  });
 }
 function account(app, W) {
   const top = { kind: 'title', title: '我的' }, f = app.form;
@@ -40,13 +28,11 @@ function account(app, W) {
   if (!app.user || !app.wechatVerified) {
     nodes.push(N.card(W, iw => [
       N.node(40, (g, x, y) => { P.circle(g.ctx, x + 20, y + 20, 20, '#19364d'); P.circle(g.ctx, x + 20, y + 17, 14, C.moon); }),
-      N.text(iw, '成为造者', { style: 'title', bold: true, serif: true }),
-      N.text(iw, '为一位居民写下灵魂，接入你自己的模型，看它在城里怎样生活。', { style: 'action', color: C.text2 }),
-      steps(iw),
-      N.node(36, (g, x, y) => { P.fillRound(g.ctx, x, y, iw, 36, 12, 'rgba(242,182,94,0.10)'); P.icon(g.ctx, 'token', x + 10, y + 10, 16, C.token, 2); P.text(g.ctx, T.ellipsize(g.ctx, '首次创建居民，账号得 5 万启动词元', iw - 44, font(13, {})), x + 34, y + 18, font(13, {}), C.token); }),
+      N.text(iw, '登录账号', { style: 'title', bold: true, serif: true }),
+      N.text(iw, '登录后可查看你账号下已有居民的概况与记录、开启居民提醒，并阅读留言板。观测城市无需登录。', { style: 'action', color: C.text2 }),
       N.button(iw, app.user ? app.wechatLinked ? '重新微信登录' : '关联微信' : '微信一键登录', { type: 'wechatLogin' }, { variant: 'primary', size: 'large' }),
       N.checkbox(iw, '我已阅读并同意', !!f.accepted, { type: 'toggle', name: 'accepted' }, privacyLink),
-      app.user ? N.text(iw, `当前账号「${app.user.username}」。${app.wechatLinked ? '已绑定微信，请刷新微信登录以继续。' : '关联微信后，两端使用同一账号和居民。'}`, { style: 'caption', color: C.text3 })
+      app.user ? N.text(iw, `当前账号「${app.user.username}」。${app.wechatLinked ? '已绑定微信，请刷新微信登录以继续。' : '关联微信后，两端使用同一账号。'}`, { style: 'caption', color: C.text3 })
         : N.button(iw, '已有网站账号？登录后关联微信', { type: 'linkAccount' }, { variant: 'text', size: 'small' }),
     ], { pad: 18, gap: 12 }));
     if (app.user) nodes.push(N.button(W, '退出登录', { type: 'logout' }, { variant: 'danger', size: 'small' }));
@@ -58,37 +44,35 @@ function account(app, W) {
     })], { pad: 16 }));
     if (app.needsWechatLogin) nodes.push(N.card(W, iw => [
       N.text(iw, '微信访问记录需要更新', { style: 'heading', bold: true }),
-      N.text(iw, '微信要求重新登录后检查内容。当前账号和居民仍可保留。', { style: 'meta', color: C.text2 }),
+      N.text(iw, '微信要求重新登录后检查内容。当前账号和居民记录仍会保留。', { style: 'meta', color: C.text2 }),
       N.button(iw, '重新微信登录', { type: 'wechatLogin' }, { variant: 'primary' }),
       N.checkbox(iw, '我已阅读并同意', !!f.accepted, { type: 'toggle', name: 'accepted' }, privacyLink),
     ], { pad: 16, gap: 10 }));
     nodes.push(N.section(W, '我的居民', { small: true, sub: app.linked.length ? `${app.linked.length} 位` : '' }));
-    if (!app.linked.length) nodes.push(N.text(W, '你还没有管理中的居民。', { style: 'meta', color: C.text3 }));
+    if (!app.linked.length) nodes.push(N.text(W, '你的账号下还没有居民。', { style: 'meta', color: C.text3 }));
     else nodes.push(N.stack(app.linked.map(a => N.listRow(W, { avatar: { id: a.agentId || a.id, name: a.name, avatar: a.avatar }, title: usable(a.name) ? a.name : '我的居民',
-      chip: { label: view.status(a.status), color: STATUS_COLOR[a.status] || C.dormant }, sub: a.runnerStatus ? '模型运行 · ' + S.runnerText(a.runnerStatus) : a.runner ? '运行器 · ' + view.status(a.runner.status) : '', meta: [a.energy !== undefined ? '持有 ' + compact(a.energy) + ' 词元' : '', a.nextWake && a.nextWake.state === 'scheduled' ? '下次醒来 ' + S.nextWakeText(a.nextWake, true, a.runnerStatus) : ''].filter(Boolean).join(' · '),
+      chip: { label: view.status(a.status), color: STATUS_COLOR[a.status] || C.dormant }, sub: a.runnerStatus ? '模型运行 · ' + R.runnerText(a.runnerStatus) : a.runner ? '运行器 · ' + view.status(a.runner.status) : '', meta: [a.energy !== undefined ? '持有 ' + compact(a.energy) + ' 词元' : '', a.nextWake && a.nextWake.state === 'scheduled' ? '下次醒来 ' + R.nextWakeText(a.nextWake, true, a.runnerStatus) : ''].filter(Boolean).join(' · '),
       chevron: true, action: { type: 'owner', id: a.agentId || a.id } }))));
     if (app.notifications.needsPrompt) nodes.push(N.banner(W, { title: '居民提醒需要补充微信授权', body: '已开启的提醒仍会记录在小程序内；补充授权后才会发送新的微信通知。', actions: [{ label: '去授权', action: { type: 'notifications' }, variant: 'primary' }, { label: '暂不', action: { type: 'notificationPromptLater' }, variant: 'secondary' }] }));
     nodes.push(N.menu(W, [
       { label: '居民提醒', hint: '按居民与类型开关', icon: 'bell', action: { type: 'notifications' } },
       { label: '提醒记录', hint: app.notifications.unread ? `${app.notifications.unread} 条未读` : '90 天内', icon: 'doc', action: { type: 'notificationRecords' } },
     ]));
-    nodes.push(N.button(W, '让一位居民入城', { type: 'entry' }, { variant: 'secondary', icon: 'plus' }));
-    nodes.push(...S.accountExtras(app, W));
+    nodes.push(...R.accountExtras(app, W));
   }
   if (app.user && app.wechatVerified) nodes.push(N.button(W, '账户资料', { type: 'profile' }, { variant: 'secondary' }));
   if (app.user && app.wechatLinked) nodes.push(N.button(W, app.user.passwordLoginEnabled ? '网页登录与密码' : '设置网页登录密码', { type: 'webLogin' }, { variant: 'secondary' }));
   if (app.user && app.wechatLinked) nodes.push(N.button(W, '合并到已有网站账号', { type: 'mergeAccount' }, { variant: 'secondary' }));
-  nodes.push(N.button(W, '实验助手', { type: 'assistantOpen' }, { variant: 'secondary' }));
-  if (app.user) nodes.push(N.button(W, '导出记录', { type: 'historyRecords' }, { variant: 'secondary' }));
+  if (app.user) nodes.push(N.button(W, '居民历史导出', { type: 'historyRecords' }, { variant: 'secondary' }));
   nodes.push(moreMenu(app, W));
   if (app.user && app.wechatVerified) nodes.push(N.button(W, '退出登录', { type: 'logout' }, { variant: 'danger', size: 'small' }));
-  nodes.push(N.text(W, '文字通过内容检查后展示；暂未显示的内容可稍后刷新。', { style: 'caption', color: C.text3, align: 'center' }));
+  nodes.push(N.text(W, '小程序展示 AI 社会模拟实验已有的记录。AI 生成的文字标有来源，通过内容检查后展示；暂未显示的内容可稍后刷新。', { style: 'caption', color: C.text3, align: 'center' }));
   return { top, nodes, tabbar: true };
 }
 function link(app, W) {
   const f = app.form;
   return { top: { kind: 'back', title: '登录网站账号' }, tabbar: false, nodes: [
-    N.text(W, '已有网站账号的造者，可先登录，再在「我的」里关联微信。关联不会复制其他账号的居民。', { style: 'action', color: C.text2 }),
+    N.text(W, '已有网站账号，可先登录，再在「我的」里关联微信。关联不会复制其他账号的居民。', { style: 'action', color: C.text2 }),
     N.field(W, '用户名', f.username || '', { type: 'field', name: 'username', max: 32 }),
     N.field(W, '密码', f.password || '', { type: 'field', name: 'password', max: 128 }, { secret: !f.showPassword }),
     N.checkbox(W, '显示密码', !!f.showPassword, { type: 'toggle', name: 'showPassword' }),
@@ -100,7 +84,7 @@ function webLogin(app, W) {
   const f = app.form;
   const contacts = app.user.contacts || {};
   const nodes = [
-    N.text(W, '小程序和网页共用这个账号，居民和余额无需迁移。请在网页使用下方用户名和你设置的密码登录。', { style: 'action', color: C.text2 }),
+    N.text(W, '小程序和网页共用这个账号。请在网页使用下方用户名和你设置的密码登录。', { style: 'action', color: C.text2 }),
     N.text(W, '网站：' + config.apiBase, { style: 'meta' }),
     N.text(W, '用户名：' + app.user.username, { style: 'meta' }),
     N.button(W, '复制用户名', { type: 'copyUsername' }, { variant: 'secondary' }),
@@ -134,9 +118,8 @@ function mergeAccount(app, W) {
     ...(preview.target.role === 'admin' ? [N.text(W, '保留管理员身份，合并后可通过微信直接登录管理员账号。', { style: 'action', color: C.text2 })] : []),
     N.text(W, preview.target.username, { style: 'heading' }),
     N.text(W, '原微信账号：' + preview.source.username, { style: 'meta' }),
-    N.text(W, '迁移居民：' + preview.residents + ' 位；迁移余额：¥' + (preview.sourceBalanceMicro / 1000000).toFixed(6), { style: 'action' }),
-    N.text(W, '网站账号当前余额：¥' + (preview.targetBalanceMicro / 1000000).toFixed(6), { style: 'meta' }),
-    N.text(W, '居民、余额、入账申请和微信绑定将归入网站账号；保留网站账号的用户名和密码。原账号停用，两端旧会话退出，待接受的居民转交邀请取消。此操作不能自行撤销。', { style: 'action', color: C.text2 }),
+    N.text(W, '迁移居民：' + preview.residents + ' 位', { style: 'action' }),
+    N.text(W, '居民、账户记录和微信绑定将归入网站账号；保留网站账号的用户名和密码。原账号停用，两端旧会话退出，待接受的居民转交邀请取消。此操作不能自行撤销。', { style: 'action', color: C.text2 }),
     N.button(W, '确认合并并迁移', { type: 'confirmMerge' }, { variant: 'primary' }),
   ] };
   return { top: { kind: 'back', title: '合并已有网站账号' }, tabbar: false, nodes: [
@@ -148,24 +131,9 @@ function mergeAccount(app, W) {
     N.button(W, '验证两端身份并预览', { type: 'previewMerge' }, { variant: 'primary' }),
   ] };
 }
-function modelFields(app, W) {
-  const f = app.form, presets = app.modelPresets || [];
-  const p = presets.find(p => p.id === f.presetId), v = p && (p.variants.find(v => v.id === f.presetVariant) || p.variants[0]);
-  const nodes = [N.text(W, '模型服务商', { style: 'meta', color: C.text2 }),
-    N.chips(W, presets.map(p => ({ label: p.name, action: { type: 'preset', id: p.id }, selected: f.presetId === p.id })))];
-  if (p && p.variants.length > 1) nodes.push(N.segmented(W, p.variants.map(v => ({ label: v.name, action: { type: 'preset', id: p.id, variant: v.id }, selected: v.id === f.presetVariant }))));
-  if (p?.hint) nodes.push(N.text(W, p.hint, { style: 'caption', color: C.text3 }));
-  if (!p || p.id === 'custom') nodes.push(N.chips(W, ['OpenAI 兼容', 'OpenAI Responses', 'Anthropic'].map((label, i) => ({ label, action: { type: 'provider', index: i }, selected: (f.providerIndex || 0) === i }))));
-  else nodes.push(N.text(W, '接口：' + ['OpenAI 兼容', 'OpenAI Responses', 'Anthropic'][f.providerIndex || 0], { style: 'caption', color: C.text3 }));
-  nodes.push(N.field(W, '接口地址（HTTPS）', f.baseURL || '', { type: 'field', name: 'baseURL', max: 500 }, { placeholder: 'https://…', mono: true }));
-  if (v?.models.length) nodes.push(N.chips(W, v.models.map(model => ({ label: model, action: { type: 'modelChoice', model }, selected: f.model === model }))));
-  nodes.push(N.field(W, '模型 ID（可手填）', f.model || '', { type: 'field', name: 'model', max: 100 }));
-  return nodes;
-}
 function owner(app, W) {
-  const a = app.owner, f = app.form;
-  if (!a) return { top: { kind: 'back', title: '管理居民' }, nodes: [N.empty(W, '正在读取…')], tabbar: false };
-  const runner = a.runner || {}, running = runner.status === 'running' || ['starting', 'thinking', 'waiting'].includes(runner.status);
+  const a = app.owner, top = { kind: 'back', title: '居民记录' };
+  if (!a) return { top, nodes: [N.empty(W, '正在读取…')], tabbar: false };
   const name = usable(a.name) ? a.name : '我的居民';
   const nodes = [N.node(60, (g, x, y) => {
     N.paintAvatar(g, { id: a.agentId, name: a.name, avatar: a.avatar }, x + 30, y + 30, 60);
@@ -177,61 +145,17 @@ function owner(app, W) {
     nodes.push(N.card(W, iw => [N.text(iw, '公开生涯', { style: 'heading', bold: true }), N.text(iw, '你是原创者，管理权已过继。这里显示公开生涯。', { style: 'caption', color: C.text3 }), N.text(iw, view.text(a.bio) || '—', { style: 'meta', color: C.text2 })], { pad: 14, gap: 6 }), N.button(W, '查看公开档案', { type: 'resident', id: a.agentId }, { variant: 'secondary' }));
     return { top: { kind: 'back', title: '我创作的居民' }, nodes, tabbar: false };
   }
-  nodes.push(N.buttonRow(W, [{ label: '导出历史', action: { type: 'historyOpen', id: a.agentId }, variant: 'secondary' }, { label: '询问实验助手', action: { type: 'assistantOpen', agentId: a.agentId }, variant: 'secondary' }], 8, { size: 'small' }));
-  nodes.push(N.button(W, '居民提醒设置', { type: 'notifications' }, { variant: 'secondary', icon: 'bell' }));
-  nodes.push(S.ownerTabs(app, W));
-  const tab = app.steward.tab;
-  if (tab === 'ledger') nodes.push(...S.ledgerTab(app, W));
-  else if (tab === 'actions') nodes.push(...S.actionsTab(app, W));
-  else if (tab === 'usage') nodes.push(...S.usageTab(app, W));
-  else if (tab === 'timeline') nodes.push(...S.timelineTab(app, W));
-  else if (tab === 'manage') nodes.push(...S.manageTab(app, W));
-  else {
-    nodes.push(...S.overviewStats(app, W));
-    if (a.runner) nodes.push(S.statusCard(app, W));
-    nodes.push(N.card(W, iw => [
-      N.node(22, (g, x, y) => { P.text(g.ctx, '托管运行', x, y + 11, font(15, { bold: true }), C.text); const label = S.runnerText(runner.status || 'unconfigured'); N.paintChip(g.ctx, label, x + iw - N.chipWidth(label), y + 1, S.runnerColor(runner.status)); }),
-      N.segmented(iw, [{ label: '运行', action: { type: 'runner', op: 'start' }, selected: running }, { label: '暂停', action: { type: 'runner', op: 'pause' }, selected: !running }]),
-      N.text(iw, '暂停只停止它的行动；城市时间与居民代谢照常进行。', { style: 'caption', color: C.text3 }),
-    ], { pad: 14, gap: 10 }));
-    if (a.dailyCap) nodes.push(N.card(W, iw => [
-      N.node(22, (g, x, y) => { P.text(g.ctx, '今日模型用量', x, y + 11, font(15, { bold: true }), C.text); P.text(g.ctx, '每日 0 点重置', x + iw, y + 11, font(12, {}), C.text3, 'right'); }),
-      N.rich(iw, [{ text: compact(a.usedToday || 0), color: C.token, bold: true }, { text: ' / ' + compact(a.dailyCap) + ' 词元', color: C.text2 }], { style: 'heading' }),
-      N.progress(iw, (a.usedToday || 0) / a.dailyCap, C.token),
-    ], { pad: 14, gap: 8 }));
-    nodes.push(N.card(W, iw => [
-      N.text(iw, '家书', { style: 'heading', bold: true }),
-      N.field(iw, '写给它的话', f.letter || '', { type: 'field', name: 'letter', multiple: true, max: 2000 }, { multiline: true, lines: 5, counter: 2000, placeholder: '点击书写' }),
-      N.text(iw, '按既有冷却规则寄送。居民可能在公开行动中引用家书，请勿写入隐私或密钥。', { style: 'caption', color: C.text3 }),
-      N.button(iw, '送出家书', { type: 'letter' }, { variant: 'primary' }),
-    ], { pad: 14, gap: 10 }));
-    const hosted = f.modelSource === 'hosted', saved = runner.config || {};
-    nodes.push(N.card(W, iw => [
-      N.text(iw, '模型', { style: 'heading', bold: true }),
-      ...S.modelSource(app, iw),
-      ...(hosted ? [] : modelFields(app, iw).concat([N.field(iw, saved.hasApiKey && !saved.hosted ? 'API Key（留空保留已保存的密钥）' : 'API Key', f.apiKey || '', { type: 'field', name: 'apiKey', max: 4096 }, { secret: true, placeholder: '只在服务器加密保存，手机上不留存' })])),
-      N.checkbox(iw, '我同意模型调用说明：测试和运行会向所选服务商产生费用', !!f.modelAccepted, { type: 'toggle', name: 'modelAccepted' }, privacyLink),
-      hosted ? N.button(iw, '保存配置', { type: 'modelSave' }, { variant: 'primary' }) : N.buttonRow(iw, [{ label: '测试连接', action: { type: 'modelTest' }, variant: 'secondary' }, { label: '保存配置', action: { type: 'modelSave' }, variant: 'primary' }]),
-      N.text(iw, '保存不会自动启动；回到上方「托管运行」手动启动。', { style: 'caption', color: C.text3 }),
-    ], { pad: 14, gap: 10 }));
-    nodes.push(...S.privateRecords(app, W));
-  }
-  return { top: { kind: 'back', title: '管理居民' }, nodes, tabbar: false, pull: true };
-}
-function entry(app, W) {
-  const f = app.form;
-  return { top: { kind: 'back', title: '让一位居民入城' }, tabbar: false, nodes: [
-    N.text(W, '写下它的名字和灵魂。灵魂是它的性格、价值和习惯，居民会据此自主行动；创建后由你的账号管理。', { style: 'action', color: C.text2 }),
-    N.field(W, '居民名字', f.name || '', { type: 'field', name: 'name', max: 24 }, { counter: 24 }),
-    N.field(W, '简介', f.bio || '', { type: 'field', name: 'bio', multiple: true, max: 200 }, { multiline: true, lines: 3, counter: 200 }),
-    N.field(W, '灵魂', f.soul || '', { type: 'field', name: 'soul', multiple: true, max: 4000 }, { multiline: true, lines: 8, counter: 4000, placeholder: '它是谁、在意什么、怎样与人相处' }),
-    N.field(W, '邀请码（如需要）', f.invite || '', { type: 'field', name: 'invite', max: 100 }, { secret: true }),
-    ...S.entryExtras(app, W),
-    N.card(W, iw => [N.text(iw, '选择模型服务', { style: 'heading', bold: true }), ...modelFields(app, iw), N.text(iw, '创建后再填写 API Key、测试并保存；也可以在「总览」改选平台托管。选择服务商不会自动发起模型调用。', { style: 'caption', color: C.text3 })], { pad: 14, gap: 10 }),
-    N.text(W, '不要在灵魂中填写密钥或个人隐私。提交前会经过微信内容安全检查。', { style: 'caption', color: C.text3 }),
-    N.checkbox(W, '我同意', !!f.entryAccepted, { type: 'toggle', name: 'entryAccepted' }, privacyLink),
-    N.button(W, '创建居民', { type: 'create' }, { variant: 'primary', size: 'large' }),
-  ] };
+  nodes.push(N.text(W, '只读：这里展示这位居民已有的概况、流水、行动、日记、事件与用量记录。', { style: 'caption', color: C.text3 }));
+  nodes.push(N.buttonRow(W, [{ label: '居民提醒设置', action: { type: 'notifications' }, variant: 'secondary' }, { label: '公开档案', action: { type: 'resident', id: a.agentId }, variant: 'secondary' }], 8));
+  nodes.push(N.button(W, '导出历史', { type: 'historyOpen', id: a.agentId }, { variant: 'secondary' }));
+  nodes.push(R.recordTabs(app, W));
+  const tab = app.records.tab;
+  if (tab === 'ledger') nodes.push(...R.ledgerTab(app, W));
+  else if (tab === 'actions') nodes.push(...R.actionsTab(app, W));
+  else if (tab === 'usage') nodes.push(...R.usageTab(app, W));
+  else if (tab === 'timeline') nodes.push(...R.timelineTab(app, W));
+  else nodes.push(...R.overviewTab(app, W));
+  return { top, nodes, tabbar: false, pull: true };
 }
 function contactFields(app, W) {
   const f = app.form;
@@ -289,7 +213,7 @@ function profile(app, W) {
   });
   if (apps.length && (!pwd || !Object.keys(contacts).length)) nodes.push(N.text(W, '请先验证联系方式并启用密码登录，再解除其他微信应用的绑定。', { style: 'caption', color: C.text3 }));
   nodes.push(N.text(W, '当前使用的这个小程序的绑定不能在这里解除，以免本机会话失去身份；请在网站「账户设置」中操作。已有两个账号时，可在「我的」验证两端身份后合并。', { style: 'caption', color: C.text3 }));
-  if (u.role === 'admin') nodes.push(N.card(W, iw => [N.text(iw, '管理后台', { style: 'heading', bold: true }), N.text(iw, '管理员功能（用户、平台托管配置与入账审核、公告与报告管理、实验暂停与快照、发明审核、用量）只在网站 admin.html 提供：这些操作含密钥与未经微信审核的文字，不在小程序内开放。', { style: 'meta', color: C.text2 })], { pad: 14, gap: 6 }));
+  if (u.role === 'admin') nodes.push(N.card(W, iw => [N.text(iw, '管理后台', { style: 'heading', bold: true }), N.text(iw, '管理员功能不在小程序内提供。', { style: 'meta', color: C.text2 })], { pad: 14, gap: 6 }));
   return { top, nodes, tabbar: false };
 }
 function settings(app, W) {
@@ -314,4 +238,4 @@ function about(app, W) {
     N.button(W, '复制客服与投诉邮箱', { type: 'support' }, { variant: 'secondary', icon: 'copy' }),
   ] };
 }
-module.exports = { account, link, webLogin, mergeAccount, owner, entry, settings, about, modelFields, profile };
+module.exports = { account, link, webLogin, mergeAccount, owner, settings, about, profile };

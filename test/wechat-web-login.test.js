@@ -104,7 +104,12 @@ test('QR mutations have CSRF checks, throttle creation and do not overwrite an e
   assert.equal((await e.call('/api/wechat/qr/create', { method: 'POST', body: {} })).status, 403);
   const p = await login();
   await call('scan', { scene }, cookie(p)); await call('confirm', { scene, approve: true }, cookie(p));
-  assert.equal((await call('consume', { scene }, browser + '; ' + cookie(p))).status, 409);
+  const phoneConsume = await call('consume', { scene }, browser + '; ' + cookie(p));
+  assert.equal(phoneConsume.status, 403);
+  assert.equal(phoneConsume.json.error.code, 'wechat_observation_only');
+  const signed = await call('consume', { scene }, browser);
+  assert.equal(signed.status, 200);
+  assert.equal((await call('consume', { scene }, browser + '; ' + cookie(signed))).status, 409);
   for (let n = 0; n < 5; n++) assert.equal((await call('create')).status, 201);
   assert.equal((await call('create')).status, 429);
 });

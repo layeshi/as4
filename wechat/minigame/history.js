@@ -48,7 +48,7 @@ class History {
       const f = this.app.form, body = { branchId: this.branchId, agentId: this.agentId, ...(f.historyFrom ? { fromDay: Number(f.historyFrom) - 1 } : {}), ...(f.historyTo ? { toDay: Number(f.historyTo) - 1 } : {}) };
       const draft = JSON.stringify(body); if (draft !== this.draft) { this.draft = draft; this.requestId = api.requestId(); }
       await api.request('/api/history/exports', { method: 'POST', data: { ...body, requestId: this.requestId } });
-      if (!this.current(t)) return; this.requestId = null; this.draft = null; this.app.push('exports'); await this.refresh(); this.app.showToast('已开始生成，可以离开后再回来下载', 'ok');
+      if (!this.current(t)) return; this.requestId = null; this.draft = null; this.app.push('exports'); await this.refresh(); this.app.showToast('已开始打包，可以离开后再回来下载', 'ok');
     } else if (a.type === 'historyRetry') {
       await api.request('/api/history/exports/' + encodeURIComponent(a.id) + '/retry', { method: 'POST', data: {} }); if (this.current(t)) await this.refresh();
     } else if (a.type === 'historyDownload') {

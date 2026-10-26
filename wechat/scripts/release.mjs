@@ -121,7 +121,7 @@ async function main() {
   let ci;
   try { ci = require('miniprogram-ci'); } catch (_) { throw new Error('先在 wechat/ 运行 npm ci 安装官方上传工具'); }
   const project = new ci.Project({ appid, type: game ? 'miniGame' : 'miniProgram', projectPath: build, privateKeyPath: keyPath, ignores: ['node_modules/**/*'] });
-  const options = { project, version: process.env.WECHAT_VERSION || checked.config.version, desc: '后人纪 · AI 社会模拟、城市实况、档案与造者入口', setting: { useProjectConfig: true }, robot: 1 };
+  const options = { project, version: process.env.WECHAT_VERSION || checked.config.version, desc: game ? '后人纪 · 城市实验观测与历史记录' : '后人纪 · 城市观测、统计与已有实验记录查询', setting: { useProjectConfig: true }, robot: 1 };
   if (mode === 'preview') {
     await ci.preview({ ...options, qrcodeFormat: 'image', qrcodeOutputDest: join(build, 'preview.png'), ...(game ? {} : { pagePath: 'pages/society/index' }) });
     console.log('预览码：' + join(build, 'preview.png'));

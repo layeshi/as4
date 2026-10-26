@@ -41,23 +41,42 @@ function captureCookies(response) {
     }
   });
 }
+// 小程序只做观测与已有记录查询。读取照常（已移除功能的接口除外）；写入只放行账户身份、居民提醒订阅与已读、
+// 已有历史的打包导出，其他写入在本机直接拒绝，不发出请求。服务端对微信会话另有同样的限制。
+const OBSERVATION_ONLY = '小程序仅提供观测与已有记录查询，此操作不可用。';
+const REMOVED_READS = /^\/api\/(?:assistant|admin|me|owner|runner|port\/model|(?:wechat\/)?model-presets|(?:wechat\/)?account\/(?:hosted|transfers|worlds))(?:[/?]|$)/;
+const WRITES = [
+  ['POST', /^\/api\/history\/exports(?:\/[a-f0-9-]+\/retry)?$/],
+  ['POST', /^\/api\/wechat\/(?:login|password-login|password|merge\/preview|merge\/confirm|qr\/scan|qr\/confirm)$/],
+  ['POST', /^\/api\/account\/(?:logout|contacts|verification\/request|verification\/confirm)$/],
+  ['DELETE', /^\/api\/account\/contacts\/(?:email|phone)$/],
+  ['PATCH', /^\/api\/account$/],
+  ['DELETE', /^\/api\/account\/wechat\/wx[0-9a-f]{16}$/],
+  ['POST', /^\/api\/wechat\/notifications\/(?:preferences|authorization|authorization\/result|records\/read)$/],
+];
+function observationOnly() {
+  const error = new Error(OBSERVATION_ONLY);
+  error.status = 403; error.code = 'wechat_observation_only';
+  return error;
+}
+function permitted(method, path) {
+  if (method === 'GET') return !REMOVED_READS.test(path);
+  return WRITES.some(([m, pattern]) => m === method && pattern.test(path));
+}
 function request(path, options = {}) {
   if (!/^\/api\//.test(path) || path.includes('..')) return Promise.reject(new Error('接口路径无效'));
+  const method = String(options.method || 'GET').toUpperCase();
+  if (!permitted(method, path)) return Promise.reject(observationOnly());
   if (path.startsWith('/api/public/')) path = path.replace('/api/public/', '/api/wechat/public/');
   if (/^\/api\/messages(?:[/?]|$)/.test(path)) path = path.replace('/api/messages', '/api/wechat/messages');
-  if ((!options.method || options.method === 'GET') && /^\/api\/account\/residents(?:[/?]|$)/.test(path)) path = path.replace('/api/account/residents', '/api/wechat/residents');
-  // 账户里含文字的只读资料（过继邀请、托管账目、旧世界灵魂）走审核代理，与网站同一份数据。
-  if ((!options.method || options.method === 'GET') && /^\/api\/account\/(?:transfers|hosted|worlds)(?:[/?]|$)/.test(path)) path = path.replace('/api/account/', '/api/wechat/account/');
+  if (method === 'GET' && /^\/api\/account\/residents(?:[/?]|$)/.test(path)) path = path.replace('/api/account/residents', '/api/wechat/residents');
   const generation = sessionGeneration, session = cookies.houren_session;
   return new Promise((resolve, reject) => {
     const header = { 'Content-Type': 'application/json', 'X-Houren-Request': '1', 'X-Houren-Client': 'wechat' };
     const cookie = Object.keys(cookies).map(name => name + '=' + cookies[name]).join('; ');
     if (cookie) header.Cookie = cookie;
-    if (options.assistantAdminKey) header['X-Admin-Key'] = options.assistantAdminKey;
-    if (options.assistantOwnerKey) header['X-Owner-Key'] = options.assistantOwnerKey;
-    if (options.ownerKey) header.Authorization = 'Bearer ' + options.ownerKey;
     wx.request({
-      url: config.apiBase + path, method: options.method || 'GET', data: options.data,
+      url: config.apiBase + path, method, data: options.data,
       timeout: options.timeout || 15000, header,
       success(response) {
         // Old account callbacks may settle, but cannot change the current credential jar.
@@ -67,7 +86,7 @@ function request(path, options = {}) {
         const code = body && body.error && body.error.code;
         if (response.statusCode >= 200 && response.statusCode < 300 && body && typeof body === 'object' && !body.error) return resolve(body);
         // Content-check identity expiry is distinct from an invalid website account session.
-        if (current && response.statusCode === 401 && !['wechat_login_required', 'invalid_credentials', 'wechat_login_failed', 'invalid_password'].includes(code) && !options.ownerKey) clearSession();
+        if (current && response.statusCode === 401 && !['wechat_login_required', 'invalid_credentials', 'wechat_login_failed', 'invalid_password'].includes(code)) clearSession();
         const error = new Error(body && body.error && (body.error.message || body.error.code) || '服务暂不可用，请稍后刷新');
         error.status = response.statusCode;
         error.code = code;
@@ -101,7 +120,7 @@ function requestId() {
   return 'wx-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
-// 历史包与居民流水 CSV（只有数字与命令代码，无居民文字）。其他导出不经下载通道。
+// 已生成的历史包与居民流水 CSV（只有数字与命令代码，无居民文字）。其他导出不经下载通道。
 const DOWNLOADS = [/^\/api\/history\/exports\/[a-zA-Z0-9-]+\/download$/, /^\/api\/account\/residents\/[A-Za-z0-9_-]{1,128}\/export\?format=csv$/];
 function download(path) {
   if (!DOWNLOADS.some(pattern => pattern.test(path))) return Promise.reject(new Error('下载路径无效'));
@@ -122,4 +141,4 @@ function download(path) {
   });
 }
 
-module.exports = { request, download, restoreSession, clearSession, loginWeChat, loginByPassword, setWebPassword, setContactByWechat, setContactByPassword, removeContactByWechat, removeContactByPassword, previewMerge, requestId };
+module.exports = { request, download, restoreSession, clearSession, loginWeChat, loginByPassword, setWebPassword, setContactByWechat, setContactByPassword, removeContactByWechat, removeContactByPassword, previewMerge, requestId, observationOnly, OBSERVATION_ONLY };

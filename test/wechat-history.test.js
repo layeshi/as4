@@ -30,7 +30,7 @@ test('requesting a new WeChat export after success creates a fresh history snaps
 test('WeChat downloads use session headers and reject a callback after logout', async () => {
   const m = minigame(), api = m.load(new URL('../wechat/minigame/utils/api.js', import.meta.url).pathname);
   m.wx.request = options => options.success({ statusCode: 200, data: {}, cookies: ['houren_session=history-session-abcdefghijklmnop'] });
-  const login = api.request('/api/account/login', { method: 'POST', data: {} });
+  const login = api.request('/api/wechat/login', { method: 'POST', data: {} });
   await login;
   let download; m.wx.downloadFile = request => { download = request; };
   const request = api.download('/api/history/exports/example/download');

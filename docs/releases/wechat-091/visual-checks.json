@@ -1,0 +1,607 @@
+[
+ {
+  "device": "375x667",
+  "name": "01-startup",
+  "tab": "startup",
+  "error": "",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [
+   "about 343x36"
+  ],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "02-city",
+  "tab": "city",
+  "error": "",
+  "title": "后人纪 · 全岛",
+  "primary": 0,
+  "max": 423,
+  "smallHits": [
+   "cityFocus 80x32",
+   "cityFocus 80x32",
+   "cityFocus 80x32",
+   "cityFocus 80x32"
+  ],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "03-account",
+  "tab": "account",
+  "error": "",
+  "title": "我的",
+  "primary": 0,
+  "max": 627,
+  "smallHits": [
+   "webLogin 343x33"
+  ],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "04-account-guest",
+  "tab": "account",
+  "error": "",
+  "title": "我的",
+  "primary": 0,
+  "max": 267,
+  "smallHits": [
+   "toggle 38x40",
+   "toggle 169x24",
+   "about 78x24",
+   "linkAccount 307x36",
+   "about 343x15"
+  ],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "05-records-overview",
+  "tab": "owner",
+  "error": "",
+  "title": "居民记录",
+  "primary": 0,
+  "max": 827,
+  "smallHits": [
+   "recordsTab 65x42",
+   "recordsTab 65x42",
+   "recordsTab 65x42",
+   "recordsTab 65x42",
+   "recordsTab 65x42"
+  ],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "06-records-usage",
+  "tab": "owner",
+  "error": "",
+  "title": "居民记录",
+  "primary": 0,
+  "max": 266,
+  "smallHits": [
+   "recordsTab 65x42",
+   "recordsTab 65x42",
+   "recordsTab 65x42",
+   "recordsTab 65x42",
+   "recordsTab 65x42"
+  ],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "07-records-ledger",
+  "tab": "owner",
+  "error": "",
+  "title": "居民记录",
+  "primary": 0,
+  "max": 575,
+  "smallHits": [
+   "recordsTab 65x42",
+   "recordsTab 65x42",
+   "recordsTab 65x42",
+   "recordsTab 65x42",
+   "recordsTab 65x42"
+  ],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "08-messages",
+  "tab": "messages",
+  "error": "",
+  "title": "留言板",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "09-message-thread",
+  "tab": "messageThread",
+  "error": "",
+  "title": "留言讨论",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "10-about-privacy",
+  "tab": "about",
+  "error": "",
+  "title": "关于后人纪",
+  "primary": 0,
+  "max": 553,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "11-archive-cradle",
+  "tab": "archive",
+  "error": "",
+  "title": "档案",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "12-resident-profile",
+  "tab": "resident",
+  "error": "",
+  "title": "测试居民·石序",
+  "primary": 0,
+  "max": 180,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "13-history-exports",
+  "tab": "exports",
+  "error": "",
+  "title": "导出记录",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "14-history-export-form",
+  "tab": "historyExport",
+  "error": "",
+  "title": "导出居民历史",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "375x667",
+  "name": "15-notifications",
+  "tab": "notifications",
+  "error": "",
+  "title": "居民提醒",
+  "primary": 0,
+  "max": 318,
+  "smallHits": [
+   "notificationToggle 315x36"
+  ],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "01-startup",
+  "tab": "startup",
+  "error": "",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [
+   "about 358x36"
+  ],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "02-city",
+  "tab": "city",
+  "error": "",
+  "title": "后人纪 · 全岛",
+  "primary": 0,
+  "max": 319,
+  "smallHits": [
+   "cityFocus 84x32",
+   "cityFocus 84x32",
+   "cityFocus 84x32",
+   "cityFocus 84x32",
+   "observe 93x14"
+  ],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "03-account",
+  "tab": "account",
+  "error": "",
+  "title": "我的",
+  "primary": 0,
+  "max": 511,
+  "smallHits": [
+   "historyRecords 358x33"
+  ],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "04-account-guest",
+  "tab": "account",
+  "error": "",
+  "title": "我的",
+  "primary": 0,
+  "max": 129,
+  "smallHits": [
+   "toggle 38x40",
+   "toggle 169x24",
+   "about 78x24",
+   "linkAccount 322x36"
+  ],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "05-records-overview",
+  "tab": "owner",
+  "error": "",
+  "title": "居民记录",
+  "primary": 0,
+  "max": 711,
+  "smallHits": [
+   "recordsTab 68x42",
+   "recordsTab 68x42",
+   "recordsTab 68x42",
+   "recordsTab 68x42",
+   "recordsTab 68x42"
+  ],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "06-records-usage",
+  "tab": "owner",
+  "error": "",
+  "title": "居民记录",
+  "primary": 0,
+  "max": 150,
+  "smallHits": [
+   "recordsTab 68x42",
+   "recordsTab 68x42",
+   "recordsTab 68x42",
+   "recordsTab 68x42",
+   "recordsTab 68x42"
+  ],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "07-records-ledger",
+  "tab": "owner",
+  "error": "",
+  "title": "居民记录",
+  "primary": 0,
+  "max": 459,
+  "smallHits": [
+   "recordsTab 68x42",
+   "recordsTab 68x42",
+   "recordsTab 68x42",
+   "recordsTab 68x42",
+   "recordsTab 68x42",
+   "recordsLedgerCsv 358x36"
+  ],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "08-messages",
+  "tab": "messages",
+  "error": "",
+  "title": "留言板",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "09-message-thread",
+  "tab": "messageThread",
+  "error": "",
+  "title": "留言讨论",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "10-about-privacy",
+  "tab": "about",
+  "error": "",
+  "title": "关于后人纪",
+  "primary": 0,
+  "max": 393,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "11-archive-cradle",
+  "tab": "archive",
+  "error": "",
+  "title": "档案",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "12-resident-profile",
+  "tab": "resident",
+  "error": "",
+  "title": "测试居民·石序",
+  "primary": 0,
+  "max": 64,
+  "smallHits": [
+   "profileTab 86x42",
+   "profileTab 86x42",
+   "profileTab 86x42",
+   "profileTab 86x42"
+  ],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "13-history-exports",
+  "tab": "exports",
+  "error": "",
+  "title": "导出记录",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "14-history-export-form",
+  "tab": "historyExport",
+  "error": "",
+  "title": "导出居民历史",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "390x844",
+  "name": "15-notifications",
+  "tab": "notifications",
+  "error": "",
+  "title": "居民提醒",
+  "primary": 0,
+  "max": 202,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "01-startup",
+  "tab": "startup",
+  "error": "",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [
+   "about 361x36"
+  ],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "02-city",
+  "tab": "city",
+  "error": "",
+  "title": "后人纪 · 全岛",
+  "primary": 0,
+  "max": 265,
+  "smallHits": [
+   "cityFocus 84x32",
+   "cityFocus 84x32",
+   "cityFocus 84x32",
+   "cityFocus 84x32",
+   "historyReports 68x22"
+  ],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "03-account",
+  "tab": "account",
+  "error": "",
+  "title": "我的",
+  "primary": 0,
+  "max": 455,
+  "smallHits": [
+   "announcements 361x31"
+  ],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "04-account-guest",
+  "tab": "account",
+  "error": "",
+  "title": "我的",
+  "primary": 0,
+  "max": 73,
+  "smallHits": [
+   "toggle 38x40",
+   "toggle 169x24",
+   "about 78x24",
+   "linkAccount 325x36"
+  ],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "05-records-overview",
+  "tab": "owner",
+  "error": "",
+  "title": "居民记录",
+  "primary": 0,
+  "max": 655,
+  "smallHits": [
+   "recordsTab 69x42",
+   "recordsTab 69x42",
+   "recordsTab 69x42",
+   "recordsTab 69x42",
+   "recordsTab 69x42"
+  ],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "06-records-usage",
+  "tab": "owner",
+  "error": "",
+  "title": "居民记录",
+  "primary": 0,
+  "max": 94,
+  "smallHits": [
+   "recordsTab 69x42",
+   "recordsTab 69x42",
+   "recordsTab 69x42",
+   "recordsTab 69x42",
+   "recordsTab 69x42"
+  ],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "07-records-ledger",
+  "tab": "owner",
+  "error": "",
+  "title": "居民记录",
+  "primary": 0,
+  "max": 403,
+  "smallHits": [
+   "recordsTab 69x42",
+   "recordsTab 69x42",
+   "recordsTab 69x42",
+   "recordsTab 69x42",
+   "recordsTab 69x42",
+   "recordsLedgerCsv 361x36"
+  ],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "08-messages",
+  "tab": "messages",
+  "error": "",
+  "title": "留言板",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "09-message-thread",
+  "tab": "messageThread",
+  "error": "",
+  "title": "留言讨论",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "10-about-privacy",
+  "tab": "about",
+  "error": "",
+  "title": "关于后人纪",
+  "primary": 0,
+  "max": 337,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "11-archive-cradle",
+  "tab": "archive",
+  "error": "",
+  "title": "档案",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "12-resident-profile",
+  "tab": "resident",
+  "error": "",
+  "title": "测试居民·石序",
+  "primary": 0,
+  "max": 8,
+  "smallHits": [
+   "profileTab 87x42",
+   "profileTab 87x42",
+   "profileTab 87x42",
+   "profileTab 87x42"
+  ],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "13-history-exports",
+  "tab": "exports",
+  "error": "",
+  "title": "导出记录",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "14-history-export-form",
+  "tab": "historyExport",
+  "error": "",
+  "title": "导出居民历史",
+  "primary": 0,
+  "max": 0,
+  "smallHits": [],
+  "errors": []
+ },
+ {
+  "device": "393x851",
+  "name": "15-notifications",
+  "tab": "notifications",
+  "error": "",
+  "title": "居民提醒",
+  "primary": 0,
+  "max": 146,
+  "smallHits": [],
+  "errors": []
+ }
+]

@@ -275,7 +275,7 @@ export class AccountStore {
     if (this.sessions.size >= 10000) this.sessions.delete(this.sessions.keys().next().value);
     const token = randomBytes(32).toString('hex');
     const wechatIdentity = metadata.wechatIdentity || (metadata.wechat ? hash(`${metadata.wechat.appid}:${metadata.wechat.openid}`) : null);
-    this.sessions.set(hash(token), { userId: id, revision: u.revision, authRevision: u.authRevision || 0, expires: Date.now() + TTL, wechat: metadata.wechat, wechatIdentity });
+    this.sessions.set(hash(token), { userId: id, revision: u.revision, authRevision: u.authRevision || 0, expires: Date.now() + TTL, wechat: metadata.wechat, wechatIdentity, client: metadata.client === 'wechat' || metadata.wechat ? 'wechat' : 'web' });
     return token;
   }
   sessionMetadata(token) {

@@ -59,13 +59,14 @@ test('submission deadline bounds a stalled archive before spending quota',async 
  const r=await e.call('/api/assistant/questions',{method:'POST',headers,body:{text:'解释实验'}});assert.equal(r.status,503);assert.equal(c.assistant.store.quota(u.id).used,0);c.history.flush=original;
 });
 
-test('WeChat withholds the entire answer until approved, including answers created on web',async t=>{
+test('WeChat cannot access web-created assistant answers, even after moderation approval',async t=>{
  const {e,c,u,headers}=await setup(t);const key=c.accounts.issue(u.id,{wechat:{appid:c.wechat.appid,openid:'test-openid',verifiedAt:Date.now()}});
  const wh={...headers,Cookie:`houren_session=${key}`,'X-Houren-Client':'wechat'};
- let release;const gate=new Promise(r=>release=r);t.after(()=>release());c.wechat.check=async(_text,_identity,scene)=>{if(scene===3)await gate;};
+ c.wechat.check=async()=>{};
  const r=await e.call('/api/assistant/questions',{method:'POST',headers,body:{text:'解释实验'}});await c.assistant.idle();
- const path=`/api/assistant/conversations/${r.json.conversationId}`;const pending=await e.call(path,{headers:wh});assert.equal(pending.status,200);assert.equal(pending.json.conversation.messages.at(-1).status,'pending');assert.equal(pending.json.conversation.messages.at(-1).text,'');assert.deepEqual(pending.json.conversation.messages.at(-1).sources,[]);
- release();await new Promise(r=>setTimeout(r,30));const ready=await e.call(path,{headers:wh});assert.equal(ready.json.conversation.messages.at(-1).status,'complete');assert.equal(ready.json.conversation.messages.at(-1).text,'依据资料 [S1]');
+ const path=`/api/assistant/conversations/${r.json.conversationId}`,denied=await e.call(path,{headers:wh});
+ assert.equal(denied.status,403);assert.equal(denied.json.error.code,'wechat_observation_only');
+ assert.equal((await e.call(path,{headers})).json.conversation.messages.at(-1).status,'complete');
 });
 test('in-flight account revocation clears partial text and terminates before completion',async t=>{
  const {e,c,u,headers}=await setup(t);let entered,release;const started=new Promise(r=>entered=r),gate=new Promise(r=>release=r);
@@ -79,13 +80,13 @@ test('assistant leaves paused world, resident balance and deterministic state un
  const r=await e.call('/api/assistant/questions',{method:'POST',headers,body:{text:'为什么实验暂停'}});assert.equal(r.status,202,r.text);await c.assistant.idle();assert.equal(stateHash(e.rt.w),before);assert.equal(c.hosted.billing.balance(u.id),balance);
 });
 
-test('WeChat presentation moderation stops waiting at its deadline without displaying text',async t=>{
- const {e,c,u,headers}=await setup(t);let now=Date.now();c.assistant.now=()=>now;
- const key=c.accounts.issue(u.id,{wechat:{appid:c.wechat.appid,openid:'deadline-openid',verifiedAt:Date.now()}}),wh={...headers,Cookie:`houren_session=${key}`,'X-Houren-Client':'wechat'};
- let release;const gate=new Promise(r=>release=r);c.wechat.check=async(_t,_i,scene)=>{if(scene===3)await gate;};
- const r=await e.call('/api/assistant/questions',{method:'POST',headers,body:{text:'解释实验'}});await c.assistant.idle();const path=`/api/assistant/conversations/${r.json.conversationId}`;
- assert.equal((await e.call(path,{headers:wh})).json.conversation.messages.at(-1).status,'pending');
- now+=61000;const stopped=await e.call(path,{headers:wh});assert.equal(stopped.json.conversation.messages.at(-1).status,'withheld');assert.equal(stopped.json.conversation.messages.at(-1).text,'');release();
+test('WeChat assistant rejection happens before presentation moderation or polling begins',async t=>{
+ const {e,c,u,headers}=await setup(t);
+ const key=c.accounts.issue(u.id,{wechat:{appid:c.wechat.appid,openid:'deadline-openid',verifiedAt:Date.now()}}),wh={...headers,Cookie:`houren_session=${key}`};
+ let checks=0;c.wechat.check=async()=>{checks++;};
+ const r=await e.call('/api/assistant/questions',{method:'POST',headers,body:{text:'解释实验'}});await c.assistant.idle();
+ const path=`/api/assistant/conversations/${r.json.conversationId}`;
+ assert.equal((await e.call(path,{headers:wh})).status,403);assert.equal(checks,0);
 });
 
 test('switching to public scope does not send earlier private turns back to the model',async t=>{
@@ -99,12 +100,12 @@ test('switching to public scope does not send earlier private turns back to the 
 test('an already expired original moderation deadline is never extended',async t=>{
  const {c}=await setup(t);assert.equal(c.assistant.presentationTimedOut('new-wechat-question',true,Date.now()-1),true);
 });
-test('new WeChat answer moderation is inside generation deadline',async t=>{
- const {e,c,u,headers}=await setup(t);c.assistant.deadlineMs=60;const key=c.accounts.issue(u.id,{wechat:{appid:c.wechat.appid,openid:'timeout-openid',verifiedAt:Date.now()}});
- let release;const gate=new Promise(r=>release=r);c.wechat.check=async(_t,_i,scene)=>{if(scene===3)await gate;};
+test('new WeChat questions are rejected before consuming model budget',async t=>{
+ const {e,c,u,headers}=await setup(t);const key=c.accounts.issue(u.id,{wechat:{appid:c.wechat.appid,openid:'timeout-openid',verifiedAt:Date.now()}});
  const wh={...headers,Cookie:`houren_session=${key}`,'X-Houren-Client':'wechat'};
- const r=await e.call('/api/assistant/questions',{method:'POST',headers:wh,body:{text:'解释实验'}});assert.equal(r.status,202,r.text);await c.assistant.idle();release();
- const stored=c.assistant.store.get(u.id,r.json.conversationId).messages.at(-1);assert.equal(stored.status,'failed');assert.equal(stored.text,'');
+ let calls=0;c.assistant.generate=async()=>{calls++;};
+ const r=await e.call('/api/assistant/questions',{method:'POST',headers:wh,body:{text:'解释实验'}});
+ assert.equal(r.status,403);assert.equal(r.json.error.code,'wechat_observation_only');assert.equal(calls,0);assert.equal(c.assistant.store.quota(u.id).used,0);
 });
 
 test('storage failure in a detached job is contained and reservations remain charged',async t=>{
@@ -115,7 +116,7 @@ test('storage failure in a detached job is contained and reservations remain cha
  assert.equal((await e.call('/api/public/state')).status,200);
 });
 
-test('private scope without a provable resident is refused before quota; WeChat titles await moderation',async t=>{
+test('private scope without a provable resident is refused before quota; WeChat cannot list titles',async t=>{
  const {e,c,u,headers}=await setup(t);
  const none=await e.call('/api/assistant/questions',{method:'POST',headers,body:{text:'我的居民怎么样',scope:{mode:'resident'}}});assert.equal(none.status,403);assert.equal(c.assistant.store.quota(u.id).used,0);
  const long='三城公库最近为什么差这么多？\n'.repeat(4);
@@ -124,8 +125,8 @@ test('private scope without a provable resident is refused before quota; WeChat 
  assert.equal(status.conversations[0].title,title);assert.ok(status.branches.every(b=>Object.hasOwn(b,'premise')));
  assert.equal((await e.call(`/api/assistant/conversations/${r.json.conversationId}`,{headers})).json.conversation.title,title);
  const key=c.accounts.issue(u.id,{wechat:{appid:c.wechat.appid,openid:'title-openid',verifiedAt:Date.now()}}),wh={...headers,Cookie:`houren_session=${key}`,'X-Houren-Client':'wechat'};
- assert.equal((await e.call('/api/assistant/status',{headers:wh})).json.conversations[0].title,'实验对话');
- assert.equal((await e.call(`/api/assistant/conversations/${r.json.conversationId}`,{headers:wh})).json.conversation.title,'实验对话');
+ assert.equal((await e.call('/api/assistant/status',{headers:wh})).json.error.code,'wechat_observation_only');
+ assert.equal((await e.call(`/api/assistant/conversations/${r.json.conversationId}`,{headers:wh})).json.error.code,'wechat_observation_only');
 });
 
 for(const reason of ['approved','pending','rejected','loginRequired','unavailable','withheld','other']) {

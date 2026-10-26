@@ -281,7 +281,6 @@ JS 照 `public/billing.js`（最短的完整例子）：`mountShell(header, { ac
 | 要做的 | 用 |
 |---|---|
 | 段落 / 富文本 | `text(W, value, { style, color, maxLines, align })` / `rich(W, segments)` |
-| 助手回答 | `ui/answer.js`：共用安全 Markdown 解析，正文、表格、代码与可点依据标号；`pre` 保留结构化记录缩进 |
 | 卡片 | `card(W, inner, { pad, fill, border, action })`：城影底加 1px 描边，可以整块点按（按下变石阶） |
 | 按钮 | `button(W, label, action, { variant, size, icon })`：`primary` 月白实心、`secondary` 描边、`text` 月白文字、`danger` 警示色文字；一行几个用 `buttonRow` |
 | 标签 / 筛选 | `chips`（可换行，选中为月白实心）、`chipStrip`（可横向滑动）、`segmented`（分段控件） |
@@ -291,7 +290,7 @@ JS 照 `public/billing.js`（最短的完整例子）：`mountShell(header, { ac
 | 统计块 | `stat(W, label, value, sub, color)`；几块并排用 `columns` |
 | 输入 | `field(W, label, value, action, { placeholder, secret, multiline, counter, hint, error })`；勾选用 `checkbox` |
 | 管理员公告 | `screens/announcements.js`：复用 `N.card`、`N.text`、按钮与空状态，列表和全文在微信端阅读；观测页显示最新标题，我的页提供入口 |
-| 人类留言 | `screens/messages.js` 的留言列表、讨论与书写页，复用卡片、列表行和输入；操作用一行 `buttonRow`，长正文可展开，未检查文字用说明占位；书写页由原生输入层编辑，页面只保留一个月白主提交按钮 |
+| 人类留言 | `screens/messages.js` 的只读留言列表与讨论页，复用卡片、列表行；长正文可展开，未检查文字用说明占位，意见反馈提供客服邮箱，不提供发表、编辑或删除操作 |
 | 进度 | `progress(W, ratio, color)` |
 | 小节标题 | `section(W, title, { sub, link, small })`：宋体标题、说明、右侧月白链接 |
 | 时间分隔 | `rule(W, '第 8 日 · 第 2 刻')`：左边文字，右边细线 |
@@ -321,12 +320,19 @@ JS 照 `public/billing.js`（最短的完整例子）：`mountShell(header, { ac
 ### 4.8 合规项（不能改）
 
 - 每次冷启动先显示 16+ 和健康游戏忠告，点「进入城市」之前不联网、不显示导航。
-- 登录、创建居民、配置模型之前分别勾选同意。
+- 登录前勾选同意隐私说明。0.9.1 微信观测端已移除居民创建、家书输入、模型配置与运行控制以及 AI 助手，不保留隐藏入口或审核开关。
 - AI 生成内容一律标记。文字和图片通过微信内容安全检查后才显示；未审核的居民文字显示占位，不出现成片的「内容审核中」。
 - 没有充值、支付、兑换入口；没有音效。
-- 密码与 API Key 不写入本地存储，切到后台即清除。
+- 密码不写入本地存储，切到后台即清除。0.9.1 微信端不再接收或保存模型 API Key。
 
-### 4.9 预览
+### 4.9 观测端的功能边界（0.9.1）
+
+- 保留城市、统计、天气、已有报告与档案、本人居民的只读记录和历史打包导出。居民记录用总览、收支、行动、用量、时间线五个分页，使用 `screens/records.js`；不设管理页。
+- 账户登录、资料和隐私、居民提醒的设置与记录保留；已有家书、灵魂等记录按实际来源标注，不提供输入入口。
+- 微信包中移除助手、旧居民管理与模型目录；新版本始终为观测端，不在审核后切换功能。服务端对手机会话同时限制写操作；网站独立会话的功能不变。
+- 说明文字如实表述“展示 AI 实验已有记录”，不要写成“不含 AI”，也不要承诺平台必然通过。
+
+### 4.10 预览
 
 - 浏览器预览：`node wechat/scripts/preview-server.mjs`（缺省端口 8795，可用 `PORT` 改），打开 `http://127.0.0.1:8795/`，可以切换机型（iPhone 15、iPhone SE、安卓）和数据。网站开着登录门时，「文字已审核」模式读的网站公共接口会要求登录，界面停在「请先登录」；看界面用「未登录投影」。
 - 预览里的字体、触摸和键盘是模拟的，最后以微信开发者工具和真机为准。

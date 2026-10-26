@@ -1,11 +1,11 @@
-// 留言与草稿属于当前账号；网络结果需同时匹配账号、导航及读取版本。
+// 留言板在小程序内只读：留言属于登录账号可见的内容，网络结果需同时匹配账号、导航及读取版本。
+// 发表、回复、编辑与删除不在小程序提供；意见反馈使用客服邮箱。
 const api = require('./utils/api');
 class MessageBoard {
   constructor(app) { this.app = app; this.ownerId = null; this.version = 0; this.verified = false; this.reset(); }
   reset() {
     this.version++; this.roots = []; this.total = 0; this.cursor = null; this.loaded = false; this.loading = false; this.error = '';
-    this.replies = new Map(); this.expanded = new Set(); this.drafts = new Map(); this.editor = null; this.threadId = '';
-    delete this.app.form.messageText;
+    this.replies = new Map(); this.expanded = new Set(); this.threadId = '';
     delete this.app.moderation.messages; delete this.app.loginRequired.messages;
   }
   sync() {
@@ -16,7 +16,7 @@ class MessageBoard {
   }
   ticket(scope) { return { ownerId: this.ownerId, version: this.version, read: this.app.beginRead(scope), scope }; }
   current(ticket) { return ticket.ownerId === this.app.user?.id && ticket.version === this.version && this.app.readCurrent(ticket.scope, ticket.read); }
-  requireLogin() { if (!this.sync()) throw new Error('请先使用微信登录后参与讨论'); }
+  requireLogin() { if (!this.sync()) throw new Error('请先使用微信登录后阅读留言'); }
   fail(error) {
     if (error.status === 401 && error.sessionCurrent !== false) {
       if (error.code !== 'wechat_login_required') this.app.user = null;
@@ -63,22 +63,11 @@ class MessageBoard {
     } catch (error) { if (this.current(ticket)) { this.fail(error); state.error = error.message; } }
     finally { if (this.app.readVersions.messageThread === ticket.read.version) { state.loading = false; this.app.invalidate(); this.app.render(); } }
   }
-  stash() { if (this.editor) this.drafts.set(this.editor.key, this.app.form.messageText || ''); }
-  compose(kind, id) {
-    this.requireLogin(); this.stash();
-    const item = id ? this.get(id) : null;
-    if (kind !== 'new' && !item) throw new Error('留言已变更，请刷新后重试');
-    const key = kind + ':' + (id || 'new');
-    this.editor = { kind, id, key, threadId: item ? item.threadId || item.id : null, item };
-    if (!this.drafts.has(key)) this.drafts.set(key, kind === 'edit' ? item.text || '' : '');
-    this.app.form.messageText = this.drafts.get(key);
-    this.app.push('messageEditor');
-  }
-  apply(item, created = false) {
+  apply(item) {
     if (item.threadId === null) {
       const index = this.roots.findIndex(root => root.id === item.id);
       if (index >= 0) this.roots[index] = item;
-      else { this.roots.unshift(item); if (created) this.total++; }
+      else this.roots.unshift(item);
       this.roots.sort((a, b) => b.seq - a.seq);
     } else {
       let state = this.replies.get(item.threadId);
@@ -86,37 +75,10 @@ class MessageBoard {
       const index = state.messages.findIndex(row => row.id === item.id);
       if (index >= 0) state.messages[index] = item; else state.messages.push(item);
       state.messages.sort((a, b) => a.seq - b.seq);
-      const root = this.get(item.threadId); if (created && root) root.replyCount++;
     }
     for (const state of this.replies.values()) for (const reply of state.messages) if (reply.replyTo?.id === item.id) {
       reply.replyTo = { id: item.id, displayName: item.author.displayName, deleted: !!item.deletedAt };
     }
-  }
-  async submit() {
-    this.requireLogin();
-    const editor = this.editor;
-    if (!editor || this.saving) return;
-    const text = (this.app.form.messageText || '').trim();
-    if (editor.kind !== 'delete' && (!text || Array.from(text).length > 2000)) throw new Error('请输入 1–2,000 字的留言');
-    this.stash();
-    this.app.editing = ''; if (this.app.wx.hideKeyboard) this.app.wx.hideKeyboard();
-    const ticket = this.ticket('messageWrite');
-    const path = editor.kind === 'new' ? '/api/messages' : '/api/messages/' + (editor.kind === 'reply' ? editor.threadId + '/replies' : editor.id);
-    const method = editor.kind === 'delete' ? 'DELETE' : editor.kind === 'edit' ? 'PATCH' : 'POST';
-    const data = editor.kind === 'delete' ? {} : { text, ...(editor.kind === 'reply' ? { replyToId: editor.id } : {}) };
-    this.saving = true;
-    try {
-      const result = await api.request(path, { method, data, timeout: 60000 });
-      if (ticket.ownerId !== this.app.user?.id || ticket.version !== this.version) return;
-      const onPage = this.current(ticket);
-      this.version++; this.apply(result.message, ['new', 'reply'].includes(editor.kind)); this.loaded = true;
-      this.drafts.delete(editor.key);
-      if (this.editor === editor) { this.editor = null; delete this.app.form.messageText; }
-      this.app.rememberModeration('messages', result);
-      if (onPage) this.app.back();
-      if (onPage) this.app.showToast(editor.kind === 'delete' ? '留言已删除，已有回复已保留' : editor.kind === 'edit' ? '修改已保存' : editor.kind === 'reply' ? '回复已发布' : '留言已发布', 'ok');
-    } catch (error) { if (ticket.ownerId === this.app.user?.id && ticket.version === this.version) this.fail(error); throw error; }
-    finally { this.saving = false; }
   }
   async refresh() {
     await this.app.loadAccount();
@@ -130,10 +92,6 @@ class MessageBoard {
       case 'messageMore': await this.load(true); break;
       case 'messageThread': this.requireLogin(); this.threadId = action.id; this.app.push('messageThread'); await this.loadThread(action.id); break;
       case 'messageRepliesMore': await this.loadThread(this.threadId, true); break;
-      case 'messageCompose': this.compose(action.kind, action.id); break;
-      case 'messageDelete': this.compose('delete', action.id); break;
-      case 'messageSubmit': await this.submit(); break;
-      case 'messageCancel': this.stash(); this.editor = null; delete this.app.form.messageText; this.app.back(); break;
       case 'messageExpand': if (this.expanded.has(action.id)) this.expanded.delete(action.id); else this.expanded.add(action.id); break;
       case 'messageRefresh': await this.refresh(); break;
       default: break;

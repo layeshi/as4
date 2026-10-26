@@ -20,13 +20,14 @@
 <body>
 <div class="bar">
   <label>机型 <select id="device"><option value="iphone15">iPhone 15（390×844）</option><option value="se">iPhone SE（375×667）</option><option value="android">安卓（393×851）</option></select></label>
-  <label>数据 <select id="data"><option value="approved">文字已审核</option><option value="anon">未登录投影</option></select></label>
+  <label>客户端 <select id="client"><option value="miniprogram">普通小程序</option><option value="game">小游戏</option></select></label>
+  <label>数据 <select id="data"><option value="fixture">本地测试数据（已登录）</option><option value="fixture-guest">本地测试数据（未登录）</option><option value="approved">线上·文字已审核</option><option value="anon">线上·未登录投影</option></select></label>
   <button id="reload" type="button">重新载入</button>
 </div>
 <div class="phone" id="phone">
   <div class="kb" id="kb"><textarea id="kbInput" rows="1"></textarea><button id="kbDone" type="button">完成</button></div>
 </div>
-<p class="note">预览只读：只转发 GET 请求到线上接口，登录与写操作会被拒绝。字体、触摸和键盘是模拟的，最终以微信开发者工具和真机为准。</p>
+<p class="note" id="note">「本地测试数据」由本机预览服务返回，不连接线上，画面里的名字与文字均为测试数据。线上模式只转发 GET 请求，写操作会被拒绝。字体、触摸和键盘是模拟的，最终以微信开发者工具和真机为准。</p>
 <script src="/tools/preview/preview.js"></script>
 </body>
 </html>

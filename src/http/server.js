@@ -13,6 +13,7 @@ import { WechatProjection } from '../wechat/projection.js';
 import { WechatService } from '../wechat/service.js';
 import { systemTextSource } from '../wechat/system-texts.js';
 import { wechatRoutes } from './wechat.js';
+import { isWechatObservation, wechatObservationAllows, wechatObservationError } from './wechat-observation.js';
 import { archiveRoutes } from './archives.js';
 import { residentRoutes } from './residents.js';
 import { supportRoutes } from './support.js';
@@ -241,6 +242,11 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
         return;
       }
       if (pathname.startsWith('/api/')) {
+        if (isWechatObservation(ctx, req)) {
+          // Keep existing text projections active when a phone drops its header.
+          req.headers['x-houren-client'] = 'wechat';
+          if (!wechatObservationAllows(req.method, pathname)) return sendJson(res, 403, wechatObservationError);
+        }
         if ((rt.w.premise === 6 || rt.w.premise === 7) && (/^\/api\/(me(?:\/|$)|owner(?:\/|$))/.test(pathname) || /^\/api\/port\//.test(pathname) && req.method !== 'GET' || pathname === '/api/account/agents' && req.method !== 'GET' || /^\/api\/admin\/agents\/[^/]+\/owner-key$/.test(pathname))) return sendError(res,'zh','unauthorized');
         res.setHeader('X-Houren-Protocol', String(rt.engine.protocol)); // 协议版本随世界的物理（SPEC-E2 §2.1）
         if (cfg.requireLogin === true && walledApi(pathname) && !passesWall(ctx, req)) {

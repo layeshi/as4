@@ -222,58 +222,57 @@ test('协作开放后出现入口：列表、详情、历史版本与翻页都�
 });
 
 // ── 居民管理 ──
-async function createResident(h, { name = '石序', soul = '观察与生活', city = 'north', cap = '120000' } = {}) {
-  const { g } = h;
-  await g.dispatch({ type: 'tab', tab: 'account' });
-  await g.dispatch({ type: 'entry' });
-  assert.equal(g.tab, 'entry', g.error);
-  Object.assign(g.form, { name, soul, bio: '简介', entryAccepted: true });
-  if (city) await g.dispatch({ type: 'createCity', city });
-  if (cap) g.form.createCap = cap;
-  await g.dispatch({ type: 'create' }); await settle();
+// 小程序只观测：居民在同一账号的网页会话里创建（不带微信来源），再在小程序里打开只读的居民记录。
+function webHeaders(h, user = h.g.user) { return { Cookie: 'houren_session=' + h.env.app.ctx.accounts.issue(user.id), 'X-Houren-Request': '1' }; }
+function phoneHeaders(h) { return { ...webHeaders(h), 'X-Houren-Client': 'wechat' }; }
+let createdN = 0;
+async function createResident(h, { name = '石序', soul = '观察与生活', city = 'north', cap = 120000 } = {}) {
+  const { g, env } = h;
+  const created = await env.call('/api/account/residents', { method: 'POST', headers: webHeaders(h), body: { name, soul, bio: '简介', lang: 'zh', dailyCap: cap, city, requestId: 'web-create-' + (++createdN) } });
+  assert.ok(created.status >= 200 && created.status < 300, created.text);
+  const id = created.json.agentId;
+  await g.loadAccount();
+  await g.dispatch({ type: 'owner', id }); await settle();
   assert.equal(g.tab, 'owner', g.error);
-  return g.residentId;
+  return id;
+}
+const REJECTED = /小程序仅提供观测与已有记录查询/;
+async function rejected(h, actions) {
+  const { g } = h, before = h.calls.filter(x => x.method !== 'GET').length;
+  for (const action of actions) { g.error = ''; await g.dispatch(action); await settle(); assert.match(g.error, REJECTED, action.type); }
+  assert.equal(h.calls.filter(x => x.method !== 'GET').length, before, 'removed actions send no write request');
 }
 
-test('创建居民：第七前提必须选城，语言、每日上限与网站同一字段；失败重试沿用请求编号', async t => {
+test('居民创建已移除：入口不在界面上，旧动作不发请求；手机会话直接写入被服务端拒绝，网页创建的居民在「我的」只读出现', async t => {
   const h = await harness(t);
   const { g, env } = h;
   await h.login();
-  await g.dispatch({ type: 'entry' });
   let shown = h.texts();
-  for (const label of ['选一座城落籍', '中文', 'English', '每日游戏词元上限', '从旧世界带入灵魂']) assert.ok(shown.includes(label), label);
-  assert.equal(g.form.createCap, '880000', '默认上限与网站一致');
-  Object.assign(g.form, { name: '石序', soul: '观察与生活', entryAccepted: true });
-  await g.dispatch({ type: 'create' });
-  assert.equal(g.error, '请选一座城落籍');
-  assert.equal(h.posts('/api/account/residents').length, 0, '未选城不发请求');
-  await g.dispatch({ type: 'createCity', city: 'west' });
-  await g.dispatch({ type: 'createLang', lang: 'en' });
-  g.form.createCap = '12x';
-  await g.dispatch({ type: 'create' });
-  assert.match(g.error, /整数/);
-  g.form.createCap = '120000';
-  await g.dispatch({ type: 'create' }); await settle();
-  assert.equal(g.tab, 'owner', g.error);
-  const post = h.posts('/api/account/residents')[0];
-  assert.equal(post.data.city, 'west'); assert.equal(post.data.lang, 'en'); assert.equal(post.data.dailyCap, 120000);
-  const a = env.rt.w.agents[g.residentId];
-  assert.equal(a.city, 'west'); assert.equal(a.lang, 'en'); assert.equal(a.tokens.cap, 120000);
-  assert.ok(h.checked.includes('观察与生活'), '灵魂经过微信内容安全检查');
+  for (const label of ['让一位居民入城', '成为造者', '实验助手', '余额与托管']) assert.ok(!shown.includes(label), label);
+  Object.assign(g.form, { name: '石序', soul: '观察与生活', entryAccepted: true, createCity: 'west', createCap: '120000' });
+  await rejected(h, [{ type: 'entry' }, { type: 'createCity', city: 'west' }, { type: 'createLang', lang: 'en' }, { type: 'create' }, { type: 'stewardImportOpen' }]);
+  assert.equal(h.posts('/api/account/residents').length, 0);
+  const phone = await env.call('/api/account/residents', { method: 'POST', headers: phoneHeaders(h), body: { name: '石序', soul: '观察与生活', lang: 'zh', dailyCap: 120000, city: 'west', requestId: 'phone-create-1' } });
+  assert.equal(phone.status, 403); assert.equal(phone.json.error.code, 'wechat_observation_only');
+  const id = await createResident(h, { city: 'west' });
+  await g.dispatch({ type: 'tab', tab: 'city' }); await g.dispatch({ type: 'tab', tab: 'account' }); await h.reviewed();
+  shown = h.texts();
+  assert.ok(shown.includes('石序'), shown.join('|'));
+  assert.equal(env.rt.w.agents[id].city, 'west');
 });
 
-test('管理居民的六个分页读取真实数据：总览、收支、行动、用量、时间线（筛选与翻页）与管理', async t => {
+test('居民记录的五个分页读取真实数据：总览、收支、行动、用量、时间线（筛选与翻页），没有管理分页', async t => {
   const h = await harness(t);
-  const { g, env } = h;
+  const { g } = h;
   await h.login();
   const id = await createResident(h);
   let shown = h.texts();
-  for (const label of ['总览', '收支', '行动', '用量', '时间线', '管理', '可转让词元', '当前状态', '下次醒来：未配置模型，不会醒来', '灵魂']) assert.ok(shown.includes(label), label + '\n' + shown.join('|'));
+  for (const label of ['总览', '收支', '行动', '用量', '时间线', '可转让词元', '当前状态', '下次醒来：未配置模型，不会醒来', '灵魂', '居民提醒设置', '公开档案']) assert.ok(shown.includes(label), label + '\n' + shown.join('|'));
+  for (const label of ['管理', '托管运行', '运行', '暂停', '家书', '送出家书', '模型', '测试连接', '保存配置', '询问实验助手']) assert.ok(!shown.includes(label), label);
   await h.tap('收支');
   shown = h.texts();
   assert.ok(shown.some(t => t.includes('首次启动款')), '累计收支按网站的来源名称显示');
-  assert.ok(shown.includes('导出流水 CSV'));
-  await h.tap('导出流水 CSV');
+  await h.tap('下载流水 CSV');
   assert.equal(h.downloads.length, 1);
   assert.ok(h.downloads[0].url.endsWith('/api/account/residents/' + id + '/export?format=csv'));
   assert.match(h.downloads[0].header.Cookie, /^houren_session=/);
@@ -282,7 +281,9 @@ test('管理居民的六个分页读取真实数据：总览、收支、行动�
   await h.tap('行动');
   assert.ok(h.texts().includes('实际成果'));
   await h.tap('用量');
-  assert.ok(h.texts().includes('模型用量'));
+  shown = h.texts();
+  assert.ok(shown.includes('模型用量'));
+  assert.ok(!shown.some(t => /¥|托管扣费/.test(t)), '用量页不展示价格与扣费');
   await h.tap('时间线');
   assert.equal(h.gets('/api/wechat/residents/' + id + '/events?limit=50').length, 1);
   await h.reviewed();
@@ -290,80 +291,57 @@ test('管理居民的六个分页读取真实数据：总览、收支、行动�
   h.type('timelineType', 'arrive'); h.type('timelineDay', '1');
   await h.tap('筛选');
   assert.equal(h.gets('/api/wechat/residents/' + id + '/events?limit=50&type=arrive&day=0').length, 1);
-  await h.tap('管理');
-  assert.equal(g.form.dailyCap, '120000', '上限输入框预填当前值');
-  h.type('dailyCap', '200000');
-  await h.tap('更新上限');
-  assert.equal(env.rt.w.agents[id].tokens.cap, 200000, g.error);
-  const capPost = h.posts('/api/account/residents/' + id + '/cap')[0];
-  assert.ok(capPost.data.requestId, '每日上限带请求编号');
-  await h.tap('恢复默认形象');
-  assert.ok(h.texts().includes('确认恢复默认'), '恢复默认形象先确认');
-  await h.tap('确认恢复默认');
-  assert.equal(h.calls.filter(x => x.method === 'DELETE' && x.path === '/api/account/residents/' + id + '/avatar').length, 1);
-  assert.equal(g.error, '');
-  await h.tap('移除配置');
-  assert.equal(h.posts('/api/account/residents/' + id + '/runner').length, 0, '移除前先确认');
-  await h.tap('确认移除');
-  assert.deepEqual(clone(h.posts('/api/account/residents/' + id + '/runner')[0].data), { op: 'remove' });
-  assert.equal(g.error, '');
+  await rejected(h, [{ type: 'stewardTab', tab: 'manage' }, { type: 'stewardCap' }, { type: 'stewardAvatarReset' }, { type: 'stewardRemoveRunner' }, { type: 'letter' }, { type: 'runner', op: 'start' }]);
+  assert.equal(h.posts('/api/account/residents/' + id).length, 0);
+  assert.equal(h.calls.filter(x => x.method === 'DELETE').length, 0);
+  assert.equal(g.records.tab, 'timeline');
 });
 
-test('自备模型与网站同一份配置：原生工具调用，已保存的密钥留空保留，测试后不在手机上留存密钥', async t => {
+test('模型配置、测试、启停与托管选择已移除：旧动作不发请求，模型目录与托管账目读取在本机拒绝，手机会话写入被服务端拒绝', async t => {
   const h = await harness(t);
   const { g, env } = h;
   await h.login();
   const id = await createResident(h);
-  env.app.ctx.runners.prepare = async config => config; // 不真正连接模型服务商
-  Object.assign(g.form, { apiKey: 'sk-test-wechat-parity', modelAccepted: true });
-  await g.dispatch({ type: 'modelSave' }); await settle();
-  assert.equal(g.error, '');
-  const saved = h.posts('/api/account/residents/' + id + '/runner').find(x => x.data.op === 'save').data.config;
-  assert.equal(saved.toolMode, 'native'); assert.equal(saved.actionTools, 'typed');
-  assert.ok(!g.form.apiKey, '保存后清除本机密钥');
-  assert.ok(h.texts().includes('API Key（留空保留已保存的密钥）'));
-  g.form.modelAccepted = true;
-  await g.dispatch({ type: 'modelTest' }); await settle();
-  assert.equal(g.error, '', '已保存密钥时可留空测试');
-  assert.equal(h.posts('/api/account/residents/' + id + '/runner').filter(x => x.data.op === 'test')[0].data.config.apiKey, '');
+  Object.assign(g.form, { apiKey: 'sk-should-never-leave', modelAccepted: true, baseURL: 'https://api.example.com/v1', model: 'm' });
+  await rejected(h, [{ type: 'preset', id: 'deepseek' }, { type: 'provider', index: 1 }, { type: 'modelChoice', model: 'm' }, { type: 'modelTest' }, { type: 'modelSave' }, { type: 'runner', op: 'start' }, { type: 'runner', op: 'pause' }, { type: 'stewardModelSource', source: 'hosted' }, { type: 'stewardHostedModel', id: 'm' }, { type: 'stewardBilling' }, { type: 'stewardCancelRequest', id: 'r1' }]);
+  assert.equal(h.posts('/api/account/residents/' + id + '/runner').length, 0);
+  assert.ok(!h.calls.some(x => x.data && JSON.stringify(x.data).includes('sk-should-never-leave')));
+  assert.ok(!h.calls.some(x => /model-presets|\/account\/hosted/.test(x.path)), '不读取模型目录与托管账目');
+  const api = h.c.load(new URL('../wechat/minigame/utils/api.js', import.meta.url).pathname);
+  for (const path of ['/api/wechat/model-presets', '/api/account/hosted', '/api/account/transfers', '/api/account/worlds', '/api/assistant/status', '/api/port/model']) {
+    await assert.rejects(api.request(path), error => error.code === 'wechat_observation_only', path);
+  }
+  for (const op of ['test', 'save', 'start', 'pause', 'remove']) {
+    const r = await env.call('/api/account/residents/' + id + '/runner', { method: 'POST', headers: phoneHeaders(h), body: { op } });
+    assert.equal(r.status, 403, op); assert.equal(r.json.error.code, 'wechat_observation_only');
+  }
+  assert.equal(env.app.ctx.runners.records[id], undefined, '没有任何运行配置被写入');
 });
 
-test('过继：A 发起（需确认）、B 在「我的」收到邀请并配置模型后接受；管理权真实转移', async t => {
+test('过继已移除：小程序不显示过继邀请与接受入口，旧动作不发请求；网页完成的过继后，原创者保留公开生涯入口', async t => {
   const env = await server(t);
   const a = await client(env, 'parity-openid-aaaa'), b = await client(env, 'parity-openid-bbbb');
   await a.login(); await b.login();
   const id = await createResident(a);
-  await a.tap('管理');
+  assert.ok(!a.texts().includes('发起过继邀请'));
   a.type('transferUsername', b.g.user.username);
-  await a.tap('发起过继邀请');
-  assert.equal(a.posts('/api/account/residents/' + id + '/transfer').length, 0, '先确认再发起');
-  assert.ok(a.texts().some(t => t.startsWith('确认把这位居民过继给')));
-  await a.tap('确认发起');
-  assert.equal(a.g.error, '');
-  assert.ok(Object.values(env.rt.w.access.transfers).some(x => x.agentId === id && x.status === 'pending'));
-  assert.ok(a.texts().some(t => t.startsWith('已向对方发出邀请')), '发出的邀请显示在管理页，可取消');
+  await rejected(a, [{ type: 'stewardTransfer' }, { type: 'stewardCancelTransfer', agentId: id, transferId: 't1' }]);
+  const invite = await env.call('/api/account/residents/' + id + '/transfer', { method: 'POST', headers: webHeaders(a), body: { username: b.g.user.username, requestId: 'web-transfer-1' } });
+  assert.ok(invite.status >= 200 && invite.status < 300, invite.text);
   await b.g.dispatch({ type: 'tab', tab: 'city' }); await b.g.dispatch({ type: 'tab', tab: 'account' }); await settle();
-  assert.ok(b.gets('/api/wechat/account/transfers').length >= 1, '过继邀请走审核代理');
-  assert.ok(b.texts().includes('过继邀请'));
-  await b.tap('接受并配置模型');
-  assert.equal(b.g.tab, 'transferAccept');
-  assert.ok(b.texts().includes('平台托管暂未开放，可改用自己的模型。'), '托管未开放时给出原因，不能选择');
+  assert.equal(b.gets('/api/wechat/account/transfers').length, 0, '不读取过继邀请');
+  assert.ok(!b.texts().includes('过继邀请') && !b.texts().includes('接受并配置模型'));
+  await rejected(b, [{ type: 'stewardAcceptOpen', id: 't1' }, { type: 'stewardAccept' }]);
+  const transfer = Object.values(env.rt.w.access.transfers).find(x => x.agentId === id && x.status === 'pending');
   env.app.ctx.runners.prepare = async config => config;
-  Object.assign(b.g.form, { apiKey: 'sk-test-b', modelAccepted: true, acceptCap: '300000' });
-  await b.tap('接受并配置模型');
-  assert.equal(b.g.error, '');
-  assert.equal(b.g.tab, 'owner');
-  const relation = env.rt.w.access.residents[id];
-  assert.equal(relation.managerAccountId, b.g.user.id);
-  assert.equal(env.rt.w.agents[id].tokens.cap, 300000);
-  const accept = b.posts('/api/account/transfers/')[0];
-  assert.equal(accept.data.config.toolMode, 'native'); assert.ok(accept.data.requestId);
-  assert.equal(b.g.form.apiKey, undefined, '接受后清除本机密钥');
+  const accepted = await env.call('/api/account/transfers/' + transfer.id + '/accept', { method: 'POST', headers: webHeaders(b), body: { config: { provider: 'openai', model: 'test-model', baseURL: 'https://api.example.com/v1', apiKey: 'sk-test-b', toolMode: 'native', actionTools: 'typed', actEveryTicks: 1, historyRounds: 6 }, dailyCap: 300000, requestId: 'web-accept-1' } });
+  assert.ok(accepted.status >= 200 && accepted.status < 300, accepted.text);
+  assert.equal(env.rt.w.access.residents[id].managerAccountId, b.g.user.id);
   await a.g.dispatch({ type: 'tab', tab: 'city' }); await a.g.dispatch({ type: 'tab', tab: 'account' }); await settle();
   assert.ok(a.texts().includes('已过继的创作'), '原创者保留公开生涯入口');
 });
 
-test('领养摇篮中的灵魂：登录后在「我的」与档案摇篮都可进入，提交真实领养', async t => {
+test('领养已移除：摇篮只读，「我的」与档案都没有领养入口，旧动作不发请求', async t => {
   const h = await harness(t);
   const { g, env } = h;
   const { wakeCore } = await import('../src/http/tokens.js');
@@ -376,59 +354,29 @@ test('领养摇篮中的灵魂：登录后在「我的」与档案摇篮都可�
   await g.refresh({ full: true }); await h.reviewed();
   await g.dispatch({ type: 'tab', tab: 'archive' });
   await g.dispatch({ type: 'archive', tab: 'cradle' });
-  assert.ok(h.texts().includes('领养'), '摇篮卡片带领养入口：' + h.texts().join('|'));
+  let shown = h.texts();
+  assert.ok(shown.includes('小满'), '摇篮仍可阅读：' + shown.join('|'));
+  assert.ok(!shown.includes('领养'));
   await g.dispatch({ type: 'tab', tab: 'account' }); await settle();
-  assert.ok(h.texts().includes('领养摇篮中的灵魂'));
-  await g.dispatch(h.find(b => b.text === '小满' && b.action?.type === 'stewardAdoptOpen', '小满').action);
-  assert.equal(g.tab, 'adopt');
-  assert.ok(h.texts().includes('一个爱说话的灵魂'));
-  g.form.adoptCap = '90000';
-  await h.tap('领养');
-  assert.equal(g.error, '请先阅读并同意隐私说明');
-  g.form.adoptAccepted = true;
-  await h.tap('领养');
-  assert.equal(g.error, '');
-  assert.equal(g.tab, 'owner');
-  const post = h.posts('/api/account/residents/adopt')[0];
-  assert.equal(post.data.soulId, 's1'); assert.equal(post.data.dailyCap, 90000); assert.ok(post.data.requestId);
-  assert.equal(env.rt.w.access.residents[g.residentId].managerAccountId, g.user.id);
-  assert.equal(env.rt.w.agents[g.residentId].tokens.cap, 90000);
+  assert.ok(!h.texts().includes('领养摇篮中的灵魂'));
+  g.form.adoptAccepted = true; g.form.adoptCap = '90000';
+  await rejected(h, [{ type: 'stewardAdoptOpen', id: 's1' }, { type: 'stewardAdopt' }]);
+  assert.equal(h.posts('/api/account/residents/adopt').length, 0);
+  const phone = await env.call('/api/account/residents/adopt', { method: 'POST', headers: phoneHeaders(h), body: { soulId: 's1', dailyCap: 90000, requestId: 'phone-adopt-1' } });
+  assert.equal(phone.status, 403);
 });
 
-test('平台托管：余额页只读并可撤回申请；托管开放后可在模型里选平台托管并保存', async t => {
+test('余额与充值入口已移除：「我的」没有余额、托管或价格信息，托管账目不被读取', async t => {
   const h = await harness(t);
   const { g, env } = h;
-  const ctx = env.app.ctx;
   await h.login();
-  const id = await createResident(h);
-  const pending = ctx.hosted.billing.request(g.user.id, { requestId: 'parity-topup-1', amountMicro: 2000000, note: '周五转账' });
+  await createResident(h);
+  env.app.ctx.hosted.billing.request(g.user.id, { requestId: 'parity-topup-1', amountMicro: 2000000, note: '周五转账' });
   await g.dispatch({ type: 'tab', tab: 'city' }); await g.dispatch({ type: 'tab', tab: 'account' }); await settle();
-  await g.dispatch(h.find(b => b.text === '余额与托管', '余额与托管').action); await settle();
-  assert.equal(g.tab, 'billing');
-  assert.ok(h.gets('/api/wechat/account/hosted').length >= 1, '托管账目走审核代理');
-  let shown = h.texts();
-  assert.ok(shown.some(t => t.startsWith('购买额度需在网站') || t === '平台托管暂未开放。'));
-  assert.ok(!shown.some(t => t.includes('收款码')), '小程序内不展示收款码与付款引导');
-  await g.dispatch({ type: 'refresh' }); await h.reviewed();
-  assert.ok(h.texts().includes('付款说明：周五转账'), '申请说明经审核后显示');
-  await h.tap('撤回申请');
-  assert.equal(ctx.hosted.billing.data.requests.find(r => r.id === pending.id).status, 'cancelled');
-  // 管理员开放平台托管后，模型来源可选「平台托管」。
-  const admin = await ctx.accounts.create({ username: 'parity_admin', password: 'test-password-1234' }, { role: 'admin' });
-  const cookie = 'houren_session=' + ctx.accounts.issue(admin.id);
-  ctx.hosted.providerOverride = () => ({ step: async () => ({ text: '', toolCalls: [], usage: { input: 1, output: 1 } }) });
-  const saved = await env.call('/api/admin/hosted/config', { method: 'POST', headers: { Cookie: cookie, 'X-Houren-Request': '1' }, body: { enabled: true, model: 'deepseek-test', apiKey: 'hosted-parity-secret', maxOutputTokens: 256, pricesMicro: { miss: 1000000, hit: 500000, output: 2000000 } } });
-  assert.equal(saved.status, 200, saved.text);
-  await g.dispatch({ type: 'owner', id }); await settle();
-  await h.tap('平台托管');
-  shown = h.texts();
-  assert.ok(!shown.includes('测试连接'), '平台托管不提供测试连接');
-  assert.ok(!shown.some(t => t.startsWith('API Key')), '平台托管不填密钥');
-  g.form.modelAccepted = true;
-  await h.tap('保存配置');
-  assert.equal(g.error, '');
-  assert.equal(h.posts('/api/account/residents/' + id + '/runner').find(x => x.data.op === 'save').data.config.hosted, true);
-  assert.equal(ctx.runners.records[id].config.hosted, true);
+  const shown = h.texts();
+  assert.ok(!shown.some(t => /余额与托管|购买额度|充值|入账申请|¥/.test(t)), shown.join('|'));
+  assert.equal(h.gets('/api/wechat/account/hosted').length, 0);
+  await rejected(h, [{ type: 'stewardBilling' }, { type: 'stewardCancelRequest', id: 'r1' }]);
 });
 
 // ── 迟到失败与秘密清理 ──
@@ -468,52 +416,18 @@ test('迟到失败：离开观测页或退出登录后，旧请求的失败不�
   assert.match(g.error || g.toast?.text || '', /统计暂不可用/);
 });
 
-test('迟到失败：居民时间线与托管账目在离开页面后失败，不报错也不写入', async t => {
+test('迟到失败：居民时间线在离开页面后失败，不报错也不写入', async t => {
   const h = await harness(t);
   const { g } = h;
   await h.login();
   const id = await createResident(h);
   h.hold('/api/wechat/residents/' + id + '/events');
-  const loading = g.dispatch({ type: 'stewardTab', tab: 'timeline' }); await settle();
+  const loading = g.dispatch({ type: 'recordsTab', tab: 'timeline' }); await settle();
   await g.dispatch({ type: 'back' });
   h.held[0].fail();
   await loading; await settle();
   assert.equal(g.error, ''); assert.equal(g.toast?.kind === 'error' ? g.toast.text : '', '');
-  h.hold('/api/wechat/account/hosted');
-  const billing = g.dispatch({ type: 'stewardBilling' }); await settle();
-  const hosted = g.steward.hosted;
-  await g.dispatch({ type: 'back' });
-  h.held[1].fail(500, '旧页面的托管读取失败');
-  await billing; await settle();
-  assert.equal(g.steward.hostedError, '', '离开后旧请求的失败不写入');
-  assert.equal(g.steward.hosted, hosted, '已有的托管数据不被清空');
-  assert.equal(g.error, '');
-});
-
-test('模型保存或测试失败、校验不通过后都清除本机 API Key；换接口地址时不能留空沿用旧密钥', async t => {
-  const h = await harness(t);
-  const { g, env } = h;
-  const { RunnerError } = await import('../src/runner/manager.js');
-  await h.login();
-  const id = await createResident(h);
-  env.app.ctx.runners.prepare = async () => { throw new RunnerError('模型连接失败：401'); };
-  Object.assign(g.form, { apiKey: 'sk-should-not-stay', modelAccepted: true });
-  await g.dispatch({ type: 'modelTest' }); await settle();
-  assert.match(g.error, /模型连接失败/);
-  assert.ok(!g.form.apiKey, '测试失败后清除密钥');
-  Object.assign(g.form, { apiKey: 'sk-should-not-stay', modelAccepted: true, model: '' });
-  await g.dispatch({ type: 'modelSave' });
-  assert.match(g.error, /请填写模型名/);
-  assert.ok(!g.form.apiKey, '校验失败也清除密钥');
-  env.app.ctx.runners.prepare = async config => config;
-  Object.assign(g.form, { apiKey: 'sk-saved', modelAccepted: true, model: 'deepseek-flash' });
-  await g.dispatch({ type: 'modelSave' }); await settle();
-  assert.equal(g.error, '');
-  Object.assign(g.form, { modelAccepted: true, baseURL: 'https://api.moonshot.cn/v1' });
-  const before = h.posts('/api/account/residents/' + id + '/runner').length;
-  await g.dispatch({ type: 'modelSave' });
-  assert.match(g.error, /API Key/, '接口地址改变时需要重新填写密钥（与服务端沿用规则一致）');
-  assert.equal(h.posts('/api/account/residents/' + id + '/runner').length, before);
+  assert.equal(g.records.timeline, null, '离开后旧请求的失败不写入');
 });
 
 // ── 档案、账户资料、居民公开档案 ──
@@ -651,10 +565,9 @@ test('居民谱系：作者与子女（上溯三代、下传两代）以可点�
   assert.equal(actCore(env.app.ctx, mother, { wakeId: wake.wakeId, requestId: 'conceive-lineage', experimentGeneration: 0, actionTools: 'typed', actions: [{ type: 'conceive', name: '小潮', soul: '一个安静的灵魂' }] }, 'zh').json.results[0].ok, true);
   await h.login();
   await g.refresh({ full: true });
-  await g.dispatch({ type: 'stewardAdoptOpen', id: 's1' });
-  Object.assign(g.form, { adoptAccepted: true, adoptCap: '90000' });
-  await g.dispatch({ type: 'stewardAdopt' }); await settle();
-  const child = g.residentId;
+  const adopted = await env.call('/api/account/residents/adopt', { method: 'POST', headers: webHeaders(h), body: { soulId: 's1', dailyCap: 90000, requestId: 'web-adopt-lineage' } });
+  assert.ok(adopted.status >= 200 && adopted.status < 300, adopted.text);
+  const child = adopted.json.agentId;
   assert.deepEqual(clone(env.rt.w.agents[child].authors), [mother]);
   await g.refresh({ full: true });
   await g.dispatch({ type: 'resident', id: child }); await h.reviewed();

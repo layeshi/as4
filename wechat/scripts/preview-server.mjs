@@ -1,9 +1,10 @@
 // 浏览器预览：在普通浏览器的 Canvas 里运行 minigame/ 的同一份代码，用于改界面时截图核对。
-// 只读：只把 GET 转发到线上接口，其他方法一律拒绝；不替代微信编译和真机验收。
+// 线上数据只读：只把 GET 转发到线上接口，其他方法一律拒绝；「本地测试数据」完全不连线上。不替代微信编译和真机验收。
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { resolve, dirname, extname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fixture } from '../tools/preview/fixtures.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.PORT || 8795);
@@ -33,11 +34,14 @@ async function proxy(req, res, mode, path, search) {
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://preview.local');
+  const local = /^\/proxy\/(fixture|fixture-guest)(\/api\/.*)$/.exec(url.pathname);
+  if (local) { const [status, body] = fixture(req.method, local[2] + url.search, { guest: local[1] === 'fixture-guest' }); return send(res, status, body); }
   const m = /^\/proxy\/(anon|approved)(\/api\/.*)$/.exec(url.pathname);
   if (m) return proxy(req, res, m[1], m[2], url.search);
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: { message: 'method not allowed' } });
   if (url.pathname === '/') return file(res, join(root, 'tools', 'preview'), 'index.html');
   if (url.pathname.startsWith('/tools/preview/')) return file(res, join(root, 'tools', 'preview'), url.pathname.slice('/tools/preview/'.length));
   if (url.pathname.startsWith('/minigame/')) return file(res, join(root, 'minigame'), url.pathname.slice('/minigame/'.length));
+  if (url.pathname === '/miniprogram-app/config.js') return file(res, join(root, 'miniprogram-app'), 'config.js');
   send(res, 404, { error: { message: 'not found' } });
-}).listen(port, '127.0.0.1', () => console.log(`小游戏预览：http://127.0.0.1:${port}/  （数据来自 ${api}，只读）`));
+}).listen(port, '127.0.0.1', () => console.log(`小游戏预览：http://127.0.0.1:${port}/  （线上数据来自 ${api}，只读；本地测试数据不联网）`));

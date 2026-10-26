@@ -62,7 +62,7 @@ function client(base, { intercept, miniprogram = false } = {}) {
   return { api: load(resolve(source, '../minigame/utils/api.js')), view: load(resolve(source, 'utils/view.js')), page, game, wx, app, storage, requests, timers };
 }
 
-for (const miniprogram of [false, true]) test('P6 ' + (miniprogram ? 'Mini Program' : 'miniGame') + ' integration: WeChat login, creation, private authorization, letters and logout', async t => {
+for (const miniprogram of [false, true]) test('P6 ' + (miniprogram ? 'Mini Program' : 'miniGame') + ' integration: WeChat login, read-only resident records, private authorization, read-only messages and logout', async t => {
   const dir=mkdtempSync(resolve(tmpdir(),'houren-wx-p6-')), file=resolve(dir,'physics.json');
   writeFileSync(file, JSON.stringify({version:1,regrowth:{baseByZone:{wilds:20,scrapyard:15,solarfield:10},thresholdByZone:{wilds:30,scrapyard:25,solarfield:15},factorPermille:500},construction:{fullActionsPerTick:2,factorPermille:500}}));
   const env = await boot({ physics: 2, premise: 6, shellSlots:0, hiddenPhysicsFile:file, map: 'compact-materials-v1', wechatAppId: 'wx216f3fb724629f67', wechatAppSecret: 'test-server-secret', wechatMiniprogramAppId: 'wx83d31aa7fc9a797e', wechatMiniprogramAppSecret: 'test-miniprogram-secret' }, {dir}); t.after(() => env.close());
@@ -98,10 +98,31 @@ for (const miniprogram of [false, true]) test('P6 ' + (miniprogram ? 'Mini Progr
   env.app.ctx.cfg.turnstileSecretKey = '';
   g.form.accepted=true; await g.dispatch({type:'wechatLogin'}); assert.equal(g.error,''); assert.equal(g.user.role,'user'); assert.equal(g.wechatVerified,true);
   if (miniprogram) assert.equal(c.requests.find(r => r.url.endsWith('/api/wechat/login')).data.appid, 'wx83d31aa7fc9a797e');
-  await g.dispatch({type:'entry'}); Object.assign(g.form,{name:'小游戏居民',soul:'独立观察这座城市',entryAccepted:true});
-  await g.dispatch({type:'create'}); assert.equal(g.error,''); assert.ok(g.residentId); assert.equal(g.tab,'owner');
-  const id=g.residentId, relation=env.rt.w.access.residents[id]; assert.equal(relation.managerAccountId,g.user.id);
-  g.form.letter='一封来自微信的家书'; await g.dispatch({type:'letter'}); assert.equal(g.error,''); assert.equal(env.rt.w.agents[id].letters.at(-1).text,'一封来自微信的家书');
+  // 小程序只观测：创建居民与家书的旧动作被拒绝且不发请求；同一账号的网页会话仍可照常创建与写家书。
+  const writesBefore = c.requests.filter(r => r.method && r.method !== 'GET').length;
+  Object.assign(g.form,{name:'小游戏居民',soul:'独立观察这座城市',entryAccepted:true,letter:'不应发出的家书'});
+  for (const type of ['entry', 'create', 'letter', 'runner', 'modelSave', 'assistantOpen', 'stewardAdoptOpen']) {
+    await g.dispatch({ type }); assert.match(g.error, /小程序仅提供观测与已有记录查询/, type);
+  }
+  assert.equal(c.requests.filter(r => r.method && r.method !== 'GET').length, writesBefore, 'removed actions send nothing');
+  const webSession = 'houren_session=' + env.app.ctx.accounts.issue(g.user.id), webHeaders = { Cookie: webSession, 'X-Houren-Request': '1' };
+  const created = await env.call('/api/account/residents', { method: 'POST', headers: webHeaders, body: { name: '网页创建的居民', soul: '独立观察这座城市', lang: 'zh', dailyCap: 880000, requestId: 'web-create-1' } });
+  assert.ok(created.status >= 200 && created.status < 300, created.text);
+  const id = created.json.agentId, relation = env.rt.w.access.residents[id]; assert.equal(relation.managerAccountId, g.user.id);
+  const letter = await env.call('/api/account/residents/' + id + '/letter', { method: 'POST', headers: webHeaders, body: { text: '一封网页写下的家书', requestId: 'web-letter-1' } });
+  assert.ok(letter.status >= 200 && letter.status < 300, letter.text);
+  const phoneLetter = await env.call('/api/account/residents/' + id + '/letter', { method: 'POST', headers: { ...webHeaders, Cookie: 'houren_session=' + c.storage.values().next().value, 'X-Houren-Client': 'wechat' }, body: { text: '绕过客户端的家书', requestId: 'phone-letter-1' } });
+  assert.equal(phoneLetter.status, 403); assert.equal(phoneLetter.json.error.code, 'wechat_observation_only');
+  await g.loadAccount();
+  assert.ok(g.linked.some(a => (a.agentId || a.id) === id));
+  await g.dispatch({type:'owner', id}); assert.equal(g.error,''); assert.equal(g.tab,'owner');
+  // 网页写下的家书在微信端经审核投影：先显示审核中，检查完成后才可阅读。
+  for (let i = 0; i < 20 && g.owner.letters.at(-1).text !== '一封网页写下的家书'; i++) { await new Promise(r => setTimeout(r, 10)); await g.loadOwner(); }
+  assert.equal(g.owner.letters.at(-1).text, '一封网页写下的家书');
+  g.invalidate(); g.render(); assert.equal(g.page.top.title, '居民记录');
+  assert.ok(!g.hits.some(h => /^(?:letter|runner|modelTest|modelSave|steward|assistant)/.test(h.action.type)), 'the records page offers no management controls');
+  for (const tab of ['ledger', 'actions', 'usage', 'timeline']) { await g.dispatch({ type: 'recordsTab', tab }); assert.equal(g.error, '', tab); }
+  assert.ok(c.requests.some(r => r.url.includes('/api/wechat/residents/' + id + '/events?')));
   const stranger=await env.app.ctx.accounts.create({username:'stranger',password:'test-other-password'});
   const token=env.app.ctx.accounts.issue(stranger.id);
   assert.equal((await env.call('/api/wechat/residents/'+id+'/private',{headers:{Cookie:'houren_session='+token}})).status,403);
@@ -157,39 +178,25 @@ for (const miniprogram of [false, true]) test('P6 ' + (miniprogram ? 'Mini Progr
   // 网站与微信端共用留言，普通小程序运行的是由相同 Canvas 源码构建的控制器。
   await g.dispatch({ type: 'messages' });
   assert.equal(g.tab, 'messages'); assert.equal(g.wechatVerified, true);
-  await g.dispatch({ type: 'messageCompose', kind: 'new' });
-  const originalCheck = env.app.ctx.wechat.check;
-  env.app.ctx.wechat.check = async function(text, identity, scene) {
-    if (text === '检查失败的草稿') throw new AccountError(422, 'moderated', '请修改文字后再发布');
-    return originalCheck.call(this, text, identity, scene);
-  };
-  g.form.messageText = '检查失败的草稿'; await g.dispatch({ type: 'messageSubmit' });
-  assert.equal(g.tab, 'messageEditor'); assert.equal(g.form.messageText, '检查失败的草稿'); assert.match(g.error, /修改文字/);
-  env.app.ctx.wechat.check = originalCheck;
-  g.form.messageText = '来自微信端的跨端留言';
-  await g.dispatch({ type: 'messageSubmit' });
-  assert.equal(g.error, ''); assert.equal(g.tab, 'messages');
-  const rootId = g.messageBoard.roots[0].id;
-  assert.equal(g.messageBoard.roots[0].text, '来自微信端的跨端留言');
-  const webCookie = 'houren_session=' + env.app.ctx.accounts.issue(g.user.id);
-  const webMessages = await env.call('/api/messages', { headers: { Cookie: webCookie } });
-  assert.equal(webMessages.json.messages[0].id, rootId);
+  const webCookie = 'houren_session=' + env.app.ctx.accounts.issue(g.user.id), webPost = { Cookie: webCookie, 'X-Houren-Request': '1' };
+  const posted = await env.call('/api/messages', { method: 'POST', headers: webPost, body: { text: '来自网页的跨端留言' } });
+  assert.ok(posted.status >= 200 && posted.status < 300, posted.text);
+  const rootId = posted.json.message.id;
+  const replied = await env.call(`/api/messages/${rootId}/replies`, { method: 'POST', headers: webPost, body: { text: '网页回复' } });
+  assert.ok(replied.status >= 200 && replied.status < 300, replied.text);
+  await g.dispatch({ type: 'messageRefresh' });
+  for (let i = 0; i < 20 && g.messageBoard.roots[0]?.text !== '来自网页的跨端留言'; i++) { await new Promise(r => setTimeout(r, 10)); await g.dispatch({ type: 'messageRefresh' }); }
+  assert.equal(g.error, ''); assert.equal(g.messageBoard.roots[0].id, rootId); assert.equal(g.messageBoard.roots[0].text, '来自网页的跨端留言');
+  assert.ok(!g.hits.some(h => ['messageCompose', 'messageDelete', 'messageSubmit'].includes(h.action.type)), 'the board is read-only');
   await g.dispatch({ type: 'messageThread', id: rootId });
-  await g.dispatch({ type: 'messageCompose', kind: 'reply', id: rootId });
-  g.form.messageText = '微信端回复'; await g.dispatch({ type: 'messageSubmit' });
-  assert.equal(g.error, ''); assert.equal(g.tab, 'messageThread');
-  const replyId = g.messageBoard.replies.get(rootId).messages[0].id;
-  const webReply = await env.call(`/api/messages/${rootId}/replies`, { headers: { Cookie: webCookie } });
-  assert.equal(webReply.json.messages[0].id, replyId);
-  await g.dispatch({ type: 'messageCompose', kind: 'edit', id: replyId });
-  g.form.messageText = '微信端修改后的回复'; await g.dispatch({ type: 'messageSubmit' });
-  assert.equal(g.error, ''); assert.equal(g.messageBoard.get(replyId).text, '微信端修改后的回复');
-  await g.dispatch({ type: 'messageDelete', id: rootId }); await g.dispatch({ type: 'messageSubmit' });
-  assert.equal(g.error, ''); assert.equal(g.messageBoard.get(rootId).text, null);
-  assert.equal(g.messageBoard.get(replyId).text, '微信端修改后的回复');
-  assert.ok(c.requests.some(r => r.url.endsWith('/api/wechat/messages') && r.method === 'POST'));
+  for (let i = 0; i < 20 && g.messageBoard.replies.get(rootId).messages[0]?.text !== '网页回复'; i++) { await new Promise(r => setTimeout(r, 10)); await g.dispatch({ type: 'messageRefresh' }); }
+  assert.equal(g.tab, 'messageThread'); assert.equal(g.messageBoard.replies.get(rootId).messages[0].text, '网页回复');
+  const messageWrites = c.requests.filter(r => /\/messages/.test(r.url) && r.method && r.method !== 'GET').length;
+  for (const action of [{ type: 'messageCompose', kind: 'new' }, { type: 'messageCompose', kind: 'reply', id: rootId }, { type: 'messageDelete', id: rootId }, { type: 'messageSubmit' }]) {
+    await g.dispatch(action); assert.match(g.error, /小程序仅提供观测与已有记录查询/, action.type);
+  }
+  assert.equal(c.requests.filter(r => /\/messages/.test(r.url) && r.method && r.method !== 'GET').length, messageWrites);
   assert.ok(!c.requests.some(r => /\/api\/messages(?:[/?]|$)/.test(r.url)), '微信不读取未经投影的网页版接口');
-  await g.dispatch({ type: 'messageCompose', kind: 'new' }); g.form.messageText = '退出后应清除的草稿';
   await g.dispatch({type:'logout'}); assert.equal(g.error,''); assert.equal(c.storage.size,0); assert.equal(g.user,null);
-  assert.equal(g.messageBoard.roots.length, 0); assert.equal(g.form.messageText, undefined); assert.equal(g.messageBoard.drafts.size, 0);
+  assert.equal(g.messageBoard.roots.length, 0);
 });

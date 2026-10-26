@@ -48,13 +48,11 @@ function residents(app, W) {
   let list = alive.filter(a => !q || (nameOf(a) + ' ' + textOf(a.bio)).toLowerCase().includes(q));
   const speech = a => (a.stats && a.stats.utterances) || 0;
   list = list.slice().sort(app.sort === 'tokens' ? (a, b) => (b.energy || 0) - (a.energy || 0) : app.sort === 'age' ? (a, b) => (b.ageDays || 0) - (a.ageDays || 0) : (a, b) => (b.lastActTick ?? -1) - (a.lastActTick ?? -1));
-  if (!list.length) nodes.push(N.empty(W, q ? '没有找到' : '城里还没有居民', q ? '换个名字或简介里的词试试。' : '成为造者，让第一位居民入城。'));
+  if (!list.length) nodes.push(N.empty(W, q ? '没有找到' : '城里还没有居民', q ? '换个名字或简介里的词试试。' : '城里暂时没有在世居民。'));
   else nodes.push(N.stack(list.map(a => N.listRow(W, { avatar: { id: a.id, name: nameOf(a), avatar: a.avatar }, title: nameOf(a),
     chip: { label: view.status(a.status), color: STATUS_COLOR[a.status] || C.dormant }, sub: textOf(a.bio),
     meta: [placeName(s, a.place), a.ageDays !== undefined ? `入城 ${a.ageDays} 日` : '', `发言 ${speech(a)}`].filter(Boolean).join(' · '),
     trailing: { value: compact(a.energy), label: '词元' }, action: { type: 'resident', id: a.id } }))));
-  if (!app.user) nodes.push(N.card(W, iw => [N.text(iw, '想让自己的居民入城？', { style: 'heading', bold: true }), N.text(iw, '写下它的灵魂，接入你的模型。', { style: 'meta', color: C.text2 }),
-    N.button(iw, '成为造者', { type: 'tab', tab: 'account' }, { variant: 'secondary', size: 'small' })], { pad: 16 }));
   return { top, nodes, tabbar: true, pull: true };
 }
 
@@ -91,7 +89,7 @@ function resident(app, W) {
   const top = { kind: 'back', title: usable(a.name) ? a.name : '居民' };
   if (p.loading || !p.agent) return { top, nodes: [N.space(40), N.text(W, p.loading ? '正在读取档案…' : '档案暂不可用', { style: 'body', color: C.text2, align: 'center' })], tabbar: false };
   const s = app.state || {};
-  const nodes = [N.button(W, '询问实验助手', { type: 'assistantOpen', agentId: p.agent.id }, { variant: 'secondary' })];
+  const nodes = [];
   const name = nameOf(a), bio = textOf(a.bio);
   const header = N.stack([
     N.text(W - 84, name, { style: 'title', bold: true, serif: true }),

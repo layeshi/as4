@@ -53,7 +53,11 @@ for (const targetRole of ['user', 'admin']) test(targetRole + ': two proofs and 
   assert.equal(wxLogin.json.user.id, target.id);
   assert.equal(wxLogin.json.user.role, targetRole);
   const management = await e.call('/api/admin/users', { headers: { Cookie: wxLogin.headers.get('set-cookie').split(';')[0] } });
-  assert.equal(management.status, targetRole === 'admin' ? 200 : 403);
+  assert.equal(management.status, 403);
+  assert.equal(management.json.error.code, 'wechat_observation_only');
+  const browserToken = s.issue(target.id);
+  const webManagement = await e.call('/api/admin/users', { headers: { Cookie: 'houren_session=' + browserToken } });
+  assert.equal(webManagement.status, targetRole === 'admin' ? 200 : 403);
   assert.equal(billing.balance(source.id), 0); assert.equal(billing.balance(target.id), 6000000);
   assert.equal(e.rt.w.access.residents[a].managerAccountId, target.id);
   assert.equal(e.rt.w.access.residents[a].creatorAccountId, target.id);

@@ -142,12 +142,12 @@ test('clicking the privacy link opens the notice without granting consent', asyn
 test('leaving an input page clears secrets and ignores late keyboard completion', async () => {
   const { game: g, wx } = minigame();
   await g.start();
-  g.tab = 'owner'; g.stack = ['account'];
-  Object.assign(g.form, { apiKey: 'test-model-secret', password: 'test-password' });
-  g.editing = 'apiKey';
+  g.tab = 'profile'; g.stack = ['account'];
+  Object.assign(g.form, { currentPassword: 'test-current-password', password: 'test-password' });
+  g.editing = 'currentPassword';
   await g.dispatch({ type: 'back' });
   wx.emitKeyboardComplete({ value: 'late-secret' });
-  assert.ok(!g.form.apiKey); assert.ok(!g.form.password); assert.equal(g.editing, '');
+  assert.ok(!g.form.currentPassword); assert.ok(!g.form.password); assert.equal(g.editing, '');
   g.tab = 'link'; g.editing = 'password'; g.form.password = 'another-secret';
   wx.emitHide(); wx.emitKeyboardConfirm({ value: 'late-password' });
   assert.ok(!g.form.password);
@@ -183,8 +183,7 @@ for (const outcome of ['success', 'network', 'timeout', 'unauthorized', 'malform
     g.user = { id: 'fixture-account', displayName: '造者' }; g.wechatVerified = true;
     g.owner = { agentId: 'a1', soul: 'private cached record' };
     g.linked = [{ agentId: 'a1' }]; g.created = [{ agentId: 'a1' }]; g.residentId = 'a1';
-    Object.assign(g.form, { letter: 'private unsent letter', soul: 'private creation draft', apiKey: 'fixture-key', password: 'fixture-password', accepted: true });
-    g.letterDraft = g.form.letter; g.createDraft = 'private serialized creation draft'; g.letterRequestId = 'fixture-letter-request'; g.createRequestId = 'fixture-create-request';
+    Object.assign(g.form, { displayName: 'private unsaved nickname', timelineType: 'say', search: 'private search', password: 'fixture-password', accepted: true });
     const previousRead = g.beginRead('owner');
     const exiting = g.dispatch({ type: 'logout' });
     assert.ok(logout.header.Cookie.includes('houren_session='), 'the revocation request carries the original session');
@@ -192,7 +191,6 @@ for (const outcome of ['success', 'network', 'timeout', 'unauthorized', 'malform
     assert.equal(g.user, null); assert.equal(g.owner, null); assert.equal(g.residentId, '');
     assert.equal(g.linked.length, 0); assert.equal(g.created.length, 0); assert.equal(g.wechatVerified, false);
     assert.equal(Object.keys(g.form).length, 0, 'private drafts and consent do not survive account changes');
-    assert.ok(!g.letterDraft && !g.createDraft && !g.letterRequestId && !g.createRequestId);
     assert.equal(g.readCurrent('owner', previousRead), false, 'late private reads cannot restore the previous account');
     await api.request('/api/wechat/status'); assert.ok(!nextCookie, 'later requests no longer send the session');
     if (outcome === 'success') logout.success({ statusCode: 200, data: { ok: true } });
@@ -203,7 +201,7 @@ for (const outcome of ['success', 'network', 'timeout', 'unauthorized', 'malform
     assert.equal(g.user, null); assert.equal(g.owner, null); assert.equal(stored.size, 0);
     if (outcome === 'success') assert.match(g.notice, /已退出/);
     else assert.match(g.error, /本机已退出.*服务器会话撤销未确认/);
-    assert.ok(!g.blocks.some(b => /private cached record|private unsent letter/.test(b.text || '')));
+    assert.ok(!g.blocks.some(b => /private cached record|private unsaved nickname/.test(b.text || '')));
   });
 }
 
@@ -416,55 +414,20 @@ function paintAll(g) {
   for (let y = 0; y <= g.scroller().max + 300; y += 300) { g.scroller().scrollTo(y); g.render(); }
 }
 
-test('creation and management offer supplier presets and changing them clears secrets', async () => {
-  const { game: g, drawn } = minigame();
-  g.entered = true; g.tab = 'entry'; g.render();
-  paintAll(g);
-  assert.ok(drawn.includes('DeepSeek'));
-  assert.ok(drawn.includes('智谱 GLM'));
-  g.form.apiKey = 'previous-key';
-  await g.dispatch({ type: 'preset', id: 'deepseek' });
-  assert.equal(g.form.baseURL, 'https://api.deepseek.com');
-  assert.equal(g.form.providerIndex, 0); assert.ok(g.form.model); assert.ok(!g.form.apiKey);
-  await g.dispatch({ type: 'preset', id: 'glm', variant: 'coding' });
-  assert.equal(g.form.baseURL, 'https://open.bigmodel.cn/api/coding/paas/v4');
-  await g.dispatch({ type: 'preset', id: 'custom' });
-  assert.equal(g.form.baseURL, ''); assert.equal(g.form.model, '');
-  g.tab = 'owner'; g.owner = { name: '我的居民' }; g.invalidate(); g.render();
-  drawn.length = 0; paintAll(g);
-  assert.ok(drawn.includes('DeepSeek'));
-});
-
-test('supplier selection works against an old server and submits the selected provider settings', async () => {
-  let submitted;
-  const c = minigame({ respond: (path, options) => {
-    if (path === '/api/wechat/model-presets') throw Error('old server');
-    if (options.data?.op === 'test') { submitted = options.data.config; return { ok: true }; }
-    return {};
-  } });
-  const g = c.game;
-  g.entered = true; g.user = { id: 'u1' }; g.wechatVerified = true;
-  await g.dispatch({ type: 'entry' });
-  paintAll(g); assert.ok(c.drawn.includes('DeepSeek'));
-  await g.dispatch({ type: 'preset', id: 'deepseek' });
-  Object.assign(g.form, { apiKey: 'test-only-key', modelAccepted: true }); g.residentId = 'a1';
-  await g.configureRunner(true);
-  assert.equal(submitted.baseURL, 'https://api.deepseek.com');
-  assert.equal(submitted.provider, 'openai'); assert.equal(submitted.model, g.form.model);
-});
-
-test('late supplier loading cannot reopen a creation page after navigating away', async () => {
-  const pending = deferred(), requested = deferred();
-  const c = minigame({ respond: path => {
-    if (path === '/api/wechat/model-presets') { requested.resolve(); return pending.promise; }
-    return {};
-  } });
-  const g = c.game;
-  g.entered = true; g.tab = 'account'; g.state = structuredClone(state); g.user = { id: 'u1' }; g.wechatVerified = true;
-  const entry = g.dispatch({ type: 'entry' }); await requested.promise;
-  await g.dispatch({ type: 'tab', tab: 'city' });
-  pending.resolve({}); await entry;
-  assert.equal(g.tab, 'city');
+test('creation, supplier presets and model configuration are gone from the client and their old actions send nothing', async () => {
+  const c = minigame({ respond: () => ({}) }), g = c.game;
+  g.entered = true; g.user = { id: 'u1' }; g.wechatVerified = true; g.residentId = 'a1'; g.state = structuredClone(state);
+  for (const page of ['entry', 'billing', 'adopt', 'transferAccept', 'soulImport', 'assistant']) {
+    g.tab = page; g.invalidate(); paintAll(g);
+    assert.ok(!c.drawn.some(t => /DeepSeek|智谱 GLM|API Key|测试连接|保存配置|创建居民|实验助手/.test(t)), page);
+  }
+  for (const action of [{ type: 'entry' }, { type: 'preset', id: 'deepseek' }, { type: 'provider', index: 1 }, { type: 'modelChoice', model: 'm' }, { type: 'modelTest' }, { type: 'modelSave' }, { type: 'create' }]) {
+    g.error = ''; Object.assign(g.form, { apiKey: 'test-only-key', modelAccepted: true, name: 'n', soul: 's', entryAccepted: true });
+    await g.dispatch(action);
+    assert.match(g.error, /小程序仅提供观测与已有记录查询/, action.type);
+  }
+  assert.ok(!c.requests.some(path => /model-presets|\/runner|\/api\/(?:wechat|account)\/residents$/.test(path)), c.requests.join(','));
+  assert.equal(typeof g.configureRunner, 'undefined'); assert.equal(typeof g.enter, 'undefined'); assert.equal(typeof g.selectPreset, 'undefined');
 });
 
 // Deferred wx responses exercise the real API cookie jar and controller together.
@@ -781,55 +744,47 @@ test('owner headers and avatar initials never render moderation placeholders as 
   }
 });
 
-for (const action of ['letter', 'create']) {
-  test(`content 401 during ${action} keeps the website credential and draft, and offers explicit re-login`, async () => {
-    const c = sessionRaceClient(), g = c.game;
-    const path = action === 'letter' ? '/api/account/residents/a1/letter' : '/api/account/residents';
-    g.tab = action === 'letter' ? 'owner' : 'entry'; g.wechatVerified = true;
-    g.owner = { agentId: 'a1', name: '石序' };
-    Object.assign(g.form, { letter: '未送出的家书', name: '新居民', bio: '未提交简介', soul: '未提交灵魂', entryAccepted: true });
-    c.deferredPaths.add(path);
-    const submitting = g.dispatch({ type: action }), request = c.take(path);
-    const draft = JSON.stringify(g.form), requestId = request.data.requestId;
-    const cachedDraft = action === 'letter' ? g.letterDraft : g.createDraft;
-    request.success({ statusCode: 401, data: { error: { code: 'wechat_login_required', message: '微信访问记录已过期，请重新微信登录。' } } });
-    await submitting;
-    assert.equal(c.storage.get(c.key), c.original, 'content identity failure does not revoke the website credential');
-    assert.equal(g.user.id, 'original-account'); assert.equal(g.wechatVerified, true);
-    assert.equal(g.needsWechatLogin, true); assert.match(g.error, /微信/);
-    assert.equal(JSON.stringify(g.form), draft);
-    assert.equal(action === 'letter' ? g.letterRequestId : g.createRequestId, requestId);
-    assert.equal(action === 'letter' ? g.letterDraft : g.createDraft, cachedDraft);
-    assert.equal(await c.cookie(), 'houren_session=' + c.original);
-    c.deferredPaths.delete('/api/wechat/status');
-    await g.dispatch({ type: 'tab', tab: 'account' }); paintAll(g);
-    assert.ok(c.drawn.includes('重新微信登录'));
-    assert.equal(JSON.stringify(g.form), draft, 'visiting re-login leaves the draft intact');
-    g.form.accepted = true; c.deferredPaths.add('/api/wechat/login');
-    const login = g.dispatch({ type: 'wechatLogin' });
-    await Promise.resolve(); await Promise.resolve();
-    const exchange = c.take('/api/wechat/login');
-    assert.equal(exchange.data.bindCurrent, true); assert.equal(exchange.header.Cookie, 'houren_session=' + c.original);
-    exchange.success({ statusCode: 200, data: { ok: true }, cookies: ['houren_session=' + c.current] });
-    await login;
-    assert.equal(g.needsWechatLogin, false);
-    assert.equal(action === 'letter' ? g.letterRequestId : g.createRequestId, requestId);
-    assert.equal(action === 'letter' ? g.form.letter : g.form.soul, action === 'letter' ? '未送出的家书' : '未提交灵魂');
-    g.tab = action === 'letter' ? 'owner' : 'entry';
-    const retry = g.dispatch({ type: action }), repeated = c.take(path);
-    assert.equal(repeated.data.requestId, requestId, 'retry reuses the idempotency identifier');
-    assert.equal(repeated.header.Cookie, 'houren_session=' + c.current);
-    repeated.success({ statusCode: 200, data: action === 'letter' ? { ok: true } : { agentId: 'a7' } });
-    await retry; assert.equal(g.error, '');
-    assert.equal(action === 'letter' ? g.letterRequestId : g.createRequestId, null);
-  });
-}
+test('content 401 during a nickname save keeps the website credential and draft, and offers explicit re-login', async () => {
+  const c = sessionRaceClient(), g = c.game;
+  const path = '/api/account';
+  g.tab = 'profile'; g.wechatVerified = true; g.user = { id: 'original-account', displayName: '旧昵称', username: 'fixture-user' };
+  g.form.displayName = '未保存的新昵称';
+  c.deferredPaths.add(path);
+  const submitting = g.dispatch({ type: 'profileSave' });
+  for (let i = 0; i < 10 && !c.pending.some(r => r.path === path); i++) await Promise.resolve();
+  const request = c.take(path);
+  assert.equal(request.method, 'PATCH');
+  const draft = JSON.stringify(g.form);
+  request.success({ statusCode: 401, data: { error: { code: 'wechat_login_required', message: '微信访问记录已过期，请重新微信登录。' } } });
+  await submitting;
+  c.deferredPaths.delete(path);
+  assert.equal(c.storage.get(c.key), c.original, 'content identity failure does not revoke the website credential');
+  assert.equal(g.user.id, 'original-account'); assert.equal(g.wechatVerified, true);
+  assert.equal(g.needsWechatLogin, true); assert.match(g.error, /微信/);
+  assert.equal(JSON.stringify(g.form), draft);
+  assert.equal(await c.cookie(), 'houren_session=' + c.original);
+  c.deferredPaths.delete('/api/wechat/status');
+  await g.dispatch({ type: 'tab', tab: 'account' }); paintAll(g);
+  assert.ok(c.drawn.includes('重新微信登录'));
+  assert.equal(g.form.displayName, '未保存的新昵称', 'visiting re-login leaves the draft intact');
+  g.form.accepted = true; c.deferredPaths.add('/api/wechat/login');
+  const login = g.dispatch({ type: 'wechatLogin' });
+  await Promise.resolve(); await Promise.resolve();
+  const exchange = c.take('/api/wechat/login');
+  assert.equal(exchange.data.bindCurrent, true); assert.equal(exchange.header.Cookie, 'houren_session=' + c.original);
+  exchange.success({ statusCode: 200, data: { ok: true }, cookies: ['houren_session=' + c.current] });
+  await login;
+  assert.equal(g.needsWechatLogin, false);
+  assert.equal(g.form.displayName, '未保存的新昵称');
+});
 
 test('a late previous-session content 401 cannot mark a newer session for re-login', async () => {
   const c = sessionRaceClient(), g = c.game;
-  g.wechatVerified = true; g.form.letter = '旧会话家书'; g.tab = 'owner';
-  const path = '/api/account/residents/a1/letter'; c.deferredPaths.add(path);
-  const old = g.dispatch({ type: 'letter' }), request = c.take(path);
+  g.wechatVerified = true; g.user = { id: 'original-account', displayName: '旧昵称' }; g.form.displayName = '旧会话昵称'; g.tab = 'profile';
+  const path = '/api/account'; c.deferredPaths.add(path);
+  const old = g.dispatch({ type: 'profileSave' });
+  for (let i = 0; i < 10 && !c.pending.some(r => r.path === path); i++) await Promise.resolve();
+  const request = c.take(path); c.deferredPaths.delete(path);
   c.storage.set(c.key, c.current); c.api.restoreSession();
   request.success({ statusCode: 401, data: { error: { code: 'wechat_login_required', message: '旧访问记录过期' } } });
   await old;

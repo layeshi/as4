@@ -21,7 +21,7 @@ function base(app, W, title) {
 function reports(app, W) {
   const page = base(app, W, '世界报告'); if (!app.user) return page;
   const h = app.history;
-  page.nodes.push(N.text(W, 'AI 史官回顾世界，仅供人类观测。', { style: 'meta', color: C.text2 }), N.chips(W, Object.keys(kinds).map(kind => ({ label: kinds[kind], selected: h.kind === kind, action: { type: 'historyKind', kind } }))));
+  page.nodes.push(N.text(W, '已发布的世界报告由 AI 史官撰写，仅供人类观测。', { style: 'meta', color: C.text2 }), N.chips(W, Object.keys(kinds).map(kind => ({ label: kinds[kind], selected: h.kind === kind, action: { type: 'historyKind', kind } }))));
   if (h.branches.length > 1) page.nodes.push(N.chips(W, [{ label: '当前世界', selected: !h.reportBranchId, action: { type: 'historyReportBranch', id: '' } }, ...h.branches.map(b => ({ label: `${b.worldId} · ${b.id.slice(0, 6)}`, selected: h.reportBranchId === b.id, action: { type: 'historyReportBranch', id: b.id } }))]));
   if (!h.reports.length && !h.loading) page.nodes.push(N.empty(W, '尚无报告', '世界周期结束后自动生成，旧周期可由管理员补生成。'));
   for (const r of h.reports) page.nodes.push(N.card(W, iw => [N.text(iw, `${kinds[r.kind]} · ${range(r)}`, { style: 'meta', color: C.text3 }), N.text(iw, r.title ? label(r.title) : status(r), { style: 'heading', bold: true }), N.text(iw, 'AI 生成 · ' + status(r) + (r.partial ? ' · 未满一年' : ''), { style: 'caption', color: C.ai }), N.text(iw, `${r.worldId} · 分支 ${r.branchId.slice(0, 8)}`, { style: 'caption', color: C.text3 })], { action: r.status === 'ready' ? { type: 'historyReport', id: r.id } : null }));
@@ -48,12 +48,12 @@ function worldReport(app, W) {
 function historyExport(app, W) {
   const page = base(app, W, '导出居民历史'); if (!app.user) return page;
   const h = app.history, branches = h.branches.filter(b => b.residents.length), b = branches.find(b => b.id === h.branchId);
-  page.nodes.push(N.text(W, '下载 ZIP：HTML 时间线、JSON 历史、CSV 行动表。默认包含全部已保存历史。', { style: 'meta', color: C.text2 }));
-  if (!branches.length && !h.loading) page.nodes.push(N.empty(W, '尚无可导出的居民', '创建或领养居民后可保存它的经历。'));
+  page.nodes.push(N.text(W, '把已保存的历史打包为 ZIP：HTML 时间线、JSON 历史、CSV 行动表。只整理已有记录，不生成新内容。', { style: 'meta', color: C.text2 }));
+  if (!branches.length && !h.loading) page.nodes.push(N.empty(W, '尚无可导出的居民', '你的账号下还没有居民的历史记录。'));
   if (branches.length) {
     page.nodes.push(N.section(W, '世界与历史分支'), N.chips(W, branches.map(x => ({ label: `${x.worldId} · ${x.id.slice(0, 6)}`, selected: h.branchId === x.id, action: { type: 'historyBranch', id: x.id } }))));
     page.nodes.push(N.section(W, '居民'), N.chips(W, (b?.residents || []).map(r => ({ label: label(r.name), selected: h.agentId === r.id, action: { type: 'historyResident', id: r.id } }))));
-    page.nodes.push(N.field(W, '起始世界日（留空为全部）', app.form.historyFrom || '', { type: 'field', name: 'historyFrom', max: 9 }, { placeholder: '例如 1' }), N.field(W, '结束世界日（留空为当前）', app.form.historyTo || '', { type: 'field', name: 'historyTo', max: 9 }, { placeholder: '例如 24' }), N.button(W, '生成历史包', { type: 'historyCreate' }, { variant: 'primary' }));
+    page.nodes.push(N.field(W, '起始世界日（留空为全部）', app.form.historyFrom || '', { type: 'field', name: 'historyFrom', max: 9 }, { placeholder: '例如 1' }), N.field(W, '结束世界日（留空为当前）', app.form.historyTo || '', { type: 'field', name: 'historyTo', max: 9 }, { placeholder: '例如 24' }), N.button(W, '打包已有历史', { type: 'historyCreate' }, { variant: 'primary' }));
   }
   page.nodes.push(N.button(W, '查看导出记录', { type: 'historyRecords' }, { variant: 'secondary' }), N.text(W, '只包含该居民有权知悉的记录。缺失内容如实说明，不包含模型内部推理。', { style: 'caption', color: C.text3 }));
   return page;
@@ -61,9 +61,9 @@ function historyExport(app, W) {
 function exportsPage(app, W) {
   const page = base(app, W, '导出记录'); if (!app.user) return page;
   const h = app.history;
-  page.nodes.push(N.text(W, '生成期间可以离开页面，下拉刷新查看最新状态。下载时仍会核验当前归属。', { style: 'meta', color: C.text2 }));
+  page.nodes.push(N.text(W, '把已有的历史记录打包为文件，不生成新内容。打包期间可以离开页面，下拉刷新查看最新状态。下载时仍会核验当前归属。', { style: 'meta', color: C.text2 }));
   if (!h.jobs.length && !h.loading) page.nodes.push(N.empty(W, '尚无导出记录'));
-  for (const j of h.jobs) page.nodes.push(N.card(W, iw => [N.text(iw, label(j.name), { style: 'heading', bold: true }), N.text(iw, `${range(j)} · ${j.worldId} · ${j.branchId.slice(0, 8)}`, { style: 'caption', color: C.text3 }), N.text(iw, ({ queued: '等待生成', generating: '正在生成…', ready: '可下载', failed: '生成失败' })[j.status], { style: 'meta', color: j.status === 'ready' ? C.awake : C.text2 }), j.status === 'ready' ? N.button(iw, '下载 ZIP', { type: 'historyDownload', id: j.id }, { variant: 'secondary' }) : j.status === 'failed' ? N.button(iw, '重新生成', { type: 'historyRetry', id: j.id }, { variant: 'secondary' }) : null, h.saved?.id === j.id ? N.button(iw, '保存或分享文件', { type: 'historyShare' }, { variant: 'secondary' }) : null]));
+  for (const j of h.jobs) page.nodes.push(N.card(W, iw => [N.text(iw, label(j.name), { style: 'heading', bold: true }), N.text(iw, `${range(j)} · ${j.worldId} · ${j.branchId.slice(0, 8)}`, { style: 'caption', color: C.text3 }), N.text(iw, ({ queued: '等待打包', generating: '正在打包…', ready: '可下载', failed: '打包失败' })[j.status], { style: 'meta', color: j.status === 'ready' ? C.awake : C.text2 }), j.status === 'ready' ? N.button(iw, '下载 ZIP', { type: 'historyDownload', id: j.id }, { variant: 'secondary' }) : j.status === 'failed' ? N.button(iw, '重新打包', { type: 'historyRetry', id: j.id }, { variant: 'secondary' }) : null, h.saved?.id === j.id ? N.button(iw, '保存或分享文件', { type: 'historyShare' }, { variant: 'secondary' }) : null]));
   page.nodes.push(N.button(W, '刷新导出记录', { type: 'historyRefresh' }, { variant: 'secondary' })); return page;
 }
 module.exports = { reports, worldReport, historyExport, exports: exportsPage };

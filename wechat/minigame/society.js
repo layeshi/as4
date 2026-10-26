@@ -11,28 +11,27 @@ const { buildFeed } = require('./utils/feed');
 const { parseChronicle } = require('./utils/chronicle');
 const screens = require('./screens/index');
 const serifChars = require('./ui/serif-chars');
-const modelPresets = require('./utils/model-presets');
 const { GAME_NAME } = require('./copy');
 const { MessageBoard } = require('./messages');
-const { Assistant } = require('./assistant');
 const { History } = require('./history');
 const { Announcements } = require('./announcements');
 const { Notifications } = require('./notifications');
 const { Observe, OBSERVE_PAGES } = require('./observe');
-const { Stewardship, DEFAULT_CAP } = require('./stewardship');
+const { ResidentRecords } = require('./records');
 const { Profile } = require('./profile');
 const { C, font } = theme;
 
 const TABS = [['city', '观测', 'city'], ['residents', '居民', 'residents'], ['archive', '档案', 'archive'], ['account', '我的', 'me']];
 const TAB_IDS = TABS.map(t => t[0]);
-// 处理中仍可操作的界面动作；停止生成也保留入口。
-const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'contactChannel', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'provider', 'preset', 'modelChoice', 'messageExpand', 'assistantList', 'assistantCloseSource', 'assistantScope', 'assistantResetScope', 'assistantCancel', 'notificationSkip', 'notificationPromptLater', 'launchCancel', 'stewardModelSource', 'stewardHostedModel', 'stewardConfirmCancel', 'profileCancel', 'createCity', 'createLang']);
+// 处理中仍可操作的界面动作。
+const UI_ONLY = new Set(['tab', 'back', 'sheet', 'closeSheet', 'filter', 'segment', 'sort', 'expand', 'field', 'toggle', 'contactChannel', 'pref', 'about', 'aboutBack', 'settings', 'health', 'dismiss', 'noop', 'messageExpand', 'notificationSkip', 'notificationPromptLater', 'launchCancel', 'profileCancel']);
+// 小程序只做观测与已有记录查询。旧版本的问答、居民创建与管理、家书、模型和托管、留言写入等动作已删除实现；
+// 旧页面状态、缓存的点击或启动参数再触发这些动作时一律拒绝，不发出请求。
+const REMOVED_ACTIONS = /^(?:assistant\w*|steward\w*|entry|create|createCity|createLang|letter|runner|disconnect|provider|preset|modelChoice|modelTest|modelSave|messageCompose|messageDelete|messageSubmit|messageCancel)$/;
 const PREFS_KEY = 'houren.prefs';
 const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null;
 const caf = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
 
-// 经过审核投影的配置里，接口地址与模型名若仍在审核就不回填，保留当前选择的服务商。
-function usableConfig(config) { return config.hosted || [config.baseURL, config.model].every(v => typeof v === 'string' && !['内容审核中', '内容未通过安全检查', '内容暂不可用', '请微信登录后阅读', '内容暂未展示'].includes(v)); }
 class SocietyGame {
   constructor(platform = wx) {
     this.wx = platform;
@@ -52,13 +51,11 @@ class SocietyGame {
     this.navigation = 0; this.readVersions = {}; this.launch = null;
     this.messageBoard = new MessageBoard(this);
     this.history = new History(this);
-    this.assistant = new Assistant(this);
     this.announcements = new Announcements(this);
     this.notifications = new Notifications(this);
     this.observe = new Observe(this);
-    this.steward = new Stewardship(this);
+    this.records = new ResidentRecords(this);
     this.profileState = new Profile(this);
-    this.modelPresets = modelPresets.bundled;
     this.cityMap = new CityMap(() => this.wx.createCanvas());
     this.filterScroller = new Scroller(); this.horizontalAreas = [];
     this.images = new Map();
@@ -160,10 +157,8 @@ class SocietyGame {
     this.clearSecrets();
   }
   clearSecrets() {
-    this.editing = ''; this.mergePreview = null; if (this.steward) this.steward.confirm = null; if (this.profileState) this.profileState.confirm = null;
-    this.messageBoard.stash();
-    this.assistant.stash();
-    delete this.form.apiKey; delete this.form.password; delete this.form.confirmPassword; delete this.form.currentPassword; delete this.form.showPassword;
+    this.editing = ''; this.mergePreview = null; if (this.profileState) this.profileState.confirm = null;
+    delete this.form.password; delete this.form.confirmPassword; delete this.form.currentPassword; delete this.form.showPassword;
     delete this.form.contactValue; delete this.form.contactCode; delete this.form.contactChallenge; delete this.form.contactProof;
     if (this.wx.hideKeyboard) this.wx.hideKeyboard();
     this.invalidate();
@@ -186,27 +181,11 @@ class SocietyGame {
   readCurrent(scope, ticket) {
     return this.readVersions[scope] === ticket.version && this.navigation === ticket.navigation;
   }
-  async loadModelPresets() {
-    if (!this.presetLoad) this.presetLoad = api.request('/api/wechat/model-presets').then(data => {
-      const presets = modelPresets.normalize(data.presets);
-      if (presets) this.modelPresets = presets;
-    }).catch(() => { /* The same operator catalog is bundled for older/offline servers. */ });
-    await this.presetLoad;
-  }
-  selectPreset(id, variantId) {
-    const preset = this.modelPresets.find(p => p.id === id);
-    if (!preset) return;
-    const variant = preset.variants.find(v => v.id === variantId) || preset.variants[0];
-    this.clearSecrets();
-    Object.assign(this.form, { presetId: id, presetVariant: variant.id, providerIndex: modelPresets.PROVIDERS.indexOf(variant.provider), baseURL: variant.baseURL, model: variant.models[0] || '', modelAccepted: false });
-  }
-
   // ── 数据 ──
   async refresh(opts = {}) {
     clearTimeout(this.timer); this.timer = null;
     if (!this.entered) { this.render(); return; }
     if (this.refreshing) return;
-    if (this.tab === 'assistant') { await this.assistant.refresh(); return; }
     if (['reports', 'worldReport', 'historyExport', 'exports'].includes(this.tab)) {
       await this.history.refresh(); return;
     }
@@ -224,13 +203,6 @@ class SocietyGame {
       return;
     }
     if (OBSERVE_PAGES.includes(this.tab)) { await this.observe.refresh(); return; }
-    if (['billing', 'soulImport'].includes(this.tab)) {
-      this.refreshing = true; this.render();
-      try { if (this.tab === 'billing') await this.steward.loadHosted(); else await this.steward.loadImports(); }
-      catch (error) { this.showToast(error.message, 'error'); }
-      finally { this.refreshing = false; this.invalidate(); this.render(); }
-      return;
-    }
     if (['messages', 'messageThread'].includes(this.tab)) {
       this.refreshing = true; this.render();
       try { await this.messageBoard.refresh(); }
@@ -293,10 +265,8 @@ class SocietyGame {
     this.user = result.user; this.registrationOpen = result.registrationOpen;
     this.wechatLinked = status.linked; this.wechatEnabled = status.enabled; this.wechatVerified = status.verified; this.wechatAppId = status.appid || config.appid || null;
     this.messageBoard.sync();
-    this.linked = mine?.managed || []; this.created = mine?.created || []; this.startupAvailable = !!mine?.startupAvailable;
+    this.linked = mine?.managed || []; this.created = mine?.created || [];
     this.rememberModeration('account', mine);
-    // 过继邀请与托管余额不阻塞登录与刷新；各自的卡片读到后再重绘。
-    if (this.tab === 'account') this.steward.loadAccountExtras().then(() => { this.invalidate(); this.render(); });
   }
   async loadArchive() {
     if (!this.state) return;
@@ -327,8 +297,6 @@ class SocietyGame {
     const [detail, privateData] = await Promise.all([api.request(path), api.request(path + '/private')]);
     if (!this.readCurrent('owner', ticket) || this.residentId !== id) return false;
     this.owner = Object.assign({}, detail.resident, privateData, detail.overview, { agentId: id, usage: detail.usage, statistics: detail.statistics || null, publicOnly: !!detail.publicOnly });
-    // 每日上限输入框跟随当前居民；换了居民或上限被别处改过时重新预填。
-    if (this.form.capFor !== id + ':' + this.owner.dailyCap) { this.form.dailyCap = this.owner.dailyCap === undefined ? '' : String(this.owner.dailyCap); this.form.capFor = id + ':' + this.owner.dailyCap; }
     this.rememberModeration('owner', detail, privateData);
     return true;
   }
@@ -360,7 +328,6 @@ class SocietyGame {
 
   async dispatch(action) {
     if (!action) return;
-    if (this.busy && action.type === 'field' && action.name === 'messageText') return;
     if (this.busy && !UI_ONLY.has(action.type)) return;
     if (!this.entered && !['about', 'back'].includes(action.type) && !(this.tab === 'startup' && action.type === 'start')) return;
     if (action.type === 'field') {
@@ -383,13 +350,13 @@ class SocietyGame {
   }
   async handle(a) {
     const f = this.form;
-    if (a.type?.startsWith('assistant')) return this.assistant.handle(a);
+    if (REMOVED_ACTIONS.test(a.type || '')) throw api.observationOnly();
     if (a.type?.startsWith('history')) return this.history.handle(a);
     if (a.type === 'announcements' || a.type?.startsWith('announcement')) return this.announcements.handle(a);
     if (a.type === 'messages' || a.type?.startsWith('message')) return this.messageBoard.handle(a);
     if (a.type === 'notifications' || a.type?.startsWith('notification')) return this.notifications.handle(a);
     if (a.type === 'observe' || a.type?.startsWith('observe')) return this.observe.handle(a);
-    if (a.type?.startsWith('steward')) return this.steward.handle(a);
+    if (a.type?.startsWith('records')) return this.records.handle(a);
     if (a.type?.startsWith('profile') && a.type !== 'profileTab') return this.profileState.handle(a);
     switch (a.type) {
       case 'start': this.entered = true; this.tab = 'city'; this.stack = []; await Promise.all([this.refresh({ full: true }), this.loadAccount().catch(() => {})]); await this.openLaunch(); break;
@@ -410,7 +377,7 @@ class SocietyGame {
       case 'segment': this.segment = a.value; break;
       case 'sort': this.sort = a.value; break;
       case 'expand': if (this.expanded.has(a.key)) this.expanded.delete(a.key); else this.expanded.add(a.key); break;
-      case 'sheet': this.sheet = { kind: a.kind, id: a.id }; if (a.kind === 'assistantScope') this.scroller('assistant-sheet').reset(); break;
+      case 'sheet': if (a.kind !== 'place') return; this.sheet = { kind: a.kind, id: a.id }; break;
       case 'closeSheet': this.sheet = null; break;
       case 'dismiss': this.dismissed[a.key] = true; break;
       case 'toggle': f[a.name] = !f[a.name]; break;
@@ -438,7 +405,7 @@ class SocietyGame {
         if (!f.accepted) throw new Error('请先阅读并同意隐私说明');
         try { await api.loginByPassword((f.username || '').trim(), f.password || ''); }
         finally { this.clearSecrets(); }
-        f.password = ''; this.navigation++; this.owner = null; this.residentId = ''; this.moderation = {}; this.loginRequired = {}; this.messageBoard.reset(); this.notifications.reset(); this.steward.reset(); await this.loadAccount(); this.back(); this.showToast('已登录网站账号', 'ok');
+        f.password = ''; this.navigation++; this.owner = null; this.residentId = ''; this.moderation = {}; this.loginRequired = {}; this.messageBoard.reset(); this.notifications.reset(); this.records.reset(); await this.loadAccount(); this.back(); this.showToast('已登录网站账号', 'ok');
         await this.resumeLaunch();
         break;
       case 'linkAccount': this.push('link'); break;
@@ -457,7 +424,7 @@ class SocietyGame {
         const ticket = this.mergePreview.ticket;
         await api.request('/api/wechat/merge/confirm', { method: 'POST', timeout: 60000, data: { ticket, confirm: true } });
         this.clearSecrets(); this.navigation++; this.owner = null; this.residentId = '';
-        this.messageBoard.reset(); this.notifications.reset(); this.steward.reset();
+        this.messageBoard.reset(); this.notifications.reset(); this.records.reset();
         this.moderation = {}; this.loginRequired = {}; this.stack = []; this.tab = 'account';
         await this.loadAccount(); this.showToast('账号已合并，请使用网站账号登录', 'ok');
         await this.resumeLaunch();
@@ -499,7 +466,7 @@ class SocietyGame {
         this.navigation++; // Old readers must not restore a previous login's moderation state.
         this.refreshing = false; // A fresh read may replace an outstanding read from the previous login.
         this.moderation = {}; this.loginRequired = {}; this.updatePending();
-        this.messageBoard.reset(); this.notifications.reset(); this.steward.reset();
+        this.messageBoard.reset(); this.notifications.reset(); this.records.reset();
         await this.loadAccount(); this.map = null; await this.refresh({ full: true });
         this.notice = '微信登录成功'; this.showToast('微信登录成功', 'ok');
         await this.resumeLaunch();
@@ -511,9 +478,9 @@ class SocietyGame {
         api.clearSession();
         this.user = null; this.owner = null; this.linked = []; this.created = []; this.wechatVerified = false;
         this.messageBoard.reset();
-        this.notifications.reset(); this.steward.reset(); this.launch = null; this.launchQueued = false; // 只清本机状态；普通退出不取消服务器上的提醒订阅。
+        this.notifications.reset(); this.records.reset(); this.launch = null; this.launchQueued = false; // 只清本机状态；普通退出不取消服务器上的提醒订阅。
         this.loginRequired = {};
-        this.form = {}; this.residentId = ''; this.letterDraft = ''; this.createDraft = ''; this.letterRequestId = null; this.createRequestId = null;
+        this.form = {}; this.residentId = '';
         this.stack = []; this.sheet = null; this.tab = 'account'; this.moderation.owner = 0; this.moderation.account = 0;
         this.updatePending(); this.invalidate(); this.render();
         try { const result = await revocation; if (result.ok !== true) throw new Error('Unconfirmed revocation'); }
@@ -522,88 +489,17 @@ class SocietyGame {
         this.showToast('已退出登录', 'ok');
         break;
       case 'owner': {
-        const navigation = this.navigation;
-        if (this.residentId !== a.id) { this.clearSecrets(); this.steward.tab = 'overview'; this.steward.timeline = null; this.steward.confirm = null; delete f.modelSource; }
+        if (this.residentId !== a.id) { this.clearSecrets(); this.records.reset(); }
         this.residentId = a.id;
-        await Promise.all([this.loadModelPresets(), this.user ? this.steward.loadHosted() : null]);
-        if (this.navigation !== navigation || this.residentId !== a.id) break;
-        if (!f.presetId && !f.baseURL) this.selectPreset('deepseek');
-        if (await this.loadOwner()) {
-          const config = this.owner.runner && this.owner.runner.config;
-          if (!f.modelSource) { if (!this.steward.prefill(config && usableConfig(config) ? config : null)) f.modelSource = 'own'; }
-          if (this.tab !== 'owner') this.push('owner');
-        }
+        if (await this.loadOwner() && this.tab !== 'owner') this.push('owner');
         break;
       }
-      case 'letter': {
-        const text = (f.letter || '').trim(); if (!text) throw new Error('请先写下家书');
-        if (this.letterDraft !== text) { this.letterRequestId = api.requestId(); this.letterDraft = text; }
-        this.letterRequestId = this.letterRequestId || api.requestId();
-        await api.request('/api/account/residents/' + encodeURIComponent(this.residentId) + '/letter', { method: 'POST', data: { text, requestId: this.letterRequestId } });
-        this.letterRequestId = null; f.letter = ''; await this.loadOwner(); this.notice = '家书已送出'; this.showToast('家书已送出', 'ok');
-        break;
-      }
-      case 'runner':
-        await api.request('/api/account/residents/' + encodeURIComponent(this.residentId) + '/runner', { method: 'POST', data: { op: a.op } });
-        await this.loadOwner(); this.showToast(a.op === 'start' ? '运行器已启动' : '运行器已暂停', 'ok');
-        break;
-      case 'disconnect': this.owner = null; f.letter = ''; f.apiKey = ''; this.back(); break;
-      case 'entry': {
-        const navigation = this.navigation;
-        if (!this.user || !this.wechatVerified) throw new Error('请先使用微信登录');
-        await this.loadModelPresets(); if (this.navigation !== navigation) break;
-        if (!f.presetId && !f.baseURL) this.selectPreset('deepseek');
-        if (!f.createCap) f.createCap = String(DEFAULT_CAP);
-        if (!f.lang) f.lang = 'zh';
-        this.push('entry'); break;
-      }
-      case 'provider': f.providerIndex = a.index !== undefined ? a.index : ((f.providerIndex || 0) + 1) % 3; f.apiKey = ''; break;
-      case 'preset': this.selectPreset(a.id, a.variant); break;
-      case 'modelChoice': f.model = a.model; break;
-      case 'modelTest': case 'modelSave': await this.configureRunner(a.type === 'modelTest'); break;
-      case 'create': await this.enter(); break;
-      case 'createCity': f.createCity = a.city; break;
-      case 'createLang': f.lang = a.lang; break;
       case 'support':
         await new Promise((resolve, reject) => this.wx.setClipboardData({ data: 'wong.laye@outlook.com', success: resolve, fail: () => reject(new Error('复制失败，请手动记录邮箱')) }));
         this.notice = '客服邮箱已复制'; this.showToast('客服邮箱已复制', 'ok');
         break;
       default: break;
     }
-  }
-  async enter() {
-    const f = this.form;
-    if (!f.entryAccepted) throw new Error('请先阅读并同意隐私说明');
-    if (!(f.name || '').trim() || !(f.soul || '').trim()) throw new Error('请填写居民名字与灵魂');
-    const cities = this.state && this.state.cities;
-    if (cities && !cities.some(c => c.id === f.createCity)) throw new Error('请选一座城落籍');
-    const lang = /^[a-z]{2}(?:-[A-Za-z]{2,4})?$/.test(f.lang || '') ? f.lang : 'zh';
-    const capText = String(f.createCap === undefined ? DEFAULT_CAP : f.createCap).trim();
-    if (!/^\d{1,9}$/.test(capText) || Number(capText) > 50000000) throw new Error('每日游戏词元上限须为 0–50,000,000 的整数');
-    const dailyCap = Number(capText);
-    const draft = JSON.stringify([f.name.trim(), f.bio || '', f.soul.trim(), f.invite || '', cities ? f.createCity : null, lang, dailyCap]);
-    if (this.createDraft !== draft) { this.createRequestId = api.requestId(); this.createDraft = draft; }
-    this.createRequestId = this.createRequestId || api.requestId();
-    try {
-      const result = await api.request('/api/account/residents', { method: 'POST', timeout: 60000, data: { name: f.name.trim(), bio: f.bio || '', soul: f.soul.trim(), lang, dailyCap, ...(cities ? { city: f.createCity } : {}), invite: (f.invite || '').trim(), requestId: this.createRequestId } });
-      this.residentId = result.agentId; this.createRequestId = null; f.soul = ''; f.name = ''; f.bio = ''; delete f.createCity;
-      this.steward.tab = 'overview'; this.steward.timeline = null; f.modelSource = 'own';
-      this.clearSecrets(); this.navigation++; this.stack = ['account']; this.tab = 'owner'; this.scroller('owner').reset();
-      await this.loadOwner(); this.notice = '居民已创建，请配置模型后启动'; this.showToast('居民已创建', 'ok');
-    } catch (error) { if (!error.status) throw new Error('结果未确认。保留原提交编号，再次提交不会重复创建居民。'); throw error; }
-  }
-  async configureRunner(testOnly) {
-    const f = this.form;
-    if (!f.modelAccepted) throw new Error('请先同意模型调用说明');
-    if (testOnly && f.modelSource === 'hosted') { delete f.apiKey; throw new Error('平台托管无需测试连接，保存后即可启动'); }
-    // 密钥只在这一次请求里使用：成功、失败或校验不通过都不留在手机内存的表单里。
-    try {
-      const runner = this.steward.runnerConfig(this.owner && this.owner.runner && this.owner.runner.config);
-      await api.request('/api/account/residents/' + encodeURIComponent(this.residentId) + '/runner', { method: 'POST', timeout: 60000, data: { op: testOnly ? 'test' : 'save', config: runner } });
-    } finally { delete f.apiKey; }
-    if (!testOnly) await this.loadOwner();
-    this.notice = testOnly ? '模型连接成功' : '模型配置已保存，可主动启动运行器';
-    this.showToast(this.notice, 'ok');
   }
   showToast(text, kind = 'ok') {
     this.toast = { text, kind };
@@ -648,8 +544,7 @@ class SocietyGame {
       this.cityMap.startGesture(this.mapPoints(e));
       this.render(); return;
     }
-    const inSheet = this.sheet?.kind === 'assistantScope' && this.sheetArea && t.clientY >= this.sheetArea.top && t.clientY <= this.sheetArea.bottom;
-    this.touch = { x: t.clientX, y: t.clientY, moved: false, sheet: !!inSheet, vertical: inSheet ? this.scroller('assistant-sheet') : this.scroller(), scroll: inSheet || !this.sheet && t.clientY >= this.contentTop() && t.clientY <= this.contentBottom() };
+    this.touch = { x: t.clientX, y: t.clientY, moved: false, vertical: this.scroller(), scroll: !this.sheet && t.clientY >= this.contentTop() && t.clientY <= this.contentBottom() };
     const area = this.horizontalAreas.find(h => t.clientX >= h.x && t.clientX <= h.x + h.w && t.clientY >= h.y && t.clientY <= h.y + h.h);
     if (area && this.touch.scroll) { this.touch.horizontal = area.scroller; area.scroller.start(t.clientX, now); }
     const hit = this.hitAt(t.clientX, t.clientY);
@@ -693,7 +588,7 @@ class SocietyGame {
     const horizontal = touch.axis === 'horizontal', sc = horizontal ? touch.horizontal : touch.vertical;
     if (touch.horizontal && !horizontal) touch.horizontal.dragging = false;
     if (horizontal) touch.vertical.dragging = false;
-    if (touch.scroll) { const pull = sc.end(Date.now()); if (!touch.sheet && !horizontal && pull && this.page && this.page.pull && !this.refreshing) this.dispatch({ type: 'refresh', pull: true }); }
+    if (touch.scroll) { const pull = sc.end(Date.now()); if (!horizontal && pull && this.page && this.page.pull && !this.refreshing) this.dispatch({ type: 'refresh', pull: true }); }
     if (action) { this.haptic(); this.dispatch(action); }
     this.kick(sc);
   }
@@ -745,9 +640,6 @@ class SocietyGame {
     ctx.fillStyle = C.bg; ctx.fillRect(0, 0, this.width, this.height);
     const top = this.contentTop(), bottom = this.contentBottom(), sc = this.scroller();
     sc.setMax(page.height - (bottom - top));
-    if (this.tab === 'assistant' && this.assistant.pendingScroll != null) {
-      sc.scrollTo(this.assistant.pendingScroll === 'bottom' ? sc.max : this.assistant.pendingScroll); this.assistant.pendingScroll = null;
-    }
     ctx.save(); ctx.beginPath(); ctx.rect(0, top, this.width, bottom - top); ctx.clip();
     if (page.pull) this.paintPull(top, sc);
     const g = this.context(top, bottom, !!this.sheet);
@@ -803,7 +695,7 @@ class SocietyGame {
       const f = font(22, { bold: true, serif: true, text: top.title });
       P.text(ctx, top.title || '', 16, cy, f, C.text);
     }
-    if (this.tab !== 'assistant' && (this.busy || this.refreshing)) {
+    if (this.busy || this.refreshing) {
       const label = this.busy ? '处理中…' : '更新中…', lw = T.measure(ctx, font(12, {}), label);
       P.text(ctx, label, this.menu.left - 10 - lw, cy, font(12, {}), C.text3);
     }
@@ -839,12 +731,8 @@ class SocietyGame {
     P.line(ctx, 22, top + 0.5, this.width - 22, top + 0.5, C.lineStrong, 1);
     P.fillRound(ctx, this.width / 2 - 19, top + 9, 38, 5, 2.5, C.lineStrong);
     this.hits.push({ x: 0, y: top, w: this.width, h, action: { type: 'noop' } });
-    const scrollable = this.sheet.kind === 'assistantScope', sc = scrollable ? this.scroller('assistant-sheet') : null;
-    const start = top + 28, bottom = this.height - this.bottomInset - 20;
-    this.sheetArea = scrollable ? { top: start, bottom } : null;
-    if (sc) sc.setMax(body.height - (bottom - start));
-    ctx.save(); ctx.beginPath(); ctx.rect(0, scrollable ? start : top, this.width, scrollable ? bottom - start : h); ctx.clip();
-    body.paint(this.context(scrollable ? start : top, scrollable ? bottom : this.height, false), 18, start - (sc ? Math.round(sc.offset) : 0));
+    ctx.save(); ctx.beginPath(); ctx.rect(0, top, this.width, h); ctx.clip();
+    body.paint(this.context(top, this.height, false), 18, top + 28);
     ctx.restore();
   }
   paintToast() {
