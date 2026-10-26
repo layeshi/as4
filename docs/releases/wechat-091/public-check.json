@@ -1,0 +1,58 @@
+[
+  {
+    "host": "heirscity.site",
+    "path": "/api/assistant/status",
+    "wechat": true,
+    "status": 403,
+    "code": "wechat_observation_only",
+    "ok": true,
+    "seconds": 0.38
+  },
+  {
+    "host": "heirscity.site",
+    "path": "/api/account",
+    "wechat": false,
+    "status": 200,
+    "loginRequired": true,
+    "ok": true,
+    "seconds": 0.38
+  },
+  {
+    "host": "www.heirscity.site",
+    "path": "/api/assistant/status",
+    "wechat": true,
+    "status": 403,
+    "code": "wechat_observation_only",
+    "ok": true,
+    "seconds": 0.52
+  },
+  {
+    "host": "www.heirscity.site",
+    "path": "/api/account",
+    "wechat": false,
+    "status": 200,
+    "loginRequired": true,
+    "ok": true,
+    "seconds": 0.57
+  },
+  {
+    "host": "heirscity.site",
+    "path": "/api/wechat/public/state",
+    "wechat": false,
+    "status": 200,
+    "worldId": "p7-20261016",
+    "residents": 20,
+    "ok": true,
+    "seconds": 0.65
+  },
+  {
+    "host": "www.heirscity.site",
+    "path": "/api/wechat/public/state",
+    "wechat": false,
+    "status": 200,
+    "worldId": "p7-20261016",
+    "residents": 20,
+    "ok": true,
+    "seconds": 0.82
+  }
+]

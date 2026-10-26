@@ -1,0 +1,19 @@
+{
+  "callsAfterStop": 31,
+  "failedAfterStop": 10,
+  "failedCategories": [
+    {
+      "errorKind": "timeout",
+      "status": null,
+      "phase": "request",
+      "count": 8
+    },
+    {
+      "errorKind": "http",
+      "status": 500,
+      "phase": "response",
+      "count": 2
+    }
+  ],
+  "previousHourFailedCategories": []
+}

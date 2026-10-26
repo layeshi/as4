@@ -1,0 +1,14 @@
+{
+  "observedAt": "2026-10-26T08:37:10.709808+00:00",
+  "calls": 31,
+  "failed": 10,
+  "firstAt": "2026-10-26T08:27:38.575Z",
+  "lastAt": "2026-10-26T08:29:56.582Z",
+  "lastFailureAt": "2026-10-26T08:29:03.680Z",
+  "successesAfterLastFailure": 6,
+  "failureModels": {
+    "glm-5.3": 2,
+    "gpt-6-luna": 6,
+    "glm-5.3-flash": 2
+  }
+}
