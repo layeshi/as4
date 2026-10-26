@@ -55,9 +55,17 @@
     "miniprogram-app/sitemap.json": "cea0c50c956716139b1fab475cb5477ba950140582e14780eb36a472c5ec8de6",
     "project.config.json": "9256facc8014fdd005b4f27b007b1161c374ced63a23a30cd3a6f6d482353fe3"
   },
-  "officialCompiled": false,
+  "officialCompiled": true,
   "deviceVerified": false,
-  "uploaded": false,
-  "reviewSubmitted": false,
-  "published": false
+  "uploaded": true,
+  "reviewSubmitted": true,
+  "published": false,
+  "uploadedAt": "2026-10-26T16:51:18+08:00",
+  "sourceCommit": "4f5073546ad258e7151e71f6d0b6fa9026ca3e3b",
+  "githubMainBeforeUpload": "00bc604bd71b3143473cb2a7b4b71862c86fdffc",
+  "officialTool": "Stable 2.02.2608080",
+  "reviewStatus": "submitted_success",
+  "reviewObservedAtApprox": "2026-10-26T17:02:00+08:00",
+  "privacyAgreementSubmitted": true,
+  "reviewTimestampVerified": false
 }
