@@ -209,6 +209,134 @@ test('concurrent action retries update a resident session and its next reread ch
   } finally { await e.rt.closeAsync(); await e.close(); }
 });
 
+test('concurrent residents wake and look against their admitted world version', async () => {
+  for (const worldExecution of ['worker', 'inline']) {
+    const e = await boot({ ...options, worldExecution });
+    try {
+      const ids = Array.from({ length: 3 }, (_, i) => e.rt.exec('account', create(i)).result.agentId);
+      await e.rt.enableCompute(testResources);
+      assert.equal(e.rt.compute.mode, worldExecution);
+      const { wakeCore, lookCore } = await import('../src/http/tokens.js');
+      // A tick already ahead of the reads must finish before their content and
+      // wake identifiers are rendered. Each meter command changes commandN.
+      let follow;
+      const off = e.rt.onCommand(({ cmd }) => { if (cmd.type === 'tick' && !follow) follow = e.rt.submit('tick'); });
+      const tick = e.rt.submit('tick');
+      const wakes = await Promise.allSettled(ids.map(id => wakeCore(e.app.ctx, id, { kind: 'main' }, 'zh')));
+      await tick; await follow; off();
+      assert.deepEqual(wakes.map(r => r.status === 'fulfilled' ? r.value.status : r.reason.code), [200, 200, 200], worldExecution);
+      assert.equal(e.rt.w.clock.tick, 2);
+      for (const id of ids) assert.equal(e.app.ctx.wakings.get(id).tick, 2);
+      const looks = await Promise.allSettled(ids.map((id, i) => lookCore(e.app.ctx, id, { wakeId: wakes[i].value.json.wakeId, what: 'here', turn: 1 }, 'zh')));
+      assert.deepEqual(looks.map(r => r.status === 'fulfilled' ? r.value.status : r.reason.code), [200, 200, 200], worldExecution);
+      for (const id of ids) assert.equal(e.app.ctx.wakings.get(id).requests, 1);
+    } finally { await e.rt.closeAsync(); await e.close(); }
+  }
+});
+
+test('session admission remains bounded while waiting for the world queue', async () => {
+  const e = await boot({ ...options, computeQueueLimit: 1 }); let release;
+  try {
+    const ids = [0, 1].map(i => e.rt.exec('account', create(i)).result.agentId);
+    await e.rt.enableCompute(testResources);
+    const { wakeCore } = await import('../src/http/tokens.js');
+    const call = e.rt.compute.call.bind(e.rt.compute);
+    let entered;
+    const preparing = new Promise(resolve => { entered = resolve; });
+    const held = new Promise(resolve => { release = resolve; });
+    e.rt.compute.call = async (op, cmd) => {
+      const value = await call(op, cmd);
+      if (op === 'prepare' && cmd.type === 'tick') { entered(); await held; }
+      return value;
+    };
+    const tick = e.rt.submit('tick'); await preparing;
+    const first = wakeCore(e.app.ctx, ids[0], { kind: 'main' }, 'zh');
+    // Attach a rejection handler immediately, including on the unfixed path.
+    const firstResult = Promise.allSettled([first]);
+    await assert.rejects(wakeCore(e.app.ctx, ids[1], { kind: 'main' }, 'zh'), { code: 'compute_busy' });
+    release(); await tick;
+    const [result] = await firstResult;
+    assert.equal(result.status, 'fulfilled'); assert.equal(result.value.status, 200);
+  } finally { release?.(); await e.rt.closeAsync(); await e.close(); }
+});
+
+test('queued session requests expire without later charging or creating a waking', async t => {
+  const e = await boot(options); let release;
+  try {
+    const ids = [0, 1].map(i => e.rt.exec('account', create(i)).result.agentId);
+    await e.rt.enableCompute(testResources);
+    const { wakeCore } = await import('../src/http/tokens.js');
+    const call = e.rt.compute.call.bind(e.rt.compute), n = e.rt.log.n;
+    let entered;
+    const preparing = new Promise(resolve => { entered = resolve; });
+    const held = new Promise(resolve => { release = resolve; });
+    e.rt.compute.call = async (op, cmd) => {
+      const value = await call(op, cmd);
+      if (op === 'prepare') { entered(); await held; }
+      return value;
+    };
+    const first = wakeCore(e.app.ctx, ids[0], { kind: 'main' }, 'zh'); await preparing;
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const queued = wakeCore(e.app.ctx, ids[1], { kind: 'main' }, 'zh');
+    const expired = assert.rejects(queued, { code: 'compute_busy' });
+    t.mock.timers.tick(30000); await expired;
+    t.mock.timers.reset();
+    release(); assert.equal((await first).status, 200);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(e.rt.log.n, n + 1);
+    assert.equal(e.app.ctx.wakings.has(ids[1]), false);
+  } finally { release?.(); t.mock.timers.reset(); await e.rt.closeAsync(); await e.close(); }
+});
+
+test('a queued action retry rechecks its own authority before returning a cached receipt', async () => {
+  const e = await boot(options); let release;
+  try {
+    const id = e.rt.exec('account', create(0)).result.agentId;
+    await e.rt.enableCompute(testResources);
+    const { wakeCore } = await import('../src/http/tokens.js');
+    const { actCore } = await import('../src/http/agent.js');
+    const wake = await wakeCore(e.app.ctx, id, { kind: 'main' }, 'zh');
+    const body = { wakeId: wake.json.wakeId, requestId: 'queued-revoked-retry', turn: 1, experimentGeneration: 0, actions: [{ type: 'say', text: '只执行一次。' }] };
+    const call = e.rt.compute.call.bind(e.rt.compute), n = e.rt.log.n;
+    let entered, allowed = true;
+    const preparing = new Promise(resolve => { entered = resolve; });
+    const held = new Promise(resolve => { release = resolve; });
+    e.rt.compute.call = async (op, cmd) => {
+      const value = await call(op, cmd);
+      if (op === 'prepare') { entered(); await held; }
+      return value;
+    };
+    const first = actCore(e.app.ctx, id, body, 'zh'); await preparing;
+    const retry = commandAuthority.run(() => { if (!allowed) throw Object.assign(new Error('revoked'), { code: 'unauthorized', status: 401 }); }, () => actCore(e.app.ctx, id, body, 'zh'));
+    const denied = assert.rejects(retry, { code: 'unauthorized' });
+    allowed = false; release();
+    assert.equal((await first).status, 200); await denied;
+    assert.equal(e.rt.log.n, n + 1);
+    assert.equal(e.app.ctx.wakings.get(id).requests, 1);
+  } finally { release?.(); await e.rt.closeAsync(); await e.close(); }
+});
+
+test('a legacy action keeps its committed result when supplementary inbox metering is busy', async () => {
+  const e = await boot({ physics: 2, premise: 4, map: 'frontier', shellSlots: 0 });
+  try {
+    const registered = await e.register('旧代币世界居民', { dailyCap: 5000000 });
+    assert.equal(e.rt.exec('admin', { op: 'adjust', args: { agentId: registered.agentId, energy: 1000000, reason: 'arrival metering fixture' } }).result.ok, true);
+    await e.rt.enableCompute(testResources); assert.equal(e.rt.compute.mode, 'worker');
+    const { wakeCore } = await import('../src/http/tokens.js');
+    const { actCore } = await import('../src/http/agent.js');
+    const wake = await wakeCore(e.app.ctx, registered.agentId, { kind: 'main' }, 'zh');
+    let follow;
+    const off = e.rt.onCommand(({ cmd }) => { if (cmd.type === 'act') follow = e.rt.submit('tick'); });
+    const n = e.rt.log.n;
+    const result = await actCore(e.app.ctx, registered.agentId, { wakeId: wake.json.wakeId, actions: [{ type: 'move', to: 'agora' }] }, 'zh');
+    await follow; off();
+    assert.equal(result.status, 200); assert.equal(result.json.results[0].ok, true, JSON.stringify(result.json.results[0]));
+    assert.equal(result.json.arrived, undefined); assert.equal(typeof result.json.arrivedWithheld, 'number');
+    assert.equal(e.rt.w.agents[registered.agentId].place, 'agora');
+    assert.equal(e.rt.log.n, n + 2);
+  } finally { await e.rt.closeAsync(); await e.close(); }
+});
+
 test('background history runs in workers, caches fixed cutoffs, and reapplies redaction on new versions', async () => {
   const e=world(); let history;
   try {

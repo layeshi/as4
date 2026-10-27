@@ -1,0 +1,25 @@
+{
+  "baselineCommit": "9c55e5f6a7f3178cee4cb99893f253afd76f3711",
+  "node": "v24.16.0",
+  "platform": "darwin-arm64",
+  "completeSuite": {
+    "tests": 2178,
+    "pass": 2177,
+    "fail": 0,
+    "skip": 1,
+    "skippedReason": "External frozen worlds fixture not configured",
+    "log": "2026-10-27-batched-session-complete.tap.gz"
+  },
+  "newRegressions": {
+    "tests": 5,
+    "pass": 5,
+    "fail": 0,
+    "independentReviewPass": 5
+  },
+  "sourceHashes": {
+    "src/http/tokens.js": "39a4ac334d8b1c9d16d2fa0c506cbf1dd52b91bf05b88269af2a4bc6010a339d",
+    "test/adaptive-compute.test.js": "f3935edc23de304b0de8de0dc379d5f0039f3603ac876a66ae41b2f1fe2e149d"
+  },
+  "productionInitiallyRestoredWithCurrentData": true,
+  "currentProgressAtRecovery": 19546
+}

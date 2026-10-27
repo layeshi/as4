@@ -1,5 +1,7 @@
 import { runSteps, submit } from '../compute/steps.js';
 import { busy } from '../compute/online.js';
+import { commandAuthority } from '../compute/authority.js';
+import { performance } from 'node:perf_hooks';
 import { entitiesEnabled, ENTITY_LOOKS } from '../e2/entities/catalog.js';
 import { entityLook } from '../e2/entities/views.js';
 import { programsEnabled } from '../e2/programs/catalog.js';
@@ -40,22 +42,41 @@ function sessionFor(ctx, id, wakeId) {
   const s = ctx.wakings?.get(id);
   return s && activeWaking(ctx.rt.w, ctx.rt.w.agents[id], s.wakeId) && s.tick === ctx.rt.w.clock.tick && (wakeId === undefined || wakeId === s.wakeId) ? s : null;
 }
-const residentSessions = new WeakMap();
-function sessionSteps(ctx, id, iterator) {
+const sessionQueues = new WeakMap();
+function sessionSteps(ctx, iterator) {
   if (!ctx.rt.compute) return runSteps(iterator);
-  let pending = residentSessions.get(ctx);
-  if (!pending) { pending = { count: 0, tails: new Map() }; residentSessions.set(ctx, pending); }
+  let pending = sessionQueues.get(ctx.rt);
+  if (!pending) { pending = { count: 0, tail: Promise.resolve() }; sessionQueues.set(ctx.rt, pending); }
   if (pending.count >= (ctx.cfg?.computeQueueLimit ?? ctx.rt.cfg.computeQueueLimit ?? 256)) return Promise.reject(busy());
   pending.count++;
-  // Rendering and session accounting must use the result of the previous turn.
-  // In particular, an in-flight retry must observe the committed act receipt.
-  const previous = pending.tails.get(id) ?? Promise.resolve();
-  const work = previous.catch(() => {}).then(() => runSteps(iterator));
-  pending.tails.set(id, work);
-  return work.finally(() => {
-    pending.count--;
-    if (pending.tails.get(id) === work) pending.tails.delete(id);
+  const computer = ctx.rt.compute, authorize = commandAuthority.getStore(), deadline = performance.now() + 30000;
+  let expired = false, timer;
+  const expiry = new Promise((_, reject) => { timer = setTimeout(() => { expired = true; reject(busy()); }, 30000); timer.unref?.(); });
+  // Metering changes the shared world version, including for different
+  // residents. Keep rendering, admission and session accounting in one FIFO.
+  const work = pending.tail.catch(() => {}).then(async () => {
+    if (expired || performance.now() >= deadline) throw busy();
+    let boundary;
+    do {
+      boundary = computer.tail;
+      await Promise.race([boundary, expiry]);
+      if (expired || performance.now() >= deadline) throw busy();
+    } while (boundary !== computer.tail);
+    if (computer.closed || computer.closing || ctx.rt.stopped || ctx.rt.receiptFailed) throw busy();
+    authorize?.();
+    clearTimeout(timer);
+    // No await between the stable version check and render -> submit.
+    return runSteps(iterator);
   });
+  pending.tail = work;
+  const finished = () => {
+    clearTimeout(timer); pending.count--;
+    if (pending.tail === work) pending.tail = Promise.resolve();
+  };
+  // An expired caller keeps its queue slot until its skipped FIFO entry drains.
+  // This bounds memory while an earlier admitted command is still executing.
+  work.then(finished, finished);
+  return Promise.race([work, expiry]);
 }
 export function tokenStatus(ctx, id, { lang = 'zh' } = {}) {
   const { rt } = ctx, w = rt.w, a = w.agents[id], s = sessionFor(ctx, id);
@@ -108,7 +129,7 @@ function prompt(ctx, id, p, lang, toolMode = 'native', actionTools = 'legacy', t
     toolMode, actionTools, trained, prayers: false, cooperation: cooperationEnabled(w), programs: programsEnabled(w), entities: entitiesEnabled(w), tokenValues: tokenValues(w) });
 }
 export function wakeCore(ctx, id, body, lang) {
-  return sessionSteps(ctx, id, (function* () {
+  return sessionSteps(ctx, (function* () {
   const w = ctx.rt.w, a = w.agents[id];
   if (!tokenized(w)) return failure(lang, 'not_found');
   if (!object(body) || !['main', 'wake'].includes(body.kind) || (body.toolMode !== undefined && !['native', 'json', 'mcp'].includes(body.toolMode)) || (body.actionTools !== undefined && !['legacy', 'typed'].includes(body.actionTools)) || (body.lang !== undefined && typeof body.lang !== 'string')) return failure(lang, 'invalid_request');
@@ -136,7 +157,7 @@ function turnFor(s, body) {
   return { turn: Math.max(s.turn, turn), reread: turn > s.turn ? rereadCost(s.ctx - s.fresh) : 0 };
 }
 export function lookCore(ctx, id, body, lang) {
-  return sessionSteps(ctx, id, (function* () {
+  return sessionSteps(ctx, (function* () {
   if (!tokenized(ctx.rt.w)) return failure(lang, 'not_found');
   if (!object(body)) return failure(lang, 'invalid_request');
   const s = sessionFor(ctx, id, body.wakeId);
@@ -185,7 +206,7 @@ export function lookCore(ctx, id, body, lang) {
   })());
 }
 export function actTokens(ctx, id, body, lang) {
-  return sessionSteps(ctx, id, (function* () {
+  return sessionSteps(ctx, (function* () {
   if(materialsEnabled(ctx.rt.w)){
     const identity=requestIdentity(ctx.rt.w,{...body,agentId:id,lang});
     if(identity.error)return failed(lang,identity.error);
@@ -217,7 +238,14 @@ export function actTokens(ctx, id, body, lang) {
     const moved = result.results.some(r => r.ok && r.type === 'move');
     const text = [...renderArrived(p, p.inbox, { lang }), ...(moved ? renderArrival(p, { lang }) : [])].join('\n');
     if (text) {
-      const metered = (yield submit(ctx.rt,'meter', { op: 'inbox', agentId: id, wakeId: s.wakeId, day: earthDayKey(ctx), reread: 0, read: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) })).result;
+      let metered;
+      try { metered = (yield submit(ctx.rt,'meter', { op: 'inbox', agentId: id, wakeId: s.wakeId, day: earthDayKey(ctx), reread: 0, read: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) })).result; }
+      catch (error) {
+        if (error.code !== 'compute_busy') throw error;
+        // The action is durable already. Withhold an unmetered supplement,
+        // while returning the committed action so callers do not repeat it.
+        metered = { ok: false };
+      }
       if (metered.ok) { if (coop) s.cooperationRead = (s.cooperationRead || 0) + cpLength(text);
   s.ctx += textWeight(text); s.fresh = textWeight(text); arrived = text; bill = metered.bill; }
       else { arrivedWithheld = p.inbox.length; ctx.wakings.delete(id); }

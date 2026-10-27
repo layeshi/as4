@@ -1,6 +1,6 @@
 # 在线服务多核 CPU 与大内存适配
 
-日期：2026-10-27（北京时间）。状态：用户已在 Q9 确认完整方案；代码实现、独立审查及 Linux / Windows 实机验证已完成，尚未部署。
+日期：2026-10-27（北京时间）。状态：用户已在 Q9 确认完整方案；首批代码及 Linux / Windows 实机验证完成，已进入生产验收。批量会话问题的处理见 [修复记录](../fixes/2026-10-27-batched-session-admission.md)。
 
 实现与验证记录见 [在线资源适配验证报告](../performance/2026-10-27-online-adaptation/README.md)，配置及资源边界见 [运维说明](../RESOURCE-ADAPTATION.md)。
 
