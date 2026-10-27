@@ -261,6 +261,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
       if (!r.ok) {
         const code = r.json?.error?.code;
         rejectTool('look_request', [code]);
+        if (code === 'compute_busy') { ended = code; tokenEnded = true; return { text: res.actFailed(code), isError: true }; }
         if (r.status === 402) { ended = 'tokens'; tokenEnded = true; return { text: stoppedTokensLine(code, lang), isError: true }; }
         if (r.status === 429) { S.looks.n = limits.looks; return { text: res.looksOut }; }
         if (r.status === 401) stop = 'auth';
@@ -316,6 +317,7 @@ export async function runWaking(S, p0, { kind, tokenWake } = {}) {
         acted++;
       } else {
         const code = r.json && r.json.error && r.json.error.code;
+        if (p4 && code === 'compute_busy') { ended = code; tokenEnded = true; return { text: res.actFailed(code), isError: true }; }
         if (p4 && r.status === 402) { ended = 'tokens'; tokenEnded = true; return { text: stoppedTokensLine(code, lang), isError: true }; }
         if (p4 && ['no_waking', 'paused', 'not_awake'].includes(code)) { ended = code === 'paused' ? 'paused' : code === 'not_awake' ? 'asleep' : 'deadline'; tokenEnded = true; }
         log.warn(`行动失败：${providerErrorLabel(r)} ${safeErrorCode(r.json?.error?.code)}`);
@@ -640,6 +642,7 @@ export async function waitTickOrWake(S, p, n = 1) {
       break;
     }
     if (!Array.isArray(json.items) || json.items.length === 0) continue;
+    const previousWakeSeen = S.wakeSeen;
     S.wakeSeen = Math.max(S.wakeSeen, Number.isFinite(json.cursor) ? json.cursor : 0); // 同一批收件不会两次叫醒
     if (S.wakes.tick !== tick) S.wakes = { tick, n: 0 };
     if (S.wakes.n >= limits.wakes) continue;
@@ -661,6 +664,11 @@ export async function waitTickOrWake(S, p, n = 1) {
     const out = await (tokenized(qp) ? runWaking4 : runWaking)(S, qp, { kind: 'wake' });
     acted += out.acted;
     if (out.stop) return { stop: out.stop, acted };
+    if (tokenized(qp) && out.rec?.ended === 'compute_busy' && out.rec.turns === 0) {
+      S.wakeSeen = previousWakeSeen; S.wakes.n--;
+      await S.waitTick(qp, 1); // Keep this inbox opportunity, but do not spin within the same tick.
+      break;
+    }
   }
   return { stop: null, acted };
 }
@@ -668,10 +676,12 @@ export async function waitTickOrWake(S, p, n = 1) {
 const billNumbers = bill => ({ reread: bill?.reread || 0, read: bill?.read || 0, write: bill?.write || 0 });
 export async function runWaking4(S, status, { kind = 'main' } = {}) {
   const mode = S.cfg.toolMode === 'native' && typeof S.provider.step === 'function' ? 'native' : 'json';
+  const previousLastMain = S.lastMain;
   if (kind === 'main') S.lastMain = status.now.tick;
   const r = await S.client.wake({ kind, lang: codeOf(S.cfg.lang), toolMode: mode, actionTools: S.cfg.actionTools || 'legacy' });
   if (!r.ok) {
     const reason = r.json?.error?.code || 'error';
+    if (kind === 'main' && reason === 'compute_busy') S.lastMain = previousLastMain;
     if (r.status === 402) (S.missed ||= []).push({ tick: status.now.tick, reason });
     const rec = { tick: status.now.tick, kind, mode, turns: 0, looks: [], acts: [], ended: reason, tokens: { in: 0, out: 0 }, ms: 0,
       bill: billNumbers(null), ...(r.status === 402 ? { refused: reason } : {}) };

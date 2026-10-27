@@ -20,9 +20,9 @@ export const TRACE_KEEP_DAYS = 30;
 const KINDS = new Set(['main', 'wake']);
 const MODES = new Set(['native', 'json']);
 const ENDED = new Set(['end', 'reply', 'actions', 'turns', 'deadline', 'budget', 'error', 'refusal', 'asleep', 'paused', 'format']);
-const P4_ENDED = new Set([...ENDED, 'tokens', 'tokens_exhausted', 'cap_reached']);
+const P4_ENDED = new Set([...ENDED, 'tokens', 'tokens_exhausted', 'cap_reached', 'compute_busy']);
 const REFUSED = new Set(['tokens_exhausted', 'cap_reached']);
-const P4_ERRORS = new Set([...REFUSED, 'no_waking', 'looks_exhausted']);
+const P4_ERRORS = new Set([...REFUSED, 'no_waking', 'looks_exhausted', 'compute_busy']);
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 const count = (v, max = 1e9) => (Number.isFinite(v) && v >= 0 ? Math.min(Math.round(v), max) : 0);

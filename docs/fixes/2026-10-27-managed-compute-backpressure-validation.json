@@ -1,0 +1,29 @@
+{
+  "baselineCommit": "7bac7592c2d0083b6b57e2d54f316e4d68429e64",
+  "node": "v24.16.0",
+  "platform": "darwin-arm64",
+  "completeSuite": {
+    "tests": 2194,
+    "pass": 2193,
+    "fail": 0,
+    "skip": 1,
+    "skippedReason": "External frozen worlds fixture not configured",
+    "log": "2026-10-27-managed-compute-backpressure-complete.tap.gz"
+  },
+  "newRegressions": {
+    "testsIncludingSubtests": 16,
+    "focusedTests": 29,
+    "focusedPass": 29,
+    "independentReviewPass": 29,
+    "independentReviewP1P2": 0,
+    "actualFifoTimeoutCovered": true
+  },
+  "sourceHashes": {
+    "src/runner/managed-client.js": "452e3bc78286543d0d3bfb4ef0791c9fc71d5f746e268f543f682a4ca41eba7e",
+    "runner/loop.js": "0e06b90d1e752428fa574c4bf0263323b85eaa73098bf36e76dd81fbd4d80caf",
+    "src/runner/traces.js": "330d7ea27c35466519bcbbec8066ee5fa6263eeb1d2c9d1143a43e32712fb6e2",
+    "test/compute-backpressure.test.js": "d7112669649da28988e152d4e7212b91f206a68d0595f94bd416b0fbb8281285",
+    "test/p4-loop.test.js": "e175b4949205664e5197668f32f213f4e9b78b6407912ee47cfb657187b6d910"
+  },
+  "paidModelProbes": 0
+}

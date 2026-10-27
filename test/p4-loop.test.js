@@ -191,3 +191,46 @@ test('P4 T11: failed scheduled wakings still respect the resident’s cadence', 
     assert.equal(out.requests.length, 0);
   } finally { await s.env.close(); }
 });
+
+test('P4 busy scheduled waking retries next tick without consuming the resident cadence', async () => {
+  const s = await setup();
+  try {
+    s.a.routine.every = 6; s.a.routine.called = false;
+    const wake = s.client.wake; let attempts = 0;
+    s.client.wake = args => ++attempts === 1 ? { ok: false, status: 503, json: { error: { code: 'compute_busy' } } } : wake(args);
+    const out = await drive(s, { rounds: 2, script: [{ text: '结束', calls: [] }], deps: { wait: async () => s.env.rt.tickNow() } });
+    assert.deepEqual(out.traces.map(r => [r.tick, r.ended]), [[0, 'compute_busy'], [1, 'reply']]);
+    assert.equal(out.requests.length, 1);
+  } finally { await s.env.close(); }
+});
+
+for (const tool of ['look', 'act']) test(`P4 busy ${tool} stops the waking without another provider call`, async () => {
+  const s = await setup();
+  try {
+    s.client[tool] = async () => ({ ok: false, status: 503, json: { error: { code: 'compute_busy' } } });
+    const out = await drive(s, { script: [{ calls: [call(tool, tool === 'look' ? { what: 'self' } : { actions: [{ type: 'say', text: '繁忙时不重复。' }] }), call('act', { actions: [{ type: 'say', text: '不应再执行。' }] })] }, { text: '不应再调用模型', calls: [] }] });
+    assert.equal(out.requests.length, 1);
+    assert.equal(out.traces[0].ended, 'compute_busy');
+    assert.equal(out.result.acted, 0);
+  } finally { await s.env.close(); }
+});
+
+test('P4 busy called waking preserves the unconsumed inbox for the next tick', async () => {
+  const s = await setup();
+  try {
+    s.a.routine.every = 0;
+    const wake = s.client.wake; let attempts = 0;
+    const after = [];
+    s.client.wake = args => ++attempts === 1 ? { ok: false, status: 503, json: { error: { code: 'compute_busy' } } } : wake(args);
+    const ac = new AbortController(), traces = [];
+    const out = await drive(s, { rounds: 2, cfg: { actionTools: 'typed' }, script: [{ calls: [call('done', {})] }], deps: {
+      signal: ac.signal,
+      wait: async () => s.env.rt.tickNow(),
+      waitWake: async args => { after.push(args.after); return { ok: true, json: { items: [{ seq: 100, kind: 'whisper' }], cursor: 100 } }; },
+      onWaking: (id, rec) => { traces.push(rec); if (traces.length === 2) ac.abort(); },
+    } });
+    assert.equal(out.requests.length, 1);
+    assert.deepEqual(traces.map(r => [r.tick, r.kind, r.ended]), [[0, 'wake', 'compute_busy'], [1, 'wake', 'end']]);
+    assert.equal(after[1], after[0]);
+  } finally { await s.env.close(); }
+});
