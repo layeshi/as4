@@ -61,17 +61,26 @@ export class ExportManager {
       fromDay, toDay, throughCommand: branch.commandN, throughSeq: branch.eventSeq, throughTick: branch.tick, requestId: body.requestId ?? null, status: 'queued', createdAt: new Date().toISOString() };
     this.jobs.push(job); this.save(); this.kick(); return this.view(job);
   }
-  kick() { this.running = this.running.then(async () => { await this.archive.ready; for (const job of this.jobs) if (!this.closed && job.status === 'queued') await this.build(job); }); }
+  kick() { this.running = this.running.then(async () => {
+    await this.archive.ready;
+    const jobs=this.jobs.filter(job=>!this.closed&&job.status==='queued');
+    const concurrency=this.ctx.rt.compute ? Math.max(1,this.ctx.rt.compute.budget.current.slots-1) : 1;
+    let next=0;
+    await Promise.all(Array.from({length:Math.min(jobs.length,concurrency)},async()=>{while(next<jobs.length&&!this.closed)await this.build(jobs[next++]);}));
+  }); }
   async build(job) {
     job.status = 'generating'; this.save();
     try {
       const records = await this.archive.residentRecords(job.branchId, job.agentId, job);
       const data = { version: 1, worldId: job.worldId, epoch: job.epoch, branchId: job.branchId, resident: job.profile, fromDay: job.fromDay, toDay: job.toDay, ticksPerDay: job.ticksPerDay, throughTick: job.throughTick, generatedAt: new Date().toISOString(),
         coverage: { records: records.length, firstRecordDay: records[0]?.day ?? null, lastRecordDay: records.at(-1)?.day ?? null, unknownActionResults: records.filter(r => r.kind === 'action' && r.result.ok === null).length, note: '包含所选范围内已保存且可核实的记录。旧版本未保存的内容标为缺失或未知；资源与位置的前后状态以整次命令为范围。未保存的逐刻感知、内部推理及缺失历史不会补写。' }, records };
-      const style = await readFile(new URL('../../public/history-export.css', import.meta.url), 'utf8');
-      const bytes = zip(historyFiles(data, style));
+      const computed=this.ctx.rt.compute ? await this.ctx.rt.compute.pool.run('export',data,Math.max(16*1048576,Buffer.byteLength(JSON.stringify(data))*8)) : null;
+      const style = computed ? null : await readFile(new URL('../../public/history-export.css', import.meta.url), 'utf8');
+      const bytes = computed ? computed.bytes : zip(historyFiles(data, style));
+      const user=this.ctx.accounts.get(job.userId);
+      if(!user||user.status!=='active'||!owns(this.ctx,this.archive,user,job.branchId,job.agentId))throw new Error('Export permission changed');
       await writeFile(join(this.archive.root, `${job.id}.zip`), bytes, { mode: 0o600 });
-      Object.assign(job, { status: 'ready', bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), records: records.length, completedAt: data.generatedAt });
+      Object.assign(job, { status: 'ready', bytes: bytes.length, sha256: computed?.sha256 ?? createHash('sha256').update(bytes).digest('hex'), records: records.length, completedAt: data.generatedAt });
       delete job.error;
     } catch { job.status = 'failed'; job.error = '历史生成失败，请重试。'; }
     this.save();

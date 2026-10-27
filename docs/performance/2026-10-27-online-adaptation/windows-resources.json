@@ -1,0 +1,11 @@
+{
+  "cpu": 4,
+  "slots": 3,
+  "memory": 17125167104,
+  "budget": 12843875328,
+  "cacheBytes": 1284387532.8,
+  "available": 12209635328,
+  "high": null,
+  "constraintSource": "system; job limits unknown",
+  "platform": "win32"
+}

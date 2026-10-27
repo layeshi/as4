@@ -51,14 +51,14 @@ export class ExperimentControl {
       if (this.rt.stopped) throw new Error('Runtime is closed');
       try {
         if (this.rt.w.paused !== paused || (paused && !this.rt.w.experimentControl?.active)) {
-          const { result } = this.rt.exec('admin', { op: paused ? 'pause' : 'resume', args: { experiment: true } });
+          const { result } = await this.rt.submit('admin', { op: paused ? 'pause' : 'resume', args: { experiment: true } }, {authorize});
           if (!result.ok) throw Object.assign(new Error('Experiment transition failed'), { engineError: result.error });
         } else if (this.state.endsWith('_error')) this.reconcile();
         await this.pending;
       } catch (error) {
         if (!paused && !this.rt.w.paused) {
           // A partial resume must not leave time or any newly started loop running.
-          this.rt.exec('admin', { op: 'pause', args: { experiment: true } });
+          await this.rt.submit('admin', { op: 'pause', args: { experiment: true } }, {skipRequestAuthority:true});
           await this.pending;
         }
         throw error;
@@ -75,10 +75,10 @@ export class ExperimentControl {
       if (this.rt.stopped) throw new Error('Runtime is closed');
       await this.pending;
       authorize();
-      const { result } = this.rt.exec('admin', { op: 'law_recover' });
+      const { result } = await this.rt.submit('admin', { op: 'law_recover' }, {authorize});
       try { await this.pending; }
       catch (error) {
-        if (!this.rt.w.paused) this.rt.exec('admin', { op: 'pause', args: { experiment: true } });
+        if (!this.rt.w.paused) await this.rt.submit('admin', { op: 'pause', args: { experiment: true } }, {skipRequestAuthority:true});
         throw error;
       }
       return result;

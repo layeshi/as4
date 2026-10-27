@@ -1,3 +1,5 @@
+import { runSteps, submit } from '../compute/steps.js';
+import { busy } from '../compute/online.js';
 import { entitiesEnabled, ENTITY_LOOKS } from '../e2/entities/catalog.js';
 import { entityLook } from '../e2/entities/views.js';
 import { programsEnabled } from '../e2/programs/catalog.js';
@@ -37,6 +39,23 @@ export const tokenValues = w => ({ k: K(w), capacity: w.tokens.capacity, basicAl
 function sessionFor(ctx, id, wakeId) {
   const s = ctx.wakings?.get(id);
   return s && activeWaking(ctx.rt.w, ctx.rt.w.agents[id], s.wakeId) && s.tick === ctx.rt.w.clock.tick && (wakeId === undefined || wakeId === s.wakeId) ? s : null;
+}
+const residentSessions = new WeakMap();
+function sessionSteps(ctx, id, iterator) {
+  if (!ctx.rt.compute) return runSteps(iterator);
+  let pending = residentSessions.get(ctx);
+  if (!pending) { pending = { count: 0, tails: new Map() }; residentSessions.set(ctx, pending); }
+  if (pending.count >= (ctx.cfg?.computeQueueLimit ?? ctx.rt.cfg.computeQueueLimit ?? 256)) return Promise.reject(busy());
+  pending.count++;
+  // Rendering and session accounting must use the result of the previous turn.
+  // In particular, an in-flight retry must observe the committed act receipt.
+  const previous = pending.tails.get(id) ?? Promise.resolve();
+  const work = previous.catch(() => {}).then(() => runSteps(iterator));
+  pending.tails.set(id, work);
+  return work.finally(() => {
+    pending.count--;
+    if (pending.tails.get(id) === work) pending.tails.delete(id);
+  });
 }
 export function tokenStatus(ctx, id, { lang = 'zh' } = {}) {
   const { rt } = ctx, w = rt.w, a = w.agents[id], s = sessionFor(ctx, id);
@@ -89,6 +108,7 @@ function prompt(ctx, id, p, lang, toolMode = 'native', actionTools = 'legacy', t
     toolMode, actionTools, trained, prayers: false, cooperation: cooperationEnabled(w), programs: programsEnabled(w), entities: entitiesEnabled(w), tokenValues: tokenValues(w) });
 }
 export function wakeCore(ctx, id, body, lang) {
+  return sessionSteps(ctx, id, (function* () {
   const w = ctx.rt.w, a = w.agents[id];
   if (!tokenized(w)) return failure(lang, 'not_found');
   if (!object(body) || !['main', 'wake'].includes(body.kind) || (body.toolMode !== undefined && !['native', 'json', 'mcp'].includes(body.toolMode)) || (body.actionTools !== undefined && !['legacy', 'typed'].includes(body.actionTools)) || (body.lang !== undefined && typeof body.lang !== 'string')) return failure(lang, 'invalid_request');
@@ -102,12 +122,13 @@ export function wakeCore(ctx, id, body, lang) {
   // Q65: acquired content remains in the model prompt, but its entire block is free.
   // The session context tracks only billable weight, including on later turns.
   const systemWeight = textWeight(prompt(ctx, id, p, normLang(a.lang), 'native', 'legacy', []));
-  const result = ctx.rt.exec('meter', { op: 'wake', agentId: id, wakeId, day: earthDayKey(ctx), kind: body.kind,
-    system: systemWeight, brief: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) }).result;
+  const result = (yield submit(ctx.rt,'meter', { op: 'wake', agentId: id, wakeId, day: earthDayKey(ctx), kind: body.kind,
+    system: systemWeight, brief: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) })).result;
   if (!result.ok) return failed(lang, result);
   ctx.wakings.set(id, { wakeId, tick: w.clock.tick, kind: body.kind, turn: 1, ctx: systemWeight + textWeight(text), fresh: textWeight(text), requests: 0, cooperationRead: 0 });
   return { status: 200, json: { ...(materialsEnabled(w)?{premise:w.premise}:{}), ...(entitiesEnabled(w) ? { entities: { version: 1 } } : {}), ...(programsEnabled(w) ? { programServices: { version: 1 } } : {}), ...(cooperationEnabled(w) ? { cooperation: { version: 1 } } : {}), wakeId, system: prompt(ctx, id, p, lang, body.toolMode ?? 'native', body.actionTools ?? 'legacy'), text,
     bill: result.bill, you: tokenStatus(ctx, id, { lang }).you, attention: { ...limits(ctx) } } };
+  })());
 }
 function turnFor(s, body) {
   if (body.turn !== undefined && (!Number.isSafeInteger(body.turn) || body.turn < 1)) return null;
@@ -115,6 +136,7 @@ function turnFor(s, body) {
   return { turn: Math.max(s.turn, turn), reread: turn > s.turn ? rereadCost(s.ctx - s.fresh) : 0 };
 }
 export function lookCore(ctx, id, body, lang) {
+  return sessionSteps(ctx, id, (function* () {
   if (!tokenized(ctx.rt.w)) return failure(lang, 'not_found');
   if (!object(body)) return failure(lang, 'invalid_request');
   const s = sessionFor(ctx, id, body.wakeId);
@@ -154,14 +176,16 @@ export function lookCore(ctx, id, body, lang) {
       delivered = Math.max(delivered, p.inbox[i].seq);
     }
   }
-  const result = ctx.rt.exec('meter', { op: lines ? 'inbox' : 'look', agentId: id, wakeId: s.wakeId, day: earthDayKey(ctx), reread: next.reread, read: textWeight(text), ...(lines ? { delivered } : {}) }).result;
+  const result = (yield submit(ctx.rt,'meter', { op: lines ? 'inbox' : 'look', agentId: id, wakeId: s.wakeId, day: earthDayKey(ctx), reread: next.reread, read: textWeight(text), ...(lines ? { delivered } : {}) })).result;
   if (!result.ok) { if (['tokens_exhausted', 'cap_reached'].includes(result.error.code)) ctx.wakings.delete(id); return failed(lang, result); }
   if (coop) s.cooperationRead = (s.cooperationRead || 0) + cpLength(text);
   s.ctx += textWeight(text); s.fresh = textWeight(text); s.turn = next.turn; s.requests++;
   ctx.looks.set(id, { tick: s.tick, n: count + 1 });
   return { status: 200, json: { text, ...(cooperationPage ? { nextOffset: cooperationPage.nextOffset, version: cooperationPage.version, next: cooperationPage.next } : {}), bill: result.bill, you: tokenStatus(ctx, id, { lang }).you } };
+  })());
 }
 export function actTokens(ctx, id, body, lang) {
+  return sessionSteps(ctx, id, (function* () {
   if(materialsEnabled(ctx.rt.w)){
     const identity=requestIdentity(ctx.rt.w,{...body,agentId:id,lang});
     if(identity.error)return failed(lang,identity.error);
@@ -172,8 +196,8 @@ export function actTokens(ctx, id, body, lang) {
   const next = turnFor(s, body);
   if (!next) return failure(lang, 'invalid_request', { field: 'turn' });
   const w = ctx.rt.w, a = w.agents[id];
-  const result = ctx.rt.exec('act', { ...(materialsEnabled(w)?{requestId:body.requestId,requestTurn:body.turn??null,experimentGeneration:body.experimentGeneration??0}:{}), agentId: id, actions: body.actions, thought: body.thought ?? undefined, lang,
-    meter: { wakeId: s.wakeId, turn: next.turn, reread: next.reread, day: earthDayKey(ctx) } }).result;
+  const result = (yield submit(ctx.rt,'act', { ...(materialsEnabled(w)?{requestId:body.requestId,requestTurn:body.turn??null,experimentGeneration:body.experimentGeneration??0}:{}), agentId: id, actions: body.actions, thought: body.thought ?? undefined, lang,
+    meter: { wakeId: s.wakeId, turn: next.turn, reread: next.reread, day: earthDayKey(ctx) } })).result;
   if (!result.ok) { if (['tokens_exhausted', 'cap_reached'].includes(result.error.code)) ctx.wakings.delete(id); return failed(lang, result); }
   // Successful long outputs enter context at raw weight, not their multiplied
   // archive price. Failed/rolled-back actions and short fee receipts stay free.
@@ -193,7 +217,7 @@ export function actTokens(ctx, id, body, lang) {
     const moved = result.results.some(r => r.ok && r.type === 'move');
     const text = [...renderArrived(p, p.inbox, { lang }), ...(moved ? renderArrival(p, { lang }) : [])].join('\n');
     if (text) {
-      const metered = ctx.rt.exec('meter', { op: 'inbox', agentId: id, wakeId: s.wakeId, day: earthDayKey(ctx), reread: 0, read: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) }).result;
+      const metered = (yield submit(ctx.rt,'meter', { op: 'inbox', agentId: id, wakeId: s.wakeId, day: earthDayKey(ctx), reread: 0, read: textWeight(text), delivered: maxSeq(p.inbox, a.delivered) })).result;
       if (metered.ok) { if (coop) s.cooperationRead = (s.cooperationRead || 0) + cpLength(text);
   s.ctx += textWeight(text); s.fresh = textWeight(text); arrived = text; bill = metered.bill; }
       else { arrivedWithheld = p.inbox.length; ctx.wakings.delete(id); }
@@ -203,6 +227,7 @@ export function actTokens(ctx, id, body, lang) {
   const results = result.results.map(r => actionFeedback(r.ok ? r : { ...r, error: errorBody(lang, r.error.code, r.error, 2).error }, lang, { premise: w.premise, act: body.actions[r.index], tokenValues: tokenValues(w) }));
   return { status: 200, json: { ok: true, results, you: { ...result.you, ...tokenStatus(ctx, id, { lang }).you }, bill,
     ...(arrived !== undefined ? { arrived } : {}), ...(arrivedWithheld !== undefined ? { arrivedWithheld } : {}) } };
+  })());
 }
 
 // Presentation is applied to both new and cached receipts, never stored in the world.

@@ -251,6 +251,48 @@ test('slow invention review revalidates independence immediately before command'
   } finally { await e.close(); }
 });
 
+test('worker preparation revalidates adopter links before spending prayer points', async () => {
+  const { e, a, alice, prayerId, earn } = await setup();
+  try {
+    earn(1);
+    await e.rt.enableCompute({ readers: { freemem: () => 1024 ** 3 } });
+    assert.equal(e.rt.compute.mode, 'worker');
+    const before = JSON.stringify(e.rt.w.prayers), n = e.rt.log.n;
+    const call = e.rt.compute.call.bind(e.rt.compute);
+    e.rt.compute.call = async (op, cmd) => {
+      const result = await call(op, cmd);
+      if (op === 'prepare') e.app.ctx.accounts.unlinkAgents(alice.id, e.rt.w.id, [a.id]);
+      return result;
+    };
+    const response = await alice.call(replyPath(prayerId), { text: '不应消耗祈愿点' });
+    assert.equal(response.status, 403, JSON.stringify(response.json));
+    assert.equal(e.rt.log.n, n);
+    assert.equal(JSON.stringify(e.rt.w.prayers), before);
+  } finally { await e.rt.closeAsync(); await e.close(); }
+});
+
+test('worker preparation revalidates reviewer independence before awarding an invention', async () => {
+  const { e, a, chief, invent, link } = await setup();
+  try {
+    const { inventionId } = invent();
+    await e.rt.enableCompute({ readers: { freemem: () => 1024 ** 3 } });
+    assert.equal(e.rt.compute.mode, 'worker');
+    const n = e.rt.log.n;
+    const call = e.rt.compute.call.bind(e.rt.compute);
+    e.rt.compute.call = async (op, cmd) => {
+      const result = await call(op, cmd);
+      if (op === 'prepare') link(chief);
+      return result;
+    };
+    const response = await chief.call(reviewPath(inventionId), { decision: 'approved', reason: '不应自审' });
+    assert.equal(response.status, 403, JSON.stringify(response.json));
+    assert.equal(response.json.error.code, 'self_review');
+    assert.equal(e.rt.log.n, n);
+    assert.equal(e.rt.w.prayers.inventions[inventionId].status, 'pending');
+    assert.equal(e.rt.w.prayers.accounts[a.id]?.balance || 0, 0);
+  } finally { await e.rt.closeAsync(); await e.close(); }
+});
+
 test('premise 0 and 1 feature stays unavailable with no prayer state', async () => {
   for (const premise of [0, 1]) {
     const { e, alice, chief } = await setup({ premise });

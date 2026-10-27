@@ -83,7 +83,7 @@ export async function register(req, res, ctx, url) {
   if (!body) return;
   const agentToken = issueSecret();
   const ownerKey = issueSecret();
-  const { result } = ctx.rt.exec('register', {
+  const { result } = await ctx.rt.submit('register', {
     name: body.name, bio: str(body.bio), soul: body.soul, lang: str(body.lang), model: body.model, creatorName: str(body.creatorName),
     tokenHash: sha256hex(agentToken), ownerKeyHash: sha256hex(ownerKey), ...(tokenized(ctx.rt.w) ? { dailyCap: body.dailyCap } : {}),
   });
@@ -106,7 +106,7 @@ export async function adopt(req, res, ctx, url) {
   if (!body) return;
   const agentToken = issueSecret();
   const ownerKey = issueSecret();
-  const { result } = ctx.rt.exec('adopt', {
+  const { result } = await ctx.rt.submit('adopt', {
     soulId: body.soulId, model: body.model, creatorName: str(body.creatorName),
     tokenHash: sha256hex(agentToken), ownerKeyHash: sha256hex(ownerKey), ...(tokenized(ctx.rt.w) ? { dailyCap: body.dailyCap } : {}),
   });
@@ -132,7 +132,7 @@ export async function foster(req, res, ctx, url) {
   if (!body) return;
   const agentToken = issueSecret();
   const ownerKey = issueSecret();
-  const { result } = ctx.rt.exec('foster', {
+  const { result } = await ctx.rt.submit('foster', {
     agentId: body.agentId, model: body.model, creatorName: str(body.creatorName),
     tokenHash: sha256hex(agentToken), ownerKeyHash: sha256hex(ownerKey), ...(tokenized(ctx.rt.w) ? { dailyCap: body.dailyCap } : {}),
   });

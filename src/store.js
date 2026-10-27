@@ -13,12 +13,12 @@ export const commandsPath = (dir) => join(dir, 'commands.jsonl');
 export const eventsPath = (dir) => join(dir, 'events.jsonl');
 
 /** 原子写快照 */
-export function writeSnapshot(dir, w) {
+export function writeSnapshot(dir, w, serialized) {
   mkdirSync(dir, { recursive: true });
   const tmp = join(dir, 'snapshot.json.tmp');
   const fd = openSync(tmp, 'w');
   try {
-    writeSync(fd, JSON.stringify(w));
+    writeSync(fd, serialized ?? JSON.stringify(w));
     fsyncSync(fd);
   } finally {
     closeSync(fd);

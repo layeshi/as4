@@ -183,7 +183,8 @@ test('admin server status requires a signed-in administrator and returns only ag
     assert.equal(r.status, 200);
     assert.equal(r.headers.get('cache-control'), 'no-store');
     assert.deepEqual(r.json.users, { total: 4, active: 2, disabled: 2, admins: 2, wechatLinked: 1, createdLast24Hours: 1, createdLast7Days: 2 });
-    assert.deepEqual(Object.keys(r.json).sort(), ['cpu', 'memory', 'network', 'sampledAt', 'uptime', 'users']);
+    assert.deepEqual(Object.keys(r.json).sort(), ['compute', 'cpu', 'memory', 'network', 'sampledAt', 'uptime', 'users']);
+    assert.equal(r.json.compute,null,'direct test runtime has no online computer');
     assert.ok(Number.isFinite(Date.parse(r.json.sampledAt)));
     assert.deepEqual(Object.keys(r.json.cpu).sort(), ['busyPercent', 'cores', 'loadavg']);
     assert.equal(r.json.cpu.loadavg.length, 3);

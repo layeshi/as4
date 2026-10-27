@@ -27,6 +27,7 @@ const rt = Runtime.open(cfg, {
   },
 });
 const app = createApp(rt, cfg);
+await rt.enableCompute();
 
 app.server.listen(cfg.port, cfg.host, () => {
   console.log(`后人纪 · ${rt.w.id}（第 ${rt.engine.physics === 2 ? '二' : '一'}纪 · 第 ${rt.w.clock.tick} 刻，种子 ${rt.w.seed}，地图 ${rt.w.map || 'classic'}）`);
@@ -39,8 +40,10 @@ const shutdown = async (signal) => {
   if (closing) return;
   closing = true;
   console.log(`\n收到 ${signal}，正在保存快照并退出……`);
+  rt.stopped = true;
+  if (rt.timer) clearTimeout(rt.timer);
   await app.close();
-  rt.close();
+  await rt.closeAsync();
   process.exit(0);
 };
 process.on('SIGINT', () => shutdown('SIGINT'));

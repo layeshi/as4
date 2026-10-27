@@ -1,0 +1,10 @@
+{
+  "exitCode": 0,
+  "productionStartedAtUnchanged": true,
+  "taskAfter": "Running",
+  "temporaryDirectory": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\as4-adaptive-99fbf92a8a43",
+  "platform": "win32",
+  "node": "v24.22.1",
+  "taskBefore": "Running",
+  "productionPidUnchanged": true
+}

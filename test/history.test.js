@@ -19,7 +19,7 @@ async function setup(t) {
   writeFileSync(hiddenPhysicsFile, JSON.stringify({ version: 1, regrowth: { baseByZone: { wilds: 20, scrapyard: 15, solarfield: 10 }, thresholdByZone: { wilds: 30, scrapyard: 25, solarfield: 15 }, factorPermille: 500 }, construction: { fullActionsPerTick: 2, factorPermille: 500 } }));
   const cfg = { ...loadConfig({}, []), dataDir, worldId: 'history', physics: 2, premise: 6, map: 'compact-materials-v1', shellSlots: 0, hiddenPhysicsFile, seed: 'history', allowLocalModels: true };
   const rt = Runtime.open(cfg, { logger: {} });
-  const ctx = { rt, cfg, accounts: { linksOf: () => [] } };
+  const ctx = { rt, cfg, accounts: { linksOf: () => [], get: id => ({id,status:'active'}) } };
   const archive = new HistoryArchive(rt); ctx.history = archive;
   await archive.ready;
   t.after(async () => { await archive.close(); rt.close(); rmSync(dataDir, { recursive: true, force: true }); });
@@ -142,7 +142,7 @@ test('a verified account merge preserves access to archived resident history', a
   const { ctx, archive, id } = await setup(t);
   const branch = structuredClone(archive.meta); branch.id = 'archived-before-merge'; archive.index.branches.push(branch);
   copyFileSync(archive.file(archive.branchId), archive.file(branch.id));
-  ctx.accounts.get = id => id === 'alice' ? { status: 'disabled', mergedTo: 'bob' } : { status: 'active' };
+  ctx.accounts.get = id => id === 'alice' ? { id, status: 'disabled', mergedTo: 'bob' } : { id, status: 'active' };
   const exports = new ExportManager(ctx, archive); t.after(() => exports.close());
   const job = await exports.create({ id: 'bob' }, { branchId: branch.id, agentId: id });
   await exports.idle(); assert.equal(exports.get({ id: 'bob' }, job.id).status, 'ready'); assert.ok(exports.get({ id: 'bob' }, job.id).records > 0);
@@ -232,4 +232,12 @@ test('manual backfill rejects inherited object names as report kinds', async t =
   const { ctx, archive } = await setup(t), reports = new ReportManager(ctx, archive);
   t.after(() => reports.close());
   await assert.rejects(reports.request({ kind: 'toString', fromDay: 0 }), e => e.status === 400);
+});
+
+ test('export publication refuses an account disabled during asynchronous generation', async t => {
+  const {ctx,archive,id}=await setup(t);
+  const exports=new ExportManager(ctx,archive); t.after(()=>exports.close());
+  const job=await exports.create({id:'alice'},{agentId:id});
+  ctx.accounts.get=accountId=>({id:accountId,status:'disabled'});
+  await exports.idle(); assert.equal(exports.get({id:'alice'},job.id).status,'failed');
 });

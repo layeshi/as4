@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-27",
+  "baseCommit": "609fd27245b1e95e4a9957a685c04827e5f4bebf",
+  "branch": "codex/adaptive-online-compute",
+  "completeSuite": {
+    "command": "npm test",
+    "node": "v22.14.0",
+    "platform": "darwin-arm64",
+    "tests": 2173,
+    "pass": 2172,
+    "fail": 0,
+    "skipped": 1,
+    "durationMs": 193269.872208,
+    "log": "complete-tests.tap.gz",
+    "skippedReason": "HOUREN_FROZEN_WORLDS archive fixture not configured"
+  },
+  "linux": {
+    "command": "node --test test/adaptive-compute.test.js test/prayers-http.test.js test/event-memory.test.js test/command-receipt.test.js test/world-snapshots.test.js test/accounts.test.js",
+    "node": "v24.22.1",
+    "platform": "linux-arm64",
+    "cpus": 4,
+    "memoryBytes": 2147483648,
+    "tests": 57,
+    "pass": 57,
+    "fail": 0,
+    "log": "linux-tests.tap.gz",
+    "finalSourceManifestMatched": true
+  },
+  "realCgroupProbe": {
+    "cpus": 1.5,
+    "memoryBytes": 805306368,
+    "expectedServiceBudgetBytes": 603979776,
+    "result": "passed",
+    "log": "linux-resource-probe.json"
+  },
+  "independentReview": {
+    "remainingConfirmedP1P2": 0,
+    "finalRegressionTests": 2,
+    "finalRegressionPass": 2
+  },
+  "windows": {
+    "status": "passed",
+    "node": "v24.22.1",
+    "platform": "win32-x64",
+    "tests": 57,
+    "pass": 57,
+    "fail": 0,
+    "exitCode": 0,
+    "testConcurrency": 1,
+    "priority": "BelowNormal",
+    "productionPidUnchanged": true,
+    "productionStartedAtUnchanged": true,
+    "productionTaskState": "Running",
+    "productionDeployment": false,
+    "log": "windows-tests.tap.gz",
+    "resources": "windows-resources.json",
+    "temporaryDirectoryRemoved": true,
+    "cleanup": "windows-cleanup.json",
+    "finalSourceManifestMatched": true
+  },
+  "frontend": {
+    "authoring": "Claude Code desktop Opus 5.5",
+    "independentBrowserCheck": true,
+    "screenshot": "admin-resources.png"
+  },
+  "performance": "summary.json",
+  "productionDeployment": false,
+  "pathRegression": {
+    "command": "node --test test/adaptive-compute.test.js",
+    "tests": 22,
+    "pass": 22,
+    "fail": 0,
+    "log": "path-regression-tests.tap.gz",
+    "change": "Use fileURLToPath for Windows fixture paths"
+  },
+  "sourceManifest": "source-manifest.json"
+}

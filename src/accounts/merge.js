@@ -1,3 +1,4 @@
+import { runSteps, submit } from '../compute/steps.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { durableFile } from '../durable-file.js';
 import { fail, publicUser, wechatBindings, MAX_LINKS } from './store.js';
@@ -55,7 +56,7 @@ export class AccountMerger {
     this.tickets.delete(ticket);
     // No new authenticated work can start while these accounts are locked.
     await Promise.all(Object.keys(runners.records).filter(id => [source.id, target.id].includes(runners.records[id].accountId)).map(id => runners.stop(id)));
-    this.finish(plan);
+    await this.finish(plan);
     for (const id of plan.runners) if (runners.records[id]?.enabled && runners.serverURL && !runners.closing && ['awake', 'dormant'].includes(rt.w.agents[id]?.status)) {
       try { runners.start(id); } catch { /* Durable merge is complete; resume can be retried from the resident page. */ }
     }
@@ -65,10 +66,11 @@ export class AccountMerger {
     for (const u of this.ctx.accounts.data.users) if (u.mergePending && typeof u.mergePending === 'object') this.finish(u.mergePending);
   }
   finish(plan) {
+    return runSteps((function* () {
     const { rt, hosted, runners, accounts } = this.ctx;
     if (rt.w.id !== plan.world || (rt.w.premise !== 6 && rt.w.premise !== 7)) throw new Error('Account merge requires its original world');
     hosted.billing.mergeAccounts(plan.id, plan.from, plan.to);
-    const result = rt.exec('account', { op: 'merge_accounts', accountId: plan.to, from: plan.from, requestId: plan.id }).result;
+    const result = (yield submit(rt, 'account', { op: 'merge_accounts', accountId: plan.to, from: plan.from, requestId: plan.id }, () => { if (!accounts.get(plan.to)?.mergePending || !accounts.get(plan.from)?.mergePending) throw new Error('Merge authority expired'); })).result;
     if (!result.ok) throw new Error('Account merge world receipt failed');
     const target = accounts.get(plan.to);
     for (const id of plan.runners) {
@@ -90,6 +92,7 @@ export class AccountMerger {
       delete from.mergePending; delete to.mergePending;
       from.updatedAt = to.updatedAt = new Date().toISOString();
     });
+    }).call(this));
   }
   mergeUsage(from, to) {
     const store = this.ctx.runners.usage, next = structuredClone(store.agents);

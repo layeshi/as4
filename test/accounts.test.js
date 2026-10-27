@@ -70,7 +70,8 @@ test('registration, profile, login, logout, persistence and secret boundaries', 
     assert.equal((await c.call('/api/account/register', person('ALICE'))).status, 409);
     const disk = readFileSync(join(e.dir, 'accounts.json'), 'utf8');
     assert.ok(!disk.includes(pass)); assert.ok(!JSON.stringify(r.json).includes('passwordHash'));
-    assert.equal(statSync(join(e.dir, 'accounts.json')).mode & 0o777, 0o600);
+    // Windows access is governed by NTFS ACLs, not POSIX mode bits.
+    if (process.platform !== 'win32') assert.equal(statSync(join(e.dir, 'accounts.json')).mode & 0o777, 0o600);
     const fresh = new AccountStore(e.dir);
     assert.equal((await fresh.login(person('alice'))).displayName, 'New name');
     assert.equal(fresh.session(c.cookie.split('=')[1]), null, 'sessions do not survive a restart');

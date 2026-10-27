@@ -257,7 +257,7 @@ export async function postWeatherVote(req, res, ctx, url) {
   if (voters.includes(primary) || voters.includes(ipUa)) {
     return sendError(res, lang, 'rate_limited', { month: ctx.rt.w.weather.votes.month, tallies: { ...ctx.rt.w.weather.votes.tallies } }, headers);
   }
-  const { result } = ctx.rt.exec('weather_vote', { voterHash: primary, type: parsed.value.type });
+  const { result } = await ctx.rt.submit('weather_vote', { voterHash: primary, type: parsed.value.type });
   if (!result.ok) return sendEngineError(res, lang, result.error, headers);
   sendJson(res, 200, { month: result.month, tallies: result.tallies }, headers);
 }

@@ -1,7 +1,8 @@
+import { WorldComputer } from './compute/online.js';
 import { archivedWorlds } from './world-archives.js';
 // 运行时：把世界、命令日志、事件存储、快照与刻调度器接在一起。
 //
-// HTTP 层与调度器只能通过 exec() 改变世界。历史语义先记录请求再执行；法律语义 2
+// 在线 HTTP 与调度器通过 submit() 排队；exec() 保留给启动和同步工具。历史语义先记录请求再执行；法律语义 2
 // 在隔离副本执行，持久化请求与结果回执后才提交状态、事件和唤醒。
 // 每日结算发生的那条 tick 命令执行完之后写快照（所以快照的状态与 commandN 严格对应）。
 
@@ -111,15 +112,14 @@ export class Runtime {
 
   /** 执行一条命令；新语义先准备并持久化回执，再公开状态。返回 { result, events, cmd } */
   exec(type, payload = {}) {
+    if (this.compute) throw new Error('Online world writes must use submit()');
+    return this.executeInline(type, payload);
+  }
+
+  executeInline(type, payload = {}) {
     if (this.receiptFailed) throw new Error('Runtime is stopped after a receipt failure');
-    const before = this.commandSubs.size ? Object.fromEntries(Object.values(this.w.agents).map(a => [a.id, Object.fromEntries(['place', 'energy', 'coins', 'basic', 'materials'].filter(k => a[k] !== undefined).map(k => [k, a[k]]))])) : {};
-    const wasPaused = this.w.paused;
-    const wasExperimentPaused = this.w.experimentControl?.active === true;
-    const wasFaultProtected = !!this.w.lawSemantics?.protection;
-    const wasCapacityProtected = !!this.w.ruleExecution?.protection;
-    if (type === 'admin' && payload.op === 'pause' && payload.args?.experiment === true && (!wasPaused || !wasExperimentPaused)) {
-      payload = { ...payload, args: { ...payload.args, remainingMs: this.nextTickAt === null ? this.remainingMs : Math.max(0, this.nextTickAt - Date.now()) } };
-    }
+    const context = this.commandContext(type, payload);
+    ({ payload } = context);
     let cmd, out, committedCommand;
     const durable = usesLawSemantics2(this.w) || (this.w.physics === 2 && type === 'admin' && payload.op === 'law_semantics' && payload.args?.version === 2);
     if (durable) {
@@ -145,6 +145,23 @@ export class Runtime {
         out = { result: { ok: false, error: { code: 'internal' } }, events: this.engine.drainEvents(this.w) };
       }
     }
+    return this.publishCommand(out, cmd, { ...context, durable, committedCommand });
+  }
+
+  commandContext(type, payload) {
+    const before = this.commandSubs.size ? Object.fromEntries(Object.values(this.w.agents).map(a => [a.id, Object.fromEntries(['place', 'energy', 'coins', 'basic', 'materials'].filter(k => a[k] !== undefined).map(k => [k, a[k]]))])) : {};
+    const wasPaused = this.w.paused;
+    const wasExperimentPaused = this.w.experimentControl?.active === true;
+    const wasFaultProtected = !!this.w.lawSemantics?.protection;
+    const wasCapacityProtected = !!this.w.ruleExecution?.protection;
+    if (type === 'admin' && payload.op === 'pause' && payload.args?.experiment === true && (!wasPaused || !wasExperimentPaused)) {
+      payload = { ...payload, args: { ...payload.args, remainingMs: this.nextTickAt === null ? this.remainingMs : Math.max(0, this.nextTickAt - Date.now()) } };
+    }
+    return { before, wasPaused, wasExperimentPaused, wasFaultProtected, wasCapacityProtected, payload };
+  }
+
+  publishCommand(out, cmd, { before, wasPaused, wasExperimentPaused, wasFaultProtected, wasCapacityProtected, durable, committedCommand }) {
+    const type = cmd.type;
     const controlChanged = (!wasFaultProtected && !!this.w.lawSemantics?.protection) || wasPaused !== this.w.paused || (!wasExperimentPaused && this.w.experimentControl?.active) || (!wasCapacityProtected && !!this.w.ruleExecution?.protection);
     if (controlChanged) {
       if (this.w.paused) {
@@ -187,7 +204,30 @@ export class Runtime {
       try { observer({ ...out, cmd: committedCommand ?? cmd, before }); }
       catch (error) { this.logger.error?.('提交观察者失败', error.message); }
     }
+    this.preparedSnapshot = null;
     return { ...out, cmd };
+  }
+
+  async enableCompute(options) {
+    if (this.compute) return;
+    const compute = new WorldComputer(this, options);
+    try { await compute.start(); this.compute = compute; }
+    catch (error) {
+      await compute.close();
+      if (this.cfg.worldExecution !== 'auto') throw error;
+      this.logger.warn?.('World worker unavailable; using ordered inline mode', error.message);
+      const fallback=new WorldComputer(this, options); fallback.mode='inline'; await fallback.start(); this.compute=fallback;
+    }
+  }
+  submit(type, payload = {}, options) {
+    return this.compute ? this.compute.submit(type, payload, options) : Promise.resolve().then(() => { options?.authorize?.(); return this.exec(type, payload); });
+  }
+  async closeAsync() {
+    this.stopped = true;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    await this.compute?.close();
+    this.snapshot();
   }
 
   failStop() {
@@ -205,7 +245,7 @@ export class Runtime {
       try { this.events.sync(); }
       catch (error) { this.failStop(); throw error; }
     }
-    writeSnapshot(this.dir, this.w);
+    writeSnapshot(this.dir, this.w, this.preparedSnapshot?.n === this.w.commandN ? this.preparedSnapshot.text : undefined);
     this.receiptEventsPending = false;
   }
 
@@ -216,7 +256,7 @@ export class Runtime {
 
   /** 推进一刻（调度器与 admin/tick 用） */
   tickNow() {
-    return this.exec('tick');
+    return this.compute ? this.submit('tick') : this.exec('tick');
   }
 
   /** 暂停时不挂定时器；恢复后继续剩余时间，不补刻。 */
@@ -233,11 +273,15 @@ export class Runtime {
     this.timer = setTimeout(() => {
       this.timer = null;
       if (this.stopped || this.w.paused) return;
-      this.tickNow();
-      if (this.w.paused || this.stopped) return;
-      this.nextTickAt += this.cfg.tickMs;
-      if (this.nextTickAt < Date.now()) this.nextTickAt = Date.now() + this.cfg.tickMs;
-      this.scheduleTick();
+      const finish = () => {
+        if (this.w.paused || this.stopped) return;
+        this.nextTickAt += this.cfg.tickMs;
+        if (this.nextTickAt < Date.now()) this.nextTickAt = Date.now() + this.cfg.tickMs;
+        this.scheduleTick();
+      };
+      const fail = error => { this.logger.error?.('Tick failed', error.message); if (!this.receiptFailed) finish(); };
+      try { const result = this.compute ? this.submit('tick', {}, { skipRequestAuthority: true }) : this.tickNow(); if (result?.then) result.then(finish, fail); else finish(); }
+      catch (error) { fail(error); }
     }, Math.max(0, this.nextTickAt - Date.now()));
   }
 

@@ -66,8 +66,8 @@ function diff(before, after, path = [], changes = []) {
   }
   return changes;
 }
-export function makeReceipt(before, after, out) {
-  return { version: 1, before: stateHash(before), after: stateHash(after), changes: diff(before, after), out };
+export function makeReceipt(before, after, out, beforeHash) {
+  return { version: 1, before: beforeHash ?? stateHash(before), after: stateHash(after), changes: diff(before, after), out };
 }
 export function applyReceipt(w, cmd) {
   const receipt = cmd.receipt;

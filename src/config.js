@@ -28,6 +28,12 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
   const demo = argv.includes('--demo');
   const reset = argv.includes('--reset');
   const cfg = {
+    resourceCpu: num(env.RESOURCE_CPU_LIMIT, null),
+    resourceMemoryMb: num(env.RESOURCE_MEMORY_MB, null),
+    computeWorkers: num(env.COMPUTE_WORKERS, null),
+    computeCacheMb: num(env.COMPUTE_CACHE_MB, null),
+    computeQueueLimit: num(env.COMPUTE_QUEUE_LIMIT, 256),
+    worldExecution: env.WORLD_EXECUTION_MODE || 'auto',
     port: num(env.PORT, 8787),
     host: env.HOST || '127.0.0.1',
     worldId: env.WORLD_ID || 'baihua',
@@ -94,6 +100,10 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2), { de
   if (cfg.loginCaptcha === 'turnstile' && !cfg.turnstileSecretKey) throw new Error('LOGIN_CAPTCHA=turnstile 必须配置 Turnstile 密钥');
   if (!Number.isInteger(cfg.altchaMaxCounter) || cfg.altchaMaxCounter < 500 || cfg.altchaMaxCounter > 20000) throw new Error('ALTCHA_MAX_COUNTER 必须是 500–20000 的整数');
   if (!Number.isInteger(cfg.smsDailyLimit) || cfg.smsDailyLimit < 1) throw new Error('SMS_DAILY_LIMIT 必须是正整数');
+  if (!['auto', 'worker', 'inline'].includes(cfg.worldExecution)) throw new Error('WORLD_EXECUTION_MODE must be auto, worker or inline');
+  for (const key of ['resourceCpu', 'resourceMemoryMb', 'computeWorkers', 'computeCacheMb', 'computeQueueLimit']) {
+    if (cfg[key] !== null && (!Number.isFinite(cfg[key]) || cfg[key] < (key === 'computeCacheMb' ? 0 : key === 'resourceCpu' ? 0.01 : 1) || (key !== 'resourceCpu' && !Number.isSafeInteger(cfg[key])))) throw new Error(`Invalid compute configuration: ${key}`);
+  }
   return cfg;
 }
 

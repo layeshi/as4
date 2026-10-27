@@ -1,3 +1,4 @@
+import { runSteps, submit } from '../compute/steps.js';
 import { durableFile } from '../durable-file.js';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -20,7 +21,14 @@ export class PublicRoleService {
     this.budget.outbox??={};
     this.recovered=new Set(Object.keys(this.budget.reservations));
     for(const r of Object.values(this.budget.reservations))this.budget.days[r.day]=(this.budget.days[r.day]??0)+r.amount;
-    this.budget.reservations={};if(this.recovered.size)this.persist();
+    this.budget.reservations={};
+    for(const id of this.recovered){
+      const q=ctx.rt.w.roleRequests?.[id],role=ctx.rt.w.publicRoles?.[q?.roleId];
+      // Persist the fallback before clearing an ambiguous model reservation so
+      // another restart or a full compute queue cannot trigger a second call.
+      if(q?.status==='pending'&&role)this.budget.outbox[id]??={text:this.fixed(role),source:'fixed'};
+    }
+    if(this.recovered.size)this.persist();
     if(existsSync(this.configFile)){
       const key=readFileSync(this.keyFile),e=JSON.parse(readFileSync(this.configFile,'utf8'));
       const d=createDecipheriv('aes-256-gcm',key,Buffer.from(e.iv,'hex'));d.setAuthTag(Buffer.from(e.tag,'hex'));
@@ -99,9 +107,21 @@ export class PublicRoleService {
     delete this.budget.reservations[id];this.persist();
   }
   publish(q,text,source) {
+    return runSteps((function* () {
     if(this.closed||this.ctx.rt.w.paused)return;
-    const result=this.ctx.rt.exec('role_reply',{requestId:q.id,text:[...text].slice(0,300).join(''),source}).result;
-    if(result.ok||result.error?.code==='conflict'){delete this.budget.outbox[q.id];this.persist();}
+    const result=(yield submit(this.ctx.rt,'role_reply',{requestId:q.id,text:[...text].slice(0,300).join(''),source})).result;
+    if(result.ok||result.error?.code==='conflict'){delete this.budget.outbox[q.id];this.recovered.delete(q.id);this.persist();}
+    }).call(this));
+  }
+  reply(q, publish) {
+    // A queued world command is still in flight even when no model is running.
+    this.jobs.set(q.id,{controller:new AbortController()});
+    const failed=error=>{if(error.code!=='compute_busy')this.fault=true;};
+    try {
+      const pending=publish();
+      if(pending?.then)pending.catch(failed).finally(()=>this.jobs.delete(q.id));
+      else this.jobs.delete(q.id);
+    } catch(error) { this.jobs.delete(q.id);failed(error); }
   }
   pump() {
     if(this.closed||this.fault)return;
@@ -112,10 +132,10 @@ export class PublicRoleService {
       if(q.status!=='pending'||this.jobs.has(q.id))continue;
       if(this.jobs.size>=2)break;
       const role=this.ctx.rt.w.publicRoles[q.roleId];
-      if(!rolePresent(this.ctx.rt.w,role)||q.generation!==(this.ctx.rt.w.experimentControl?.generation??0)){this.ctx.rt.exec('role_reply',{requestId:q.id,text:this.fixed(role),source:'fixed'});continue;}
-      if(this.budget.outbox[q.id]){const answer=this.budget.outbox[q.id];this.publish(q,answer.text,answer.source);continue;}
-      if(this.recovered.has(q.id)||!this.config||['archivist','wellkeeper'].includes(role.id)){this.recovered.delete(q.id);this.publish(q,this.fixed(role),'fixed');continue;}
-      this.run(q,role).catch(()=>{this.fault=true;});
+      if(!rolePresent(this.ctx.rt.w,role)||q.generation!==(this.ctx.rt.w.experimentControl?.generation??0)){this.reply(q,()=>this.publish(q,this.fixed(role),'fixed'));continue;}
+      if(this.budget.outbox[q.id]){const answer=this.budget.outbox[q.id];this.reply(q,()=>this.publish(q,answer.text,answer.source));continue;}
+      if(this.recovered.has(q.id)||!this.config||['archivist','wellkeeper'].includes(role.id)){this.reply(q,()=>this.publish(q,this.fixed(role),'fixed'));continue;}
+      this.run(q,role).catch(error=>{if(error.code!=='compute_busy')this.fault=true;});
     }
   }
   async run(q,role) {
@@ -151,7 +171,7 @@ export class PublicRoleService {
         this.budget.diagnostics=this.budget.diagnostics.filter(d=>Date.parse(d.at)>=this.now()-30*86400000);
         if(source==='model')this.budget.memories[role.id]=[...(this.budget.memories[role.id]??[]),text].slice(-2);
         this.budget.outbox[q.id]={text,source};
-        this.persist();this.publish(q,text,source);
+        this.persist();await this.publish(q,text,source);
       }finally{this.jobs.delete(q.id);}
     }
   }

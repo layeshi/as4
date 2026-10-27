@@ -1,3 +1,4 @@
+import { runSteps, submit } from '../compute/steps.js';
 import { requestIdentity } from '../e2/engine/act-receipts.js';
 import { activeWaking } from '../e2/engine/tokens.js';
 import { tokenStatus, rulesCore, wakeCore, lookCore, actTokens, materialActResponse } from './tokens.js';
@@ -66,6 +67,7 @@ export async function getMe(req, res, ctx, url) {
  * 不合法的请求不进命令日志。
  */
 export function actCore(ctx, id, body, lang) {
+  return runSteps((function* () {
   const { rt, cursors } = ctx;
   const protocol = rt.engine.protocol;
   const fail = (code, extra = {}) => ({ status: httpStatusFor(code), json: errorBody(lang, code, extra, protocol) });
@@ -97,12 +99,12 @@ export function actCore(ctx, id, body, lang) {
       if (issues.length) return fail('invalid_request', { field: `actions[${i}]`, issues });
     }
   }
-  if (tokenized(w)) return actTokens(ctx, id, body, lang);
+  if (tokenized(w)) return yield actTokens(ctx, id, body, lang);
   // ackSeq：这位 agent 到此刻为止已经被送达的最大收件序号（由内存游标而来）
   const payload = { agentId: id, thought: body.thought ?? undefined, actions: body.actions, ackSeq: cursors.get(id) || 0 };
   // 第二纪：请求的语言进入命令（draft 的说明、read { law } 的读法按它取），所以回放一致；第一纪的命令载荷不变
   if (protocol === 2) payload.lang = lang;
-  const { result } = rt.exec('act', payload);
+  const { result } = yield submit(rt, 'act', payload);
   if (!result.ok) {
     const { code, ...extra } = result.error;
     return fail(code, extra);
@@ -117,6 +119,7 @@ export function actCore(ctx, id, body, lang) {
     return { ...r, error: { code: err.code, message: hint?.[lang] ?? errorMessage(lang, err.code) } };
   });
   return { status: 200, json: { ok: true, results, you: result.you } };
+  })());
 }
 
 /**
@@ -187,7 +190,7 @@ export async function postAct(req, res, ctx, url) {
   if (!id) return;
   const parsed = await readJson(req);
   if (!parsed.ok) return sendError(res, lang, parsed.code);
-  const r = actCore(ctx, id, parsed.value, tokenized(ctx.rt.w) && parsed.value?.lang === 'en' ? 'en' : lang);
+  const r = await actCore(ctx, id, parsed.value, tokenized(ctx.rt.w) && parsed.value?.lang === 'en' ? 'en' : lang);
   sendJson(res, r.status, r.json);
 }
 
@@ -198,7 +201,7 @@ const tokenRequest = core => async (req, res, ctx, url) => {
   if (!id) return;
   const body = await readJson(req);
   if (!body.ok) return sendError(res, lang, body.code);
-  const r = core(ctx, id, body.value, lang);
+  const r = await core(ctx, id, body.value, lang);
   sendJson(res, r.status, r.json);
 };
 async function getTokenRules(req, res, ctx, url) {

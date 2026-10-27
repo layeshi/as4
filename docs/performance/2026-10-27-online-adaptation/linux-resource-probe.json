@@ -1,0 +1,12 @@
+{
+  "node": "v24.22.1",
+  "platform": "linux",
+  "cpu": 1.5,
+  "slots": 1,
+  "memory": 805306368,
+  "budget": 603979776,
+  "cacheBytes": 60397977.6,
+  "available": 794783744,
+  "high": null,
+  "constraintSource": "cgroup"
+}

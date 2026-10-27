@@ -1,0 +1,102 @@
+{
+  "node": "v22.14.0",
+  "platform": "darwin",
+  "availableParallelism": 12,
+  "baseline": "609fd27245b1e95e4a9957a685c04827e5f4bebf",
+  "note": "Limited local online Runtime tick path with HistoryArchive, synthetic P7 residents/history; no HTTP listeners/models; not production capacity data.",
+  "results": [
+    {
+      "syntheticLedgerRecords": 0,
+      "residents": 12,
+      "worldBytes": 208283,
+      "normalCount": 11,
+      "normalMedianMs": {
+        "exec": 10.795,
+        "prepare": 1.125,
+        "receipt": 4.213,
+        "persist": 4.081,
+        "commit": 1.365,
+        "events": 0.002,
+        "history": 8.31,
+        "snapshot": 0
+      },
+      "dailySamplesMs": [
+        {
+          "tick": 12,
+          "exec": 30.379,
+          "prepare": 8.389,
+          "receipt": 5.914,
+          "persist": 4.719,
+          "commit": 1.652,
+          "events": 0.151,
+          "history": 12.621,
+          "snapshot": 9.228
+        }
+      ],
+      "rssBytes": 109232128,
+      "receiptReplayMatched": true
+    },
+    {
+      "syntheticLedgerRecords": 5000,
+      "residents": 12,
+      "worldBytes": 1078283,
+      "normalCount": 11,
+      "normalMedianMs": {
+        "exec": 46.318,
+        "prepare": 7.188,
+        "receipt": 23.492,
+        "persist": 4.536,
+        "commit": 10.642,
+        "events": 0.002,
+        "history": 8.326,
+        "snapshot": 0
+      },
+      "dailySamplesMs": [
+        {
+          "tick": 12,
+          "exec": 69.389,
+          "prepare": 9.249,
+          "receipt": 27.122,
+          "persist": 9.564,
+          "commit": 11.807,
+          "events": 0.153,
+          "history": 12.597,
+          "snapshot": 11.189
+        }
+      ],
+      "rssBytes": 181321728,
+      "receiptReplayMatched": true
+    },
+    {
+      "syntheticLedgerRecords": 20000,
+      "residents": 12,
+      "worldBytes": 3688283,
+      "normalCount": 11,
+      "normalMedianMs": {
+        "exec": 152.581,
+        "prepare": 26.848,
+        "receipt": 80.819,
+        "persist": 4.543,
+        "commit": 40.523,
+        "events": 0.003,
+        "history": 8.25,
+        "snapshot": 0
+      },
+      "dailySamplesMs": [
+        {
+          "tick": 12,
+          "exec": 181.675,
+          "prepare": 28.425,
+          "receipt": 91.786,
+          "persist": 5.047,
+          "commit": 39.12,
+          "events": 0.207,
+          "history": 13.444,
+          "snapshot": 16.739
+        }
+      ],
+      "rssBytes": 303054848,
+      "receiptReplayMatched": true
+    }
+  ]
+}

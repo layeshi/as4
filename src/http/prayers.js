@@ -73,25 +73,28 @@ function commandResult(res, url, result) {
 }
 
 export const prayerRoutes = [
-  ['GET', '/api/public/prayers', accountWrap(({ res, ctx, url }) => {
+  ['GET', '/api/public/prayers', accountWrap(async({ res, ctx, url }) => {
     sendJson(res, 200, publicView(ctx, residentFilter(url)));
   })],
-  ['POST', /^\/api\/account\/prayers\/([^/]+)\/reply$/, accountWrap(({ res, ctx, url, params, body, actor, authorize }) => {
+  ['POST', /^\/api\/account\/prayers\/([^/]+)\/reply$/, accountWrap(async({ res, ctx, url, params, body, actor, authorize }) => {
     const prayerId = refId(params[0], 'pr');
-    // No await between this fresh check, the linked-token check and rt.exec.
-    authorize();
-    const w = ctx.rt.w; enabled(w);
-    const prayer = own(w.prayers.prayers, prayerId);
-    if (!prayer) fail(404, 'not_found', '祈祷记录不存在。');
-    const a = own(w.agents, prayer.agentId), link = linksFor(ctx, actor, a);
-    if (!link.linked) fail(403, link.stale ? 'stale_link' : 'forbidden', '请使用当前有效关联此居民的账号。');
-    const { result } = ctx.rt.exec('prayer_reply', {
+    const authorizeReply = () => {
+      authorize();
+      const w = ctx.rt.w; enabled(w);
+      const prayer = own(w.prayers.prayers, prayerId);
+      if (!prayer) fail(404, 'not_found', '祈祷记录不存在。');
+      const a = own(w.agents, prayer.agentId), link = linksFor(ctx, actor, a);
+      if (!link.linked) fail(403, link.stale ? 'stale_link' : 'forbidden', '请使用当前有效关联此居民的账号。');
+      return a;
+    };
+    const a = authorizeReply();
+    const { result } = await ctx.rt.submit('prayer_reply', {
       prayerId, actorId: actor.id, ownerTokenHash: a.tokenHash,
       text: body.text, energy: body.energy,
-    });
+    }, { authorize: authorizeReply });
     commandResult(res, url, result);
   }, { signedIn: true })],
-  ['GET', '/api/account/prayers/audit', accountWrap(({ res, ctx, url, actor }) => {
+  ['GET', '/api/account/prayers/audit', accountWrap(async({ res, ctx, url, actor }) => {
     const scope = url.searchParams.get('scope') ?? 'own';
     if (!['own', 'all'].includes(scope)) fail(400, 'invalid_request', '查询范围无效。');
     if (scope === 'all' && actor.role !== 'admin') fail(403, 'forbidden', '此查询需要管理员权限。');
@@ -99,20 +102,23 @@ export const prayerRoutes = [
     const audit = prayersEnabled(w) ? w.prayers.audit.filter((row) => (scope === 'all' || row.actorId === actor.id) && (agentId === undefined || row.agentId === agentId)) : [];
     sendJson(res, 200, { enabled: prayersEnabled(w), audit });
   }, { signedIn: true })],
-  ['GET', '/api/admin/inventions', accountWrap(({ res, ctx, url, actor }) => {
+  ['GET', '/api/admin/inventions', accountWrap(async({ res, ctx, url, actor }) => {
     const view = publicView(ctx, residentFilter(url));
     sendJson(res, 200, { enabled: view.enabled, inventions: (view.inventions || []).map((row) => ({ ...row, canReview: canReview(ctx, actor, row) })) });
   }, { admin: true })],
-  ['POST', /^\/api\/admin\/inventions\/([^/]+)\/review$/, accountWrap(({ res, ctx, url, params, body, actor, authorize }) => {
+  ['POST', /^\/api\/admin\/inventions\/([^/]+)\/review$/, accountWrap(async({ res, ctx, url, params, body, actor, authorize }) => {
     const inventionId = refId(params[0], 'iv');
-    authorize();
-    const w = ctx.rt.w; enabled(w);
-    const invention = own(w.prayers.inventions, inventionId);
-    if (!invention) fail(404, 'not_found', '发明记录不存在。');
-    if (linksFor(ctx, actor, own(w.agents, invention.agentId)).linked) fail(403, 'self_review', '管理员不能审核自己关联居民的发明。');
-    const { result } = ctx.rt.exec('invention_review', {
+    const authorizeReview = () => {
+      authorize();
+      const w = ctx.rt.w; enabled(w);
+      const invention = own(w.prayers.inventions, inventionId);
+      if (!invention) fail(404, 'not_found', '发明记录不存在。');
+      if (linksFor(ctx, actor, own(w.agents, invention.agentId)).linked) fail(403, 'self_review', '管理员不能审核自己关联居民的发明。');
+    };
+    authorizeReview();
+    const { result } = await ctx.rt.submit('invention_review', {
       inventionId, actorId: actor.id, decision: body.decision, reason: body.reason,
-    });
+    }, { authorize: authorizeReview });
     commandResult(res, url, result);
   }, { admin: true })],
 ];

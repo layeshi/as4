@@ -25,6 +25,33 @@ export function serverStatusPanel() {
     return tr(`${days} 天 ${hours} 小时 ${minutes} 分 ${Math.floor(seconds) % 60} 秒`, `${days}d ${hours}h ${minutes}m ${Math.floor(seconds) % 60}s`);
   };
   const row = (label, value) => h('p', null, h('strong', null, `${label} · `), value);
+  // 计算资源：只有新服务返回 compute。数字缺失、为 null 或不合理时一律显示「未知」；服务器给的字符串只当文字显示。
+  const unknown = () => tr('未知', 'Unknown');
+  const known = v => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+  const count = v => known(v) ? String(Math.round(v * 100) / 100) : unknown();
+  const size = v => known(v) ? bytes(v) : unknown();
+  const pair = (a, b, format = count) => `${format(a)} / ${format(b)}`;
+  const named = (value, names) => typeof value !== 'string' || !value ? unknown() : Object.hasOwn(names, value) ? names[value] : value;
+  const object = v => v && typeof v === 'object' && !Array.isArray(v) ? v : null;
+  const computeCard = c => {
+    const queue = object(c.queue) || {}, cache = object(c.cache) || {};
+    const rate = known(cache.hits) && known(cache.misses) && cache.hits + cache.misses > 0 ? ` (${(cache.hits / (cache.hits + cache.misses) * 100).toFixed(1)}%)` : '';
+    return h('article', { class: 'card-panel' }, h('h3', null, tr('计算资源', 'Compute resources')),
+      row(tr('执行模式', 'Execution mode'), named(c.mode, { worker: tr('独立工作线程', 'Worker thread'), inline: tr('主线程内联', 'Inline on main thread') })),
+      row(tr('有效 CPU / 计算槽位', 'Effective CPU / compute slots'), pair(c.cpu, c.slots)),
+      row(tr('服务内存预算 / 有效上限', 'Service memory budget / effective limit'), pair(c.budget, c.memory, size)),
+      row(tr('已预留 / 进程 RSS', 'Reserved / process RSS'), pair(c.reservedBytes, c.rssBytes, size)),
+      row(tr('缓存占用 / 上限', 'Cache used / limit'), `${pair(cache.bytes, cache.limitBytes ?? c.cacheBytes, size)} · ${tr('条目', 'entries')} ${count(cache.entries)}`),
+      row(tr('缓存命中 / 未命中', 'Cache hits / misses'), `${pair(cache.hits, cache.misses)}${rate}`),
+      row(tr('世界队列 / 运行中', 'World queue / running'), pair(queue.world, c.worldActive)),
+      row(tr('后台队列 / 运行中', 'Background queue / running'), pair(queue.background, c.backgroundActive)),
+      row(tr('实际世界堆上限', 'Actual world heap limit'), size(c.worldHeapLimitBytes)),
+      row(tr('主线程实际堆上限', 'Actual main thread heap limit'), size(c.mainHeapLimitBytes)),
+      row(tr('后台线程实际堆上限', 'Actual background thread heap limits'), !Array.isArray(c.backgroundHeapLimitBytes) ? unknown()
+        : c.backgroundHeapLimitBytes.length ? c.backgroundHeapLimitBytes.map(size).join(tr('、', ', ')) : tr('尚未启动', 'Not started yet')),
+      row(tr('内存降载', 'Memory load shedding'), c.pressure === null ? tr('正常', 'Normal') : named(c.pressure, { memory: tr('内存降载中：已清空缓存，新计算暂缓', 'Shedding load (memory): cache cleared, new work deferred') })),
+      row(tr('探测来源', 'Detection source'), named(c.constraintSource, { cgroup: tr('cgroup 限额', 'cgroup limits'), system: tr('系统总量（未检测到 cgroup）', 'System totals (no cgroup detected)'), 'system; job limits unknown': tr('系统总量（作业限额未知）', 'System totals (job limits unknown)') })));
+  };
   async function refresh() {
     if (!root.isConnected) return;
     const r = await api('/api/admin/server-status');
@@ -32,7 +59,7 @@ export function serverStatusPanel() {
     if (!r.ok) error.textContent = errorText(r, tr('刷新失败，请稍后重试。', 'Refresh failed. Please try again.'));
     else {
       error.textContent = '';
-      const { cpu, memory, network, uptime, users, sampledAt } = r.json;
+      const { cpu, memory, network, uptime, users, sampledAt, compute } = r.json;
       clear(values).append(
         h('div', { class: 'card-grid' },
           h('article', { class: 'card-panel' }, h('h3', null, tr('服务器负载', 'Server load')),
@@ -48,7 +75,8 @@ export function serverStatusPanel() {
             row(tr('启用 / 停用', 'Active / Disabled'), `${users.active} / ${users.disabled}`),
             row(tr('管理员', 'Administrators'), String(users.admins)),
             row(tr('已关联微信', 'WeChat-linked'), String(users.wechatLinked)),
-            row(tr('最近 24 小时 / 7 天注册', 'Created in the last 24 hours / 7 days'), `${users.createdLast24Hours} / ${users.createdLast7Days}`))),
+            row(tr('最近 24 小时 / 7 天注册', 'Created in the last 24 hours / 7 days'), `${users.createdLast24Hours} / ${users.createdLast7Days}`)),
+          object(compute) && computeCard(compute)),
         h('p', { class: 'muted' }, `${tr('采样时间', 'Sample time')} · ${new Date(sampledAt).toLocaleString(getLang() === 'en' ? 'en-US' : 'zh-CN')} · ${tr('每 10 秒刷新', 'Refreshes every 10 seconds')}`),
       );
     }

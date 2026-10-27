@@ -1,3 +1,4 @@
+import { commandAuthority } from '../compute/authority.js';
 import { NotificationService } from '../wechat/notifications.js';
 import { notificationRoutes } from './notifications.js';
 import { AssistantService } from '../assistant/service.js';
@@ -20,7 +21,7 @@ import { supportRoutes } from './support.js';
 import { hostedRoutes } from './hosted.js';
 import { HostedService } from '../hosted/service.js';
 import { PublicRoleService } from '../runner/public-roles.js';
-import { accountWrap } from './accounts.js';
+import { accountWrap, accountFor } from './accounts.js';
 import { sendJson } from './util.js';
 import { loginLocation, passesWall, walledApi, walledPage } from './login-wall.js';
 // SPEC-M1 §13：HTTP 服务。路由、静态文件、限速、CORS、CSP。
@@ -79,7 +80,7 @@ const MIME = {
 export const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; worker-src 'self'; frame-src 'none'";
 
 const roleAdminRoutes = [
-  ['GET','/api/admin/server-status',accountWrap(({res,ctx})=>sendJson(res,200,{...ctx.serverStatus.view(),users:registeredUserCounts(ctx.accounts.data.users)}),{admin:true})],
+  ['GET','/api/admin/server-status',accountWrap(({res,ctx})=>sendJson(res,200,{...ctx.serverStatus.view(),users:registeredUserCounts(ctx.accounts.data.users),compute:ctx.rt.compute?.view()??null}),{admin:true})],
   ['GET','/api/admin/public-model',accountWrap(({res,ctx})=>sendJson(res,200,ctx.publicRoles.view()),{admin:true})],
   ['POST','/api/admin/public-model',accountWrap(({res,ctx,body})=>{try{sendJson(res,200,ctx.publicRoles.save(body));}catch(e){sendJson(res,400,{error:{code:'invalid_config',message:e.message}});}},{admin:true})],
 ];
@@ -253,9 +254,19 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
           const en = url.searchParams.get('lang') === 'en';
           return sendJson(res, 401, { error: { code: 'login_required', message: en ? 'Please sign in to watch the city.' : '请先登录后再观看这座城。' } });
         }
+        if(rt.stopped&&req.method!=='GET')return sendJson(res,503,{error:{code:'compute_busy',message:'服务器暂不可接受新操作。'}});
         const m = match(req.method, pathname);
         if (!m) return sendError(res, 'zh', 'not_found');
-        await m.handler(req, res, ctx, url, m.params);
+        const user = accountFor(ctx, req), revision = user?.revision, userId = user?.id, role = user?.role;
+        const tokenLookup=pathname.startsWith('/api/owner')?'ownerFor':pathname.startsWith('/api/me')?'agentFor':null;
+        const token = tokenLookup ? /^Bearer\s+(\S+)$/i.exec(req.headers.authorization || '')?.[1] : null;
+        const agentId = token ? ctx.tokens[tokenLookup](rt.w, token) : null;
+        const authority = () => {
+          if(rt.stopped)throw Object.assign(Error('服务器暂不可接受新操作。'),{status:503,code:'compute_busy'});
+          if (userId) { const current = accountFor(ctx, req); if (!current || current.id !== userId || current.revision !== revision || current.role !== role) throw Object.assign(new Error('登录或权限已变化。'), {status:401,code:'unauthorized'}); }
+          if (token && (!agentId || ctx.tokens[tokenLookup](rt.w, token) !== agentId)) throw Object.assign(new Error('居民令牌已变化。'), {status:401,code:'unauthorized'});
+        };
+        await commandAuthority.run(authority, () => m.handler(req, res, ctx, url, m.params));
         return;
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -265,7 +276,8 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
       await serveStatic(req, res, url, publicDir, cfg.requireLogin === true ? ctx : null, csp);
     } catch (e) {
       logger.error?.('HTTP 处理出错：', e);
-      if (!res.headersSent) sendError(res, 'zh', 'internal');
+      if (!res.headersSent && ['compute_busy','unauthorized'].includes(e.code)) sendJson(res,e.status,{error:{code:e.code,message:e.message}},e.status===503?{'Retry-After':'1'}:{});
+      else if (!res.headersSent) sendError(res, 'zh', 'internal');
       else res.end();
     }
   });
@@ -279,7 +291,7 @@ export function createApp(rt, cfg, { publicDir = PUBLIC_DIR, logger = console, b
     ctx.publicRoles.start();
     ctx.reports.start();
     ctx.historyExports.kick();
-    ctx.runners.activate(`http://${host}:${address.port}`);
+    ctx.runners.activate(`http://${host}:${address.port}`).catch(error=>logger.error?.('运行器启动失败',error.message));
     if (ctx.shells) ctx.shells.activate();
   });
   // 慢速连接与保活：SSE 长连接由自己的心跳维持

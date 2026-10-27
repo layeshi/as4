@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-27",
+  "node": "v24.22.1",
+  "platform": "linux",
+  "containerMemoryBytes": 2147483648,
+  "runsPerCase": 3,
+  "worldHashesMatched": true,
+  "worldHash": "40e8236f4c92a5de3b30d791118ad65ba3fadfbd1695a44b11f7fa36fc5bddc5",
+  "cases": {
+    "legacy-4cpu": {
+      "elapsedMs": 5010.616539,
+      "cpuMs": 5361.429,
+      "tickP50Ms": 208.005353,
+      "tickP95Ms": 251.3717499999998,
+      "readP50Ms": 212.6467090000001,
+      "readP95Ms": 255.39040699999987,
+      "eventLoopP95Ms": 251.396095,
+      "peakRssBytes": 320487424
+    },
+    "worker-4cpu": {
+      "elapsedMs": 4011.484338,
+      "cpuMs": 6081.999,
+      "tickP50Ms": 163.68204400000013,
+      "tickP95Ms": 194.5341410000001,
+      "readP50Ms": 1.0828340000002754,
+      "readP95Ms": 5.188920999999937,
+      "eventLoopP95Ms": 13.664255,
+      "peakRssBytes": 468336640,
+      "background": {
+        "elapsedMs": 809.3210930000005,
+        "cpuMs": 1926.753,
+        "workers": 2,
+        "outputBytes": 322747,
+        "jobs": 12
+      }
+    },
+    "worker-1cpu": {
+      "elapsedMs": 6247.347826,
+      "cpuMs": 6227.936,
+      "tickP50Ms": 258.4190940000001,
+      "tickP95Ms": 323.37101200000006,
+      "readP50Ms": 1.0885419999999613,
+      "readP95Ms": 9.097335999999814,
+      "eventLoopP95Ms": 45.744127,
+      "peakRssBytes": 436527104,
+      "background": {
+        "elapsedMs": 1851.140155,
+        "cpuMs": 1843.672,
+        "workers": 1,
+        "outputBytes": 322747,
+        "jobs": 12
+      }
+    }
+  },
+  "comparison": {
+    "tickMedianReductionPercent": 21.308734780493786,
+    "readP95Speedup": 49.21840340217224,
+    "backgroundSpeedup1to4cpu": 2.2872753113824986
+  }
+}

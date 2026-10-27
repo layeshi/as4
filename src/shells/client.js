@@ -1,3 +1,4 @@
+import { commandAuthority } from '../compute/authority.js';
 // SPEC-E2 §13.2：躯壳居民的进程内客户端。躯壳没有令牌，不走 HTTP；它与 runner/client.js 同接口（me / act），
 // 所以参考运行器的 runAgent 可以直接驱动它。
 //
@@ -40,7 +41,7 @@ export function createShellClient(rt, agentId, { cursors }) {
       const body = { actions };
       if (experimentGeneration !== undefined) body.experimentGeneration = experimentGeneration;
       if (thought) body.thought = thought;
-      const r = actCore(ctx, agentId, body, lang);
+      const r = await commandAuthority.run(null, () => actCore(ctx, agentId, body, lang));
       return { ok: r.status >= 200 && r.status < 300, status: r.status, json: r.json };
     },
   };

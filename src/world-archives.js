@@ -59,7 +59,9 @@ export async function publishWorldArchive(root, id, codeVersion) {
     fsyncSync(fd);
   }finally{closeSync(fd);}
   renameSync(temporary,destination);
-  const parent=openSync(join(root,'public-archives'),'r');try{fsyncSync(parent);}finally{closeSync(parent);}
+  if(process.platform!=='win32'){
+    const parent=openSync(join(root,'public-archives'),'r');try{fsyncSync(parent);}finally{closeSync(parent);}
+  }
   const manifest={id,cityName:w.cityName,physics:engine.physics,premise:w.premise??0,tick:w.clock.tick,day:engine.clockDay(w),commandN:w.commandN,eventSeq:w.counters.event,archivedAt:new Date().toISOString(),codeVersion};
   durableFile(archiveIndex(root),JSON.stringify({version:1,worlds:[...archivedWorlds(root),manifest]}));
   return manifest;

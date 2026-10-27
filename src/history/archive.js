@@ -1,6 +1,6 @@
 // 人类观测归档独立于世界目录，提交观察不改变世界与回放语义。
 import { randomUUID, createHash } from 'node:crypto';
-import { mkdirSync, existsSync, readFileSync, appendFileSync, createReadStream, openSync, closeSync, fsyncSync } from 'node:fs';
+import { mkdirSync, existsSync, readFileSync, appendFileSync, createReadStream, openSync, closeSync, fsyncSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { durableFile } from '../durable-file.js';
@@ -13,9 +13,9 @@ import { P as P2 } from '../e2/params.js';
 import { actionRecords, clean, position, privateEventFor, profile } from './records.js';
 
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-export async function* jsonLines(file) {
-  if (!existsSync(file)) return;
-  const input = createReadStream(file), reader = createInterface({ input, crlfDelay: Infinity });
+export async function* jsonLines(file, throughBytes = Infinity) {
+  if (throughBytes === 0 || !existsSync(file)) return;
+  const input = createReadStream(file, Number.isFinite(throughBytes) ? {end:throughBytes-1} : {}), reader = createInterface({ input, crlfDelay: Infinity });
   try { for await (const line of reader) { if (line) yield JSON.parse(line); } }
   finally { reader.close(); input.destroy(); }
 }
@@ -140,9 +140,27 @@ export class HistoryArchive {
   branch(id = this.branchId) { return this.index.branches.find(b => b.id === id); }
   async flush() { await this.pending; if (this.fault) throw this.fault; }
   async residentRecords(branchId, id, { fromDay = 0, toDay = Number.MAX_SAFE_INTEGER, throughCommand = Infinity, throughSeq = Infinity, throughTick = Infinity } = {}) {
-    const branch = this.branch(branchId), rows = [], seen = new Set();
+    const pool = this.rt?.compute?.pool;
+    if (pool) {
+      const branch = structuredClone(this.branch(branchId));
+      if (!branch) throw Error('历史分支不存在。');
+      const query = {fromDay,toDay,throughCommand:Math.min(throughCommand,branch.commandN),throughSeq:Math.min(throughSeq,branch.eventSeq),throughTick:Math.min(throughTick,branch.tick)};
+      const file=this.file(branchId), fileBytes=existsSync(file)?statSync(file).size:0;
+      const reservation=Math.max(16*1048576,Math.min(fileBytes*8,Math.floor(this.rt.compute.budget.current.budget/Math.max(4,this.rt.compute.budget.current.slots))));
+      const key = JSON.stringify(['history',branchId,id,branch.lastHash,branch.tick,branch.redacted,fileBytes,query]);
+      const cached = this.rt.compute.cache.get(key,bytes=>{if(!this.rt.compute.budget.canRun(bytes*4)){this.rt.compute.cache.clear();throw Object.assign(Error('History cache admission failed'),{status:503,code:'compute_busy'});}});
+      if (cached !== undefined) return JSON.parse(cached);
+      const rows = await pool.run('history',{branch,file,fileBytes,id,query,maxResultBytes:Math.floor(reservation/8)},reservation);
+      // Redaction may change while a scan waits or runs; never return stale text.
+      const redacted = new Set(this.branch(branchId)?.redacted ?? []);
+      for (const row of rows) if (row.seq && redacted.has(row.seq)) row.data = {redacted:true};
+      const text=JSON.stringify(rows);
+      if (JSON.stringify(this.branch(branchId)?.redacted) === JSON.stringify(branch.redacted)) this.rt.compute.cache.set(key,text);
+      return JSON.parse(text);
+    }
+    const branch = this.branch(branchId), rows = [], seen = new Set(); let resultBytes=0;
     if (!branch) throw Error('历史分支不存在。');
-    for await (const item of jsonLines(this.file(branchId))) {
+    for await (const item of jsonLines(this.file(branchId),this.fileBytes)) {
       let row;
       if (item.kind === 'event') {
         const e = item.event;
@@ -153,7 +171,11 @@ export class HistoryArchive {
       if (!row || row.tick > throughTick || row.day < fromDay || row.day > toDay) continue;
       // 有效请求的传输重试会返回同一回执；它不代表再次行动或再次付费。
       const signature = row.kind === 'action' ? `action:${row.decisionKey ?? row.commandN}:${row.index}` : row.kind === 'thought' ? JSON.stringify(['thought', row.tick, row.text ?? row.data?.text]) : row.seq ? `event:${row.seq}` : JSON.stringify([row.kind, row.tick, row.text ?? row.data?.text ?? row.data]);
-      if (!seen.has(signature)) { seen.add(signature); rows.push(row); }
+      if (!seen.has(signature)) {
+        resultBytes+=Buffer.byteLength(JSON.stringify(row));
+        if(this.maxResultBytes&&(resultBytes>this.maxResultBytes||rows.length>=Math.floor(this.maxResultBytes/128)))throw Object.assign(Error('历史记录过多，请缩小日期范围后重试。'),{code:'compute_busy',status:503});
+        seen.add(signature); rows.push(row);
+      }
     }
     return rows.sort((a, b) => a.tick - b.tick || (a.commandN ?? a.seq ?? 0) - (b.commandN ?? b.seq ?? 0));
   }

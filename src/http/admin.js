@@ -65,7 +65,7 @@ const op = (name) => async (req, res, ctx) => {
   if (!auth(ctx, req, res)) return;
   const parsed = await readJson(req);
   if (!parsed.ok) return sendError(res, 'zh', parsed.code);
-  const { result } = ctx.rt.exec('admin', { op: name, args: parsed.value });
+  const { result } = await ctx.rt.submit('admin', { op: name, args: parsed.value });
   if (!result.ok) return sendEngineError(res, 'zh', result.error);
   sendJson(res, 200, result);
 };
@@ -110,7 +110,7 @@ async function experimentView(req, res, ctx) {
 /** POST /api/admin/tick：立即推进一刻（开发与测试用） */
 async function tickNow(req, res, ctx) {
   if (!auth(ctx, req, res)) return;
-  const { result } = ctx.rt.tickNow();
+  const { result } = await ctx.rt.tickNow();
   if (!result.ok) return sendEngineError(res, 'zh', result.error);
   sendJson(res, 200, { ok: true, tick: result.tick, day: ctx.rt.engine.clockDay(ctx.rt.w), settled: result.settled });
 }
@@ -167,7 +167,7 @@ async function shellModels(req, res, ctx) {
   if (!authV2(ctx, req, res)) return;
   const parsed = await readJson(req);
   if (!parsed.ok) return sendError(res, 'zh', parsed.code);
-  const { result } = ctx.rt.exec('admin', { op: 'shell_models', args: parsed.value });
+  const { result } = await ctx.rt.submit('admin', { op: 'shell_models', args: parsed.value });
   if (!result.ok) return sendEngineError(res, 'zh', result.error);
   sendJson(res, 200, result);
 }
@@ -204,7 +204,7 @@ async function resetOwnerCredential(req, res, ctx, url, params) {
   const parsed = await readJson(req);
   if (!parsed.ok) return sendError(res, 'zh', parsed.code);
   const ownerKey = randomBytes(32).toString('hex');
-  const { result } = ctx.rt.exec('admin', {
+  const { result } = await ctx.rt.submit('admin', {
     op: 'reset_owner_key', args: { agentId: params[0], ownerKeyHash: sha256hex(ownerKey) },
   });
   if (!result.ok) return sendEngineError(res, 'zh', result.error);

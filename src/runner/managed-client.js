@@ -1,3 +1,4 @@
+import { commandAuthority } from '../compute/authority.js';
 import { randomUUID } from 'node:crypto';
 import { meCore, actCore, waitCore } from '../http/agent.js';
 import { rulesCore, wakeCore, lookCore } from '../http/tokens.js';
@@ -6,7 +7,11 @@ export function managedClient(ctx,id,valid,signal) {
   let generation;
   const denied = () => ({ok:false,status:401,json:{error:{code:'unauthorized'}}});
   const reply = r => ({ok:r.status>=200&&r.status<300,...r});
-  const guarded = fn => async args => valid()&&!signal?.aborted ? reply(await fn(args??{})) : denied();
+  const guarded = fn => async args => {
+    if (!valid() || signal?.aborted) return denied();
+    try { return reply(await commandAuthority.run(() => { if (!valid() || signal?.aborted) throw Object.assign(new Error('Resident capability expired'), {status:401,code:'unauthorized'}); }, () => fn(args??{}))); }
+    catch (error) { if (error.code === 'unauthorized') return denied(); if (error.code === 'compute_busy') return {ok:false,status:503,json:{error:{code:'compute_busy'}}}; throw error; }
+  };
   return {
     base:'internal',
     state:guarded(()=>({status:200,json:ctx.rt.engine.publicState(ctx.rt.w)})),

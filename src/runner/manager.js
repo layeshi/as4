@@ -1,3 +1,4 @@
+import { commandAuthority } from '../compute/authority.js';
 import { durableFile } from '../durable-file.js';
 import { managedClient } from './managed-client.js';
 import { relation } from '../e2/p6/access.js';
@@ -217,7 +218,7 @@ export class RunnerManager {
     }
     // Editing the model settings keeps the running total; a record bound to another agent token (a transfer) never inherits it.
     if (!previous || previous.token !== token) this.usage.drop(id);
-    if (agent.body.model !== config.model) this.rt.exec('model', { agentId: id, ownerKeyHash: ownerHash, model: config.model });
+    if (agent.body.model !== config.model) (await this.rt.submit('model', { agentId: id, ownerKeyHash: ownerHash, model: config.model }));
     this.states.set(id, { status: 'paused', logs: [] });
     if (enabled) this.start(id);
     return this.view(id);
@@ -234,13 +235,13 @@ export class RunnerManager {
     const oldConfig = previous?.config;
     this.records[id] = liveSwitch ? Object.assign(previous, { config }) : {accountId,ownershipRevision:revision,accountRevision:this.ctx.accounts.get(accountId).revision,config,enabled};
     try{this.persist();}catch(e){if(previous){previous.config=oldConfig;this.records[id]=previous;}else delete this.records[id];throw e;}
-    const result=this.rt.exec('account',{op:'model',agentId:id,accountId,ownershipRevision:revision,model:config.model,requestId:randomUUID()}).result;
+    const result=(await this.rt.submit('account',{op:'model',agentId:id,accountId,ownershipRevision:revision,model:config.model,requestId:randomUUID()})).result;
     if(!result.ok)throw new RunnerError('模型设置未生效。');
     if (!liveSwitch) this.states.set(id,{status:'paused',logs:[]});
     if(enabled)this.start(id);
     return this.view(id);
   }
-  activate(serverURL) {
+  async activate(serverURL) {
     this.serverURL = serverURL;
     for (const id of Object.keys(this.records)) {
       this.syncOwnerKey(id);
@@ -249,7 +250,7 @@ export class RunnerManager {
       if (['dead', 'retired'].includes(agent.status)) {
         this.records[id].enabled = false; this.states.set(id, { status: 'stopped', logs: [] }); this.persist(); continue;
       }
-      if ((this.rt.w.premise!==6 && this.rt.w.premise !== 7) && agent.body.model !== this.records[id].config.model) this.rt.exec('model', { agentId: id, ownerKeyHash: this.records[id].ownerHash, model: this.records[id].config.model });
+      if ((this.rt.w.premise!==6 && this.rt.w.premise !== 7) && agent.body.model !== this.records[id].config.model) (await this.rt.submit('model', { agentId: id, ownerKeyHash: this.records[id].ownerHash, model: this.records[id].config.model }));
       if (this.records[id].enabled) this.start(id);
     }
     if((this.rt.w.premise!==6 && this.rt.w.premise !== 7))for (const id of this.usage.ids()) if (!this.records[id]) this.usage.drop(id); // usage of a runner that no longer exists
@@ -278,7 +279,7 @@ export class RunnerManager {
     this.states.set(id, state);
     this.notificationChanged(id);
     const log = makeLogger(id, { secrets: [r.token, config.apiKey], quiet: true, out: () => {}, err: () => {} });
-    const promise = Promise.resolve().then(async () => {
+    const promise = commandAuthority.run(null, () => Promise.resolve().then(async () => {
       const dynamic = () => hosted?.config.version === 2;
       const provider = hosted ? { step: async args => {
         const selected = await hosted.provider({ ...hosted.resolved(hostedConfig), timeoutMs: r.config.timeoutMs, onResponse: ({ routingGroup }) => {
@@ -316,7 +317,7 @@ export class RunnerManager {
           this.notificationChanged(id, reservation ? ['balance_low'] : false);
           return !!reservation;
         } } : {}),
-        ...(tokenized(this.rt.w) ? { refundWake: async wakeId => { if((this.rt.w.premise===6 || this.rt.w.premise === 7)&&(this.records[id]!==r||!this.valid(id)))return {ok:false};return this.rt.exec('meter', { op: 'refund', agentId: id, wakeId, day: earthDay(Date.now(), this.cfg.shellTz || 'Asia/Shanghai').key }).result; } } : {}),
+        ...(tokenized(this.rt.w) ? { refundWake: async wakeId => { if((this.rt.w.premise===6 || this.rt.w.premise === 7)&&(this.records[id]!==r||!this.valid(id)))return {ok:false};return (await this.rt.submit('meter', { op: 'refund', agentId: id, wakeId, day: earthDay(Date.now(), this.cfg.shellTz || 'Asia/Shanghai').key }, {authorize:()=>{if((this.rt.w.premise===6||this.rt.w.premise===7)&&(this.records[id]!==r||!this.valid(id)))throw new RunnerError('管理权已变化。',401);}})).result; } } : {}),
         onUsage: (_agentId, usage, meta) => {
           // Auto-stopping below must not reclassify a completed failure as cancellation.
           const cancelledBeforeUsage = controller.signal.aborted || meta.cancelled;
@@ -355,7 +356,7 @@ export class RunnerManager {
           if (event.lastActionAt) state.logs = [...state.logs, { at: event.lastActionAt, actions: event.actions }].slice(-10);
         },
       });
-    }).then((result) => {
+    })).then((result) => {
       if (!controller.signal.aborted) {
         state.status = ['auth', 'provider'].includes(result.stopped) ? 'error' : 'stopped';
         if (state.status === 'error') state.lastError ||= '运行已停止，请检查模型连接或令牌。';

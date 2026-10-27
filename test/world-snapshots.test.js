@@ -42,8 +42,11 @@ for (const physics of [1, 2]) test(`physics ${physics}: immutable world archives
     assert.deepEqual(e.rt.w, savedWorld, 'saving does not change time, state, commands or events');
     assert.equal(readFileSync(join(e.rt.dir, 'commands.jsonl'), 'utf8'), commandText);
     const archiveDir = join(e.rt.dir, 'snapshots', meta.id);
-    assert.equal(statSync(archiveDir).mode & 0o777, 0o700);
-    assert.equal(statSync(join(archiveDir, 'archive.json.gz')).mode & 0o777, 0o600);
+    // The Windows deployment verifies inherited NTFS ACLs separately.
+    if (process.platform !== 'win32') {
+      assert.equal(statSync(archiveDir).mode & 0o777, 0o700);
+      assert.equal(statSync(join(archiveDir, 'archive.json.gz')).mode & 0o777, 0o600);
+    }
     const download = await fetch(`${e.base}/api/admin/snapshots/${meta.id}/download`, {
       headers: { 'X-Admin-Key': e.cfg.adminKey },
     });

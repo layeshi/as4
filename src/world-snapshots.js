@@ -15,6 +15,8 @@ function durableWrite(file, data) {
   finally { closeSync(fd); }
 }
 function syncDirectory(dir) {
+  // Directory fsync is unavailable through Node's Windows file API.
+  if (process.platform === 'win32') return;
   const fd = openSync(dir, 'r');
   try { fsyncSync(fd); } finally { closeSync(fd); }
 }
@@ -36,22 +38,31 @@ export class WorldSnapshots {
     let staging;
     try {
       const { rt } = this;
+      const captured = rt.compute ? await rt.compute.capture(authorize) : null;
       const metadata = {
         id: randomUUID(), createdAt: new Date().toISOString(), label: (body.label || '').trim(),
         worldId: rt.w.id, physics: rt.engine.physics, tick: rt.w.clock.tick,
         day: rt.engine.clockDay(rt.w), commandN: rt.w.commandN, eventSeq: rt.w.counters.event,
-        codeVersion: rt.w.codeVersion, runtimeVersion: rt.version, stateHash: stateHash(rt.w),
+        codeVersion: rt.w.codeVersion, runtimeVersion: rt.version, stateHash: captured?.hash ?? stateHash(rt.w),
+        ...(captured?.boundary ?? {}),
       };
       // 在第一次 await 之前抓取三份数据：刻调度器、HTTP 命令无法插入这个边界。
       // 白名单保证账号、运行器、模型密钥和以前的存档不会被递归打包。
-      const files = { 'snapshot.json': JSON.stringify(rt.w) };
-      for (const name of ['commands.jsonl', 'events.jsonl']) {
-        const file = join(rt.dir, name);
-        files[name] = existsSync(file) ? readFileSync(file, 'utf8') : '';
+      let archive, archiveHash;
+      if (captured) {
+        const inputBytes=Buffer.byteLength(captured.snapshot)+Object.values(captured.files).reduce((n,f)=>n+f.bytes,0);
+        const result=await rt.compute.pool.run('snapshot',{metadata,...captured},Math.max(16*1048576,inputBytes*6));
+        archive=result.archive; archiveHash=result.sha256;
+      } else {
+        const files = { 'snapshot.json': JSON.stringify(rt.w) };
+        for (const name of ['commands.jsonl', 'events.jsonl']) {
+          const file = join(rt.dir, name);
+          files[name] = existsSync(file) ? readFileSync(file, 'utf8') : '';
+        }
+        archive = await compress(JSON.stringify({ format:'houren-world-snapshot',version:1,metadata,files }));
       }
-      const archive = await compress(JSON.stringify({ format: 'houren-world-snapshot', version: 1, metadata, files }));
       authorize(); // 压缩期间可能退出登录或撤销管理员权限，发布前再次检查。
-      const manifest = { ...metadata, bytes: archive.length, sha256: createHash('sha256').update(archive).digest('hex') };
+      const manifest = { ...metadata, bytes: archive.length, sha256: archiveHash ?? createHash('sha256').update(archive).digest('hex') };
       mkdirSync(this.root, { recursive: true, mode: 0o700 });
       staging = join(this.root, `.tmp-${metadata.id}`);
       mkdirSync(staging, { mode: 0o700 });

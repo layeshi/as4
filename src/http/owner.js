@@ -55,7 +55,7 @@ export async function postLetter(req, res, ctx, url) {
   if (body.agentId !== undefined && body.agentId !== id) return sendError(res, lang, 'not_found');
   const w = ctx.rt.w;
   if (w.paused && !w.experimentControl?.active) return sendError(res, lang, 'paused');
-  const { result } = ctx.rt.exec('letter', { agentId: id, text: body.text });
+  const { result } = await ctx.rt.submit('letter', { agentId: id, text: body.text });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   sendJson(res, 200, { letterId: result.letterId, nextLetterDay: result.nextLetterDay });
 }
@@ -70,7 +70,7 @@ export async function postRelease(req, res, ctx, url) {
   const body = parsed.value;
   if (typeof body.release !== 'boolean') return sendError(res, lang, 'invalid_request', { field: 'release' });
   if (body.agentId !== undefined && body.agentId !== id) return sendError(res, lang, 'not_found');
-  const { result } = ctx.rt.exec('release', { agentId: id, release: body.release });
+  const { result } = await ctx.rt.submit('release', { agentId: id, release: body.release });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   sendJson(res, 200, { ok: true, fosterable: result.fosterable });
 }
@@ -83,7 +83,7 @@ async function postCap(req, res, ctx, url) {
   const body = await readJson(req);
   if (!body.ok) return sendError(res, lang, body.code);
   if (!validCap(body.value.dailyCap)) return sendError(res, lang, 'invalid_request', { field: 'dailyCap' });
-  const { result } = ctx.rt.exec('cap', { agentId: id, cap: body.value.dailyCap });
+  const { result } = await ctx.rt.submit('cap', { agentId: id, cap: body.value.dailyCap });
   if (!result.ok) return sendEngineError(res, lang, result.error);
   sendJson(res, 200, { ok: true, dailyCap: result.cap });
 }

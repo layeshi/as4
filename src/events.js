@@ -5,7 +5,7 @@
 //   延迟队列       delayed 事件按 releaseTick 排序，每刻释放到期的并推送（标记 delayed: true）；
 //   造者日志       每个 agent 最近的 owner / delayed 事件（独白、梦、家书……），造者立即可见。
 
-import { closeSync, fsyncSync, openSync, renameSync, appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, fsyncSync, openSync, renameSync, appendFileSync, existsSync, mkdirSync, statSync, readSync, writeSync, fstatSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { FiscalView } from './fiscal-view.js';
 
@@ -48,31 +48,25 @@ export class EventStore {
     this.owner = new Map();
     this.lastSeq = 0;
     if (!this.file || !existsSync(this.file)) return;
-    const original = readFileSync(this.file, 'utf8');
-    const keep = [];
-    for (const line of original.split('\n')) {
-      if (line === '') continue;
-      let ev;
-      try {
-        ev = JSON.parse(line);
-      } catch {
-        break; // 崩溃时写了一半的最后一行
+    const source = openSync(this.file,'r');
+    const size=fstatSync(source).size; let retained=0, terminated=true;
+    try {
+      for(const line of eventLines(source,size)) {
+        if(line.text===''){retained=line.end;terminated=line.terminated;continue;}
+        let ev; try{ev=JSON.parse(line.text);}catch{break;}
+        if(ev.seq>keepSeq)break;
+        this.index(ev,tick); this.lastSeq=ev.seq; retained=line.end; terminated=line.terminated;
       }
-      if (ev.seq > keepSeq) break;
-      keep.push(line);
-      this.index(ev, tick);
-      this.lastSeq = ev.seq;
-    }
-    const retained = keep.length ? `${keep.join('\n')}\n` : '';
-    if (retained !== original) {
-      // A startup crash must leave either the original log or the complete
-      // retained prefix, never truncate events already covered by a snapshot.
-      const temporary = `${this.file}.tmp`;
-      writeFileSync(temporary, retained, { mode: 0o600 });
-      syncFile(temporary);
-      renameSync(temporary, this.file);
-      syncFile(dirname(this.file));
-    }
+      if(retained!==size||!terminated) {
+        const temporary=`${this.file}.tmp`,target=openSync(temporary,'w',0o600),buffer=Buffer.allocUnsafe(64*1024);
+        try{
+          let offset=0;
+          while(offset<retained){const n=readSync(source,buffer,0,Math.min(buffer.length,retained-offset),offset);if(!n)throw Error('Event prefix changed');let written=0;while(written<n){const count=writeSync(target,buffer,written,n-written);if(!count)throw Error('Short event prefix write');written+=count;}offset+=n;}
+          if(!terminated)writeSync(target,'\n'); fsyncSync(target);
+        }finally{closeSync(target);}
+      }
+    }finally{closeSync(source);}
+    if(retained!==size||!terminated){renameSync(`${this.file}.tmp`,this.file);syncFile(dirname(this.file));}
   }
 
   /** A snapshot may acknowledge events only after this durability barrier. */
@@ -186,6 +180,22 @@ export class EventStore {
 }
 
 function syncFile(file) {
-  const fd = openSync(file, 'r');
+  if (process.platform === 'win32' && statSync(file).isDirectory()) return;
+  // Windows FlushFileBuffers requires a handle opened with write access.
+  const fd = openSync(file, process.platform === 'win32' ? 'r+' : 'r');
   try { fsyncSync(fd); } finally { closeSync(fd); }
+}
+
+// Retain at most one encoded record, rather than copies of the entire history.
+function* eventLines(fd,size) {
+  const buffer=Buffer.allocUnsafe(64*1024);let offset=0,parts=[];
+  while(offset<size){
+    const n=readSync(fd,buffer,0,Math.min(buffer.length,size-offset),offset);if(!n)throw Error('Event log changed');
+    let start=0;
+    for(let end=buffer.indexOf(10,start);end>=0&&end<n;end=buffer.indexOf(10,start)){
+      parts.push(buffer.subarray(start,end));yield {text:Buffer.concat(parts).toString('utf8'),end:offset+end+1,terminated:true};parts=[];start=end+1;
+    }
+    if(start<n)parts.push(Buffer.from(buffer.subarray(start,n)));offset+=n;
+  }
+  if(parts.length)yield {text:Buffer.concat(parts).toString('utf8'),end:size,terminated:false};
 }

@@ -23,9 +23,23 @@ function owned(ctx,actor,id) {
   if(!r||r.managerAccountId!==actor.id)fail(403,'forbidden','你没有此居民的管理权。');
   return r;
 }
-function command(ctx,actor,body) {
-  const r=body.agentId?owned(ctx,actor,body.agentId):null;
-  const result=ctx.rt.exec('account',{...body,accountId:actor.id,...(r?{ownershipRevision:r.ownershipRevision}:{})}).result;
+async function command(ctx,actor,body) {
+  const r=body.agentId?owned(ctx,actor,body.agentId):null,revision=r?.ownershipRevision,userRevision=actor.revision;
+  const authorize=()=>{
+    const live=ctx.accounts.get(actor.id);
+    if(!live||live.status!=='active'||live.revision!==userRevision||live.mergePending||live.mergedTo)fail(403,'forbidden','账号已变化。');
+    if(r&&owned(ctx,actor,body.agentId).ownershipRevision!==revision)fail(403,'forbidden','居民管理权已变化。');
+    if(body.op==='transfer'){
+      const target=ctx.accounts.get(body.to);
+      if(!target||target.status!=='active'||target.mergePending||target.mergedTo)fail(404,'not_found','接收账号不存在或不可用。');
+    }
+    if(body.op==='accept_transfer'){
+      const invitation=ctx.rt.w.access.transfers[body.transferId],sender=invitation&&ctx.accounts.get(invitation.from);
+      if(invitation&&(sender?.status!=='active'||sender.mergePending||sender.mergedTo))fail(409,'conflict','原管理账号当前不可用。');
+    }
+  };
+  authorize();
+  const result=(await ctx.rt.submit('account',{...body,accountId:actor.id,...(r?{ownershipRevision:r.ownershipRevision}:{})}, {authorize})).result;
   if(!result.ok)fail(result.error.code==='unauthorized'?403:400,result.error.code,'操作未完成，请核对输入与当前状态。');
   return result;
 }
@@ -86,29 +100,29 @@ function detail(ctx,id) {
   return {resident:row(ctx,id),overview:{assets,energy:a.energy,basic:a.basic,materials:a.materials,escrow,dailyCap:a.tokens.cap,usedToday:usedToday(a,earthDayKey(ctx)),routine:a.routine,model:a.body.model,runner,nextWake:nextWake(ctx,a,runner),nextTickAt:ctx.rt.nextTickAt},statistics:projectedResident(w,id,statisticsProjection(ctx.rt).data),usage:ctx.runners.usageView(id)};
 }
 export const residentRoutes=[
-  ['GET','/api/account/residents',wrap(({res,ctx,actor})=>{
+  ['GET','/api/account/residents',wrap(async({res,ctx,actor})=>{
     const rows=Object.entries(ctx.rt.w.access.residents);
     sendJson(res,200,{world:ctx.rt.w.id,managed:rows.filter(([,r])=>r.managerAccountId===actor.id).map(([id])=>row(ctx,id,true)),created:rows.filter(([,r])=>r.creatorAccountId===actor.id).map(([id])=>row(ctx,id)),startupAvailable:!Object.hasOwn(ctx.rt.w.access.startupClaims,actor.id)});
   })],
-  ['POST','/api/account/residents',wrap(({req,res,ctx,actor,body})=>{
+  ['POST','/api/account/residents',wrap(async({req,res,ctx,actor,body})=>{
     if(!ctx.limits.port.take(clientIp(req,ctx.cfg.trustProxy)))fail(429,'rate_limited','创建过于频繁，请稍后重试。');
     if(ctx.cfg.inviteCode&&body.invite!==ctx.cfg.inviteCode)fail(403,'invite_required','入城需要邀请码。');
     const allowed=['requestId','name','bio','soul','lang','dailyCap','creatorName','city'];
     const p=Object.fromEntries(allowed.filter(k=>Object.hasOwn(body,k)).map(k=>[k,body[k]]));
     // 第七前提：可以带入旧居民的形象（只接受某个世界里已有的图片哈希）
     const avatar=typeof body.avatar==='string'&&/^[a-f0-9]{64}$/.test(body.avatar)&&[ctx.rt.dir,...archivedWorlds(ctx.cfg.dataDir).map(a=>join(ctx.cfg.dataDir,a.id))].some(dir=>existsSync(join(dir,'avatars',`${body.avatar}.webp`)))?body.avatar:null;
-    const result=command(ctx,actor,{...p,op:'create',model:'待配置',creatorName:actor.displayName});
-    if(avatar&&result.agentId)command(ctx,actor,{op:'avatar',agentId:result.agentId,avatar,requestId:`${String(p.requestId??result.agentId).slice(0,100)}-avatar`});
+    const result=await command(ctx,actor,{...p,op:'create',model:'待配置',creatorName:actor.displayName});
+    if(avatar&&result.agentId)await command(ctx,actor,{op:'avatar',agentId:result.agentId,avatar,requestId:`${String(p.requestId??result.agentId).slice(0,100)}-avatar`});
     sendJson(res,201,result);
   })],
-  ['POST','/api/account/residents/adopt',wrap(({res,ctx,actor,body})=>sendJson(res,201,command(ctx,actor,{op:'adopt',soulId:body.soulId,dailyCap:body.dailyCap,requestId:body.requestId,model:'待配置',creatorName:actor.displayName})))],
-  ['GET',/^\/api\/account\/residents\/([^/]+)$/,wrap(({res,ctx,actor,params})=>{
+  ['POST','/api/account/residents/adopt',wrap(async({res,ctx,actor,body})=>sendJson(res,201,await command(ctx,actor,{op:'adopt',soulId:body.soulId,dailyCap:body.dailyCap,requestId:body.requestId,model:'待配置',creatorName:actor.displayName})))],
+  ['GET',/^\/api\/account\/residents\/([^/]+)$/,wrap(async({res,ctx,actor,params})=>{
     const id=params[0],r=relation(ctx.rt.w,id);
     if(r?.managerAccountId===actor.id)sendJson(res,200,detail(ctx,id));
     else if(r?.creatorAccountId===actor.id)sendJson(res,200,{resident:ctx.rt.engine.publicAgent(ctx.rt.w,ctx.rt.w.agents[id]),publicOnly:true});
     else fail(403,'forbidden','你没有此居民的访问权。');
   })],
-  ['GET',/^\/api\/account\/residents\/([^/]+)\/private$/,wrap(({res,ctx,actor,params})=>{
+  ['GET',/^\/api\/account\/residents\/([^/]+)\/private$/,wrap(async({res,ctx,actor,params})=>{
     owned(ctx,actor,params[0]);const a=ctx.rt.w.agents[params[0]];
     sendJson(res,200,{soul:a.soul,memories:a.memories,diary:a.diary,letters:a.letters,inbox:a.inbox});
   })],
@@ -125,21 +139,20 @@ export const residentRoutes=[
       authorize();owned(ctx,actor,id);res.writeHead(200,{'Content-Type':'text/csv; charset=utf-8','Content-Disposition':`attachment; filename="${id}-ledger.csv"`});res.end('\uFEFF'+data);
     }else {const data=await residentEvents(ctx,id,url.searchParams,()=>{authorize();owned(ctx,actor,id);});sendJson(res,200,data,{'Content-Disposition':`attachment; filename="${id}-events.json"`});}
   })],
-  ['POST',/^\/api\/account\/residents\/([^/]+)\/(cap|letter|transfer|cancel_transfer)$/,wrap(({res,ctx,actor,params,body})=>{
+  ['POST',/^\/api\/account\/residents\/([^/]+)\/(cap|letter|transfer|cancel_transfer)$/,wrap(async({res,ctx,actor,params,body})=>{
     let to;
     if(params[1]==='transfer'){
       const user=ctx.accounts.data.users.find(u=>u.username===String(body.username??'').toLowerCase()&&u.status==='active'&&!u.mergePending&&!u.mergedTo);
       if(!user)fail(404,'not_found','接收账号不存在或不可用。');to=user.id;
     }
-    sendJson(res,200,command(ctx,actor,{op:params[1],agentId:params[0],dailyCap:body.dailyCap,text:body.text,transferId:body.transferId,to,...(params[1]==='transfer'?{now:Date.now()}:{}),requestId:body.requestId}));
+    sendJson(res,200,await command(ctx,actor,{op:params[1],agentId:params[0],dailyCap:body.dailyCap,text:body.text,transferId:body.transferId,to,...(params[1]==='transfer'?{now:Date.now()}:{}),requestId:body.requestId}));
   })],
-  ['GET','/api/account/transfers',wrap(({res,ctx,actor})=>{
+  ['GET','/api/account/transfers',wrap(async({res,ctx,actor})=>{
     sendJson(res,200,{transfers:Object.values(ctx.rt.w.access.transfers).filter(t=>t.to===actor.id||t.from===actor.id).map(t=>({id:t.id,agentId:t.agentId,name:ctx.rt.w.agents[t.agentId].name,direction:t.to===actor.id?'incoming':'outgoing',expiresAt:t.expiresAt,status:t.status}))});
   })],
   ['POST',/^\/api\/account\/transfers\/([^/]+)\/accept$/,wrap(async({res,ctx,actor,params,body,authorize})=>{
     const config=body.config?.hosted===true?ctx.hosted.runnerChoice(body.config):runnerConfig(body.config);authorize();
-    const invitation=ctx.rt.w.access.transfers[params[0]], sender=invitation&&ctx.accounts.get(invitation.from);if(invitation&&(sender?.status!=='active'||sender.mergePending||sender.mergedTo))fail(409,'conflict','原管理账号当前不可用。');
-    const result=command(ctx,actor,{op:'accept_transfer',transferId:params[0],dailyCap:body.dailyCap,model:config.model,now:Date.now(),requestId:body.requestId});
+    const result=await command(ctx,actor,{op:'accept_transfer',transferId:params[0],dailyCap:body.dailyCap,model:config.model,now:Date.now(),requestId:body.requestId});
     const check=()=>{authorize();if(owned(ctx,actor,result.agentId).ownershipRevision!==result.ownershipRevision)fail(409,'conflict','管理权已再次变更。');};
     check();
     if(!ctx.runners.valid(result.agentId)){
@@ -159,7 +172,7 @@ export const residentRoutes=[
     else fail(400,'invalid_request','运行操作无效。');
   })],
   ['POST',/^\/api\/account\/residents\/([^/]+)\/avatar$/,uploadAvatar],
-  ['DELETE',/^\/api\/account\/residents\/([^/]+)\/avatar$/,wrap(({res,ctx,actor,params,body})=>sendJson(res,200,command(ctx,actor,{op:'avatar',agentId:params[0],avatar:null,requestId:body.requestId})))],
+  ['DELETE',/^\/api\/account\/residents\/([^/]+)\/avatar$/,wrap(async({res,ctx,actor,params,body})=>sendJson(res,200,await command(ctx,actor,{op:'avatar',agentId:params[0],avatar:null,requestId:body.requestId})))],
   ['GET',/^\/api\/public\/avatars\/([a-f0-9]{64})$/,async(req,res,ctx,url,params)=>{
     try{let image;for(const dir of [ctx.rt.dir,...archivedWorlds(ctx.cfg.dataDir).map(a=>join(ctx.cfg.dataDir,a.id))]){try{image=await readFile(join(dir,'avatars',`${params[0]}.webp`));break;}catch{}}if(!image)throw Error('missing');res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'public, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'});res.end(image);}catch{res.writeHead(404).end();}
   }],
@@ -195,6 +208,6 @@ async function uploadAvatar(req,res,ctx,url,params) {
     }catch(e){if(e instanceof AccountError)throw e;fail(400,'invalid_image','图片无法解码或超过16MP。');}
     check();const hash=createHash('sha256').update(encoded).digest('hex'),dir=join(ctx.rt.dir,'avatars');
     await mkdir(dir,{recursive:true});await writeFile(join(dir,`${hash}.webp`),encoded,{mode:0o600});check();
-    sendJson(res,200,command(ctx,actor,{op:'avatar',agentId:id,avatar:hash,requestId}));
+    sendJson(res,200,await command(ctx,actor,{op:'avatar',agentId:id,avatar:hash,requestId}));
   }catch(e){if(!(e instanceof AccountError))throw e;sendJson(res,e.status,{error:{code:e.code,message:e.message}});}
 }

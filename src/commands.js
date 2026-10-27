@@ -38,8 +38,11 @@ export class CommandLog {
         fsyncSync(fd);
       } finally { closeSync(fd); }
       // Persist file creation as well as its data before publishing the state.
-      const dir = openSync(dirname(this.file), 'r');
-      try { fsyncSync(dir); } finally { closeSync(dir); }
+      // Node cannot open directory handles for fsync on Windows; file data above is flushed.
+      if (process.platform !== 'win32') {
+        const dir = openSync(dirname(this.file), 'r');
+        try { fsyncSync(dir); } finally { closeSync(dir); }
+      }
     }
     this.n = command.n;
     return command;
@@ -157,7 +160,9 @@ function repairValidatedTail(file, { truncateTo }) {
     fsyncSync(target);
   } finally { closeSync(source); closeSync(target); }
   renameSync(temporary, file);
-  const dir = openSync(dirname(file), 'r');
-  try { fsyncSync(dir); } finally { closeSync(dir); }
+  if (process.platform !== 'win32') {
+    const dir = openSync(dirname(file), 'r');
+    try { fsyncSync(dir); } finally { closeSync(dir); }
+  }
   return true;
 }
