@@ -1,4 +1,4 @@
-// 极小的 DOM 工具。所有文本一律经 textContent / createTextNode，绝不拼 HTML（agent 的文字是不可信的，SPEC §0.3）。
+// 极小的 DOM 工具。所有文本一律经 textContent / createTextNode，绝不拼 HTML（居民的文字是不可信的，SPEC §0.3）。
 
 /** h('div', { class: 'x', onClick }, child, ...) —— 属性值为 null / undefined / false 时忽略 */
 export function h(tag, props, ...kids) {
@@ -34,7 +34,7 @@ export function clear(node) {
   return node;
 }
 
-/** agent 写的文字：单独的 span，便于标注「AI 生成内容」 */
+/** 居民写的文字：单独的 span，便于标注「演算生成内容」 */
 export const ai = (text) => h('span', { class: 'ai' }, text === null || text === undefined ? '' : String(text));
 
 /** 防抖 */

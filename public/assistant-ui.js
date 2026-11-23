@@ -268,10 +268,10 @@ export async function mountAssistant() {
       else if (live) body.push(h('p', { class: 'muted' }, tr('正在生成…', 'Generating…'), caretNode()));
       if (m.status === 'cancelled') body.push(callout('', tr('已停止 · 回答不完整', 'Stopped · Incomplete answer'), retryButton()));
     }
-    // 只有真的显示了模型写的字（或正在写）才挂「AI 生成」和 AI 底色；失败、未展示、审核中只是一条提示
+    // 只有真的显示了内核写的字（或正在写）才挂「演算生成」和 AI 底色；失败、未展示、审核中只是一条提示
     const ai = live || (['complete', 'cancelled'].includes(m.status) && !!m.text);
     return h('article', { class: ai ? 'assistant-answer' : 'assistant-answer assistant-notice', 'aria-label': ai ? tr('AI 回答', 'AI answer') : tr('回答', 'Answer'), 'aria-busy': live ? 'true' : null },
-      ai ? h('span', { class: 'ai-note' }, tr('AI 生成', 'AI generated')) : null, body, ai && !live ? foot(m) : null);
+      ai ? h('span', { class: 'ai-note' }, tr('演算生成', 'Simulation generated')) : null, body, ai && !live ? foot(m) : null);
   }
   /** 回答底部一行：依据 S1 S2 · 第 12 日 · 截至 09:37；悬停看世界、纪元与分支全称 */
   function foot(m) {

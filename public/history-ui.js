@@ -42,7 +42,7 @@ export async function mountHistory() {
           finally { submit.disabled = false; }
         } }, h('label', { class: 'field' }, tr('世界与历史分支', 'World and history branch'), branch), h('label', { class: 'field' }, tr('居民', 'Resident'), resident), h('div', { class: 'form-grid' }, from, to), h('div', { class: 'form-actions' }, submit), status);
         root.append(card(tr('导出历史', 'Export history'), tr('ZIP 包含 HTML 时间线、JSON 历史数据和 CSV 行动表。', 'ZIP includes an HTML timeline, JSON history and CSV action table.'), form,
-          h('p', { class: 'muted' }, tr('成功与失败的尝试都会保留。旧记录缺失处如实标注，不包含模型内部推理过程。', 'Successful and failed attempts are included. Missing records are identified; internal model reasoning is excluded.'))));
+          h('p', { class: 'muted' }, tr('成功与失败的尝试都会保留。旧记录缺失处如实标注，不包含内核内部推理过程。', 'Successful and failed attempts are included. Missing records are identified; internal core reasoning is excluded.'))));
       }
       root.append(card(tr('导出记录', 'Export records'), tr('过继后下载权限随当前归属变化。', 'Download access follows current ownership.'), jobsRoot)); await jobs(jobsRoot, current);
     } catch (error) { if (current === version) clear(root).append(emptyState(tr('暂时无法读取历史', 'History unavailable'), error.message, btn(tr('重试', 'Retry'), load))); }

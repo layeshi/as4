@@ -100,7 +100,7 @@ test('answers render the Markdown subset with source chips, AI marking and state
   const thread = $('.assistant-thread');
   assert.equal(thread.querySelectorAll('.assistant-question').length, 4);
   assert.equal(thread.querySelectorAll('.assistant-answer').length, 4);
-  assert.deepEqual(thread.querySelectorAll('.assistant-answer > .ai-note').map(n => n.textContent), ['AI 生成', 'AI 生成']);
+  assert.deepEqual(thread.querySelectorAll('.assistant-answer > .ai-note').map(n => n.textContent), ['演算生成', '演算生成']);
   assert.equal(thread.querySelectorAll('.assistant-notice').length, 2);
   assert.equal(thread.querySelectorAll('.assistant-notice .ai-note').length, 0);
   assert.equal(thread.querySelector('.assistant-prose h3').textContent, '结论');
@@ -164,7 +164,7 @@ test('private records default to all residents: the question goes out without a 
   assert.equal(stop.textContent, '停止');
   assert.ok(!stop.classList.contains('primary'));
   assert.equal($$('.btn.primary').length, 0);
-  assert.match($('.assistant-answer').textContent, /^AI 生成正在生成…$/);
+  assert.match($('.assistant-answer').textContent, /^演算生成正在生成…$/);
   assert.ok($('.assistant-answer .assistant-caret'));
 });
 

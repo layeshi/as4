@@ -527,7 +527,7 @@ a.summary-stat small { color: var(--accent); }
 .assistant-answer > p.muted { margin: 0; font-size: 15px; }
 .assistant-callout { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 12px; }
 .assistant-answer > .ai-note + .assistant-callout { margin-top: 0; }
-/* 没有模型文字的回答位（失败、未展示、审核中）：只留一条提示，不套 AI 底色 */
+/* 没有内核文字的回答位（失败、未展示、审核中）：只留一条提示，不套 AI 底色 */
 .assistant-answer.assistant-notice { padding: 0; background: none; border: 0; }
 .assistant-notice > .assistant-callout { margin-top: 0; }
 .assistant-callout .link { font-weight: 600; }

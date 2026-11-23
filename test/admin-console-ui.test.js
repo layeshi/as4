@@ -47,7 +47,7 @@ test('管理后台：分组侧栏列出全部管理功能，默认服务器状�
     const console = await mountAdmin({ header: env.header, app: env.app }); await settle();
     const ids = adminSections().flatMap(([, items]) => items.map(([id]) => id));
     assert.deepEqual(ids, ['server', 'experiment', 'snapshots', 'users', 'topups', 'assistant', 'reports', 'hosted', 'usage', 'public-model', 'announcements', 'inventions', 'support']);
-    assert.deepEqual(env.app.querySelectorAll('.admin-nav-group').map((g) => g.textContent), ['运行', '用户与充值', '模型', '内容与支持']);
+    assert.deepEqual(env.app.querySelectorAll('.admin-nav-group').map((g) => g.textContent), ['运行', '用户与充值', '内核', '内容与支持']);
     assert.equal(env.app.querySelectorAll('.admin-nav-link').length, ids.length);
     assert.equal(console.shown, 'server'); assert.match(env.app.querySelector('h1').textContent, /服务器状态/);
     assert.equal(env.app.querySelector('[aria-current="page"]').getAttribute('href'), '#server');

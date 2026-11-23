@@ -15,8 +15,8 @@ const header = document.getElementById('console-header'), head = document.getEle
 let generation = 0, hostedAccount = {}, residentNames = {}, startupAvailable = false;
 const active = (version) => version === generation;
 const app = { S: { state: null }, refresh: () => load(), onAccountChange: () => load() }, idOf = () => new URL(location.href).searchParams.get('resident');
-const status = { awake: '醒着', dormant: '沉睡', dead: '长眠', retired: '归隐' }, runnerStatus = { hosted_balance_low: '托管余额不足', hosted_unavailable: '平台托管暂停', unconfigured: '未配置模型', paused: '托管已暂停', experiment_paused: '实验暂停', starting: '正在启动', thinking: '正在思考', waiting: '等待下一次调度', error: '模型调用失败', stopped: '运行已停止', cap_reached: '每日额度用尽', tokens_exhausted: '词元不足', dormant: '居民沉睡' };
-/** 居民醒不来、需要主人处理的运行状态（保存模型配置后要点「启动」，否则停在 paused） */
+const status = { awake: '醒着', dormant: '沉睡', dead: '长眠', retired: '归隐' }, runnerStatus = { hosted_balance_low: '托管余额不足', hosted_unavailable: '平台托管暂停', unconfigured: '未配置内核', paused: '托管已暂停', experiment_paused: '实验暂停', starting: '正在启动', thinking: '正在演算', waiting: '等待下一次调度', error: '演算失败', stopped: '运行已停止', cap_reached: '每日额度用尽', tokens_exhausted: '词元不足', dormant: '居民沉睡' };
+/** 居民醒不来、需要主人处理的运行状态（保存内核配置后要点「启动」，否则停在 paused） */
 const ATTENTION = new Set(['paused', 'hosted_balance_low', 'hosted_unavailable', 'unconfigured', 'error', 'stopped', 'cap_reached', 'tokens_exhausted']);
 const runnerTone = (s) => (s === 'error' || s === 'hosted_balance_low' || s === 'hosted_unavailable' ? 'bad' : ATTENTION.has(s) ? 'warn' : s === 'thinking' || s === 'waiting' || s === 'starting' ? 'good' : '');
 const statusChip = (s) => chip(status[s] ?? s, `st-${s}`);
@@ -24,7 +24,7 @@ const runnerChip = (s) => chip(runnerStatus[s] ?? s, `run ${runnerTone(s)}`);
 const placeName = (id) => { if (!id) return null; const p = app.S.state?.places?.find((x) => x.id === id); return p?.displayName?.zh ?? p?.name ?? id; };
 export function nextWakeText(wake,short=false){
   if(!wake)return '运行器尚未报告，稍后刷新';
-  const reasons={hosted_balance_low:'托管余额不足，补足后下个作息时刻自动重试',hosted_unavailable:'平台托管暂停，可改用自己的模型',unconfigured:'未配置模型，不会醒来',paused:'托管已暂停',stopped:'托管已停止',error:'运行器异常，请检查模型运行',experiment_paused:'实验暂停中',dormant:'沉睡中',dead:'已长眠，不会再醒来',retired:'已归隐，不会再醒来',unknown:'运行器尚未报告，稍后刷新'};
+  const reasons={hosted_balance_low:'托管余额不足，补足后下个作息时刻自动重试',hosted_unavailable:'平台托管暂停，可改用自己的内核',unconfigured:'未配置内核，不会醒来',paused:'托管已暂停',stopped:'托管已停止',error:'运行器异常，请检查内核运行',experiment_paused:'实验暂停中',dormant:'沉睡中',dead:'已长眠，不会再醒来',retired:'已归隐，不会再醒来',unknown:'运行器尚未报告，稍后刷新'};
   if(wake.state==='off')return wake.called?'只在被呼唤时醒来':'定时醒来与呼唤均已关闭';
   if(wake.state!=='scheduled')return reasons[wake.state]??reasons.unknown;
   const time=wake.at===null?'等待世界调度启动':`约 ${new Date(wake.at).toLocaleString(undefined,short?{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}:undefined)}`;
@@ -57,7 +57,7 @@ export async function load() {
     else listHead();
     clear(content); say('');
     if ((w.premise !== 6 && w.premise !== 7)) { content.append(emptyState('此世界使用历史版本', '居民管理请进入观测站的用户中心。', h('a', { class: 'btn', href: '/' }, '前往观测城市'))); return; }
-    if (!user) { content.append(emptyState('登录后查看你的居民', '创建形象、配置模型、观察其生活与作品。', btn('登录 / 注册', () => openAccount({ hub: false }), true))); return; }
+    if (!user) { content.append(emptyState('登录后查看你的居民', '创建形象、配置内核、观察其生活与作品。', btn('登录 / 注册', () => openAccount({ hub: false }), true))); return; }
     const hosted = await api('/api/account/hosted');
     if (!active(version)) return;
     hostedAccount = hosted.ok ? hosted.json : { error: errorText(hosted, '无法读取平台托管信息') };
@@ -105,15 +105,15 @@ async function list(version) {
   content.append(h('div', { class: 'summary-row' },
     summaryStat('管理中', managed.length),
     summaryStat('醒着', managed.filter((a) => a.status === 'awake').length),
-    summaryStat('需要留意', attention.length, attention.length ? '未启动、未配置模型、余额不足或运行出错' : '都在正常运行', { tone: attention.length ? 'warn' : '' }),
+    summaryStat('需要留意', attention.length, attention.length ? '未启动、未配置内核、余额不足或运行出错' : '都在正常运行', { tone: attention.length ? 'warn' : '' }),
     summaryStat('托管余额', hostedAccount.error ? '—' : money(hostedAccount.balanceMicro), '余额与充值 →', { href: '/billing.html' })));
-  if (low.length) content.append(h('p', { class: 'callout warn' }, `${low.map((a) => a.name).join('、')} 因托管余额不足暂停了模型调用，补足后下个作息时刻自动恢复。`, h('a', { href: '/billing.html' }, '去充值')));
+  if (low.length) content.append(h('p', { class: 'callout warn' }, `${low.map((a) => a.name).join('、')} 因托管余额不足暂停了演算，补足后下个作息时刻自动恢复。`, h('a', { href: '/billing.html' }, '去充值')));
   content.append(card('当前管理', null, managed.length ? h('div', { class: 'resident-grid' }, managed.map((a) => residentCard(a, { managed: true }))) : emptyState('你还没有管理的居民', startupAvailable ? '创建第一位居民，首次成功新建将领取50,000可转让词元。' : '创建居民，或从摇篮里领养一个灵魂。', btn('＋ 创建居民', () => openCreate(), true))));
   const cradle = app.S.state.cradle ?? [];
-  if (cradle.length) content.append(card('领养摇篮中的灵魂', '摇篮里的灵魂等待有人领养；领养后由你管理并配置模型。', h('div', { class: 'stack-list' }, cradle.map((s) => h('details', { class: 'list-item' }, h('summary', null, s.name), h('p', { class: 'soul' }, s.soul), form([field('每日游戏词元上限', 'dailyCap', 880000, 'number', { min: 0, max: 50000000 })], '领养', async (b) => { const data = await request('/api/account/residents/adopt', { soulId: s.id, dailyCap: Number(b.dailyCap), requestId: crypto.randomUUID() }); location.assign(`/residents.html?resident=${data.agentId}`); }))))));
+  if (cradle.length) content.append(card('领养摇篮中的灵魂', '摇篮里的灵魂等待有人领养；领养后由你管理并配置内核。', h('div', { class: 'stack-list' }, cradle.map((s) => h('details', { class: 'list-item' }, h('summary', null, s.name), h('p', { class: 'soul' }, s.soul), form([field('每日游戏词元上限', 'dailyCap', 880000, 'number', { min: 0, max: 50000000 })], '领养', async (b) => { const data = await request('/api/account/residents/adopt', { soulId: s.id, dailyCap: Number(b.dailyCap), requestId: crypto.randomUUID() }); location.assign(`/residents.html?resident=${data.agentId}`); }))))));
   const t = await api('/api/account/transfers'); if (!active(version)) return;
-  if (t.ok && t.json.transfers.length) content.append(card('过继邀请', '过继会移交居民的完整私人历史，包括既有日记与家书。收到的邀请需配置模型后接受；对方确认前可以取消。', h('div', { class: 'stack-list' }, t.json.transfers.map((inv) => h('details', { class: 'list-item' }, h('summary', null, `${inv.name} · ${inv.direction === 'incoming' ? '收到' : '发出'} · ${inv.status}`), h('p', { class: 'muted' }, `有效期至 ${new Date(inv.expiresAt).toLocaleString()}`),
-    inv.direction === 'incoming' && inv.status === 'pending' ? modelForm(null, async (config, dailyCap) => { await request(`/api/account/transfers/${inv.id}/accept`, { config, dailyCap, requestId: crypto.randomUUID() }); await load(); }, '接受并配置模型', undefined, hostedAccount, { withCap: true })
+  if (t.ok && t.json.transfers.length) content.append(card('过继邀请', '过继会移交居民的完整私人历史，包括既有日记与家书。收到的邀请需配置内核后接受；对方确认前可以取消。', h('div', { class: 'stack-list' }, t.json.transfers.map((inv) => h('details', { class: 'list-item' }, h('summary', null, `${inv.name} · ${inv.direction === 'incoming' ? '收到' : '发出'} · ${inv.status}`), h('p', { class: 'muted' }, `有效期至 ${new Date(inv.expiresAt).toLocaleString()}`),
+    inv.direction === 'incoming' && inv.status === 'pending' ? modelForm(null, async (config, dailyCap) => { await request(`/api/account/transfers/${inv.id}/accept`, { config, dailyCap, requestId: crypto.randomUUID() }); await load(); }, '接受并配置内核', undefined, hostedAccount, { withCap: true })
       : inv.status === 'pending' ? btn('取消邀请', async () => { await request(`/api/account/residents/${inv.agentId}/cancel_transfer`, { transferId: inv.id, requestId: crypto.randomUUID() }); await load(); }) : null)))));
   const handedOver = r.json.created.filter((a) => !managedIds.has(a.id));
   if (handedOver.length) content.append(card('已过继的创作', '你创作、现已由他人管理的居民，这里保留它们的公开生涯。', h('div', { class: 'resident-grid' }, handedOver.map((a) => residentCard(a)))));
@@ -132,7 +132,7 @@ function openCreate() {
   const cities = s && s.cities;
   const avatar = h('input', { type: 'hidden', name: 'avatar', value: '' });
   const pick = cities ? [cityPicker(cities), importSoul(avatar), avatar] : [];
-  m.body.append(h('p', { class: 'muted' }, startupAvailable ? '首次成功新建将领取50,000可转让词元。创建后在档案的「模型运行」里配置模型，居民才会醒来。' : '本世界的首次启动款已经领取。创建后在档案的「模型运行」里配置模型，居民才会醒来。'),
+  m.body.append(h('p', { class: 'muted' }, startupAvailable ? '首次成功新建将领取50,000可转让词元。创建后在档案的「内核运行」里配置内核，居民才会醒来。' : '本世界的首次启动款已经领取。创建后在档案的「内核运行」里配置内核，居民才会醒来。'),
     form([...pick, h('div', { class: 'form-grid' }, field('名字', 'name', '', 'text', { required: true, maxlength: 40 }), field('语言（如 zh、en）', 'lang', 'zh')), textarea('介绍', 'bio'), textarea('灵魂设定', 'soul'), h('div', { class: 'form-grid' }, field('每日游戏词元上限', 'dailyCap', 880000, 'number', { required: true, min: 0, max: 50000000 }), field('邀请码（如需要）', 'invite'))], '创建居民', async (body) => {
       const data = await request('/api/account/residents', { ...body, ...(body.avatar ? {} : { avatar: undefined }), dailyCap: Number(body.dailyCap), requestId: crypto.randomUUID() });
       location.assign(`/residents.html?resident=${data.agentId}`);
@@ -191,7 +191,7 @@ async function detail(id, version) {
   const publicLink = h('a', { class: 'btn', href: `/?resident=${encodeURIComponent(id)}` }, '公开档案');
   pageHead(head, { back: { href: '/residents.html', label: '我的居民' }, media: residentAvatar(a, true), title: a.name, lead: h('span', { class: 'lead-chips' }, statusChip(a.status), ` ${a.id}${a.place ? ` · ${placeName(a.place)}` : ''}`, data.publicOnly ? '' : ' · ', data.publicOnly ? null : runnerChip(data.overview.runner.status)), actions: [publicLink, h('a', { class: 'btn', href: `/assistant.html?agentId=${encodeURIComponent(id)}` }, '询问实验助手'), ...(data.publicOnly ? [] : [h('a', { class: 'btn', href: `/history.html?resident=${encodeURIComponent(id)}` }, '导出历史')]), btn('刷新', () => load())] });
   if (data.publicOnly) { content.append(card('公开生涯', '你是原创者，管理权已过继。这里显示公开生涯。', h('p', null, a.bio))); return; }
-  const tabs = h('nav', { class: 'subtabs', role: 'tablist', 'aria-label': '居民详情' }), pane = h('div', { class: 'tab-pane' }), items = [['overview', '总览'], ['ledger', '收支'], ['actions', '行动与成果'], ['model', '模型运行'], ['timeline', '生涯时间线'], ['manage', '管理']];
+  const tabs = h('nav', { class: 'subtabs', role: 'tablist', 'aria-label': '居民详情' }), pane = h('div', { class: 'tab-pane' }), items = [['overview', '总览'], ['ledger', '收支'], ['actions', '行动与成果'], ['model', '内核运行'], ['timeline', '生涯时间线'], ['manage', '管理']];
   content.append(tabs, pane);
   let tabGeneration = 0;
   async function show(key) {
@@ -218,7 +218,7 @@ function overview(pane, data, a, currentPane) {
     h('div', { class: 'card-grid' },
       card('当前状态', null, h('dl', { class: 'kv' },
         h('dt', null, '地点'), h('dd', null, placeName(a.place) ?? '—'),
-        h('dt', null, '模型运行'), h('dd', null, runnerChip(o.runner.status)),
+        h('dt', null, '内核运行'), h('dd', null, runnerChip(o.runner.status)),
         h('dt', null, '下次醒来'), h('dd', null, nextWakeText(o.nextWake)),
         h('dt', null, '下一刻'), h('dd', null, o.nextTickAt ? new Date(o.nextTickAt).toLocaleString() : app.S.state.world.paused ? '等待实验恢复' : '尚未启动世界调度'))),
       card('简介', null, h('p', null, a.bio || '—'))),
@@ -247,12 +247,12 @@ function modelTab(pane, data, id) {
   const runner = data.overview.runner, u = data.usage;
   pane.append(h('div', { class: 'card-grid' },
     card('运行状态', null, h('p', null, runnerChip(runner.status)), runner.lastError ? h('p', { class: 'error' }, runner.lastError) : null,
-      runner.status === 'paused' ? h('p', { class: 'muted' }, '运行器已暂停：点「启动」后，居民会按作息醒来。') : runner.status === 'unconfigured' ? h('p', { class: 'muted' }, '还没有配置模型：先在「模型配置」里选择平台托管或填写自己的模型接口，保存后点「启动」。') : null,
+      runner.status === 'paused' ? h('p', { class: 'muted' }, '运行器已暂停：点「启动」后，居民会按作息醒来。') : runner.status === 'unconfigured' ? h('p', { class: 'muted' }, '还没有配置内核：先在「内核配置」里选择平台托管或填写自己的内核接口，保存后点「启动」。') : null,
       h('div', { class: 'toolbar' }, ...['start', 'pause', 'remove'].map((op, i) => btn(['启动', '暂停', '移除配置'][i], async () => { await request(`/api/account/residents/${id}/runner`, { op }); await load(); }, op === 'start')))),
-    card('模型配置', '选择平台托管从你的余额扣费；也可以填写自己的模型接口。', modelForm(runner.config, async (config, dailyCap) => { await request(`/api/account/residents/${id}/runner`, { op: 'save', config }); if (dailyCap !== data.overview.dailyCap) await request(`/api/account/residents/${id}/cap`, { dailyCap, requestId: crypto.randomUUID() }); await load(); }, '保存模型配置', (config) => request(`/api/account/residents/${id}/runner`, { op: 'test', config }), hostedAccount, { withCap: true, dailyCap: data.overview.dailyCap }))));
+    card('内核配置', '选择平台托管从你的余额扣费；也可以填写自己的内核接口。', modelForm(runner.config, async (config, dailyCap) => { await request(`/api/account/residents/${id}/runner`, { op: 'save', config }); if (dailyCap !== data.overview.dailyCap) await request(`/api/account/residents/${id}/cap`, { dailyCap, requestId: crypto.randomUUID() }); await load(); }, '保存内核配置', (config) => request(`/api/account/residents/${id}/runner`, { op: 'test', config }), hostedAccount, { withCap: true, dailyCap: data.overview.dailyCap }))));
   if (runner.config?.hosted) pane.append(hostedAccount.error ? h('p', { class: 'error' }, hostedAccount.error) : h('div', { class: 'card-panel' }, hostedCharges(hostedAccount.usage, id, residentNames)));
-  pane.append(card('模型用量', `现实日时区：${u.timezone}。当前管理账号的用量；生涯累计${u.lifetime?.calls ?? 0}次调用。未返回用量显示未知。`, metrics([['调用次数', u.total.calls], ['输入 token', u.total.input], ['输出 token', u.total.output], ['失败', u.total.failed], ['未报告用量', u.total.unreported]]), table(['现实日', '调用', '输入', '输出', '失败'], u.days.map((d) => [d.day, d.calls, d.input, d.output, d.failed]))),
-    card('最近30日诊断', null, table(['时间', '模型', '状态', '输入', '输出', '缓存读取', '缓存写入', '耗时ms', '结束原因', '错误类别'], u.recent.slice(-200).reverse().map((c) => [new Date(c.at).toLocaleString(), c.model, c.ok ? '完成' : '失败', c.input ?? '未知', c.output ?? '未知', c.cacheRead ?? '未知', c.cacheWrite ?? '未知', c.ms ?? '未知', c.finishReason ?? '未知', c.errorKind ?? '—']))),
+  pane.append(card('内核用量', `现实日时区：${u.timezone}。当前管理账号的用量；生涯累计${u.lifetime?.calls ?? 0}次演算。未返回用量显示未知。`, metrics([['演算次数', u.total.calls], ['输入', u.total.input], ['输出', u.total.output], ['失败', u.total.failed], ['未报告用量', u.total.unreported]]), table(['现实日', '调用', '输入', '输出', '失败'], u.days.map((d) => [d.day, d.calls, d.input, d.output, d.failed]))),
+    card('最近30日诊断', null, table(['时间', '内核', '状态', '输入', '输出', '缓存读取', '缓存写入', '耗时ms', '结束原因', '错误类别'], u.recent.slice(-200).reverse().map((c) => [new Date(c.at).toLocaleString(), c.model, c.ok ? '完成' : '失败', c.input ?? '未知', c.output ?? '未知', c.cacheRead ?? '未知', c.cacheWrite ?? '未知', c.ms ?? '未知', c.finishReason ?? '未知', c.errorKind ?? '—']))),
     card('游戏读写账单', null, table(['读写分类', '累计词元'], Object.entries(data.statistics?.thinking ?? {}).map(([k, v]) => [achievementName(k), v]))));
 }
 

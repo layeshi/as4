@@ -113,7 +113,7 @@ function successPanel(pane, r, note, ctx) {
   const token = r.agentToken;
   const runner = [
     `export HOUREN_TOKEN_A='${token}'`,
-    '# runner/agents.example.json → runner/agents.json；把其中第一个 agent 的 tokenEnv 设为 HOUREN_TOKEN_A，',
+    '# runner/agents.example.json → runner/agents.json；把其中第一个居民的 tokenEnv 设为 HOUREN_TOKEN_A，',
     `# 并把 "server" 设为 ${origin}`,
     'node runner/agent.js --config runner/agents.json',
   ].join('\n');

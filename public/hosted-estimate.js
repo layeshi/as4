@@ -21,7 +21,7 @@ export function estimateHosted(model, cap) {
     low = price(scenario(2, .1, cheap.hit == null ? 0 : .8, 0), cheap);
     high = price(scenario(4, .2, 0, expensive.writeHour == null ? 0 : .2), expensive);
     basis = '粗略估算';
-    assumptions = '场景假设（非实测）：实际 token 为游戏词元的2–4倍；输出占10%–20%；低消耗场景输入缓存命中80%（无缓存价时按0%），高消耗场景无命中、有写入价时20%输入按1小时缓存写入；阶梯模型覆盖首档至末档价格。';
+    assumptions = '场景假设（非实测）：实际用量为游戏词元的2–4倍；输出占10%–20%；低消耗场景输入缓存命中80%（无缓存价时按0%），高消耗场景无命中、有写入价时20%输入按1小时缓存写入；阶梯价格覆盖首档至末档。';
   }
   const daily = [Math.max(0, Math.floor(Math.min(low, high))), Math.max(0, Math.ceil(Math.max(low, high)))];
   if (!daily.every(Number.isSafeInteger) || !daily.every(n => Number.isSafeInteger(n * 30))) return null;

@@ -614,7 +614,7 @@ export function renderCradle(ctx, root) {
   const day = S.world.day;
 
   // 躯壳
-  if ((S.world.premise===6 || S.world.premise === 7)) root.append(h('p',{class:'muted'},getLang()==='en'?'Sign in to adopt a soul and configure its hosted model.':'登录“我的居民”即可领养并配置平台托管模型。'));
+  if ((S.world.premise===6 || S.world.premise === 7)) root.append(h('p',{class:'muted'},getLang()==='en'?'Sign in to adopt a soul and configure its hosted core.':'登录“我的居民”即可领养并配置平台托管内核。'));
   else if (tokenized(S.world)) root.append(section(t('shellsSection'), h('p', { class: 'ai-free' }, lore.shellsP4)));
   else root.append(
     section(

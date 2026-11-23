@@ -58,21 +58,21 @@ test('用量面板：四块数字、近 14 日柱状图、最近调用、统计�
     const panel = usagePanel('k', fixture());
     env.dom.root.append(panel);
     const text = panel.textContent;
-    assert.match(text, /Token 用量/);
+    assert.match(text, /演算用量/);
     assert.match(text, /61,200/, '累计');
     assert.match(text, /20,400/, '今日');
     assert.match(text, /输入 60,000 · 输出 1,200/);
     assert.match(text, /10,200/, '平均每次 = 61200 ÷ 6 次报告了用量的调用');
     assert.match(text, /失败 1 次/);
     assert.doesNotMatch(text, /未报告用量 \d+ 次/, '没有未报告的调用时不显示');
-    assert.match(text, /今日 3 次调用/);
+    assert.match(text, /今日 3 次演算/);
 
     const chart = panel.querySelector('svg.usage-chart');
     assert.ok(chart, '有柱状图');
     assert.equal(chart.querySelectorAll('g.usage-bar').length, 14, '每一天一组，含没有调用的日子');
     assert.equal(chart.querySelectorAll('rect.in').length, 2);
     assert.equal(chart.querySelectorAll('rect.out').length, 2);
-    assert.match(chart.querySelectorAll('title')[13].textContent, new RegExp(`${day(13)} · 输入 20,000 · 输出 400 · 模型调用 3`));
+    assert.match(chart.querySelectorAll('title')[13].textContent, new RegExp(`${day(13)} · 输入 20,000 · 输出 400 · 内核演算 3`));
     assert.equal(chart.querySelectorAll('title')[0].textContent.includes('输入 0'), true, '没有调用的日子也有读数');
 
     const lines = panel.querySelectorAll('ul.usage-recent li').map((li) => li.textContent);
@@ -90,7 +90,7 @@ test('用量面板：没有调用、全是未报告（演示模型）、未托�
   const env = setup(() => reply(500, null));
   try {
     const empty = usagePanel('k', fixture({ since: null, total: { calls: 0, failed: 0, unreported: 0, input: 0, output: 0, tokens: 0 }, days: fixture().days.map((d) => ({ ...d, calls: 0, tokens: 0, input: 0, output: 0 })), recent: [] }));
-    assert.match(empty.textContent, /还没有调用过模型/);
+    assert.match(empty.textContent, /还没有演算过/);
     assert.equal(empty.querySelector('svg'), null);
     assert.match(empty.textContent, /平均每次/);
 
@@ -98,7 +98,7 @@ test('用量面板：没有调用、全是未报告（演示模型）、未托�
     const demoPanel = usagePanel('k', demo);
     assert.match(demoPanel.textContent, /未报告用量 5 次/);
     assert.equal(demoPanel.querySelector('svg'), null, '一个 token 也没有时不画空图');
-    assert.match(demoPanel.textContent, /最近调用/);
+    assert.match(demoPanel.textContent, /最近演算/);
 
     const manual = usagePanel('k', { agentId: 'a1', tracked: false });
     assert.match(manual.textContent, /没有托管运行器/);

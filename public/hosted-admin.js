@@ -1,6 +1,6 @@
 import { catalogAdmin } from './hosted-catalog-admin.js';
-// 管理后台里与模型计费有关的三块：平台托管（配置、连接测试、今日统计）、充值审核（待处理申请、手动调整、账号余额）、
-// 公共角色模型（独立预算）。每块返回一个根节点，由 admin.js 挂到内容区。
+// 管理后台里与内核计费有关的三块：平台托管（配置、连接测试、今日统计）、充值审核（待处理申请、手动调整、账号余额）、
+// 公共角色内核（独立预算）。每块返回一个根节点，由 admin.js 挂到内容区。
 
 import { h, clear } from './dom.js';
 import { api, errorText } from './api.js';
@@ -68,10 +68,10 @@ export function hostedConfigPanel() {
     catalogAdmin(pane, d, refresh);
     if (d.config.version === 2) return;
     const c = d.config, today = d.stats.today;
-    pane.append(h('p', { class: `callout ${d.available ? 'good' : 'warn'}` }, d.available ? '平台托管已开放：选择托管的居民从各自账号的余额扣费。' : '平台托管暂未开放：勾选「开放」并配齐接口地址、模型、API Key 与三个单价后，居民才能选择托管。'));
+    pane.append(h('p', { class: `callout ${d.available ? 'good' : 'warn'}` }, d.available ? '平台托管已开放：选择托管的居民从各自账号的余额扣费。' : '平台托管暂未开放：勾选「开放」并配齐接口地址、内核、接入密钥与三个单价后，居民才能选择托管。'));
     if (d.storageFault) pane.append(h('p', { class: 'callout bad' }, '托管账本暂不可用，入账与调整已暂停。'));
     const enabled = h('input', { name: 'enabled', type: 'checkbox', checked: c.enabled }), clearKey = h('input', { name: 'clearApiKey', type: 'checkbox' });
-    const fields = [h('label', { class: 'check' }, enabled, '开放'), field('接口地址', 'baseURL', c.baseURL, 'url', { required: true }), field('模型 ID', 'model', c.model), field(c.hasApiKey ? 'API Key（已配置，留空保留）' : 'API Key（留空保留）', 'apiKey', '', 'password', { autocomplete: 'off' }), h('label', { class: 'check' }, clearKey, '清除 API Key'), h('label', { class: 'field' }, h('span', null, '思考模式'), h('select', { name: 'thinking' }, [['default', '默认'], ['enabled', '开启'], ['disabled', '关闭']].map(([value, label]) => h('option', { value, selected: c.thinking === value }, label)))), field('单次最大输出 token', 'maxOutputTokens', c.maxOutputTokens, 'number', { min: 256, max: 32000, required: true }), h('p', { class: 'field-group' }, '单价（元 / 百万 token）'), h('div', { class: 'form-grid' }, ...priceLabels.map(([key, label]) => moneyField(label, key, c.pricesMicro ? microYuan(c.pricesMicro[key], 6) : '', { required: false })))];
+    const fields = [h('label', { class: 'check' }, enabled, '开放'), field('接口地址', 'baseURL', c.baseURL, 'url', { required: true }), field('内核 ID', 'model', c.model), field(c.hasApiKey ? '接入密钥（已配置，留空保留）' : '接入密钥（留空保留）', 'apiKey', '', 'password', { autocomplete: 'off' }), h('label', { class: 'check' }, clearKey, '清除接入密钥'), h('label', { class: 'field' }, h('span', null, '思考模式'), h('select', { name: 'thinking' }, [['default', '默认'], ['enabled', '开启'], ['disabled', '关闭']].map(([value, label]) => h('option', { value, selected: c.thinking === value }, label)))), field('单次最大输出用量', 'maxOutputTokens', c.maxOutputTokens, 'number', { min: 256, max: 32000, required: true }), h('p', { class: 'field-group' }, '单价（元 / 百万次用量）'), h('div', { class: 'form-grid' }, ...priceLabels.map(([key, label]) => moneyField(label, key, c.pricesMicro ? microYuan(c.pricesMicro[key], 6) : '', { required: false })))];
     const config = (b) => {
       const result = { enabled: enabled.checked, baseURL: b.baseURL, model: b.model, apiKey: b.apiKey, clearApiKey: clearKey.checked, thinking: b.thinking, maxOutputTokens: Number(b.maxOutputTokens) };
       if (!Number.isInteger(result.maxOutputTokens) || result.maxOutputTokens < 256 || result.maxOutputTokens > 32000) throw Error('单次最大输出须为256–32000的整数');
@@ -85,13 +85,13 @@ export function hostedConfigPanel() {
       try {
         const result = await request('/api/admin/hosted/test', config(Object.fromEntries(new FormData(configForm))));
         await refresh();
-        pane.prepend(h('p', { class: 'callout good', role: 'status' }, `模型连接测试成功：${result.model}。`));
+        pane.prepend(h('p', { class: 'callout good', role: 'status' }, `内核连接测试成功：${result.model}。`));
       } catch (err) { testNotice.className = 'error'; testNotice.textContent = err.message; }
     }));
     configForm.append(testNotice);
     pane.append(h('div', { class: 'card-grid hosted-grid' },
-      card('托管配置', '旧版单模型配置（迁移前兼容）。请使用上方 OpenLux 接入设置升级；测试调用由平台承担费用。', configForm),
-      card('今日统计', `${d.day} · ${d.timezone}`, metrics([['余额合计', money(d.stats.balanceMicro)], ['在途预留', money(d.stats.reservedMicro)], ['今日扣费', money(today.costMicro)], ['今日调用', today.calls], ['今日 token', today.tokens], ['输入 token', today.input], ['缓存命中 token', today.cacheRead], ['输出 token', today.output], ['托管居民', d.stats.hostedResidents]]))));
+      card('托管配置', '旧版单内核配置（迁移前兼容）。请使用上方 OpenLux 接入设置升级；测试调用由平台承担费用。', configForm),
+      card('今日统计', `${d.day} · ${d.timezone}`, metrics([['余额合计', money(d.stats.balanceMicro)], ['在途预留', money(d.stats.reservedMicro)], ['今日扣费', money(today.costMicro)], ['今日演算', today.calls], ['今日用量', today.tokens], ['输入', today.input], ['缓存命中', today.cacheRead], ['输出', today.output], ['托管居民', d.stats.hostedResidents]]))));
   });
 }
 
@@ -117,11 +117,11 @@ export function hostedBillingPanel({ onPending, pollMs = PENDING_POLL_MS } = {})
         await refresh();
       })),
       card('最近处理的申请', '最近 50 笔已入账、已拒绝或已撤回的申请，按处理时间新的在前。用户说提交过却不在待处理里时，先在这里查。', table(['用户名', '申请金额', '状态', '实际入账', '付款说明', '处理说明', '处理人', '申请时间', '处理 / 撤回时间'], (d.history ?? []).map((r) => [r.username ?? r.accountId, money(r.amountMicro), requestChip(r.status), r.status === 'approved' ? money(r.creditMicro) : '—', r.note || '—', r.adminNote || '—', r.status === 'cancelled' ? '用户撤回' : r.deciderName ?? r.decider ?? '—', timeText(r.createdAt), timeText(r.decidedAt ?? r.cancelledAt)]))),
-      card('账号余额与累计用量', `余额合计 ${money(d.stats.balanceMicro)} · 在途预留 ${money(d.stats.reservedMicro)}`, table(['用户名', '余额', '在途预留', '累计调用', '输入 token', '缓存命中 token', '输出 token', '累计扣费'], d.accounts.map((a) => [a.username ?? `已删除账号 · ${a.accountId}`, money(a.balanceMicro), money(a.reservedMicro), a.total.calls, a.total.input, a.total.cacheRead, a.total.output, money(a.total.costMicro)]))));
+      card('账号余额与累计用量', `余额合计 ${money(d.stats.balanceMicro)} · 在途预留 ${money(d.stats.reservedMicro)}`, table(['用户名', '余额', '在途预留', '累计演算', '输入', '缓存命中', '输出', '累计扣费'], d.accounts.map((a) => [a.username ?? `已删除账号 · ${a.accountId}`, money(a.balanceMicro), money(a.reservedMicro), a.total.calls, a.total.input, a.total.cacheRead, a.total.output, money(a.total.costMicro)]))));
   }, { pollMs, key, stale, onView: (d) => onPending?.(d.requests.length) });
 }
 
-/** 公共角色模型：独立于城市额度的每日预算与共享模型配置 */
+/** 公共角色内核：独立于城市额度的每日预算与共享内核配置 */
 export function publicModelPanel() {
   const root = h('div', { class: 'public-model' }), notice = h('p', { role: 'status' }), pane = h('div', { class: 'panel-stack' });
   async function load() {
@@ -132,7 +132,7 @@ export function publicModelPanel() {
     notice.textContent = '';
     clear(pane).append(
       card('独立预算', `现实日时区：${r.json.timezone}`, metrics([['今日已用', r.json.used], ['在途预留', r.json.reserved], ['每日硬上限', r.json.limit]])),
-      card('共享模型', '公共角色回答居民提问时使用的模型；额度独立于城市词元。', modelForm(r.json.config, (config) => request('/api/admin/public-model', { ...config, dailyLimit: 1000000 }), '保存共享模型（独立于城市额度）', undefined, null)));
+      card('共享内核', '公共角色回答居民提问时使用的内核；额度独立于城市词元。', modelForm(r.json.config, (config) => request('/api/admin/public-model', { ...config, dailyLimit: 1000000 }), '保存共享内核（独立于城市额度）', undefined, null)));
   }
   root.append(h('div', { class: 'panel-toolbar' }, btn('刷新', load)), notice, pane);
   load();

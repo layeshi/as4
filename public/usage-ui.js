@@ -1,6 +1,6 @@
-// 幕后的 token 用量：每位居民一块面板，外加跨居民的总览。
+// 幕后的演算用量：每位居民一块面板，外加跨居民的总览。
 // 数据来自 GET /api/owner（agents[0].usage）与 GET /api/owner/usage，两者同形，都用造者密钥鉴权。
-// 只有服务器托管运行的居民才有统计（tracked: true）；自托管运行器与 MCP 的模型调用服务器看不到。
+// 只有服务器托管运行的居民才有统计（tracked: true）；自建运行器与外部客户端发起的演算服务器看不到。
 
 import { h, clear } from './dom.js';
 import { t, getLang } from './i18n.js';
@@ -55,7 +55,7 @@ export function dayChart(days) {
   return svg;
 }
 
-/** 一次调用的一行：时间、用量（或失败原因）、用时、模型；第二前提的调用还有第几轮、是不是被叫醒的 */
+/** 一次演算的一行：时间、用量（或失败原因）、用时、内核；第二前提的调用还有第几轮、是不是被叫醒的 */
 function callLine(c) {
   const what = !c.ok ? (c.status ? t('usageCallFailedHttp', { status: c.status }) : t('usageCallFailed')) : c.reported ? inOut(c) : t('usageCallUnreported');
   const w = c.waking;
@@ -92,7 +92,7 @@ function usageBody(u) {
     tile(t('usageCalls'), num(total.calls), oddNotes(total).join(' · ')),
     tile(t('usageAvg'), ok > 0 ? num(Math.round(total.tokens / ok)) : '–', t('usageTodayCalls', { n: today.calls }))));
   if (total.calls === 0) return [root, h('p', { class: 'empty' }, t('usageNoCalls'))];
-  // 接口没有报告用量时（例如演示模型）一个 token 也没有，画一张全空的图没有意义
+  // 接口没有报告用量时（例如内置演示内核）一次演算量也没有，画一张全空的图没有意义
   if (u.days.some((d) => d.tokens > 0)) {
     root.append(h('h5', { class: 'usage-chart-title' }, t('usageChartTitle', { n: u.days.length })), dayChart(u.days),
       h('p', { class: 'usage-legend muted' }, h('span', { class: 'swatch in' }), t('usageInput'), ' ', h('span', { class: 'swatch out' }), t('usageOutput')));

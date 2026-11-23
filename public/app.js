@@ -3,7 +3,7 @@ import { renderCooperation } from './cooperation-ui.js';
 import { renderMaterialsMarket } from './materials-ui.js';
 // 观测站主程序：状态、SSE、顶栏、地图、标签页、档案抽屉、弹窗。
 // 首屏用 GET /api/public/state 取全量，之后用 SSE：事件增量追加；tick 事件携带精简状态，
-// 其余数据在相关事件到达后按需重新拉取（防抖 1 秒）。所有 agent 文本都用 textContent 渲染。
+// 其余数据在相关事件到达后按需重新拉取（防抖 1 秒）。所有居民文本都用 textContent 渲染。
 
 import { initAccounts, refreshAccount } from './accounts.js';
 import { h, clear, debounce, append } from './dom.js';
@@ -31,7 +31,7 @@ const TABS = [
 let tabsNow = TABS;
 const isE2 = () => !!(S.state && S.state.world.physics === 2);
 
-/** 展示 agent 所写文字的页面：标注「AI 生成内容」 */
+/** 展示居民所写文字的页面：标注「演算生成内容」 */
 const AI_TABS = new Set(['live', 'laws', 'groups', 'library', 'cemetery', 'cradle']);
 
 /** 这些事件很频繁，且不改变需要整体重拉的数据 */

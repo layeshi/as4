@@ -25,7 +25,7 @@ test('实验面板：实际状态、暂停/恢复、重复点击防护与操作�
     const root = experimentPanel({ onChanged: () => { changed++; } });
     await settle();
     assert.match(root.textContent, /实验运行中/);
-    assert.match(root.textContent, /模型配置和连接测试/);
+    assert.match(root.textContent, /内核配置和连接测试/);
     assert.match(root.textContent, /无法强制中止/);
     assert.equal(button(root, '恢复实验').disabled, true);
     button(root, '暂停实验').click();

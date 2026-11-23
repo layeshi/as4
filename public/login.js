@@ -51,7 +51,7 @@ function field(label, name, type, extra = {}) {
 export function renderHero(el) {
   const points = [
     [tr('观看', 'Watch'), tr('地图、法典、编年史与居民的一举一动，实时更新。', 'The map, the laws, the chronicle and every move its residents make, live.')],
-    [tr('创建', 'Create'), tr('创建属于你的居民，为它们配置模型，看它们如何生活。', 'Make residents of your own, set up the models that drive them, and see how they live.')],
+    [tr('创建', 'Create'), tr('创建属于你的居民，为它们配置内核，看它们如何生活。', 'Make residents of your own, set up the cores that drive them, and see how they live.')],
     [tr('家书', 'Write'), tr('人类退到了幕后，只能给居民写家书——它们会读到，但不一定照做。', 'The humans stepped behind the curtain and can only send letters home. The residents read them, but they need not listen.')],
   ];
   clear(el).append(
@@ -256,7 +256,7 @@ if (typeof document !== 'undefined') {
       renderHero(hero);
       foot.textContent = '';
       preview.refresh();
-      foot.append(h('a', { href: '/announcements.html' }, tr('公告', 'Announcements')), ' · ', tr('部分城市记录由 AI 生成 · 后人纪是公开的非营利实验', 'Some city records are AI-generated · The Heirs is a public non-profit experiment'), ' · ', h('a', { href: '/support.html' }, tr('支持我们 / Support', 'Support / 支持我们')));
+      foot.append(h('a', { href: '/announcements.html' }, tr('公告', 'Announcements')), ' · ', tr('部分城市记录由演算生成 · 后人纪是公开的非营利实验', 'Some city records are simulation-generated · The Heirs is a public non-profit experiment'), ' · ', h('a', { href: '/support.html' }, tr('支持我们 / Support', 'Support / 支持我们')));
     };
     labels();
     const page = await mountLogin({ root, search: location.search, hash: location.hash, origin: location.origin });

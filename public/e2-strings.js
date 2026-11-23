@@ -103,7 +103,7 @@ export const tokenized = world => [4, 5, 6].includes(world?.premise);
 export const tokenTerms = template => template.split(/(\{[^}]*\}|`[^`]*`)/g).map((part, i) => i % 2 ? part : part.replaceAll('能量', '词元').replace(/\bEnergy\b/g, 'Tokens').replace(/\benergy\b/g, 'tokens')).join('');
 export const P4_STR = {
   zh: {
-    tokenDailyCap: '每日上限（词元）', tokenCapHelp: '每刻都醒，一个地球日大约需要 88 万词元；真实的 token 约是词元的 2–3 倍，按你选的模型而定。',
+    tokenDailyCap: '每日上限（词元）', tokenCapHelp: '每刻都醒，一个地球日大约需要 88 万词元；接口返回的用量约是词元的 2–3 倍，按你选的内核而定。',
     tokenCapInvalid: '请输入 0–50,000,000 之间的整数。', tokenCapSave: '保存上限', tokenCapSaved: '上限已更新。', tokenStopConfirm: '这等于停止供养，你的居民会失魂。',
     tokenLedger: '城里的词元', tokenBalance: '可转让词元', tokenBasicBalance: '基本额度余额', tokenToday: '身体今天已用 / 上限',
     tokenLastWake: '上次醒来：{total}（重读 {reread} · 读入 {read} · 写出 {write}）', tokenNoBill: '尚无上次醒来的账单。',

@@ -93,20 +93,20 @@ test('异步按钮：DOM 清空 currentTarget 后仍恢复按钮，重复点击�
   const pending=button.listeners.click[0](event);event.currentTarget=null;
   assert.equal(button.disabled,true);await fire(button,'click');assert.equal(posts().length,1);finish();await pending;assert.equal(button.disabled,false);
 });
-test('模型表单：托管隐藏自有字段和测试，保存 hosted；切换自有模型完整保存；只有接受过继时才填每日上限',async()=>{
+test('内核表单：托管隐藏自有字段和测试，保存 hosted；切换自有内核完整保存；只有接受过继时才填每日上限',async()=>{
   const saves=[],tests=[];const f=modelForm({provider:'openai',model:'own-model',baseURL:'https://example.invalid'},(...args)=>saves.push(args),'保存',c=>tests.push(c),account(),{withCap:true});
   input(f,'apiKey').value='own-key';input(f,'modelSource').value='hosted';await fire(input(f,'modelSource'),'change');
-  assert.equal(input(f,'apiKey').disabled,true);assert.equal(input(f,'apiKey').parentNode.parentNode.hidden,true);assert.equal(buttons(f,'测试连接（会调用模型）')[0].hidden,true);
+  assert.equal(input(f,'apiKey').disabled,true);assert.equal(input(f,'apiKey').parentNode.parentNode.hidden,true);assert.equal(buttons(f,'测试连接（会调用内核）')[0].hidden,true);
   await submit(f);assert.deepEqual(saves[0],[{hosted:true},880000]);
   input(f,'modelSource').value='own';await fire(input(f,'modelSource'),'change');await submit(f);
   assert.deepEqual(saves[1],[{provider:'openai',baseURL:'https://example.invalid',model:'own-model',apiKey:'own-key',toolMode:'native',actionTools:'typed'},880000]);
-  assert.equal(input(f,'apiKey').disabled,false);assert.equal(buttons(f,'测试连接（会调用模型）')[0].hidden,false);
-  await fire(buttons(f,'测试连接（会调用模型）')[0],'click');assert.deepEqual(tests,[saves[1][0]]);
-  const plain=[],noCap=modelForm({hosted:true},(...args)=>plain.push(args),'保存模型配置',undefined,account());
-  assert.equal(input(noCap,'dailyCap'),null,'居民的模型配置不显示每日上限');await submit(noCap);assert.deepEqual(plain[0],[{hosted:true},undefined]);
+  assert.equal(input(f,'apiKey').disabled,false);assert.equal(buttons(f,'测试连接（会调用内核）')[0].hidden,false);
+  await fire(buttons(f,'测试连接（会调用内核）')[0],'click');assert.deepEqual(tests,[saves[1][0]]);
+  const plain=[],noCap=modelForm({hosted:true},(...args)=>plain.push(args),'保存内核配置',undefined,account());
+  assert.equal(input(noCap,'dailyCap'),null,'居民的内核配置不显示每日上限');await submit(noCap);assert.deepEqual(plain[0],[{hosted:true},undefined]);
 });
-test('模型表单：已有托管预选，关闭说明及公共角色模型保持独立',()=>{
-  const f=modelForm({hosted:true,model:'old-model'},()=>{},undefined,undefined,account());assert.equal(input(f,'modelSource').value,'hosted');assert.match(f.textContent,/平台托管模型deepseek-chat/);
+test('内核表单：已有托管预选，关闭说明及公共角色内核保持独立',()=>{
+  const f=modelForm({hosted:true,model:'old-model'},()=>{},undefined,undefined,account());assert.equal(input(f,'modelSource').value,'hosted');assert.match(f.textContent,/平台托管内核deepseek-chat/);
   const closed=modelForm(null,()=>{},undefined,undefined,account({available:false}));assert.equal(input(closed,'modelSource').children[0].disabled,true);assert.match(closed.textContent,/平台托管暂未开放/);
   const publicRole=modelForm({},()=>{},undefined,undefined,null);assert.equal(input(publicRole,'modelSource'),null);
 });
@@ -148,7 +148,7 @@ test('平台托管：配置与测试提交精确金额并刷新，今日统计�
   const f=formFor(root,'保存托管配置');input(f,'enabled').checked=false;input(f,'clearApiKey').checked=true;
   await submit(f,{miss:'0.1',hit:'0.000001',output:'0.2',maxOutputTokens:'8192',thinking:'enabled'});
   assert.equal(posts().at(-1).url,'/api/admin/hosted/config');assert.deepEqual(posts().at(-1).body,{enabled:false,baseURL:'https://api.deepseek.com',model:'deepseek-chat',apiKey:'',clearApiKey:true,thinking:'enabled',maxOutputTokens:8192,pricesMicro:{miss:100000,hit:1,output:200000}});
-  await fire(buttons(root,'测试连接')[0],'click');assert.equal(posts().at(-1).url,'/api/admin/hosted/test');assert.match(root.textContent,/模型连接测试成功/);
+  await fire(buttons(root,'测试连接')[0],'click');assert.equal(posts().at(-1).url,'/api/admin/hosted/test');assert.match(root.textContent,/内核连接测试成功/);
   assert.equal(requests.filter(r=>r.method==='GET').length,3,'初次及每次操作后都刷新');
   for(const req of posts())assert.equal(req.headers['X-Houren-Request'],'1');root.remove();
 });
@@ -180,12 +180,12 @@ test('我的居民列表：只放居民，余额只留一个数字块并链接�
   assert.ok(!requests.some(r=>r.url.startsWith('/api/account/worlds')),'不再读取历史世界');
   const text=nodes.content.textContent;
   assert.match(text,/托管余额¥12.3457/);assert.ok(nodes.content.querySelectorAll('a').some(a=>a.getAttribute('href')==='/billing.html'));
-  assert.match(text,/管理中2醒着1需要留意1/);assert.match(text,/青禾 因托管余额不足暂停了模型调用/);assert.match(text,/港口/);assert.doesNotMatch(text,/port/);
+  assert.match(text,/管理中2醒着1需要留意1/);assert.match(text,/青禾 因托管余额不足暂停了演算/);assert.match(text,/港口/);assert.doesNotMatch(text,/port/);
   assert.equal(formFor(nodes.content,'提交入账申请'),undefined,'购买在余额与充值页');
-  for(const moved of ['我的入账申请','最近充值与调整','计费规则','管理托管配置与余额','公共角色模型','用户管理'])assert.doesNotMatch(text,new RegExp(moved),moved);
+  for(const moved of ['我的入账申请','最近充值与调整','计费规则','管理托管配置与余额','公共角色内核','用户管理'])assert.doesNotMatch(text,new RegExp(moved),moved);
   const handed=nodes.content.querySelectorAll('section').find(s=>s.textContent.startsWith('已过继的创作'));assert.match(handed.textContent,/旧作/);assert.doesNotMatch(handed.textContent,/青禾/);
   assert.ok(buttons(nodes['page-head'],'＋ 创建居民').length);
-  const f=formFor(nodes.content,'接受并配置模型');input(f,'modelSource').value='hosted';await fire(input(f,'modelSource'),'change');await submit(f,{dailyCap:'12345'});
+  const f=formFor(nodes.content,'接受并配置内核');input(f,'modelSource').value='hosted';await fire(input(f,'modelSource'),'change');await submit(f,{dailyCap:'12345'});
   const req=posts().find(r=>r.url==='/api/account/transfers/tr1/accept');assert.deepEqual(req.body.config,{hosted:true});assert.equal(req.body.dailyCap,12345);assert.ok(req.body.requestId);
 });
 test('居民档案：总览只看状态，管理动作在「管理」，模型运行只显示本居民扣费并通过 runner save 提交托管配置',async()=>{
@@ -204,9 +204,9 @@ test('居民档案：总览只看状态，管理动作在「管理」，模型�
     for(const label of ['更新上限','寄送家书','发起过继邀请'])assert.equal(formFor(nodes.content,label),undefined,`总览里没有「${label}」`);
     await fire(buttons(nodes.content,'管理')[0],'click');
     for(const label of ['更新上限','寄送家书','发起过继邀请'])assert.ok(formFor(nodes.content,label),`管理里有「${label}」`);
-    await fire(buttons(nodes.content,'模型运行')[0],'click');assert.match(nodes.content.textContent,/最近30个现实日托管扣费/);assert.match(nodes.content.textContent,/¥0.3000/);assert.match(nodes.content.textContent,/托管余额不足/);
+    await fire(buttons(nodes.content,'内核运行')[0],'click');assert.match(nodes.content.textContent,/最近30个现实日托管扣费/);assert.match(nodes.content.textContent,/¥0.3000/);assert.match(nodes.content.textContent,/托管余额不足/);
     const chargeSection=nodes.content.querySelectorAll('section').find(s=>s.textContent.startsWith('最近30个现实日托管扣费'));assert.doesNotMatch(chargeSection.textContent,/a2/);assert.match(chargeSection.textContent,/青禾/);
-    const f=formFor(nodes.content,'保存模型配置');assert.equal(input(f,'modelSource').value,'hosted');assert.equal(Number(input(f,'dailyCap').value),100);await submit(f);
+    const f=formFor(nodes.content,'保存内核配置');assert.equal(input(f,'modelSource').value,'hosted');assert.equal(Number(input(f,'dailyCap').value),100);await submit(f);
     const req=posts().find(r=>r.url==='/api/account/residents/a1/runner');assert.deepEqual(req.body,{op:'save',config:{hosted:true}});
   }finally{location.href='http://localhost/residents.html';}
 });
@@ -227,7 +227,7 @@ test('OpenLux model selection displays CNY prices and recalculates daily / 30-da
   input(f,'dailyCap').value='20000';await fire(input(f,'dailyCap'),'input');assert.match(f.textContent,/每日额度 20,000/);
   await submit(f);assert.deepEqual(saved,{config:{hosted:true,model:'gpt-6-astra'},cap:20000});
   input(f,'dailyCap').value='-1';await fire(input(f,'dailyCap'),'input');assert.match(f.textContent,/有效的每日/);
-  input(f,'hostedModel').value='grok-4.7';await fire(input(f,'hostedModel'),'change');assert.match(f.textContent,/该模型尚未开放/);
+  input(f,'hostedModel').value='grok-4.7';await fire(input(f,'hostedModel'),'change');assert.match(f.textContent,/该内核尚未开放/);
 });
 
 test('OpenLux admin clears stale group selection and publishes only verified selected models',async()=>{
@@ -238,6 +238,6 @@ test('OpenLux admin clears stale group selection and publishes only verified sel
   assert.ok(formFor(root,'保存 OpenLux 设置'));assert.match(root.textContent,/固定汇率：7/);
   const group=input(root,`group-${model.id}`);assert.equal(group.value,'Self-Deployed-2');
   group.value='Self-Deployed-3';await fire(group,'change');assert.match(root.textContent,/分组已变化/);
-  await fire(buttons(root,'确认发布勾选模型及价格')[0],'click');assert.deepEqual(posts().at(-1).body,{draftId:'draft',models:[]});
+  await fire(buttons(root,'确认发布勾选内核及价格')[0],'click');assert.deepEqual(posts().at(-1).body,{draftId:'draft',models:[]});
   root.remove();
 });

@@ -16,9 +16,9 @@ export function experimentPanel({ onChanged = () => {} } = {}) {
   const refresh = h('button', { type: 'button', class: 'btn', onClick: load }, tr('刷新状态', 'Refresh status'));
   const root = h('section', { class: 'experiment-panel' }, status, clock,
     h('div', { class: 'form-actions' }, pause, resume, recover, refresh), protection, message,
-    h('p', { class: 'muted' }, tr('暂停冻结世界时间、代谢结算、居民自主行动和托管行动模型调用。浏览、注册/领养、寄信、模型配置和连接测试、管理员调整世界仍可用；手动推进时间不可用。', 'Pausing freezes world time, settlement, autonomous actions and hosted action model calls. Browsing, entry/adoption, letters, model settings, connection tests and world adjustments remain available; manual ticks are blocked.')),
+    h('p', { class: 'muted' }, tr('暂停冻结世界时间、代谢结算、居民自主行动和托管演算。浏览、注册/领养、寄信、内核配置和连接测试、管理员调整世界仍可用；手动推进时间不可用。', 'Pausing freezes world time, settlement, autonomous actions and hosted runs. Browsing, entry/adoption, letters, core settings, connection tests and world adjustments remain available; manual ticks are blocked.')),
     h('p', { class: 'muted' }, tr('恢复遵循各运行器最新的启用开关，并继续剩余倒计时；服务器重启后仍保持暂停。', 'Resuming follows the latest runner switches and the remaining countdown. A paused experiment stays paused after a server restart.')),
-    h('p', { class: 'muted' }, tr('服务器可中止托管请求。项目自带外部运行器读取暂停状态后等待；玩家自写程序或已发出的远程模型请求无法强制中止，已产生的模型费用也可能仍会计费。', 'The server cancels hosted requests locally. Reference external runners wait after reading the pause state. Custom external programs and remote requests already sent cannot be forcibly stopped; incurred model charges may still apply.')));
+    h('p', { class: 'muted' }, tr('服务器可中止托管请求。自带的外部进程读取暂停状态后等待；管理者自写的程序或已发出的远程请求无法强制中止，已产生的接口费用也可能仍会计费。', 'The server cancels hosted requests locally. Reference external processes wait after reading the pause state. Custom external programs and remote requests already sent cannot be forcibly stopped; incurred service charges may still apply.')));
   function draw() {
     const states = {
       running: tr('实验运行中', 'Experiment running'), paused: tr('实验已暂停', 'Experiment paused'),

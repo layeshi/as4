@@ -15,7 +15,7 @@ export async function mountReports() {
   watchAccount(next => { if (user && next?.id !== user.id) { generation++; clear(root); user = next; load(); } });
   async function load() {
     const current = ++generation; clear(root).append(h('p', { class: 'muted', role: 'status' }, tr('正在加载…', 'Loading…')));
-    pageHead(head, { eyebrow: tr('人类观测', 'Observation'), title: tr('世界报告', 'World reports'), lead: tr('由 AI 史官整理的世界回顾。事实附来源，分析单独标注。', 'AI chronicles with historical sources and clearly labeled analysis.'), back: { href: '/', label: tr('观测城市', 'Observe') }, actions: [btn(tr('刷新', 'Refresh'), load)] });
+    pageHead(head, { eyebrow: tr('人类观测', 'Observation'), title: tr('世界报告', 'World reports'), lead: tr('由演算史官整理的世界回顾。事实附来源，分析单独标注。', 'Simulation chronicles with historical sources and clearly labeled analysis.'), back: { href: '/', label: tr('观测城市', 'Observe') }, actions: [btn(tr('刷新', 'Refresh'), load)] });
     try {
       const account = await refreshAccount({ notify: false, redirect: false }); if (current !== generation) return;
       if (!account.ok) throw Error(tr('无法读取账号，请重试。', 'Unable to load your account. Retry.'));
@@ -42,7 +42,7 @@ export async function mountReports() {
     root.append(h('a', { class: 'back-link', href: '/reports.html' }, tr('← 全部报告', '← All reports')));
     if (r.status !== 'ready') { root.append(emptyState(reportStatus(r), tr('报告正在后台处理，请稍后刷新。', 'The report is being processed. Refresh later.'))); return; }
     const data = r.content, summary = r.sources.find(s => s.id === 'period');
-    root.append(card(data.title, `${reportKind(r.kind)} · ${reportRange(r)}${r.partial ? tr(' · 未满一年', ' · Partial year') : ''}`, h('p', { class: 'ai-note' }, tr('AI 生成 · 事实与分析分别展示', 'AI generated · Facts and analysis are shown separately')), h('p', { class: 'report-prose' }, ai(data.overview)), metrics([[tr('覆盖世界日', 'World days'), r.toDay - r.fromDay + 1], [tr('公开事件', 'Public events'), Object.values(summary?.eventCounts ?? {}).reduce((n, v) => n + v, 0)], [tr('历史分支', 'History branch'), r.branchId.slice(0, 8)]])));
+    root.append(card(data.title, `${reportKind(r.kind)} · ${reportRange(r)}${r.partial ? tr(' · 未满一年', ' · Partial year') : ''}`, h('p', { class: 'ai-note' }, tr('演算生成 · 事实与分析分别展示', 'Simulation generated · Facts and analysis are shown separately')), h('p', { class: 'report-prose' }, ai(data.overview)), metrics([[tr('覆盖世界日', 'World days'), r.toDay - r.fromDay + 1], [tr('公开事件', 'Public events'), Object.values(summary?.eventCounts ?? {}).reduce((n, v) => n + v, 0)], [tr('历史分支', 'History branch'), r.branchId.slice(0, 8)]])));
     const entry = item => h('article', { class: 'report-entry' }, h('p', { class: 'report-prose' }, ai(item.text)), h('div', { class: 'form-actions' }, item.sources.map(source => h('a', { class: 'link', href: `#source-${source.replaceAll(':', '-')}` }, `${tr('来源', 'Source')} ${source === 'period' ? tr('周期统计', 'Period statistics') : source.replace('event:', tr('事件 ', 'Event '))}`))));
     const section = (title, items) => card(title, null, ...items.map(entry));
     // 第七前提「三城」：先全岛与城际往来，再分北城、西城、东城；每节里事实与分析仍分开

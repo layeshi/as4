@@ -21,7 +21,7 @@ export function snapshotsPanel() {
   const pages = h('div', { class: 'form-actions' });
   root.append(
     h('p', { class: 'muted' }, tr('保存当前纪元、居民状态与历史日志，城市继续运行。每次保存都会保留一份独立存档。', 'Save the current era, residents and history while the city keeps running. Each save keeps a separate archive.')),
-    h('p', { class: 'muted' }, tr('存档包含居民的私有灵魂与记忆，仅管理员可下载。人类账号与托管模型配置需单独备份。', 'Archives include private souls and memories and are available only to administrators. Back up human accounts and hosted model configuration separately.')),
+    h('p', { class: 'muted' }, tr('存档包含居民的私有灵魂与记忆，仅管理员可下载。人类账号与托管内核配置需单独备份。', 'Archives include private souls and memories and are available only to administrators. Back up human accounts and hosted core configuration separately.')),
     form, h('div', { class: 'account-toolbar' }, h('h3', null, tr('已保存的快照', 'Saved snapshots')), button(tr('刷新列表', 'Refresh list'), load)), list, pages);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

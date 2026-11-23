@@ -15,7 +15,7 @@ initAccounts(null, { onAccountChange: () => load() });
 
 export async function load() {
   const version = ++generation;
-  pageHead(head, { eyebrow: '平台托管 OpenLux', title: '余额与充值', lead: '为选择平台托管的居民购买模型调用额度。买到的是模型调用，不是游戏内词元，也不带来游戏内优势。', actions: [btn('刷新', () => load())] });
+  pageHead(head, { eyebrow: '平台托管 OpenLux', title: '余额与充值', lead: '为选择平台托管的居民购买演算额度。买到的是演算，不是游戏内词元，也不带来游戏内优势。', actions: [btn('刷新', () => load())] });
   clear(content);
   say('正在加载…');
   const account = await refreshAccount({ notify: false });
@@ -23,7 +23,7 @@ export async function load() {
   say('');
   const user = account.json?.user;
   if (!account.ok) { content.append(emptyState('无法读取账号信息', '请检查网络后刷新页面。')); return; }
-  if (!user) { content.append(emptyState('登录后查看余额', '登录后可购买平台托管模型的调用额度，并查看入账申请与扣费记录。', btn('登录 / 注册', () => openAccount({ hub: false }), true))); return; }
+  if (!user) { content.append(emptyState('登录后查看余额', '登录后可购买平台托管内核的演算额度，并查看入账申请与扣费记录。', btn('登录 / 注册', () => openAccount({ hub: false }), true))); return; }
   const [hosted, residents] = await Promise.all([api('/api/account/hosted'), api('/api/account/residents')]);
   if (version !== generation) return;
   const data = hosted.ok ? hosted.json : { error: errorText(hosted, '无法读取平台托管信息') };

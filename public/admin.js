@@ -26,12 +26,12 @@ export function adminSections() {
       ['users', tr('用户管理', 'Users'), tr('搜索、创建与编辑人类账号。', 'Search, create and edit human accounts.'), () => usersPanel()],
       ['topups', tr('充值审核', 'Top-up review'), tr('核对入账申请、手动调整余额、查看各账号的余额与累计用量；新申请每 30 秒自动检查一次。', 'Review top-up requests, adjust balances and see account balances; new requests are checked every 30 seconds.'), () => hostedBillingPanel({ onPending: reportPending })],
     ]],
-    [tr('模型', 'Models'), [
-      ['assistant', tr('实验助手', 'Experiment assistant'), tr('问答专用模型、每用户次数与全站成本预算。', 'Assistant model, user quotas and site budget.'), () => assistantPanel()],
-      ['reports', tr('AI 史官', 'AI chronicler'), tr('世界报告的专用模型、独立额度与历史补生成。', 'Report model, separate budget and past report generation.'), () => reportsPanel()],
-      ['hosted', tr('平台托管', 'Hosted model'), tr('平台托管 OpenLux 的开放状态、接口、单价与今日统计。', 'Hosted DeepSeek availability, endpoint, prices and today’s statistics.'), () => hostedConfigPanel()],
-      ['usage', tr('托管用量', 'Hosted usage'), tr('所有托管居民的 token 用量、全城合计与近 14 日走势。', 'Token usage of every hosted resident, city totals and the last 14 days.'), () => { const root = h('div'); adminUsageView(root); return root; }],
-      ['public-model', tr('公共角色模型', 'Public role model'), tr('公共角色回答居民提问时使用的共享模型与独立预算。', 'The shared model and separate budget public roles use to answer residents.'), () => publicModelPanel()],
+    [tr('内核', 'Cores'), [
+      ['assistant', tr('实验助手', 'Experiment assistant'), tr('问答专用内核、每用户次数与全站成本预算。', 'Assistant core, user quotas and site budget.'), () => assistantPanel()],
+      ['reports', tr('演算史官', 'Simulation chronicler'), tr('世界报告的专用内核、独立额度与历史补生成。', 'Report core, separate budget and past report generation.'), () => reportsPanel()],
+      ['hosted', tr('平台托管', 'Hosted cores'), tr('平台托管 OpenLux 的开放状态、接口、单价与今日统计。', 'Hosted core availability, endpoint, prices and today’s statistics.'), () => hostedConfigPanel()],
+      ['usage', tr('托管用量', 'Hosted usage'), tr('所有托管居民的演算用量、全城合计与近 14 日走势。', 'Compute usage of every hosted resident, city totals and the last 14 days.'), () => { const root = h('div'); adminUsageView(root); return root; }],
+      ['public-model', tr('公共角色内核', 'Public role core'), tr('公共角色回答居民提问时使用的共享内核与独立预算。', 'The shared core and separate budget public roles use to answer residents.'), () => publicModelPanel()],
     ]],
     [tr('内容与支持', 'Content & support'), [
       ['announcements', tr('公告管理', 'Announcements'), tr('发布、编辑与撤下网站和微信端共用的公告。', 'Publish, edit and withdraw announcements shared by the website and WeChat.'), () => announcementsPanel()],

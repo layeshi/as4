@@ -50,7 +50,7 @@ test('我的居民：一张表（状态、今日、累计、调用及提示）�
     const panel = accountAgentsPanel({ openBackstage: (key) => opened.push(key), savedOwners: () => owners });
     env.dom.root.append(panel);
     assert.match(panel.textContent, /我的居民/);
-    assert.match(panel.textContent, /只能查看居民的状态与 token 用量/);
+    assert.match(panel.textContent, /只能查看居民的状态与演算用量/);
     await settle();
 
     const rows = rowsOf(panel);
@@ -209,7 +209,7 @@ test('管理员的托管用量：数字块、近 14 日合计图、每位居民�
   try {
     const body = env.dom.root;
     adminUsageView(body);
-    assert.match(body.textContent, /托管用量/);
+    assert.match(body.textContent, /托管演算量/);
     assert.match(body.textContent, /服务器托管运行的居民/);
     await settle();
     assert.deepEqual(env.requests, [{ url: '/api/admin/usage', method: 'GET', body: undefined }]);
@@ -228,7 +228,7 @@ test('管理员的托管用量：数字块、近 14 日合计图、每位居民�
     assert.match(rows[0], /青禾 · a1.*@alice @bob.*glm-5\.3.*61,200.*7.*失败 1 次/);
     assert.ok(rows[0].includes('<img src=x onerror=alert(1)>'), '造者署名原样显示为文字');
     assert.equal(body.querySelector('img'), null, '没有被当成 HTML');
-    assert.match(rows[1], /松烟 · a2.*未关联账号.*mock.*未报告用量 2 次.*尚无调用/);
+    assert.match(rows[1], /松烟 · a2.*未关联账号.*mock.*未报告用量 2 次.*尚无演算/);
     assert.doesNotMatch(text, /NaN|undefined|\[object/);
   } finally { env.restore(); }
 });
