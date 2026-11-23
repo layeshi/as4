@@ -45,7 +45,7 @@ function client(base, { intercept, miniprogram = false } = {}) {
     return module.exports;
   }
   function page(name) {
-    load(resolve(source, 'pages', name, 'index.js'));
+    load(resolve(source, '../miniprogram-app/pages', name, 'index.js'));
     const instance = { ...pageDefinition, data: structuredClone(pageDefinition.data), setData(data) { Object.assign(this.data, data); } };
     return instance;
   }
@@ -70,6 +70,11 @@ for (const miniprogram of [false, true]) test('P6 ' + (miniprogram ? 'Mini Progr
   const c = client(env.base, { miniprogram }), g = c.game();
   await g.start();
   assert.equal(g.tab,'startup'); assert.equal(c.requests.length,0); assert.equal(c.timers.size,0);
+  const startupText = g.blocks.map(b => b.text || '').join('\n');
+  assert.match(startupText, /计算机社会模拟/);
+  assert.match(startupText, /由 AI 生成/);
+  const share = miniprogram ? c.page('society').onShareAppMessage() : c.wx.emitShareAppMessage();
+  assert.equal(share.title, '后人纪 · 计算机社会模拟');
   assert.equal(g.blocks.some(b=>b.text==='适龄提示：16 岁及以上'), !miniprogram);
   if (!miniprogram) assert.ok(g.blocks.some(b=>b.text==='抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。'));
   assert.ok(!g.hits.some(h=>h.action.type==='tab'));

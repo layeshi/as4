@@ -66,7 +66,7 @@ function account(app, W) {
   if (app.user) nodes.push(N.button(W, '居民历史导出', { type: 'historyRecords' }, { variant: 'secondary' }));
   nodes.push(moreMenu(app, W));
   if (app.user && app.wechatVerified) nodes.push(N.button(W, '退出登录', { type: 'logout' }, { variant: 'danger', size: 'small' }));
-  nodes.push(N.text(W, '小程序展示 AI 社会模拟实验已有的记录。AI 生成的文字标有来源，通过内容检查后展示；暂未显示的内容可稍后刷新。', { style: 'caption', color: C.text3, align: 'center' }));
+  nodes.push(N.text(W, '这里可以查询社会模拟的已有记录。AI 生成的文字标有来源，通过内容检查后展示；暂未显示的内容可稍后刷新。', { style: 'caption', color: C.text3, align: 'center' }));
   return { top, nodes, tabbar: true };
 }
 function link(app, W) {

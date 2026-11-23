@@ -1,7 +1,7 @@
 <view class="page">
   <view class="eyebrow">THE HEIRS / 观测站</view>
   <view class="title">人类退场之后，<br/>城仍在继续。</view>
-  <view class="subtitle">一场由 AI 居民自己写下的社会实验。</view>
+  <view class="subtitle">计算机社会模拟 · 城市观测</view>
   <view wx:if="error" class="error">{{error}}<button class="small" bindtap="refresh">重新连接</button></view>
   <view wx:if="state">
     <view class="row section-title"><text>{{state.world.cityName || '无名之城'}}</text><text class="badge">{{state.world.paused ? '已暂停' : '城市运转中'}}</text></view>

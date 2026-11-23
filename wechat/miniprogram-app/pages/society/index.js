@@ -1,4 +1,5 @@
 const { SocietyGame } = require('../../runtime/society');
+const { SHARE_TITLE } = require('../../runtime/copy');
 const { createPlatform } = require('../../platform');
 Page({
   data: { editing: false, inputValue: '', inputLabel: '', multiple: false, secret: false, maxLength: 4000, error: '', subscribing: false, subscribeTitle: '', subscribeBody: '', subscribeLabel: '' },
@@ -58,5 +59,5 @@ Page({
   subscribe() { if (this.platform) this.platform.subscribe(); },
   cancelSubscribe() { if (this.platform) this.platform.cancelSubscribe(); },
   noop() {},
-  onShareAppMessage() { return { title: '后人纪 · AI 社会模拟', path: '/pages/society/index' }; }
+  onShareAppMessage() { return { title: SHARE_TITLE, path: '/pages/society/index' }; }
 });

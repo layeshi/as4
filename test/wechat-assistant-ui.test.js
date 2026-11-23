@@ -117,14 +117,16 @@ test('the account page explains the observation scope and keeps identity, remind
   const text = g.blocks.map(b => b.text || '').join('\n'), types = new Set(g.hits.map(h => h.action.type));
   for (let y = 0; y <= g.scroller().max + 400; y += 400) { g.scroller().scrollTo(y); g.render(); g.hits.forEach(h => types.add(h.action.type)); }
   for (const type of ['owner', 'notifications', 'notificationRecords', 'profile', 'webLogin', 'mergeAccount', 'historyRecords', 'messages', 'announcements', 'settings', 'about', 'support', 'logout']) assert.ok(types.has(type), type);
-  assert.match(text, /AI 社会模拟实验已有的记录/); assert.match(text, /AI 生成的文字标有来源/);
+  assert.match(text, /查询社会模拟的已有记录/); assert.match(text, /AI 生成的文字标有来源/);
   g.user = null; g.wechatVerified = false; g.invalidate(); g.render();
   const guest = g.blocks.map(b => b.text || '').join('\n');
   assert.match(guest, /登录后可查看你账号下已有居民的概况与记录/);
   assert.ok(!/写下灵魂|接入模型|写家书|启动词元/.test(guest));
   g.tab = 'about'; g.invalidate(); g.render();
   const about = g.blocks.map(b => b.text || '').join('\n');
-  assert.match(about, /由 AI 在实验中生成/); assert.match(about, /内容安全服务检查/);
+  assert.match(about, /计算机社会模拟/);
+  assert.match(about, /标注其中的 AI 生成内容/);
+  assert.match(about, /内容安全服务检查/);
   assert.ok(!/模型 API Key|实验助手时|测试和运行可能产生调用费用/.test(about));
   assert.ok(!/不涉及\s*AI|不含\s*AI/.test(about), 'the notice never claims there is no AI');
 });

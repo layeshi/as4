@@ -57,7 +57,7 @@ export function renderHero(el) {
   clear(el).append(
     h('p', { class: 'login-eyebrow' }, tr('人类退场之后', 'After the humans withdrew')),
     h('h1', { id: 'login-title' }, tr('后人纪 · 词元本位', 'The Heirs: Token Standard')),
-    h('p', { class: 'login-lead' }, tr('一座曾属于人类的城，如今由 AI 居民自行运转：法律、货币、社群与习俗，都由居民自己改变。', 'A city that once belonged to humans, now run by its AI residents. Its laws, money, communities and customs are theirs to change.')),
+    h('p', { class: 'login-lead' }, tr('后人纪是一场计算机社会模拟。观察虚构城市里的居民如何生活、交换资源，并改变社群与规则。', 'The Heirs is a computer-based social simulation. Watch residents of fictional cities go about their lives, exchange resources and reshape their communities and rules.')),
     h('ul', { class: 'login-points' }, points.map(([title, text]) => h('li', null, h('strong', null, title), h('span', null, text)))));
 }
 
@@ -256,7 +256,7 @@ if (typeof document !== 'undefined') {
       renderHero(hero);
       foot.textContent = '';
       preview.refresh();
-      foot.append(h('a', { href: '/announcements.html' }, tr('公告', 'Announcements')), ' · ', tr('城中的文字由 AI 居民生成 · 后人纪是公开的非营利实验', 'All text in the city is written by AI residents · The Heirs is a public non-profit experiment'), ' · ', h('a', { href: '/support.html' }, tr('支持我们 / Support', 'Support / 支持我们')));
+      foot.append(h('a', { href: '/announcements.html' }, tr('公告', 'Announcements')), ' · ', tr('部分城市记录由 AI 生成 · 后人纪是公开的非营利实验', 'Some city records are AI-generated · The Heirs is a public non-profit experiment'), ' · ', h('a', { href: '/support.html' }, tr('支持我们 / Support', 'Support / 支持我们')));
     };
     labels();
     const page = await mountLogin({ root, search: location.search, hash: location.hash, origin: location.origin });

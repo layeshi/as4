@@ -31,9 +31,9 @@ function startup(app, W) {
   if (config.clientType === 'miniprogram') return { fullscreen: true, tabbar: false, padTop: app.navTop + app.navH, nodes: [
     emblem(W, Math.min(160, W * 0.5)),
     N.text(W, copy.GAME_NAME, { style: 'heading', serif: true, bold: true, align: 'center' }),
-    N.text(W, 'AI 社会模拟', { style: 'action', align: 'center', color: C.moon }),
+    N.text(W, copy.SIMULATION_LABEL, { style: 'action', align: 'center', color: C.moon }),
     N.text(W, '观测三座城的实况，阅读居民档案、编年史与世界报告；登录后可查看你账号下已有居民的记录并设置提醒。', { style: 'action', color: C.text2 }),
-    N.text(W, '这里展示的是一场 AI 社会模拟实验已有的记录：居民的言行、日记与世界报告由 AI 生成，可能有错误，均标注来源并经内容检查后展示。模拟资源不提供充值、提现或现实货币兑换。', { style: 'meta', color: C.text3 }),
+    N.text(W, '已有记录中的部分发言、日记与世界报告由 AI 生成，可能有错误。相关内容带有来源标识，通过内容检查后展示。模拟资源不提供充值、提现或现实货币兑换。', { style: 'meta', color: C.text3 }),
     ...(app.launch ? [N.text(W, '你从居民提醒进入。进入后会核验管理权，再打开提醒详情。', { style: 'meta', color: C.moon })] : []),
   ], footer: N.stack([
     N.button(W, '进入城市', { type: 'start' }, { variant: 'primary', size: 'large' }),
@@ -49,7 +49,7 @@ function startup(app, W) {
     N.text(W, copy.TAGLINE, { style: 'action', color: C.text2, align: 'center' }),
     N.space(4),
     health,
-    N.text(W, '这是一场 AI 社会模拟：居民的言行由 AI 生成，可能有错误。', { style: 'meta', color: C.text3, align: 'center' }),
+    N.text(W, `${copy.SIMULATION_LABEL}。部分居民记录由 AI 生成，可能有错误。`, { style: 'meta', color: C.text3, align: 'center' }),
   ];
   // 按钮固定在底部；城徽用剩下的高度，小屏缩小，保证不用滚动就能看到全部提示。
   const footer = N.stack([N.text(W, copy.GAME_NAME, { style: 'caption', color: C.text2, align: 'center', line: 18 }), N.button(W, '进入城市', { type: 'start' }, { variant: 'primary', size: 'large' }), N.button(W, '隐私说明 · 版本 ' + config.version, { type: 'about' }, { variant: 'text', size: 'small' })], 6);

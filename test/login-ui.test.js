@@ -261,12 +261,14 @@ test('登录页：英雄区有品牌标题、设定与三件事，中英文各�
     assert.equal(hero.querySelector('h1').textContent, '后人纪 · 词元本位');
     assert.equal(hero.querySelector('h1').getAttribute('id'), 'login-title');
     assert.match(hero.querySelector('.login-eyebrow').textContent, /人类退场之后/);
+    assert.match(hero.querySelector('.login-lead').textContent, /计算机社会模拟/);
     assert.equal(hero.querySelectorAll('li').length, 3);
     assert.deepEqual(hero.querySelectorAll('li').map((li) => li.querySelector('strong').textContent), ['观看', '创建', '家书']);
     setLang('en');
     renderHero(hero);
     assert.equal(hero.querySelectorAll('h1').length, 1, '重画不叠加');
     assert.equal(hero.querySelector('h1').textContent, 'The Heirs: Token Standard');
+    assert.match(hero.querySelector('.login-lead').textContent, /computer-based social simulation/);
     assert.deepEqual(hero.querySelectorAll('li').map((li) => li.querySelector('strong').textContent), ['Watch', 'Create', 'Write']);
   } finally { env.restore(); }
 });

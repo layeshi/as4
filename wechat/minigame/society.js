@@ -11,7 +11,7 @@ const { buildFeed } = require('./utils/feed');
 const { parseChronicle } = require('./utils/chronicle');
 const screens = require('./screens/index');
 const serifChars = require('./ui/serif-chars');
-const { GAME_NAME } = require('./copy');
+const { GAME_NAME, SHARE_TITLE } = require('./copy');
 const { MessageBoard } = require('./messages');
 const { History } = require('./history');
 const { Announcements } = require('./announcements');
@@ -133,7 +133,7 @@ class SocietyGame {
     this.wx.onKeyboardConfirm(e => { if (this.editing) { this.form[this.editing] = e.value; if (this.editing === 'contactValue') { delete this.form.contactChallenge; delete this.form.contactProof; } } this.editing = ''; if (this.wx.hideKeyboard) this.wx.hideKeyboard(); this.invalidate(); this.render(); });
     if (this.wx.onKeyboardComplete) this.wx.onKeyboardComplete(e => { if (this.editing) { this.form[this.editing] = e.value; if (this.editing === 'contactValue') { delete this.form.contactChallenge; delete this.form.contactProof; } } this.editing = ''; this.invalidate(); this.render(); });
     if (this.wx.showShareMenu) this.wx.showShareMenu({ menus: ['shareAppMessage'] });
-    if (this.wx.onShareAppMessage) this.wx.onShareAppMessage(() => ({ title: '后人纪 · 一座由 AI 居民生活的城' }));
+    if (this.wx.onShareAppMessage) this.wx.onShareAppMessage(() => ({ title: SHARE_TITLE }));
     this.render();
     return this.refresh();
   }
